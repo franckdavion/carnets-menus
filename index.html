@@ -198,6 +198,12 @@ input,select,textarea{font-size:16px!important}
 #sideSheet .sheet-in,#dailySheet .sheet-in,#pickSheet .sheet-in,#histSheet .sheet-in,#storeSheet .sheet-in{height:92%}
 /* windows follow the visible area when the keyboard is open */
 .sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:var(--vvh,100%)}
+#shopList .item{grid-template-columns:12px minmax(0,1fr) auto;row-gap:4px;align-items:start}
+#shopList .item>.dot{grid-row:1 / span 2;margin-top:8px}
+#shopList .item>.nm{grid-row:1 / span 2}
+#shopList .item>.q{grid-column:3;grid-row:1;text-align:right}
+#shopList .item>.have,#shopList .item>.x{grid-column:3;grid-row:2;justify-self:end}
+.idea .link{display:inline-block;padding:6px 0;font-size:13px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -261,7 +267,8 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .link{border:none;background:none;padding:2px 0;color:var(--accent);font-weight:600;font-size:12px}
 .slot.locked .slot-name::after{content:" · fixé";color:var(--muted);font-weight:400;font-size:12px}
 .slot-add.dim{color:var(--muted);border-style:dotted}
-.pref-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.pref-row{display:flex;justify-content:space-between;align-items:center;gap:8px 12px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pref-row>div:first-child{flex:1 1 170px;min-width:0}.pref-row>.chips{flex:none;overflow:visible}
 .pref-row .ctl{display:flex;align-items:center;gap:6px}
 .pref-row .n{font-family:var(--f-mono);min-width:2ch;text-align:center}
 .pick-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
@@ -948,7 +955,7 @@ function renderMenu(){
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
-      return r?`<div class="slot${s.lock?" locked":""}" data-slot="${k}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)} <span class="chev" aria-hidden="true">›</span></button>
+      return r?`<div class="slot${s.lock?" locked":""}" data-slot="${k}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}&nbsp;<span class="chev" aria-hidden="true">›</span></button>
         <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${menu.prefs.dissoc?`<span class="dline">${dissocBadge(mealDissoc(s))}</span>`:""}${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
