@@ -269,7 +269,13 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .day-card.past{background:transparent}
 .day-card.past .day-h{color:var(--muted)}
 .slot-done{color:var(--muted);font-size:15px;min-width:0}
-.course{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.course{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding:8px 0 2px;margin-top:6px}
+.course-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.course .slot-sub{font-size:14px;font-weight:600;padding:2px 0}
+.course-acts{display:flex;gap:8px;align-items:center}
+.course-acts .link{font-size:14px;padding:6px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:34px}
+.course-acts .x{font-size:15px;padding:6px 10px;min-height:34px}
+[data-hidewine] .course .drink{display:none}
 .slot-done .course{display:block}
 .extras{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:13px;color:var(--muted);margin-top:2px}
 .xchip{display:inline-flex;align-items:center;gap:2px;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 4px 1px 9px;font-size:12px}
@@ -998,7 +1004,9 @@ function renderMenu(){
       if(isPast(k))return`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}" data-slot="${k}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}&nbsp;<span class="chev" aria-hidden="true">›</span></button>
         <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${menu.prefs.dissoc?`<span class="dline">${dissocBadge(mealDissoc(s))}</span>`:""}${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
-        ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
+        ${courses.map(c=>`<div class="course"><div class="course-main"><button class="slot-sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;<span class="chev" aria-hidden="true">›</span></button>
+          <span class="drink">${esc(drinkLine(recipes[s[c]],c))}</span></div>
+          <div class="course-acts"><button class="link" data-act="pick" data-k="${k}" data-role="${c}">↻ Autre</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer ${c==="entree"?"l'entrée":"le dessert"}">✕</button></div></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
       :`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><button class="slot-add${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir"}</button></div>`;}).join("")}</div>`).join("")}</div>`
@@ -1299,8 +1307,20 @@ const DRINKS=[
  [r=>true,"Blanc fruité (Côtes-de-Gascogne) ou rosé","Eau aromatisée maison"],
 ];
 function nm(r){return r.name+" "+(r.ing||[]).map(i=>i.n).join(" ");}
-function drinkFor(r){const d=DRINKS.find(x=>x[0](r));return[d[1],d[2]];}
-function drinkLine(r){const d=drinkFor(r);return"🍷 "+d[0]+" · 🥤 "+d[1];}
+// starters get their own pairings (apéritif style)
+const ENTREE_DRINKS=[
+ [/foie gras/,"Sauternes ou Jurançon moelleux","Jus de raisin blanc"],
+ [/saumon|huître|crevette|thon|poisson|fruits de mer|moules|crabe|accras|morue/,"Champagne ou Muscadet","Eau pétillante au citron"],
+ [/terrine|pâté|charcuterie|jambon|rillettes|saucisson/,"Beaujolais","Jus de raisin"],
+ [/quiche|tarte|feuilleté|gougère|cake|fromage|chèvre/,"Blanc d'Alsace (Pinot blanc) ou Bourgogne aligoté","Jus de pomme"],
+ [/salade|crudités|taboulé|carotte|concombre|tomate|gaspacho/,"Rosé de Provence ou blanc sec (Sauvignon)","Eau pétillante, menthe"],
+ [/soupe|velouté|potage|bouillon|minestrone/,"Blanc léger (Mâcon, Sauvignon)","Eau ou infusion"],
+];
+function drinkFor(r,role){
+  if(role==="entree"||r.cat==="Entrée"){const t=norm(r.name);const e=ENTREE_DRINKS.find(x=>x[0].test(t))||(r.cat==="Soupe"?ENTREE_DRINKS[5]:null);
+    return e?[e[1],e[2]]:["Blanc sec ou crémant","Eau pétillante, citron"];}
+  const d=DRINKS.find(x=>x[0](r));return[d[1],d[2]];}
+function drinkLine(r,role){const d=drinkFor(r,role);return"🍷 "+d[0]+" · 🥤 "+d[1];}
 
 /* ---------- nature of foods and strict food combining (dissociation) ---------- */
 // families: prot (meat, fish, eggs, cheese and dairy), star (starches), legu (pulses), veg, fruit, fat, sugar, spice
