@@ -101,7 +101,7 @@ UID:20261023-soir@carnet-menus
 DTSTAMP:20261023T000000Z
 DTSTART;TZID=Europe/Paris:20261023T193000
 DTEND;TZID=Europe/Paris:20261023T210000
-SUMMARY:Soir : Tarte aux poireaux
+SUMMARY:Soir : Cake à la Bretonne au Sarrasin : la meilleure recette
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
