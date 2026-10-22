@@ -387,6 +387,10 @@ code{font-family:var(--f-mono);font-size:.92em}
   </form>
 </div>
 
+<div class="sheet" id="recSheet" hidden>
+  <div class="sheet-in" id="recSheetIn"></div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -702,6 +706,7 @@ function render(){
   const left=items.filter(i=>!menu.checked[i.key]).length+extras.filter(x=>!x.done).length;
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
   if($("#now"))renderNow();
+  if(!$("#recSheet").hidden)renderRecSheet();
   renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids);
 }
 
@@ -868,7 +873,9 @@ document.addEventListener("click",e=>{
   else if(a==="pkindFav"){pickFav=!pickFav;renderPick();}
   else if(a==="fav"){const r=recipes[id];if(!r)return;const nr=Object.assign({},r);if(nr.fav)delete nr.fav;else nr.fav=true;
     saveRecipe(id,nr);toast(nr.fav?"Ajoutée aux favoris":"Retirée des favoris");}
-  else if(a==="viewRec")openRecipe(id);
+  else if(a==="viewRec")openRecSheet(id);
+  else if(a==="closeRec")$("#recSheet").hidden=true;
+  else if(a==="recInList"){const rid=recSheetId;$("#recSheet").hidden=true;openRecipe(rid);}
   else if(a==="del"){confirmDel=id;render();}
   else if(a==="delNo"){confirmDel=null;render();}
   else if(a==="delYes"){confirmDel=null;openId=null;removeRecipe(id);toast("Recette supprimée");}
@@ -1196,6 +1203,28 @@ $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=
 $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#prefSheet").hidden=true;});
 
 let viewServ={}, recLimit=50;
+/* recipe shown over the current screen: closing it returns exactly where you were */
+let recSheetId=null;
+function openRecSheet(id){ if(!recipes[id])return; recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+function renderRecSheet(){
+  const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
+  const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
+  const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
+  const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div></div>
+      <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
+    <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
+    <div class="serv-row"><span class="label">Ingrédients pour</span>
+      <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
+      <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
+    <ul class="ings">${ings}</ul>
+    ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
+    <div class="row"><button type="button" class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.)`:`Ajouter aux courses pour ${p} pers.`}</button>
+      ${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine</a>`:""}</div>
+    <div class="row" style="justify-content:space-between"><button type="button" class="link" data-act="recInList">Modifier ou supprimer dans Recettes</button><button type="button" class="btn primary" data-act="closeRec">Revenir</button></div>`;
+}
+$("#recSheet").addEventListener("click",e=>{if(e.target.id==="recSheet")$("#recSheet").hidden=true;});
 function openRecipe(id){
   if(!recipes[id])return;
   $("#pickSheet").hidden=true;
