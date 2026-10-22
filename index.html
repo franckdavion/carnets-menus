@@ -172,6 +172,8 @@ button{cursor:pointer}
 .hmeal .sub{display:block;font-size:13px;color:var(--muted)}
 .nut{font-size:12px;color:var(--muted)}.slot-acts .nut{flex-basis:100%;margin-top:-6px}
 .day-nut{font-size:12px;color:var(--muted);margin:-2px 0 6px}
+[data-hidewine] .slot-acts .drink,[data-hidenut] .slot-acts .nut,[data-hidenut] .day-nut{display:none}
+.slot-name .chev{color:var(--accent);font-weight:700}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -498,6 +500,12 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
     <button class="btn primary" type="submit">Enregistrer</button>
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Afficher dans le menu (ce téléphone)</span>
+      <div class="pref-row"><div><strong>Vins et boissons</strong></div><div class="chips" id="showWine"></div></div>
+      <div class="pref-row"><div><strong>Calories et glucides</strong></div><div class="chips" id="showNut"></div></div>
+      <span class="muted" style="font-size:13px">Toujours visibles dans la fiche de chaque recette.</span>
+    </div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Apparence de ce téléphone (s'applique tout de suite)</span>
       <span class="muted" style="font-size:13px">Couleurs</span><div class="look-grid" id="lookPal"></div>
@@ -905,8 +913,8 @@ function renderMenu(){
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
-      return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
-        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+      return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)} <span class="chev" aria-hidden="true">›</span></button>
+        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -1274,6 +1282,7 @@ document.addEventListener("click",e=>{
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
+  else if(a==="showSet"){LS.set("cm_show"+b.dataset.k,b.dataset.v);applyShow();renderShow();}
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
   else if(a==="prefLight"){prefDraft.lightEve=b.dataset.v==="1";$("#pl-on").setAttribute("aria-pressed",prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);}
@@ -1689,7 +1698,12 @@ const FONTS=[["carnet","Carnet",'"Young Serif",Georgia,serif'],["moderne","Moder
 function look(){const d=document.documentElement;return{pal:d.dataset.pal||"sauge",font:d.dataset.font||"carnet",dark:d.dataset.dark||"auto"};}
 function setLook(k,v){document.documentElement.dataset[k]=v;LS.set("cm_"+k,v);renderLook();
   const bg=getComputedStyle(document.body).backgroundColor;document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content",bg));}
+function showOn(k){return LS.get("cm_show"+k,"1")!=="0";}
+function applyShow(){const d=document.documentElement;d.toggleAttribute("data-hidewine",!showOn("wine"));d.toggleAttribute("data-hidenut",!showOn("nut"));}
+function renderShow(){[["wine","#showWine"],["nut","#showNut"]].forEach(([k,sel])=>{const on=showOn(k);$(sel).innerHTML=`<button type="button" class="chip" data-act="showSet" data-k="${k}" data-v="1" aria-pressed="${on}">Oui</button><button type="button" class="chip" data-act="showSet" data-k="${k}" data-v="0" aria-pressed="${!on}">Non</button>`;});}
+applyShow();
 function renderLook(){
+  renderShow();
   const L=look();
   $("#lookPal").innerHTML=PALS.map(([v,n,a,b])=>`<button type="button" class="look" data-act="look" data-k="pal" data-v="${v}" aria-pressed="${L.pal===v}"><span class="sw" style="background:linear-gradient(135deg,${b} 50%,${a} 50%)"></span>${n}</button>`).join("");
   $("#lookFont").innerHTML=FONTS.map(([v,n,f])=>`<button type="button" class="look" data-act="look" data-k="font" data-v="${v}" aria-pressed="${L.font===v}" style="font-family:${f.replace(/"/g,"&quot;")};font-size:${v==="manuscrit"?20:16}px">${n}</button>`).join("");
