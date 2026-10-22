@@ -243,7 +243,8 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .idea-name{border:none;background:none;padding:0;text-align:left;color:inherit}
 .slot-sub{border:none;background:none;padding:2px 0;text-align:left;color:var(--ink);font-size:13px;min-width:0}
 .slot-main{min-width:0;display:flex;flex-direction:column}
-.slot{position:relative}.slot>.ctl{position:absolute;top:8px;right:0}.slot-main>.slot-name{padding-right:116px}
+.pick-web{border:1px solid var(--accent);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.slot{position:relative}.slot.flash{outline:2px solid var(--accent);outline-offset:3px;border-radius:10px}.slot>.ctl{position:absolute;top:8px;right:0}.slot-main>.slot-name{padding-right:116px}
 .slot-acts{display:flex;gap:8px 8px;align-items:center;flex-wrap:wrap;font-size:12px;margin:4px 0}
 .slot-acts .link{font-size:14px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:36px}
 .slot-acts .kind,.slot-acts .nut,.slot-acts .drink{flex-basis:100%}
@@ -433,6 +434,14 @@ code{font-family:var(--f-mono);font-size:.92em}
     <input class="search" id="pickQ" type="search" placeholder="Ou cherchez : poisson, poulet, gratin…">
     <div class="chips" id="pickKinds"></div>
     <div class="pick-list" id="pickList"></div>
+    <div id="pickWeb" class="pick-web" hidden>
+      <strong>La trouver sur le web</strong>
+      <div class="row"><a class="btn" id="pw-m" target="_blank" rel="noopener">Marmiton ↗</a><a class="btn" id="pw-7" target="_blank" rel="noopener">750g ↗</a><a class="btn" id="pw-j" target="_blank" rel="noopener">Jow ↗</a></div>
+      <span class="muted" style="font-size:13px">Sur la recette qui vous plaît : Partager → Copier le lien, puis collez-le ici.</span>
+      <textarea id="pwLinks" class="search" rows="2" placeholder="Collez le lien de la recette"></textarea>
+      <button type="button" class="btn primary" data-act="pickImport" style="align-self:flex-start">Importer et mettre au menu</button>
+      <div id="pwMsg" class="muted" style="font-size:13px"></div>
+    </div>
   </div>
 </div>
 
@@ -930,13 +939,13 @@ function renderMenu(){
   el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}${(menu.prefs.days||{})[d]?` <span class="muted" style="font-family:var(--f-body);font-size:12px">· ${esc((DAY_STYLES.find(x=>x[0]===menu.prefs.days[d])||["",""])[1])}</span>`:""}</div>${(()=>{const n=sumNut(MEALS.map(([m])=>slotNut(W()[slotKey(d,m)])));return n?`<div class="day-nut">Journée : ${esc(fmtNut(n))} / pers.</div>`:"";})()}
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
-      if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
-      return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)} <span class="chev" aria-hidden="true">›</span></button>
+      if(isPast(k))return`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
+      return r?`<div class="slot${s.lock?" locked":""}" data-slot="${k}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)} <span class="chev" aria-hidden="true">›</span></button>
         <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${menu.prefs.dissoc?`<span class="dline">${dissocBadge(mealDissoc(s))}</span>`:""}${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
-      :`<div class="slot"><span class="meal">${lab}</span><button class="slot-add${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir"}</button></div>`;}).join("")}</div>`).join("")}</div>`
+      :`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><button class="slot-add${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir"}</button></div>`;}).join("")}</div>`).join("")}</div>`
     +(diff?`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="applyAll">Mettre tous les repas à ${menu.people} pers.</button></div>`:"");
 }
 
@@ -1347,6 +1356,9 @@ document.addEventListener("click",e=>{
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
+  else if(a==="pickImport"){const k=pickKey,role=pickRole,w=curWeek;
+    sendImport($("#pwLinks").value,t=>{$("#pwMsg").textContent=t;},{w,k,role}).then(ok=>{if(ok){$("#pwLinks").value="";
+      $("#pwMsg").textContent="Le robot lit la recette… dans environ une minute, elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";}});}
   else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
   else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
   else if(a==="prefDissoc"){prefDraft.dissoc=b.dataset.v==="1";$("#pd-on").setAttribute("aria-pressed",prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);}
@@ -1360,7 +1372,7 @@ document.addEventListener("click",e=>{
   else if(a==="pickRandom"){
     if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
-  else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();}
+  else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
   else if(a==="rmCourse"){const sl=W()[b.dataset.k];if(sl&&!isPast(b.dataset.k)){delete sl[b.dataset.role];render();saveMenu();}}
   else if(a==="shopAdd"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
@@ -1838,11 +1850,13 @@ function pickPool(){
   const cats=ROLE_CATS[pickRole];
   return Object.keys(recipes).filter(x=>cats?cats.includes(recipes[x].cat):!NOT_MAIN.includes(recipes[x].cat)&&!onMenu(x));
 }
+function flashSlot(k){setTimeout(()=>{const el=document.querySelector(`[data-slot="${k}"]`);if(!el||view!=="menu")return;
+  el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1600);},90);}
 function setPicked(id){
   const k=pickKey, old=W()[k];
   if(pickRole==="main")W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});
   else{if(!old)return;old[pickRole]=id;}
-  $("#pickSheet").hidden=true;render();saveMenu();
+  $("#pickSheet").hidden=true;render();saveMenu();flashSlot(k);
   toast(slotLabel(k)+(pickRole==="entree"?" · entrée : ":pickRole==="dessert"?" · dessert : ":" : ")+recipes[id].name);
 }
 function renderPick(){
@@ -1854,7 +1868,10 @@ function renderPick(){
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
-    :'<p class="muted">Aucune recette ne correspond.</p>')+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
+    :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`)+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
+  const web=!!q&&!all.length; $("#pickWeb").hidden=!web;
+  if(web){const e=encodeURIComponent($("#pickQ").value.trim());
+    $("#pw-m").href=`https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}`;$("#pw-7").href=`https://www.750g.com/recherche?q=${e}`;$("#pw-j").href=`https://www.google.com/search?q=${e}+site%3Ajow.fr`;}
 }
 let suggSeen=[], suggNow=[], favLimit=8;
 function syncFavMode(){
@@ -1978,21 +1995,23 @@ $("#findIn").addEventListener("input",updateFindLinks);
 $("#findIn").addEventListener("keydown",e=>{if(e.key==="Enter")e.preventDefault();});
 let imports=LS.get("cm_imports",[]), importTimer=null;
 function importMsg(t){$("#importStatus").textContent=t;}
-$("#findForm").addEventListener("submit",async e=>{
-  e.preventDefault();
-  const urls=[...new Set(($("#linksIn").value.match(/https?:\/\/[^\s<>"'«»]+/g)||[]).map(u=>u.replace(/[).,;]+$/,"")))].slice(0,15);
-  if(!urls.length){importMsg("Collez au moins un lien de recette (il commence par https://).");return;}
-  if(!sync){importMsg("L'import passe par le robot de votre dépôt GitHub : connectez d'abord la synchro (pastille sous le titre).");return;}
+async function sendImport(text,msg,assign){
+  const urls=[...new Set((text.match(/https?:\/\/[^\s<>"'«»]+/g)||[]).map(u=>u.replace(/[).,;]+$/,"")))].slice(0,15);
+  if(!urls.length){msg("Collez au moins un lien de recette (il commence par https://).");return false;}
+  if(!sync){msg("L'import passe par le robot de votre dépôt GitHub : connectez d'abord la synchro (pastille sous le titre).");return false;}
   const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  importMsg("Envoi au robot…");
+  msg("Envoi au robot…");
   try{
     const p=await gh("PUT",{message:"Demande d'import",content:b64e(J({id,type:"import",urls,at:new Date().toISOString()}))},sync.repo,"inbox/"+id+".json");
     if(!p.ok)throw{status:p.status};
-  }catch(err){importMsg(err&&err.status?"Envoi impossible ("+err.status+") : vérifiez la synchro.":"Pas de connexion : réessayez quand le réseau revient.");return;}
-  imports.push({id,n:urls.length,at:Date.now()});LS.set("cm_imports",imports);
-  $("#linksIn").value="";
-  importMsg(`Le robot lit ${urls.length} recette${urls.length>1?"s":""}… environ une minute. Vous pouvez continuer à utiliser l'app.`);
-  startImportPolling();
+  }catch(err){msg(err&&err.status?"Envoi impossible ("+err.status+") : vérifiez la synchro.":"Pas de connexion : réessayez quand le réseau revient.");return false;}
+  imports.push(Object.assign({id,n:urls.length,at:Date.now()},assign?{assign}:{}));LS.set("cm_imports",imports);
+  msg(`Le robot lit ${urls.length} recette${urls.length>1?"s":""}… environ une minute. Vous pouvez continuer à utiliser l'app.`);
+  startImportPolling();return true;
+}
+$("#findForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(await sendImport($("#linksIn").value,importMsg))$("#linksIn").value="";
 });
 function startImportPolling(){if(!importTimer&&imports.length)importTimer=setInterval(pollImports,8000);}
 async function pollImports(){
@@ -2004,7 +2023,7 @@ async function pollImports(){
     if(g.status!==200)continue;
     let d;try{d=JSON.parse(b64d((await g.json()).content));}catch(x){continue;}
     imports=imports.filter(x=>x!==job);
-    let added=0;
+    let added=0, firstId=null;
     for(const r of d.recipes||[]){
       if(!r||!r.name||!Array.isArray(r.ing))continue;
       const same=Object.keys(recipes).find(k=>recipes[k].source&&recipes[k].source===r.source);
@@ -2012,8 +2031,11 @@ async function pollImports(){
       recipes[rid]={name:String(r.name),cat:CATS.includes(r.cat)?r.cat:"Plat",time:Number(r.time)||0,serves:Number(r.serves)||4,
         ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),
         steps:String(r.steps||""),source:String(r.source||""),createdAt:new Date().toISOString()};
-      added++;
+      added++; if(!firstId)firstId=rid;
     }
+    if(firstId&&job.assign){const{w,k,role}=job.assign;menu.weeks=menu.weeks||{};const wk=menu.weeks[w]=menu.weeks[w]||{};
+      if(role==="main"||!role)wk[k]=Object.assign({},wk[k]||{},{id:firstId,n:wk[k]&&wk[k].n||menu.people});else if(wk[k])wk[k][role]=firstId;
+      saveMenu();setTimeout(()=>toast(recipes[firstId].name+" placée sur "+slotLabel(k)),2800);}
     LS.set("cm_recipes",recipes);render();scheduleSync();
     const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
     importMsg((added?`${added} recette${added>1?"s":""} ajoutée${added>1?"s":""} au carnet.`:"Aucune recette ajoutée.")+(errs.length?" Non importées : "+errs.join(" · "):""));
