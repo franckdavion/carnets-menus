@@ -831,6 +831,7 @@ document.addEventListener("click",e=>{
   else if(a==="proposeUndo"){if(undoWeek&&undoWeek.week===curWeek){menu.weeks[curWeek]=undoWeek.slots;undoWeek=null;render();saveMenu();toast("Ancienne semaine remise");}}
   else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
   else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
+  else if(a==="moreFav"){favLimit+=50;renderSugg();}
   else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
   else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
     const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
@@ -1226,7 +1227,7 @@ function renderPick(){
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :'<p class="muted">Aucune recette ne correspond.</p>')+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
 }
-let suggSeen=[], suggNow=[];
+let suggSeen=[], suggNow=[], favLimit=8;
 function renderSugg(){
   const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn){box.innerHTML="";return;}
   const week=weekMap(); delete week[pickKey];
@@ -1237,15 +1238,20 @@ function renderSugg(){
   const kinds=new Set(); suggNow=[];
   for(const id of ranked){const kd=kindOf(recipes[id]);if(!kinds.has(kd)){kinds.add(kd);suggNow.push(id);}if(suggNow.length>=5)break;}
   for(const id of ranked){if(suggNow.length>=5)break;if(!suggNow.includes(id))suggNow.push(id);}
-  box.innerHTML=suggNow.length?`<span class="label">Suggestions pour ce repas</span><div class="pick-list">${suggNow.map(id=>{const r=recipes[id];
-    return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${esc(r.name)}</span><span class="muted" style="font-size:13px;white-space:nowrap">${KIND_LABEL[kindOf(r)]}${r.time?" · "+r.time+" min":""}</span></button>`;}).join("")}</div>
-    <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"";
+  const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${KIND_LABEL[kindOf(r)]}${r.time?" · "+r.time+" min":""}</span></button>`;};
+  const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&!NOT_MAIN.includes(recipes[id].cat)&&(!cur||id!==cur.id))
+    .map(id=>[id,scoreFor(id,pickKey,week)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  box.innerHTML=(suggNow.length?`<span class="label">Suggestions pour ce repas</span><div class="pick-list">${suggNow.map(item).join("")}</div>
+    <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"")
+    +`<span class="label" style="display:block;margin-top:14px">★ Vos favoris</span>`
+    +(favs.length?`<div class="pick-list">${favs.slice(0,favLimit).map(item).join("")}</div>${favs.length>favLimit?`<button class="link" data-act="moreFav" style="margin-top:6px">Voir les ${favs.length-favLimit} autres favoris</button>`:""}`
+      :`<p class="muted" style="font-size:13px;margin:4px 0 0">Aucun favori pour l'instant : dans l'onglet Recettes, touchez l'étoile ☆ d'une recette pour l'ajouter.</p>`);
 }
 let suggOn=false;
 let pickKind="", pickQuick=false, pickLight=false, pickFav=false;
 function openPick(k,role,withSugg){
   pickKind=""; pickQuick=false; pickLight=false; pickFav=false;
-  suggOn=!!withSugg; suggSeen=[];
+  suggOn=!!withSugg; suggSeen=[]; favLimit=8;
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
