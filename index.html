@@ -297,6 +297,7 @@ code{font-family:var(--f-mono);font-size:.92em}
         <h2>Liste de courses</h2>
         <span class="sum" id="shopSum"></span>
       </div>
+      <div class="field" id="shopDays" style="padding:12px 0 4px;border-bottom:1px dashed var(--line)"></div>
       <div id="shopList"></div>
     </div>
     <form class="extra-form" id="extraForm">
@@ -529,6 +530,21 @@ function fmt(q,u){
   const pl={botte:"bottes",tranche:"tranches",boîte:"boîtes",sachet:"sachets",pincée:"pincées"};
   return n+" "+(n>1&&pl[u]?pl[u]:u);
 }
+/* days covered by the shopping list: upcoming days that have meals, chosen by the user */
+const SHOP_SPAN=21;
+function shopDates(){
+  const t=new Date(),t0=new Date(t.getFullYear(),t.getMonth(),t.getDate()),out=[];
+  for(let i=0;i<SHOP_SPAN;i++){const d=addDays(t0,i),wk=(menu.weeks||{})[ymd(mondayOf(d))];if(!wk)continue;
+    const dn=DAYS[(d.getDay()+6)%7],sl=MEALS.map(([m])=>wk[slotKey(dn,m)]).filter(s=>s&&recipes[s.id]);
+    if(sl.length)out.push({d,key:ymd(d),dn,wk,n:sl.length,locked:sl.filter(s=>s.lock).length});}
+  return out;
+}
+function defaultShopKeys(all){const end=ymd(addDays(mondayOf(new Date()),6));return all.filter(x=>x.key<=end).map(x=>x.key);}
+function selectedShopDates(){
+  const all=shopDates(), keys=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
+  return all.filter(x=>keys.includes(x.key));
+}
+const dayShort=x=>x.dn.slice(0,3)+". "+x.d.getDate();
 function shopping(){
   const acc={};
   const add=(rid,n,when)=>{
@@ -545,9 +561,10 @@ function shopping(){
     }
   };
   // Only locked meals go to the shopping list: unlocking a meal takes its ingredients off.
-  for(const k of SLOT_ORDER){
-    const sl=W()[k]; if(!sl||!sl.lock||isPast(k))continue;
-    const when=slotLabel(k);
+  // Only the days chosen at the top of the shopping list count.
+  for(const x of selectedShopDates())for(const[m]of MEALS){
+    const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id])continue;
+    const when=x.dn+" "+x.d.getDate()+" "+m;
     add(sl.id,sl.n,when); if(sl.entree)add(sl.entree,sl.n,when); if(sl.dessert)add(sl.dessert,sl.n,when);
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n,"hors menu");
@@ -863,14 +880,18 @@ function renderRecipes(){
 }
 
 function renderShop(items,extras,ids){
-  const meals=ids.filter(k=>!isPast(k)&&W()[k]&&W()[k].lock).length;
-  const unlocked=ids.filter(k=>!isPast(k)&&W()[k]&&!W()[k].lock).length;
-  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
+  const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
+  const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
+  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key);return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}</button></span>`;}).join("")}</div>
+    <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>`
+    :`<span class="muted" style="font-size:13px">Aucun repas prévu dans les 3 prochaines semaines.</span>`;
+  const range=sel.length?(sel.length===1?dayShort(sel[0]):`Du ${dayShort(sel[0])} au ${dayShort(sel[sel.length-1])}`):"Aucun jour choisi";
+  $("#shopSum").textContent=`${range} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="item" style="cursor:default"><span></span><span class="nm">${esc(recipes[id].name)}</span><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
   const hint=unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
-  if(!items.length&&!extras.length){el.innerHTML=hint+'<div class="muted" style="padding:16px 0">La liste se remplit dès que vous verrouillez des repas du menu.</div>';return;}
+  if(!items.length&&!extras.length){el.innerHTML=hint+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   let h=groups.map(g=>`<div class="rayon"><h4>${esc(g.ry)}</h4>${g.its.map(i=>{
     const done=!!menu.checked[i.key];
@@ -1043,6 +1064,10 @@ document.addEventListener("click",e=>{
   else if(a==="sideToggle"){toggleSide(b.dataset.t);render();renderSide();saveMenu(300);}
   else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
   else if(a==="rmSide"){const s=W()[b.dataset.k];if(s&&s.extra){s.extra.splice(Number(b.dataset.i),1);if(!s.extra.length)delete s.extra;render();saveMenu();}}
+  else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
+    const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
+  else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
+  else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
