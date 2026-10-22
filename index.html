@@ -13,8 +13,10 @@
 <link rel="icon" href="icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Carnet de menus</title>
+<script>(function(){try{var d=document.documentElement,g=function(k,v){var x=localStorage.getItem(k);return x?JSON.parse(x):v};
+d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Caveat:wght@600;700&family=Abril+Fatface&display=swap">
 <style>
 /* Layout: one-column kitchen notebook, three views behind a bottom tab bar; the shopping list reads like a market ticket. */
 :root{
@@ -24,15 +26,23 @@
   --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"DM Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#111814; --surface:#19221C; --ink:#E6ECE5; --muted:#99A69C; --line:#2A362E;
-  --accent:#7DC395; --accent-ink:#0E1A12; --soft:#22302737; --mark:#E7B23A; --danger:#E27C66; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#111814; --surface:#19221C; --ink:#E6ECE5; --muted:#99A69C; --line:#2A362E;
-  --accent:#7DC395; --accent-ink:#0E1A12; --soft:#22302737; --mark:#E7B23A; --danger:#E27C66; color-scheme:dark}
+/* Colour palettes (chosen per phone in Préférences → Apparence) */
+:root[data-pal="faience"]{--bg:#F4F7FB;--surface:#FFFFFF;--ink:#14284B;--muted:#56637A;--line:#D6E0EE;--accent:#2A5CAA;--accent-ink:#FFFFFF;--soft:#E4ECF7;--mark:#E7B23A;--danger:#B0412D}
+:root[data-pal="bistrot"]{--bg:#FBF7F2;--surface:#FFFFFF;--ink:#2B1D17;--muted:#6E5A4E;--line:#E7D9CB;--accent:#B23A2B;--accent-ink:#FFFFFF;--soft:#F5E9DE;--mark:#E7B23A;--danger:#8E2A1F;--pattern:repeating-linear-gradient(0deg,transparent 0 27px,#EFE4D8 27px 28px)}
+:root[data-pal="provence"]{--bg:#F6F3E6;--surface:#FFFDF4;--ink:#2E2C14;--muted:#6A6648;--line:#E4DDB8;--accent:#6B7A1F;--accent-ink:#FFFFFF;--soft:#ECE7CC;--mark:#D9A21B;--danger:#A8432A}
+:root[data-pal="agrumes"]{--bg:#FFF8EC;--surface:#FFFFFF;--ink:#3A2208;--muted:#7A5E44;--line:#F3DFC2;--accent:#D9631F;--accent-ink:#FFFFFF;--soft:#FDEBD3;--mark:#F2B33D;--danger:#B0412D}
+:root[data-pal="ardoise"]{--bg:#141917;--surface:#1C2420;--ink:#E6ECE5;--muted:#99A69C;--line:#2C3731;--accent:#7DC395;--accent-ink:#0E1A12;--soft:#22302A;--mark:#E7B23A;--danger:#E27C66;--pattern:none;color-scheme:dark}
+@media (prefers-color-scheme: dark){:root[data-dark="auto"]{--bg:#141917;--surface:#1C2420;--ink:#E6ECE5;--muted:#99A69C;--line:#2C3731;--accent:#7DC395;--accent-ink:#0E1A12;--soft:#22302A;--mark:#E7B23A;--danger:#E27C66;--pattern:none;color-scheme:dark}}
+/* Title styles */
+:root[data-font="moderne"]{--f-display:"Instrument Sans",system-ui,sans-serif}
+:root[data-font="moderne"] h1,:root[data-font="moderne"] h2,:root[data-font="moderne"] h3{font-weight:700;letter-spacing:-.01em}
+:root[data-font="manuscrit"]{--f-display:"Caveat","Bradley Hand",cursive}
+:root[data-font="manuscrit"] h1{font-size:38px}:root[data-font="manuscrit"] h2{font-size:29px}:root[data-font="manuscrit"] h3{font-size:23px;font-weight:600}
+:root[data-font="retro"]{--f-display:"Abril Fatface",Georgia,serif}
+:root[data-font="retro"] h3{font-size:17px}
 
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+body{background:var(--bg) var(--pattern,none);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
 .wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px calc(96px + env(safe-area-inset-bottom,0px))}
 h1,h2,h3{font-family:var(--f-display);font-weight:400;text-wrap:balance;margin:0}
 h1{font-size:28px;line-height:1.1}
@@ -135,6 +145,12 @@ button{cursor:pointer}
 .ing-block{display:flex;flex-direction:column;gap:6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .err{color:var(--danger);font-size:13px;min-height:1em}
 
+.now{margin:6px 0 0;font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.now b{font-weight:600;color:var(--accent)}
+.look-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.look{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;text-align:left;display:flex;align-items:center;gap:8px;font-size:14px}
+.look[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.sw{width:22px;height:22px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.12)}
 .sync-chip{margin-top:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 10px 4px 22px;font-size:12px;color:var(--muted);position:relative;text-align:left}
 .sync-chip::before{content:"";position:absolute;left:9px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--muted)}
 .sync-chip[data-state="ok"]::before{background:var(--accent)}
@@ -188,6 +204,7 @@ code{font-family:var(--f-mono);font-size:.92em}
   <header class="top">
     <div>
       <h1>Carnet de menus</h1>
+      <p id="now" class="now"></p>
       <p id="sub">Choisissez les repas, la liste se fait toute seule.</p>
       <button class="sync-chip" data-act="openSync" id="syncChip" data-state="off">Synchro désactivée</button>
     </div>
@@ -262,7 +279,8 @@ code{font-family:var(--f-mono);font-size:.92em}
       <button class="btn" type="submit">Ajouter</button>
     </form>
     <div class="row">
-      <button class="btn primary" data-act="copy">Copier la liste</button>
+      <button class="btn primary" data-act="shareList">Envoyer vers Notes</button>
+      <button class="btn" data-act="copy">Copier la liste</button>
       <button class="btn ghost" data-act="uncheck">Tout décocher</button>
     </div>
   </section>
@@ -335,8 +353,9 @@ code{font-family:var(--f-mono);font-size:.92em}
 <div class="sheet" id="pickSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="pickTitle">Choisir</h2><button type="button" class="btn ghost" data-act="closePick">Fermer</button></div>
-    <div class="row"><button class="btn" data-act="pickRandom">Au hasard</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
-    <input class="search" id="pickQ" type="search" placeholder="Chercher une recette">
+    <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
+    <div id="pickSugg"></div>
+    <input class="search" id="pickQ" type="search" placeholder="Ou cherchez dans toutes vos recettes">
     <div class="pick-list" id="pickList"></div>
   </div>
 </div>
@@ -351,6 +370,12 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
     <button class="btn primary" type="submit">Enregistrer</button>
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Apparence de ce téléphone (s'applique tout de suite)</span>
+      <span class="muted" style="font-size:13px">Couleurs</span><div class="look-grid" id="lookPal"></div>
+      <span class="muted" style="font-size:13px;margin-top:6px">Style des titres</span><div class="look-grid" id="lookFont"></div>
+      <span class="muted" style="font-size:13px;margin-top:6px">Mode sombre</span><div class="look-grid" id="lookDark"></div>
+    </div>
   </form>
 </div>
 
@@ -668,6 +693,7 @@ function render(){
   const items=shopping(), extras=menu.extras||[];
   const left=items.filter(i=>!menu.checked[i.key]).length+extras.filter(x=>!x.done).length;
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
+  if($("#now"))renderNow();
   renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids);
 }
 
@@ -793,22 +819,23 @@ document.addEventListener("click",e=>{
     undoWeek=had?{week:curWeek,slots:JSON.parse(JSON.stringify(W())),locked:SLOT_ORDER.some(k=>W()[k]&&W()[k].lock)}:null;
     planWeek(true);}
   else if(a==="proposeUndo"){if(undoWeek&&undoWeek.week===curWeek){menu.weeks[curWeek]=undoWeek.slots;undoWeek=null;render();saveMenu();toast("Ancienne semaine remise");}}
-  else if(a==="swap"){const k=b.dataset.k,cur=W()[k];if(!cur)return;
-    const id=bestFor(k,[cur.id]);if(!id){toast("Pas d'autre recette disponible");return;}
-    W()[k]=Object.assign({},cur,{id});render();saveMenu();}
+  else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
+  else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
   else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
   else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
     const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
   else if(a==="vservApply"){const n=viewServ[id];if(n){slotsOf(id).forEach(k=>W()[k].n=n);render();saveMenu();toast("Portions du menu mises à jour");}}
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
+  else if(a==="look")setLook(b.dataset.k,b.dataset.v);
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k,b.dataset.role||"main");
   else if(a==="pickSet")setPicked(id);
-  else if(a==="pickRandom"){const from=pickPool();
-    if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}
+  else if(a==="pickRandom"){
+    if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
+    else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
   else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();}
   else if(a==="rmCourse"){const sl=W()[b.dataset.k];if(sl&&!isPast(b.dataset.k)){delete sl[b.dataset.role];render();saveMenu();}}
   else if(a==="shopAdd"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
@@ -825,6 +852,7 @@ document.addEventListener("click",e=>{
   else if(a==="uncheck"){menu.checked={};(menu.extras||[]).forEach(x=>x.done=false);render();saveMenu();}
   else if(a==="rmX"){e.preventDefault();menu.extras.splice(Number(b.dataset.i),1);render();saveMenu();}
   else if(a==="copy")copyList();
+  else if(a==="shareList")shareList();
   else if(a==="backup")backup();
   else if(a==="pasteRecipe"){openSheet();$("#pasteBox").open=true;setTimeout(()=>$("#pasteIn").focus(),80);}
   else if(a==="parsePaste"){
@@ -853,6 +881,15 @@ $("#q").addEventListener("input",e=>{filter.q=e.target.value;recLimit=50;renderR
 $("#extraForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#extraIn").value.trim();if(!v)return;
   menu.extras=[...(menu.extras||[]),{t:v,done:false}];$("#extraIn").value="";render();saveMenu();});
 
+async function shareList(){
+  const t=listText(); if(!t){toast("La liste est vide pour l'instant");return;}
+  const title="Courses · semaine du "+shortDate(weekStartDate());
+  if(navigator.share){
+    try{await navigator.share({title,text:title+"\n\n"+t});return;}
+    catch(e){if(e&&e.name==="AbortError")return;}
+  }
+  copyList(); toast("Liste copiée : collez-la dans une note");
+}
 function listText(){
   const items=shopping().filter(i=>!menu.checked[i.key]);
   const lines=[];
@@ -1006,7 +1043,7 @@ function parseRecipeText(text){
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"bœuf / veau",volaille:"volaille",porc:"porc",vege:"végé"};
 const KIND_RE=[["poisson",/saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
-  ["rouge",/b(?:œ|oe)uf|veau|agneau|steak|bourguignon|bavette/i],
+  ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez/i],
   ["volaille",/poulet|dinde|canard|volaille|pintade/i],
   ["porc",/porc|lardon|jambon|saucisse|chorizo|bacon|rôti de porc|chipolata/i]];
 const kindCache=new Map();
@@ -1072,10 +1109,31 @@ function planWeek(replaceAll){
   render();saveMenu();
   toast(targets.length?`${targets.length} repas proposés : « ↻ Autre » pour changer un plat`:"Rien à remplir : toutes les cases sont prises ou verrouillées");
 }
+/* ---------- look (per phone) and clock ---------- */
+const PALS=[["sauge","Sauge","#2E6A45","#F1F4EE"],["faience","Faïence","#2A5CAA","#F4F7FB"],["bistrot","Bistrot","#B23A2B","#FBF7F2"],["provence","Provence","#6B7A1F","#F6F3E6"],["agrumes","Agrumes","#D9631F","#FFF8EC"],["ardoise","Ardoise","#7DC395","#141917"]];
+const FONTS=[["carnet","Carnet",'"Young Serif",Georgia,serif'],["moderne","Moderne",'"Instrument Sans",system-ui,sans-serif'],["manuscrit","Manuscrit",'"Caveat",cursive'],["retro","Rétro",'"Abril Fatface",Georgia,serif']];
+function look(){const d=document.documentElement;return{pal:d.dataset.pal||"sauge",font:d.dataset.font||"carnet",dark:d.dataset.dark||"auto"};}
+function setLook(k,v){document.documentElement.dataset[k]=v;LS.set("cm_"+k,v);renderLook();
+  const bg=getComputedStyle(document.body).backgroundColor;document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content",bg));}
+function renderLook(){
+  const L=look();
+  $("#lookPal").innerHTML=PALS.map(([v,n,a,b])=>`<button type="button" class="look" data-act="look" data-k="pal" data-v="${v}" aria-pressed="${L.pal===v}"><span class="sw" style="background:linear-gradient(135deg,${b} 50%,${a} 50%)"></span>${n}</button>`).join("");
+  $("#lookFont").innerHTML=FONTS.map(([v,n,f])=>`<button type="button" class="look" data-act="look" data-k="font" data-v="${v}" aria-pressed="${L.font===v}" style="font-family:${f.replace(/"/g,"&quot;")};font-size:${v==="manuscrit"?20:16}px">${n}</button>`).join("");
+  $("#lookDark").innerHTML=[["auto","Comme l'iPhone"],["off","Jamais"]].map(([v,n])=>`<button type="button" class="look" data-act="look" data-k="dark" data-v="${v}" aria-pressed="${L.dark===v}">${n}</button>`).join("");
+}
+function renderNow(){
+  const d=new Date(), txt=d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+  let next="";
+  const h=d.getHours(), cw=ymd(mondayOf(d)), sl=(menu.weeks||{})[cw]||{}, day=DAYS[(d.getDay()+6)%7];
+  const pick=(meal,lab)=>{const s=sl[slotKey(day,meal)];return s&&recipes[s.id]?`${lab} : <b>${esc(recipes[s.id].name)}</b>`:"";};
+  if(h<14)next=pick("midi","Ce midi")||pick("soir","Ce soir"); else if(h<22)next=pick("soir","Ce soir");
+  $("#now").innerHTML=`${txt.charAt(0).toUpperCase()+txt.slice(1)} · ${d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${next?"<br>"+next:""}`;
+}
 function openPrefs(){
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
   $("#p-skip").innerHTML=DAYS.map(d=>`<button type="button" class="chip" data-act="prefSkip" data-d="${d}" aria-pressed="${prefDraft.skip.includes(d)}">${d}</button>`).join("");
+  renderLook();
   $("#prefSheet").hidden=false;
 }
 $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=$("#p-avoid").value.trim();
@@ -1106,11 +1164,29 @@ function renderPick(){
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :'<p class="muted">Aucune recette ne correspond.</p>')+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
 }
-function openPick(k,role){
+let suggSeen=[], suggNow=[];
+function renderSugg(){
+  const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn){box.innerHTML="";return;}
+  const week=weekMap(); delete week[pickKey];
+  const cur=W()[pickKey], skip=new Set([...(cur?[cur.id]:[]),...suggSeen]);
+  let cands=eligible().filter(id=>!skip.has(id));
+  if(cands.length<4){suggSeen=[];cands=eligible().filter(id=>!cur||id!==cur.id);}
+  const ranked=cands.map(id=>[id,scoreFor(id,pickKey,week)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  const kinds=new Set(); suggNow=[];
+  for(const id of ranked){const kd=kindOf(recipes[id]);if(!kinds.has(kd)){kinds.add(kd);suggNow.push(id);}if(suggNow.length>=5)break;}
+  for(const id of ranked){if(suggNow.length>=5)break;if(!suggNow.includes(id))suggNow.push(id);}
+  box.innerHTML=suggNow.length?`<span class="label">Suggestions pour ce repas</span><div class="pick-list">${suggNow.map(id=>{const r=recipes[id];
+    return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${esc(r.name)}</span><span class="muted" style="font-size:13px;white-space:nowrap">${KIND_LABEL[kindOf(r)]}${r.time?" · "+r.time+" min":""}</span></button>`;}).join("")}</div>
+    <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"";
+}
+let suggOn=false;
+function openPick(k,role,withSugg){
+  suggOn=!!withSugg; suggSeen=[];
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
-  renderPick(); $("#pickSheet").hidden=false;
+  $("#pickRandomBtn").textContent=(role||"main")==="main"?"Choix automatique":"Au hasard";
+  renderSugg(); renderPick(); $("#pickSheet").hidden=false;
 }
 $("#pickQ").addEventListener("input",renderPick);
 $("#pickSheet").addEventListener("click",e=>{if(e.target.id==="pickSheet")$("#pickSheet").hidden=true;});
@@ -1251,6 +1327,7 @@ render();
 setStatus(sync?"pending":"off");
 if(sync)runSync();
 startImportPolling();
+renderNow(); setInterval(renderNow,20000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
