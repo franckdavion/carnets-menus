@@ -135,6 +135,7 @@ button{cursor:pointer}
 
 /* sheet (new recipe) */
 .sheet{position:fixed;inset:0;z-index:20;overscroll-behavior:contain;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;align-items:flex-end;justify-content:center}
+.dchips{display:flex;flex-wrap:wrap;gap:6px}.dchip{display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--surface);border-radius:999px;font-size:14px}.dchip button{border:none;background:none;padding:7px 12px;color:inherit}.dchip button.rm{padding:7px 10px 7px 0;color:var(--muted);font-size:13px}.dchip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}.dchip.on button.rm{color:var(--accent-ink)}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -281,8 +282,9 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div id="shopList"></div>
     </div>
     <form class="extra-form" id="extraForm">
-      <input id="extraIn" placeholder="Ajouter un article (lessive, café…)" autocomplete="off">
+      <input id="extraIn" placeholder="Ajouter un article" autocomplete="off">
       <button class="btn" type="submit">Ajouter</button>
+      <button class="btn primary" type="button" data-act="openDaily">Quotidien</button>
     </form>
     <div class="row">
       <button class="btn primary" data-act="shareList">Envoyer vers Notes</button>
@@ -364,6 +366,18 @@ code{font-family:var(--f-mono);font-size:.92em}
     <input class="search" id="pickQ" type="search" placeholder="Ou cherchez : poisson, poulet, gratin…">
     <div class="chips" id="pickKinds"></div>
     <div class="pick-list" id="pickList"></div>
+  </div>
+</div>
+
+<div class="sheet" id="dailySheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Produits du quotidien</h2><button type="button" class="btn primary" data-act="closeDaily">Terminé</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Touchez un produit pour l'ajouter à la liste de courses, touchez-le encore pour le retirer.</p>
+    <div id="dailyList" style="display:flex;flex-direction:column;gap:14px"></div>
+    <form class="field" id="dailyForm" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Ajouter un produit à « Mes produits »</span>
+      <div class="extra-form"><input id="dailyIn" placeholder="Ex. croquettes du chat, piles" autocomplete="off"><button class="btn" type="submit">Ajouter</button></div>
+    </form>
   </div>
 </div>
 
@@ -828,6 +842,30 @@ function renderShop(items,extras,ids){
   el.innerHTML=hint+xrHtml+h;
 }
 
+/* ---------- everyday products ---------- */
+const DAILY=[
+ ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
+ ["Entretien",["Essuie-tout (Sopalin)","Liquide vaisselle","Pastilles lave-vaisselle","Sel lave-vaisselle","Lessive","Adoucissant","Éponges","Sacs poubelle","Nettoyant multi-usage","Javel","Nettoyant WC","Lingettes ménagères"]],
+ ["Cuisine",["Papier aluminium","Film étirable","Papier cuisson","Sacs congélation","Filtres à café"]],
+ ["Épicerie de base",["Café","Thé","Sucre","Sel","Poivre","Huile d'olive","Farine","Pâtes","Riz","Céréales","Confiture","Biscuits","Eau"]],
+ ["Frais",["Lait","Œufs","Beurre","Pain","Yaourts","Fromage râpé","Jambon"]],
+ ["Divers",["Piles","Ampoules","Allumettes"]],
+];
+const nk=s=>norm(String(s));
+const inExtras=t=>(menu.extras||[]).findIndex(x=>nk(x.t)===nk(t));
+function renderDaily(){
+  const chip=(t,own)=>{const on=inExtras(t)>=0;return`<span class="dchip${on?" on":""}"><button type="button" data-act="dailyToggle" data-t="${esc(t)}" aria-pressed="${on}">${on?"✓ ":""}${esc(t)}</button>${own?`<button type="button" class="rm" data-act="dailyRm" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes produits">✕</button>`:""}</span>`;};
+  const mine=menu.daily||[];
+  $("#dailyList").innerHTML=`<div class="field"><span class="label">Mes produits</span>${mine.length?`<div class="dchips">${mine.map(t=>chip(t,true)).join("")}</div>`:'<span class="muted" style="font-size:13px">Ajoutez vos produits habituels en bas de cette fenêtre.</span>'}</div>`
+    +DAILY.map(([g,its])=>`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}</div></div>`).join("");
+}
+$("#dailyForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#dailyIn").value.trim();if(!v)return;
+  const all=[...(menu.daily||[]),...DAILY.flatMap(x=>x[1])];
+  if(all.some(t=>nk(t)===nk(v))){toast("Ce produit est déjà dans la liste");$("#dailyIn").value="";return;}
+  menu.daily=[...(menu.daily||[]),v];
+  if(inExtras(v)<0)menu.extras=[...(menu.extras||[]),{t:v,done:false}];
+  $("#dailyIn").value="";render();renderDaily();saveMenu();toast(v+" ajouté à vos produits et aux courses");});
+
 /* ---------- actions ---------- */
 let tt=null;
 function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,2600);}
@@ -902,6 +940,12 @@ document.addEventListener("click",e=>{
   else if(a==="delNo"){confirmDel=null;render();}
   else if(a==="delYes"){confirmDel=null;openId=null;removeRecipe(id);toast("Recette supprimée");}
   else if(a==="uncheck"){menu.checked={};(menu.extras||[]).forEach(x=>x.done=false);render();saveMenu();}
+  else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
+  else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
+  else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
+    if(i>=0)menu.extras.splice(i,1);else menu.extras=[...(menu.extras||[]),{t,done:false}];
+    render();renderDaily();saveMenu();}
+  else if(a==="dailyRm"){const t=b.dataset.t;menu.daily=(menu.daily||[]).filter(x=>x!==t);render();renderDaily();saveMenu();toast(t+" retiré de vos produits");}
   else if(a==="rmX"){e.preventDefault();menu.extras.splice(Number(b.dataset.i),1);render();saveMenu();}
   else if(a==="copy")copyList();
   else if(a==="shareList")shareList();
