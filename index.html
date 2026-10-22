@@ -177,6 +177,10 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .slot-done{color:var(--muted);font-size:15px;min-width:0}
 .course{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .slot-done .course{display:block}
+.card-btns{display:flex;align-items:center;gap:8px}
+.star{border:none;background:none;font-size:24px;line-height:1;color:var(--muted);padding:4px}
+.star.on{color:var(--mark)}
+.idea-name{border:none;background:none;padding:0;text-align:left;color:inherit}
 .slot-sub{border:none;background:none;padding:2px 0;text-align:left;color:var(--ink);font-size:13px;min-width:0}
 .slot-main{min-width:0;display:flex;flex-direction:column}
 .slot-acts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px}
@@ -451,7 +455,7 @@ let recipes={};
 let menu={people:4,weeks:{},checked:{},extras:[]};
 let mode="loading", db=null, menuRef=null;
 let view=LS.get("cm_view","menu");
-let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false};
+let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false};
 let openId=null, confirmDel=null, ideaId=null;
 
 /* ---------- quantities ---------- */
@@ -709,9 +713,10 @@ function renderIdea(){
   if(!ideaId||!pool.includes(ideaId))ideaId=pool[Math.floor(Math.random()*pool.length)];
   const r=recipes[ideaId];
   el.innerHTML=`<span class="label">Pas d'idée ? Et pourquoi pas…</span>
-   <h3>${esc(r.name)}</h3>
+   <button class="idea-name" data-act="viewRec" data-id="${esc(ideaId)}"><h3>${r.fav?"★ ":""}${esc(r.name)}</h3></button>
    <span class="muted" style="font-size:13px"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min":""}</span>
    <div class="row"><button class="btn primary" data-act="toggle" data-id="${esc(ideaId)}">Ajouter au menu</button>
+   <button class="btn" data-act="viewRec" data-id="${esc(ideaId)}">Voir la recette</button>
    <button class="btn ghost" data-act="reroll">Autre idée</button></div>`;
 }
 
@@ -734,7 +739,7 @@ function renderMenu(){
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
-        <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}</div></div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -746,10 +751,10 @@ function renderRecipes(){
   const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>r.cat===c))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
   $("#chips").innerHTML=cats.map(c=>`<button class="chip" data-act="cat" data-c="${esc(c)}" aria-pressed="${filter.cat===c}">${esc(c)}</button>`).join("");
-  $("#kindChips").innerHTML=kindChipsHtml("kind",filter.kind,filter.quick,filter.light);
+  $("#kindChips").innerHTML=kindChipsHtml("kind",filter.kind,filter.quick,filter.light,filter.fav);
   const list=Object.entries(recipes)
     .filter(([,r])=>filter.cat==="Toutes"||r.cat===filter.cat)
-    .filter(([,r])=>recMatch(r,filter.q,filter.kind,filter.quick,filter.light))
+    .filter(([,r])=>recMatch(r,filter.q,filter.kind,filter.quick,filter.light,filter.fav))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
@@ -774,9 +779,10 @@ function renderRecipes(){
           :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
-      <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}"><h3>${esc(r.name)}</h3>
+      <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
       <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${(r.ing||[]).length} ingrédients</div></button>
-      <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button>
+      <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
+      <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
 }
 
@@ -854,9 +860,14 @@ document.addEventListener("click",e=>{
   else if(a==="kind"){filter.kind=b.dataset.v;recLimit=50;renderRecipes();}
   else if(a==="kindQuick"){filter.quick=!filter.quick;recLimit=50;renderRecipes();}
   else if(a==="kindLight"){filter.light=!filter.light;recLimit=50;renderRecipes();}
+  else if(a==="kindFav"){filter.fav=!filter.fav;recLimit=50;renderRecipes();}
   else if(a==="pkind"){pickKind=b.dataset.v;renderPick();}
   else if(a==="pkindQuick"){pickQuick=!pickQuick;renderPick();}
   else if(a==="pkindLight"){pickLight=!pickLight;renderPick();}
+  else if(a==="pkindFav"){pickFav=!pickFav;renderPick();}
+  else if(a==="fav"){const r=recipes[id];if(!r)return;const nr=Object.assign({},r);if(nr.fav)delete nr.fav;else nr.fav=true;
+    saveRecipe(id,nr);toast(nr.fav?"Ajoutée aux favoris":"Retirée des favoris");}
+  else if(a==="viewRec")openRecipe(id);
   else if(a==="del"){confirmDel=id;render();}
   else if(a==="delNo"){confirmDel=null;render();}
   else if(a==="delYes"){confirmDel=null;openId=null;removeRecipe(id);toast("Recette supprimée");}
@@ -1056,14 +1067,15 @@ const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",por
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
-const FAMILY=[[/^(leger|legers|legere|legeres|light)$/,r=>isLight(r)],[/^(poissons?|fruits? de mer|mer)$/,r=>kindOf(r)==="poisson"],[/^viandes?$/,r=>["rouge","volaille","porc"].includes(kindOf(r))],
+const FAMILY=[[/^(favoris?|favorites?|prefere(e|es|s)?)$/,r=>!!r.fav],[/^(leger|legers|legere|legeres|light)$/,r=>isLight(r)],[/^(poissons?|fruits? de mer|mer)$/,r=>kindOf(r)==="poisson"],[/^viandes?$/,r=>["rouge","volaille","porc"].includes(kindOf(r))],
   [/^(vege|vegetariens?|vegetariennes?|sans viande)$/,r=>kindOf(r)==="vege"],[/^(volailles?)$/,r=>kindOf(r)==="volaille"],
   [/^(viande rouge|boeuf)$/,r=>kindOf(r)==="rouge"],[/^(rapides?|express)$/,r=>r.cat==="Rapide"||(r.time||0)&&r.time<=30]];
 const LIGHT_RE=/salade|papillote|vapeur|velout|bouillon|soupe|carpaccio|tartare|gaspacho|omelette|po(?:ê|e)l(?:é|e)e de l(?:é|e)gumes|wok de l(?:é|e)gumes|bowl|ceviche|gravlax|rouleaux de printemps/i;
 const HEAVY_RE=/gratin|tartiflette|raclette|fondue|lasagnes|cassoulet|choucroute|croziflette|aligot|truffade|mont-d'or|baeckeoffe|potée|pot-au-feu|burger|frites|carbonade|confit|cordon bleu|macaroni|pizza|flammekueche|welsh/i;
 function isLight(r){if(!r)return false;if(r.light)return true;if(HEAVY_RE.test(r.name))return false;return r.cat==="Soupe"||LIGHT_RE.test(r.name);}
 function isHeavy(r){return !!r&&!r.light&&(HEAVY_RE.test(r.name)||(r.time||0)>=90);}
-function recMatch(r,q,kind,quick,light){
+function recMatch(r,q,kind,quick,light,fav){
+  if(fav&&!r.fav)return false;
   if(light&&!isLight(r))return false;
   if(kind&&kindOf(r)!==kind)return false;
   if(quick&&!(r.time&&r.time<=30))return false;
@@ -1073,10 +1085,11 @@ function recMatch(r,q,kind,quick,light){
   const hay=deacc(r.name+" "+(r.cat||"")+" "+KIND_LABEL[kindOf(r)]+" "+(r.ing||[]).map(i=>i.n).join(" "));
   return words.every(w=>hay.includes(w));
 }
-function kindChipsHtml(act,cur,quick,light){
+function kindChipsHtml(act,cur,quick,light,fav){
   return KIND_CHIPS.map(([v,l])=>`<button type="button" class="chip" data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join("")
     +`<button type="button" class="chip" data-act="${act}Quick" aria-pressed="${quick}">30 min et moins</button>`
-    +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`;
+    +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`
+    +`<button type="button" class="chip" data-act="${act}Fav" aria-pressed="${!!fav}">★ Favoris</button>`;
 }
 const KIND_RE=[["poisson",/saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
   ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez/i],
@@ -1106,6 +1119,7 @@ function scoreFor(id,k,week){
   if(midi&&wd){if(r.cat==="Rapide"||t<=30)sc+=2;else if(t>45)sc-=2.5;}
   if(t>=75)sc+=wd?-3:1.5;
   if(r.cat==="Soupe")sc+=midi?-1.5:0.8;
+  if(r.fav)sc+=1;
   if(!midi&&menu.prefs.lightEve){sc+=isLight(r)?3.5:-1.5;if(isHeavy(r))sc-=3;}
   const idx=SLOT_ORDER.indexOf(k), near=[-2,-1,1,2].map(o=>week[SLOT_ORDER[idx+o]]).map(x=>x&&recipes[x]);
   [near[1],near[2]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=3;});
@@ -1181,6 +1195,13 @@ $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=
 $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#prefSheet").hidden=true;});
 
 let viewServ={}, recLimit=50;
+function openRecipe(id){
+  if(!recipes[id])return;
+  $("#pickSheet").hidden=true;
+  filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false}; $("#q").value="";
+  view="rec"; LS.set("cm_view",view); openId=id; confirmDel=null; render();
+  setTimeout(()=>{const el=document.getElementById("card-"+id);if(el)el.scrollIntoView({block:"start",behavior:"smooth"});},60);
+}
 let pickKey=null, pickRole="main";
 const ROLE_CATS={entree:["Entrée","Soupe"],dessert:["Dessert"]};
 function pickPool(){
@@ -1197,8 +1218,8 @@ function setPicked(id){
 function renderPick(){
   const q=norm($("#pickQ").value), cur=W()[pickKey], cats=ROLE_CATS[pickRole];
   const curId=cur&&(pickRole==="main"?cur.id:cur[pickRole]);
-  $("#pickKinds").innerHTML=kindChipsHtml("pkind",pickKind,pickQuick,pickLight);
-  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat))&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight))
+  $("#pickKinds").innerHTML=kindChipsHtml("pkind",pickKind,pickQuick,pickLight,pickFav);
+  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat))&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight,pickFav))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
@@ -1221,9 +1242,9 @@ function renderSugg(){
     <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"";
 }
 let suggOn=false;
-let pickKind="", pickQuick=false, pickLight=false;
+let pickKind="", pickQuick=false, pickLight=false, pickFav=false;
 function openPick(k,role,withSugg){
-  pickKind=""; pickQuick=false; pickLight=false;
+  pickKind=""; pickQuick=false; pickLight=false; pickFav=false;
   suggOn=!!withSugg; suggSeen=[];
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
