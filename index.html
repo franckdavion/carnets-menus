@@ -345,29 +345,40 @@ function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
 const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 function parseYmd(t){const[a,b,c]=String(t).split("-").map(Number);return new Date(a,b-1,c);}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
-function weekStartDate(m){m=m||menu;return m.weekStart?parseYmd(m.weekStart):mondayOf(new Date());}
+let curWeek=(()=>{const now=ymd(mondayOf(new Date()));let w=null;try{w=JSON.parse(localStorage.getItem("cm_week")||"null");}catch(e){}return w&&w>=now?w:now;})();
+function W(){if(!menu.weeks)menu.weeks={};if(!menu.weeks[curWeek])menu.weeks[curWeek]={};return menu.weeks[curWeek];}
+function weekIds(wk){const sl=(menu.weeks||{})[wk]||{};return Object.values(sl).map(x=>x&&x.id).filter(Boolean);}
+function weekStartDate(){return parseYmd(curWeek);}
 function todayInWeek(){const t=ymd(new Date()),w=weekStartDate();for(let i=0;i<7;i++)if(ymd(addDays(w,i))===t)return i;return -1;}
 const shortDate=d=>d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
-function slotsOf(id){return SLOT_ORDER.filter(k=>menu.slots[k]&&menu.slots[k].id===id);}
+function slotsOf(id){return SLOT_ORDER.filter(k=>W()[k]&&W()[k].id===id);}
 function onMenu(id){return slotsOf(id).length>0;}
-function filledSlots(){return SLOT_ORDER.filter(k=>menu.slots[k]&&recipes[menu.slots[k].id]);}
+function filledSlots(){return SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]);}
 function nextEmptySlot(){
   const ti=todayInWeek(), start=ti<0?0:ti*2+(new Date().getHours()>=14?1:0);
-  for(let i=0;i<14;i++){const k=SLOT_ORDER[(start+i)%14];if(!menu.slots[k])return k;}
+  for(let i=0;i<14;i++){const k=SLOT_ORDER[(start+i)%14];if(!W()[k])return k;}
   return null;
 }
 function normMenu(m){
-  m=Object.assign({people:4,slots:{},checked:{},extras:[],history:[]},m||{});
+  m=Object.assign({people:4,weeks:{},checked:{},extras:[]},m||{});
   m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:""},m.prefs||{});
-  if(!m.weekStart)m.weekStart=ymd(mondayOf(new Date()));
-  if(m.items&&Object.keys(m.items).length&&!Object.keys(m.slots).length){ // older menus: one list + optional day
+  m.weeks=Object.assign({},m.weeks);
+  if(m.slots){ // older versions kept a single week
+    const wk=m.weekStart||ymd(mondayOf(new Date()));
+    if(Object.keys(m.slots).length&&!m.weeks[wk])m.weeks[wk]=m.slots;
+  }
+  if(!m.slots)m.slots={};
+  if(m.items&&Object.keys(m.items).length&&!Object.keys(m.slots).length&&!Object.keys(m.weeks).length){ // oldest: one list + optional day
     for(const[id,n]of Object.entries(m.items)){
       let k=m.days&&m.days[id]?slotKey(m.days[id],"soir"):null;
       if(!k||m.slots[k])k=SLOT_ORDER.find(x=>!m.slots[x]);
       if(k)m.slots[k]={id,n:Number(n)||m.people};
     }
   }
-  delete m.items;delete m.days;
+  if(m.items&&Object.keys(m.slots).length&&!Object.keys(m.weeks).length)m.weeks[ymd(mondayOf(new Date()))]=m.slots;
+  delete m.items;delete m.days;delete m.slots;delete m.weekStart;delete m.history;
+  const oldest=ymd(addDays(mondayOf(new Date()),-56));
+  for(const k of Object.keys(m.weeks))if(k<oldest||!m.weeks[k]||!Object.keys(m.weeks[k]).length)delete m.weeks[k];
   return m;
 }
 const GUESS=[[/(?:^|[^a-zà-ÿœ])(?:poulet|bœuf|boeuf|porc|veau|agneau|lardon|jambon|saumon|thon|cabillaud|poisson|crevette|saucisse|steak|dinde|canard)/i,"Boucherie & poisson"],
@@ -382,7 +393,7 @@ const num=n=>n.toLocaleString("fr-FR",{maximumFractionDigits:1});
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
 let recipes={};
-let menu={people:4,slots:{},checked:{},extras:[]};
+let menu={people:4,weeks:{},checked:{},extras:[]};
 let mode="loading", db=null, menuRef=null;
 let view=LS.get("cm_view","menu");
 let filter={q:"",cat:"Toutes"};
@@ -404,7 +415,7 @@ function fmt(q,u){
 function shopping(){
   const acc={};
   for(const k of SLOT_ORDER){
-    const sl=menu.slots[k]; if(!sl)continue;
+    const sl=W()[k]; if(!sl)continue;
     const r=recipes[sl.id]; if(!r)continue;
     const f=sl.n/(r.serves||4);
     for(const i of r.ing||[]){
@@ -422,7 +433,7 @@ function shopping(){
 /* ---------- storage (on this phone) ---------- */
 function saveMenu(){LS.set("cm_menu",menu);scheduleSync();}
 function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();}
-function removeRecipe(id){slotsOf(id).forEach(k=>delete menu.slots[k]);saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
+function removeRecipe(id){slotsOf(id).forEach(k=>delete W()[k]);saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
 
 /* ---------- sync through a private GitHub repository ---------- */
 let sync=LS.get("cm_sync",null);
@@ -488,8 +499,8 @@ async function runSync(){
       else merged=merge3(base,L0,remote)||{};
       merged={v:1,recipes:merged.recipes||{},menu:normMenu(merged.menu)};
       // Plain-language plan for Home Assistant: {"Lundi|midi":"Dahl de lentilles corail", ...}
-      merged.planning=Object.fromEntries(SLOT_ORDER.filter(k=>merged.menu.slots[k]&&merged.recipes[merged.menu.slots[k].id])
-        .map(k=>[k,merged.recipes[merged.menu.slots[k].id].name]));
+      { const nowSl=merged.menu.weeks[ymd(mondayOf(new Date()))]||{};
+        merged.planning=Object.fromEntries(SLOT_ORDER.filter(k=>nowSl[k]&&merged.recipes[nowSl[k].id]).map(k=>[k,merged.recipes[nowSl[k].id].name])); }
       merged.calendar=calendarLog(merged,(remote&&remote.calendar)||(base&&base.calendar)||{});
       if(!remote||J(merged)!==J(remote)){
         const p=await gh("PUT",Object.assign({message:"Carnet de menus : mise à jour",content:b64e(J(merged))},sha?{sha}:{}));
@@ -508,17 +519,18 @@ async function runSync(){
 /* ---------- agenda file (menu.ics) on the app's own site ---------- */
 const MEAL_TIME={midi:["120000","133000"],soir:["193000","210000"]};
 function calendarLog(m,prev){
-  const today=ymd(new Date()), ws=weekStartDate(m.menu);
-  // past days stay as history; today and later only come from the current menu
+  const today=ymd(new Date());
+  // past days stay as history; today and later only come from the weekly menus
   const cal=Object.fromEntries(Object.entries(prev||{}).filter(([k])=>k.slice(0,10)<today));
-  DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
-    MEALS.forEach(([meal])=>{const sl=m.menu.slots[slotKey(d,meal)],r=sl&&m.recipes[sl.id],key=date+"|"+meal;
-      if(r)cal[key]=r.name; else delete cal[key];});});
+  for(const[wk,slots]of Object.entries(m.menu.weeks||{})){const ws=parseYmd(wk);
+    DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
+      MEALS.forEach(([meal])=>{const sl=slots[slotKey(d,meal)],r=sl&&m.recipes[sl.id],key=date+"|"+meal;
+        if(r)cal[key]=r.name; else if(date>=today)delete cal[key];});});}
   const limit=ymd(addDays(new Date(),-56));
   for(const k of Object.keys(cal))if(k.slice(0,10)<limit)delete cal[k];
   return Object.fromEntries(Object.keys(cal).sort().map(k=>[k,cal[k]]));
 }
-function icsEsc(t){return String(t).replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");}
+function icsEsc(t){return String(t).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");}
 function icsFold(line){const out=[];let cur="";for(const ch of line){if(new TextEncoder().encode(cur+ch).length>74){out.push(cur);cur=" "+ch;}else cur+=ch;}out.push(cur);return out.join("\r\n");}
 function buildIcs(cal){
   const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Carnet de menus//FR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Repas","X-WR-TIMEZONE:Europe/Paris",
@@ -618,18 +630,18 @@ function renderMenu(){
   const el=$("#menuList"), filled=filledSlots();
   $("#clearBtn").hidden=!filled.length;
   const cnt={vege:0,poisson:0,soupe:0};
-  for(const k of filled){const r=recipes[menu.slots[k].id],kd=kindOf(r);if(kd in cnt)cnt[kd]++;if(r.cat==="Soupe")cnt.soupe++;}
-  { const cur=ymd(mondayOf(new Date())), nxt=ymd(addDays(mondayOf(new Date()),7)), w=menu.weekStart;
-    const opts=[[cur,"Cette semaine"],[nxt,"Semaine prochaine"]]; if(w!==cur&&w!==nxt)opts.unshift([w,"Semaine du "+shortDate(parseYmd(w))]);
+  for(const k of filled){const r=recipes[W()[k].id],kd=kindOf(r);if(kd in cnt)cnt[kd]++;if(r.cat==="Soupe")cnt.soupe++;}
+  { const cur=ymd(mondayOf(new Date())), nxt=ymd(addDays(mondayOf(new Date()),7)), nn=ymd(addDays(mondayOf(new Date()),14)), w=curWeek;
+    const opts=[[cur,"Cette semaine"],[nxt,"Semaine prochaine"],[nn,"Dans 2 semaines"]];
     $("#weekSel").innerHTML=opts.map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===w}">${l} · ${shortDate(parseYmd(v))}</button>`).join(""); }
   $("#weekSum").textContent=filled.length?`${filled.length} repas · ${cnt.vege} végé · ${cnt.poisson} poisson${cnt.soupe?` · ${cnt.soupe} soupe${cnt.soupe>1?"s":""}`:""}`:"";
   $("#proposeAsk").innerHTML=proposeAsk?`<div class="note row" style="justify-content:space-between">Remplacer les ${proposeAsk} repas non verrouillés ?
     <span class="row"><button class="btn primary" data-act="proposeAll">Tout remplacer</button><button class="btn" data-act="proposeEmpty">Cases vides seulement</button><button class="btn ghost" data-act="proposeNo">Annuler</button></span></div>`:"";
   if(mode==="loading"){el.innerHTML="";return;}
   const t=todayInWeek(), ws=weekStartDate();
-  const diff=filled.some(k=>menu.slots[k].n!==menu.people);
+  const diff=filled.some(k=>W()[k].n!==menu.people);
   el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
-    ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=menu.slots[k],r=s&&recipes[s.id];
+    ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
         <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div></div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -651,7 +663,7 @@ function renderRecipes(){
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
   if(!list.length){el.innerHTML='<div class="empty">Aucune recette ne correspond à cette recherche.</div>';return;}
   el.innerHTML=list.map(([id,r])=>{
-    const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=on?menu.slots[sl[0]].n:menu.people, f=p/(r.serves||4);
+    const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=on?W()[sl[0]].n:menu.people, f=p/(r.serves||4);
     let det="";
     if(open){
       const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
@@ -671,7 +683,7 @@ function renderRecipes(){
 
 function renderShop(items,extras,ids){
   const meals=ids.length;
-  $("#shopSum").textContent=meals?`${meals} repas · ${items.length+extras.length} articles`:`${extras.length} articles`;
+  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas · ${items.length+extras.length} articles`:`${extras.length} articles`);
   const el=$("#shopList");
   if(!items.length&&!extras.length){el.innerHTML='<div class="muted" style="padding:16px 0">La liste se remplit dès que vous ajoutez des repas au menu.</div>';return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
@@ -695,34 +707,34 @@ document.addEventListener("click",e=>{
   if(a==="tab"){view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
   else if(a==="toggle"){
-    if(onMenu(id)){slotsOf(id).forEach(k=>delete menu.slots[k]);toast("Retiré du menu");}
+    if(onMenu(id)){slotsOf(id).forEach(k=>delete W()[k]);toast("Retiré du menu");}
     else{const k=nextEmptySlot();if(!k){toast("La semaine est complète : libérez une case d'abord");return;}
-      menu.slots[k]={id,n:menu.people};toast("Ajouté : "+slotLabel(k));}
+      W()[k]={id,n:menu.people};toast("Ajouté : "+slotLabel(k));}
     if(id===ideaId)ideaId=null;
     if(b.closest("#frOut")){const on=onMenu(id);b.classList.toggle("on",on);b.textContent=on?"✓ Au menu":"+ Menu";}
     render();saveMenu();}
-  else if(a==="serv"){const sl=menu.slots[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
-  else if(a==="applyAll"){for(const k in menu.slots)menu.slots[k].n=menu.people;render();saveMenu();}
-  else if(a==="clearMenu"){for(const k in menu.slots)if(!menu.slots[k].lock)delete menu.slots[k];menu.checked={};proposeAsk=0;render();saveMenu();}
-  else if(a==="propose"){const n=SLOT_ORDER.filter(k=>menu.slots[k]&&!menu.slots[k].lock).length;
+  else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
+  else if(a==="applyAll"){for(const k in W())W()[k].n=menu.people;render();saveMenu();}
+  else if(a==="clearMenu"){for(const k in W())if(!W()[k].lock)delete W()[k];menu.checked={};proposeAsk=0;render();saveMenu();}
+  else if(a==="propose"){const n=SLOT_ORDER.filter(k=>W()[k]&&!W()[k].lock).length;
     if(n){proposeAsk=n;render();} else planWeek(false);}
   else if(a==="proposeAll"){proposeAsk=0;planWeek(true);}
   else if(a==="proposeEmpty"){proposeAsk=0;planWeek(false);}
   else if(a==="proposeNo"){proposeAsk=0;render();}
-  else if(a==="swap"){const k=b.dataset.k,cur=menu.slots[k];if(!cur)return;
+  else if(a==="swap"){const k=b.dataset.k,cur=W()[k];if(!cur)return;
     const id=bestFor(k,[cur.id]);if(!id){toast("Pas d'autre recette disponible");return;}
-    menu.slots[k]={id,n:cur.n};render();saveMenu();}
-  else if(a==="lock"){const sl=menu.slots[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
-  else if(a==="week"){menu.weekStart=b.dataset.w;render();saveMenu();}
+    W()[k]={id,n:cur.n};render();saveMenu();}
+  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
+  else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k);
-  else if(a==="pickSet"){const k=pickKey,old=menu.slots[k];menu.slots[k]=Object.assign({id,n:old?old.n:menu.people},old&&old.lock?{lock:true}:{});$("#pickSheet").hidden=true;render();saveMenu();toast(slotLabel(k)+" : "+recipes[id].name);}
+  else if(a==="pickSet"){const k=pickKey,old=W()[k];W()[k]=Object.assign({id,n:old?old.n:menu.people},old&&old.lock?{lock:true}:{});$("#pickSheet").hidden=true;render();saveMenu();toast(slotLabel(k)+" : "+recipes[id].name);}
   else if(a==="pickRandom"){const all=Object.keys(recipes).filter(x=>recipes[x].cat!=="Dessert"&&!onMenu(x));const from=all.length?all:Object.keys(recipes);
-    if(from.length){const id=from[Math.floor(Math.random()*from.length)],old=menu.slots[pickKey];menu.slots[pickKey]={id,n:old?old.n:menu.people};$("#pickSheet").hidden=true;render();saveMenu();toast(slotLabel(pickKey)+" : "+recipes[id].name);}}
-  else if(a==="pickClear"){delete menu.slots[pickKey];$("#pickSheet").hidden=true;render();saveMenu();}
+    if(from.length){const id=from[Math.floor(Math.random()*from.length)],old=W()[pickKey];W()[pickKey]={id,n:old?old.n:menu.people};$("#pickSheet").hidden=true;render();saveMenu();toast(slotLabel(pickKey)+" : "+recipes[id].name);}}
+  else if(a==="pickClear"){delete W()[pickKey];$("#pickSheet").hidden=true;render();saveMenu();}
   else if(a==="closePick")$("#pickSheet").hidden=true;
   else if(a==="reroll"){const pool=Object.keys(recipes).filter(x=>!onMenu(x)&&x!==ideaId);if(pool.length)ideaId=pool[Math.floor(Math.random()*pool.length)];render();}
   else if(a==="open"){openId=openId===id?null:id;confirmDel=null;render();}
@@ -949,11 +961,13 @@ function scoreFor(id,k,week){
   const left=SLOT_ORDER.filter(x=>!week[x]&&!skipped(x)).length||1;
   if(kd==="vege"){const need=menu.prefs.veg-count("vege");sc+=need>0?1+need/left*4:-0.3;}
   if(kd==="poisson"){const need=menu.prefs.fish-count("poisson");sc+=need>0?1+need/left*4:-2;}
-  const h=menu.history||[];
-  if((h[0]||[]).includes(id))sc-=2; else if((h[1]||[]).includes(id))sc-=1; else if((h[2]||[]).includes(id))sc-=0.5;
+  const near1=[...weekIds(ymd(addDays(parseYmd(curWeek),-7))),...weekIds(ymd(addDays(parseYmd(curWeek),7)))];
+  const near2=[...weekIds(ymd(addDays(parseYmd(curWeek),-14))),...weekIds(ymd(addDays(parseYmd(curWeek),14)))];
+  const h=[near1,near2,weekIds(ymd(addDays(parseYmd(curWeek),-21)))];
+  if((h[0]||[]).includes(id))sc-=3.5; else if((h[1]||[]).includes(id))sc-=1; else if((h[2]||[]).includes(id))sc-=0.5;
   return sc;
 }
-function weekMap(){const w={};for(const k of SLOT_ORDER){const s=menu.slots[k];if(s&&recipes[s.id])w[k]=s.id;}return w;}
+function weekMap(){const w={};for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id])w[k]=s.id;}return w;}
 function bestFor(k,exclude){
   const week=weekMap();delete week[k];
   const c=eligible().filter(id=>!exclude.includes(id));
@@ -963,16 +977,14 @@ function bestFor(k,exclude){
 function planWeek(replaceAll){
   const pool=eligible();
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
-  if(addDays(weekStartDate(),7)<=new Date())menu.weekStart=ymd(mondayOf(new Date())); // the plan was for a past week
-  const before=filledSlots().map(k=>menu.slots[k].id);
-  if(replaceAll&&before.length){menu.history=[[...new Set(before)],...(menu.history||[])].slice(0,3);}
-  const week=weekMap(), targets=SLOT_ORDER.filter(k=>!skipped(k)&&(!menu.slots[k]||(replaceAll&&!menu.slots[k].lock)));
+  const before=filledSlots().map(k=>W()[k].id);
+  const week=weekMap(), targets=SLOT_ORDER.filter(k=>!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
   targets.forEach(k=>delete week[k]);
-  if(replaceAll)SLOT_ORDER.forEach(k=>{if(skipped(k)&&menu.slots[k]&&!menu.slots[k].lock){delete menu.slots[k];delete week[k];}});
+  if(replaceAll)SLOT_ORDER.forEach(k=>{if(skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
   for(const k of targets){
     const best=pool.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
-    week[k]=best; const old=menu.slots[k];
-    menu.slots[k]={id:best,n:old?old.n:menu.people};
+    week[k]=best; const old=W()[k];
+    W()[k]={id:best,n:old?old.n:menu.people};
   }
   menu.checked={};
   render();saveMenu();
@@ -990,7 +1002,7 @@ $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#pr
 
 let pickKey=null;
 function renderPick(){
-  const q=norm($("#pickQ").value), cur=menu.slots[pickKey];
+  const q=norm($("#pickQ").value), cur=W()[pickKey];
   const list=Object.entries(recipes).filter(([,r])=>!q||norm(r.name).includes(q)||(r.ing||[]).some(i=>norm(i.n).includes(q)))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   $("#pickList").innerHTML=list.length?list.map(([id,r])=>`<button class="pick-item${cur&&cur.id===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
@@ -998,7 +1010,7 @@ function renderPick(){
     :'<p class="muted">Aucune recette ne correspond.</p>';
 }
 function openPick(k){
-  pickKey=k; $("#pickTitle").textContent=slotLabel(k); $("#pickQ").value=""; $("#pickClear").hidden=!menu.slots[k];
+  pickKey=k; $("#pickTitle").textContent=slotLabel(k); $("#pickQ").value=""; $("#pickClear").hidden=!W()[k];
   renderPick(); $("#pickSheet").hidden=false;
 }
 $("#pickQ").addEventListener("input",renderPick);
