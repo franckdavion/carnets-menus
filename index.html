@@ -477,7 +477,7 @@ function fmt(q,u){
 }
 function shopping(){
   const acc={};
-  const add=(rid,n)=>{
+  const add=(rid,n,when)=>{
     const r=recipes[rid]; if(!r)return;
     const f=n/(r.serves||4);
     for(const i of r.ing||[]){
@@ -486,14 +486,17 @@ function shopping(){
       const key=norm(i.n)+"|"+u;
       if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:i.r||"Divers",from:[]};
       acc[key].q+=q*f;
-      if(!acc[key].from.includes(r.name))acc[key].from.push(r.name);
+      const lab=r.name+(when?" ("+when+")":"");
+      if(!acc[key].from.includes(lab))acc[key].from.push(lab);
     }
   };
+  // Only locked meals go to the shopping list: unlocking a meal takes its ingredients off.
   for(const k of SLOT_ORDER){
-    const sl=W()[k]; if(!sl||isPast(k))continue;
-    add(sl.id,sl.n); if(sl.entree)add(sl.entree,sl.n); if(sl.dessert)add(sl.dessert,sl.n);
+    const sl=W()[k]; if(!sl||!sl.lock||isPast(k))continue;
+    const when=slotLabel(k);
+    add(sl.id,sl.n,when); if(sl.entree)add(sl.entree,sl.n,when); if(sl.dessert)add(sl.dessert,sl.n,when);
   }
-  for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n);
+  for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n,"hors menu");
   return Object.values(acc);
 }
 
@@ -792,20 +795,22 @@ function renderRecipes(){
 }
 
 function renderShop(items,extras,ids){
-  const meals=ids.filter(k=>!isPast(k)).length;
-  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas · ${items.length+extras.length} articles`:`${extras.length} articles`);
+  const meals=ids.filter(k=>!isPast(k)&&W()[k]&&W()[k].lock).length;
+  const unlocked=ids.filter(k=>!isPast(k)&&W()[k]&&!W()[k].lock).length;
+  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · ${items.length+extras.length} articles`:`${extras.length} articles`);
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="item" style="cursor:default"><span></span><span class="nm">${esc(recipes[id].name)}</span><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
-  if(!items.length&&!extras.length){el.innerHTML='<div class="muted" style="padding:16px 0">La liste se remplit dès que vous ajoutez des repas au menu.</div>';return;}
+  const hint=unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
+  if(!items.length&&!extras.length){el.innerHTML=hint+'<div class="muted" style="padding:16px 0">La liste se remplit dès que vous verrouillez des repas du menu.</div>';return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   let h=groups.map(g=>`<div class="rayon"><h4>${esc(g.ry)}</h4>${g.its.map(i=>{
     const done=!!menu.checked[i.key];
     return`<label class="item${done?" done":""}"><input type="checkbox" data-act="check" data-k="${esc(i.key)}" ${done?"checked":""}>
-      <span class="nm">${esc(i.n)}${i.from.length>1?`<span class="from">${i.from.length} recettes</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span></label>`;}).join("")}</div>`).join("");
+      <span class="nm">${esc(i.n)}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span></label>`;}).join("")}</div>`).join("");
   if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<label class="item${x.done?" done":""}"><input type="checkbox" data-act="checkX" data-i="${ix}" ${x.done?"checked":""}>
       <span class="nm">${esc(x.t)}</span><button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button></label>`).join("")}</div>`;
-  el.innerHTML=xrHtml+h;
+  el.innerHTML=hint+xrHtml+h;
 }
 
 /* ---------- actions ---------- */
@@ -837,7 +842,7 @@ document.addEventListener("click",e=>{
   else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
   else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
   else if(a==="moreFav"){favLimit+=50;renderSugg();}
-  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
+  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock){delete sl.lock;toast("Déverrouillé : ingrédients retirés des courses");}else{sl.lock=true;toast("Verrouillé : ingrédients ajoutés aux courses");}render();saveMenu();}}
   else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
     const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
   else if(a==="vservApply"){const n=viewServ[id];if(n){slotsOf(id).forEach(k=>W()[k].n=n);render();saveMenu();toast("Portions du menu mises à jour");}}
@@ -924,7 +929,7 @@ function listText(){
   const items=shopping().filter(i=>!menu.checked[i.key]);
   const lines=[];
   for(const ry of RAYONS){const its=items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry);if(!its.length)continue;
-    lines.push(ry.toUpperCase());its.sort((a,b)=>a.n.localeCompare(b.n,"fr")).forEach(i=>{const q=fmt(i.q,i.u);lines.push("- "+i.n+(q?" : "+q:""));});lines.push("");}
+    lines.push(ry.toUpperCase());its.sort((a,b)=>a.n.localeCompare(b.n,"fr")).forEach(i=>{const q=fmt(i.q,i.u);lines.push("- "+i.n+(q?" : "+q:"")+(i.from.length?"  ("+i.from.join(", ")+")":""));});lines.push("");}
   const ex=(menu.extras||[]).filter(x=>!x.done);
   if(ex.length){lines.push("EN PLUS");ex.forEach(x=>lines.push("- "+x.t));}
   return lines.join("\n").trim();
@@ -1339,8 +1344,9 @@ $("#frForm").addEventListener("submit",e=>{
     const hit=main.filter(i=>matchIng(have,i.n));
     return{id,r,hit:hit.length,tot:main.length,miss:main.filter(i=>!matchIng(have,i.n)).map(i=>i.n)};
   }).filter(x=>x.hit>0).sort((a,b)=>(b.hit/b.tot)-(a.hit/a.tot)||b.hit-a.hit).slice(0,4);
-  const rows=scored.length?`<div class="list">${scored.map(x=>`<div class="dish"><div><h3>${esc(x.r.name)}</h3>
-      <div class="meta">${x.hit} sur ${x.tot} ingrédients${x.miss.length?" · manque : "+esc(x.miss.slice(0,4).join(", "))+(x.miss.length>4?"…":""):""}</div></div>
+  const rows=scored.length?`<div class="list">${scored.map(x=>`<div class="dish"><div><button type="button" class="idea-name" data-act="viewRec" data-id="${esc(x.id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${esc(x.r.name)}</h3></button>
+      <div class="meta">${x.hit} sur ${x.tot} ingrédients${x.miss.length?" · manque : "+esc(x.miss.slice(0,4).join(", "))+(x.miss.length>4?"…":""):""}</div>
+      <button type="button" class="link" data-act="viewRec" data-id="${esc(x.id)}">Voir la recette</button></div>
       <div class="ctl"><button type="button" class="add${onMenu(x.id)?" on":""}" data-act="toggle" data-id="${esc(x.id)}">${onMenu(x.id)?"✓ Au menu":"+ Menu"}</button></div></div>`).join("")}</div>`
     :'<p class="muted" style="margin:0">Aucune recette du carnet n\'utilise ces ingrédients.</p>';
   out.innerHTML=`<span class="label">Dans votre carnet</span>${rows}`;
