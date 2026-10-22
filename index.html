@@ -358,7 +358,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 <div class="sheet" id="pickSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="pickTitle">Choisir</h2><button type="button" class="btn ghost" data-act="closePick">Fermer</button></div>
-    <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
+    <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn" data-act="pickFavMode" id="pickFavBtn" aria-pressed="false">★ Favoris</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
     <div id="pickSugg"></div>
     <input class="search" id="pickQ" type="search" placeholder="Ou cherchez : poisson, poulet, gratin…">
     <div class="chips" id="pickKinds"></div>
@@ -870,7 +870,7 @@ document.addEventListener("click",e=>{
   else if(a==="pkind"){pickKind=b.dataset.v;renderPick();}
   else if(a==="pkindQuick"){pickQuick=!pickQuick;renderPick();}
   else if(a==="pkindLight"){pickLight=!pickLight;renderPick();}
-  else if(a==="pkindFav"){pickFav=!pickFav;renderPick();}
+  else if(a==="pkindFav"||a==="pickFavMode"){pickFav=!pickFav;syncFavMode();renderSugg();renderPick();if(pickFav)$("#pickQ").focus();}
   else if(a==="fav"){const r=recipes[id];if(!r)return;const nr=Object.assign({},r);if(nr.fav)delete nr.fav;else nr.fav=true;
     saveRecipe(id,nr);toast(nr.fav?"Ajoutée aux favoris":"Retirée des favoris");}
   else if(a==="viewRec")openRecSheet(id);
@@ -1257,8 +1257,12 @@ function renderPick(){
     :'<p class="muted">Aucune recette ne correspond.</p>')+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
 }
 let suggSeen=[], suggNow=[], favLimit=8;
+function syncFavMode(){
+  const btn=$("#pickFavBtn"); btn.setAttribute("aria-pressed",pickFav); btn.classList.toggle("primary",pickFav);
+  $("#pickQ").placeholder=pickFav?"Chercher dans vos favoris":"Ou cherchez : poisson, poulet, gratin…";
+}
 function renderSugg(){
-  const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn){box.innerHTML="";return;}
+  const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn||pickFav){box.innerHTML=pickFav?`<span class="label">★ Vos favoris</span>`:"";return;}
   const week=weekMap(); delete week[pickKey];
   const cur=W()[pickKey], skip=new Set([...(cur?[cur.id]:[]),...suggSeen]);
   let cands=eligible().filter(id=>!skip.has(id));
@@ -1284,6 +1288,7 @@ function openPick(k,role,withSugg){
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
+  syncFavMode();
   $("#pickRandomBtn").textContent=(role||"main")==="main"?"Choix automatique":"Au hasard";
   renderSugg(); renderPick(); $("#pickSheet").hidden=false;
 }
