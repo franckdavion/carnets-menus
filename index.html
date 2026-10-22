@@ -826,7 +826,7 @@ function renderRecipes(){
 function renderShop(items,extras,ids){
   const meals=ids.filter(k=>!isPast(k)&&W()[k]&&W()[k].lock).length;
   const unlocked=ids.filter(k=>!isPast(k)&&W()[k]&&!W()[k].lock).length;
-  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · ${items.length+extras.length} articles`:`${extras.length} articles`);
+  $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="item" style="cursor:default"><span></span><span class="nm">${esc(recipes[id].name)}</span><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
