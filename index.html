@@ -194,6 +194,8 @@ img,table,pre,code{max-width:100%}
 input,select,textarea{font-size:16px!important}
 /* nothing inside a window may be squashed when the content is long */
 .sheet-in>*{flex-shrink:0}
+/* windows whose content changes while you tap keep a fixed height, so their top edge never jumps */
+#sideSheet .sheet-in,#dailySheet .sheet-in,#pickSheet .sheet-in,#histSheet .sheet-in,#storeSheet .sheet-in{height:92%}
 /* windows follow the visible area when the keyboard is open */
 .sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:var(--vvh,100%)}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
@@ -2082,6 +2084,17 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
 (()=>{const vv=window.visualViewport;if(!vv)return;const d=document.documentElement;
   const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");};
   vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);fit();})();
+/* inside a window, a drag only scrolls the window's own content: no bounce of the whole window */
+(()=>{let y0=0,x0=0;
+  document.addEventListener("touchstart",e=>{const t=e.touches[0];y0=t.clientY;x0=t.clientX;},{passive:true});
+  document.addEventListener("touchmove",e=>{
+    const sheet=e.target.closest&&e.target.closest(".sheet");if(!sheet||sheet.hidden)return;
+    const t=e.touches[0],dy=t.clientY-y0,dx=t.clientX-x0;
+    if(Math.abs(dx)>Math.abs(dy)){let el=e.target;while(el&&el!==sheet){const cs=getComputedStyle(el);if(/(auto|scroll)/.test(cs.overflowX)&&el.scrollWidth>el.clientWidth)return;el=el.parentElement;}e.preventDefault();return;}
+    const sc=e.target.closest(".sheet-in");
+    if(!sc||sc.scrollHeight<=sc.clientHeight+1){e.preventDefault();return;}
+    if((dy>0&&sc.scrollTop<=0)||(dy<0&&sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1))e.preventDefault();
+  },{passive:false});})();
 /* freeze the page behind any open sheet (iPhone keeps scrolling the background otherwise) */
 (()=>{let y=0,frozen=false;
   const sync=()=>{const open=[...document.querySelectorAll(".sheet")].some(s=>!s.hidden);
