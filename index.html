@@ -191,6 +191,10 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .slot-done{color:var(--muted);font-size:15px;min-width:0}
 .course{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .slot-done .course{display:block}
+.extras{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:13px;color:var(--muted);margin-top:2px}
+.xchip{display:inline-flex;align-items:center;gap:2px;background:var(--soft);color:var(--ink);border-radius:999px;padding:1px 4px 1px 9px;font-size:12px}
+.xchip button{border:none;background:none;color:var(--muted);font-size:12px;padding:2px 5px}
+.extras .link{font-size:12px}
 .card-btns{display:flex;align-items:center;gap:8px}
 .star{border:none;background:none;font-size:24px;line-height:1;color:var(--muted);padding:4px}
 .star.on{color:var(--mark)}
@@ -387,6 +391,18 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Au magasin</h2><button type="button" class="btn primary" data-act="closeStore">Terminé</button></div>
     <div class="store-prog"><div class="track"><div class="fill" id="storeFill"></div></div><span class="count" id="storeCount"></span></div>
     <div id="storeList"></div>
+  </div>
+</div>
+
+<div class="sheet" id="sideSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2 id="sideTitle">Mangé en plus</h2><button type="button" class="btn primary" data-act="closeSide">Terminé</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Pour garder une trace de ce que vous avez mangé avec ce repas. Ces ajouts ne vont pas dans la liste de courses.</p>
+    <div id="sideList" style="display:flex;flex-direction:column;gap:14px"></div>
+    <form class="field" id="sideForm" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Ajouter autre chose</span>
+      <div class="extra-form"><input id="sideIn" placeholder="Ex. quiche de mamie, sushis" autocomplete="off"><button class="btn" type="submit">Ajouter</button></div>
+    </form>
   </div>
 </div>
 
@@ -797,11 +813,11 @@ function renderMenu(){
   el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
-      if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
+      if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
         <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
-        <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}</div></div>
+        <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
       :`<div class="slot"><span class="meal">${lab}</span><button class="slot-add${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir"}</button></div>`;}).join("")}</div>`).join("")}</div>`
     +(diff?`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="applyAll">Mettre tous les repas à ${menu.people} pers.</button></div>`:"");
@@ -883,6 +899,38 @@ function renderStore(){
   if(done.length)h+=`<h4 class="store-h" style="color:var(--muted)">Dans le caddie (${done.length})</h4>${done.sort((a,b)=>a.n.localeCompare(b.n,"fr")).map(row).join("")}`;
   $("#storeList").innerHTML=h;
 }
+
+/* ---------- what we ate in addition (history only, never in the shopping list) ---------- */
+const SIDES=[
+ ["Charcuterie",["Pâté","Jambon","Saucisson","Rillettes","Terrine","Jambon cru","Chorizo"]],
+ ["Fromages & laitages",["Fromage","Camembert","Comté","Chèvre","Yaourt","Fromage blanc","Petit-suisse"]],
+ ["Accompagnements",["Pain","Salade verte","Crudités","Soupe","Cornichons","Chips","Frites","Œuf"]],
+ ["Sucré",["Fruit","Compote","Chocolat","Glace","Gâteau","Biscuits","Crème dessert","Pâtisserie"]],
+ ["Boissons",["Vin","Bière","Jus de fruits","Soda","Apéritif"]],
+];
+let sideKey=null;
+function extrasHtml(k,s,edit){
+  const xs=(s&&s.extra)||[];
+  if(!xs.length)return edit?"":(isPast(k)&&s&&s.id?`<span class="extras"><button class="link" data-act="openSide" data-k="${k}">+ En plus</button></span>`:"");
+  return`<div class="extras">En plus : ${xs.map((x,ix)=>`<span class="xchip">${esc(x)}<button type="button" data-act="rmSide" data-k="${k}" data-i="${ix}" aria-label="Retirer ${esc(x)}">✕</button></span>`).join("")}${edit?"":`<button class="link" data-act="openSide" data-k="${k}">+ Ajouter</button>`}</div>`;
+}
+function renderSide(){
+  const s=W()[sideKey]; if(!s){$("#sideSheet").hidden=true;return;}
+  $("#sideTitle").textContent="En plus · "+slotLabel(sideKey);
+  const cur=s.extra||[], has=t=>cur.some(x=>norm(x)===norm(t));
+  const chip=(t,own)=>`<span class="dchip${has(t)?" on":""}"><button type="button" data-act="sideToggle" data-t="${esc(t)}" aria-pressed="${has(t)}">${has(t)?"✓ ":""}${esc(t)}</button>${own?`<button type="button" class="rm" data-act="sideForget" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes ajouts">✕</button>`:""}</span>`;
+  const mine=menu.sides||[];
+  $("#sideList").innerHTML=(mine.length?`<div class="field"><span class="label">Mes ajouts</span><div class="dchips">${mine.map(t=>chip(t,true)).join("")}</div></div>`:"")
+    +SIDES.map(([g,its])=>`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}</div></div>`).join("");
+}
+function toggleSide(t){const s=W()[sideKey];if(!s)return;const xs=s.extra||[];const i=xs.findIndex(x=>norm(x)===norm(t));
+  if(i>=0)xs.splice(i,1);else xs.push(t);
+  if(xs.length)s.extra=xs;else delete s.extra;}
+$("#sideForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#sideIn").value.trim();if(!v||!W()[sideKey])return;
+  const known=[...(menu.sides||[]),...SIDES.flatMap(x=>x[1])];
+  if(!known.some(t=>norm(t)===norm(v)))menu.sides=[...(menu.sides||[]),v];
+  const s=W()[sideKey];if(!(s.extra||[]).some(x=>norm(x)===norm(v)))s.extra=[...(s.extra||[]),v];
+  $("#sideIn").value="";render();renderSide();saveMenu();});
 
 /* ---------- everyday products ---------- */
 const DAILY=[
@@ -990,6 +1038,11 @@ document.addEventListener("click",e=>{
     if(s.startsWith("k:")){const k=s.slice(2);if(menu.checked[k])delete menu.checked[k];else menu.checked[k]=true;}
     else{const x=(menu.extras||[])[Number(s.slice(2))];if(x)x.done=!x.done;}
     render();renderStore();saveMenu(300);}
+  else if(a==="openSide"){sideKey=b.dataset.k;renderSide();$("#sideSheet").hidden=false;$("#sideSheet .sheet-in").scrollTop=0;}
+  else if(a==="closeSide"){$("#sideSheet").hidden=true;}
+  else if(a==="sideToggle"){toggleSide(b.dataset.t);render();renderSide();saveMenu(300);}
+  else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
+  else if(a==="rmSide"){const s=W()[b.dataset.k];if(s&&s.extra){s.extra.splice(Number(b.dataset.i),1);if(!s.extra.length)delete s.extra;render();saveMenu();}}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
