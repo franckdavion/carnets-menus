@@ -117,10 +117,11 @@ button{cursor:pointer}
 .tk-head .sum{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
 .rayon{padding:12px 0 4px}
 .rayon h4{margin:0 0 4px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700}
-.item{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:7px 0;cursor:pointer}
+.item{display:grid;grid-template-columns:24px 1fr auto auto;gap:10px;align-items:center;padding:7px 0;cursor:pointer}
 .item input{width:20px;height:20px;accent-color:var(--accent);margin:0}
 .item .nm{min-width:0}
 .item .from{display:block;font-size:12px;color:var(--muted)}
+.item .have{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;font-size:12px;padding:3px 9px;white-space:nowrap}
 .item .q{font-family:var(--f-mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .item.done .nm,.item.done .q{text-decoration:line-through;color:var(--muted)}
 .extra-form{display:flex;flex-wrap:wrap;gap:8px}
@@ -545,7 +546,10 @@ function selectedShopDates(){
   return all.filter(x=>keys.includes(x.key));
 }
 const dayShort=x=>x.dn.slice(0,3)+". "+x.d.getDate();
-function shopping(){
+/* "j'en ai déjà": hidden from the list until the last chosen shopping day has passed */
+function isHave(i){const v=(menu.have||{})[i.key];return !!v&&v>=ymd(new Date());}
+function haveUntil(){const s=selectedShopDates();return s.length?s[s.length-1].key:ymd(new Date());}
+function shopping(all){
   const acc={};
   const add=(rid,n,when)=>{
     const r=recipes[rid]; if(!r)return;
@@ -568,7 +572,8 @@ function shopping(){
     add(sl.id,sl.n,when); if(sl.entree)add(sl.entree,sl.n,when); if(sl.dessert)add(sl.dessert,sl.n,when);
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n,"hors menu");
-  return Object.values(acc);
+  const list=Object.values(acc);
+  return all?list:list.filter(i=>!isHave(i));
 }
 
 /* ---------- storage (on this phone) ---------- */
@@ -891,15 +896,18 @@ function renderShop(items,extras,ids){
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="item" style="cursor:default"><span></span><span class="nm">${esc(recipes[id].name)}</span><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
   const hint=unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
-  if(!items.length&&!extras.length){el.innerHTML=hint+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
+  const hv=shopping(true).filter(isHave).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
+  const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
+  if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   let h=groups.map(g=>`<div class="rayon"><h4>${esc(g.ry)}</h4>${g.its.map(i=>{
     const done=!!menu.checked[i.key];
     return`<label class="item${done?" done":""}"><input type="checkbox" data-act="check" data-k="${esc(i.key)}" ${done?"checked":""}>
-      <span class="nm">${esc(i.n)}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span></label>`;}).join("")}</div>`).join("");
+      <span class="nm">${esc(i.n)}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button></label>`;}).join("")}</div>`).join("");
+
   if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<label class="item${x.done?" done":""}"><input type="checkbox" data-act="checkX" data-i="${ix}" ${x.done?"checked":""}>
       <span class="nm">${esc(x.t)}</span><button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button></label>`).join("")}</div>`;
-  el.innerHTML=hint+xrHtml+h;
+  el.innerHTML=hint+xrHtml+h+hvHtml;
 }
 
 /* ---------- store mode: big checkboxes, ticked items drop into the cart ---------- */
@@ -1068,6 +1076,11 @@ document.addEventListener("click",e=>{
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
   else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
+  else if(a==="haveIt"){e.preventDefault();const k=b.dataset.k;menu.have=Object.assign({},menu.have,{[k]:haveUntil()});
+    for(const x in menu.have)if(menu.have[x]<ymd(new Date()))delete menu.have[x];
+    render();saveMenu(300);toast("Retiré de la liste : vous l'avez déjà");}
+  else if(a==="haveUndo"){if(menu.have){delete menu.have[b.dataset.k];render();saveMenu(300);}}
+  else if(a==="haveReset"){menu.have={};render();saveMenu();}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
