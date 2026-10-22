@@ -1025,7 +1025,9 @@ function renderRecipes(){
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
-  if(!list.length){el.innerHTML='<div class="empty">Aucune recette ne correspond à cette recherche.</div>';return;}
+  if(!list.length){const near=filter.q?closeNames(filter.q,Object.keys(recipes)):[];
+    el.innerHTML=near.length?`<div class="empty">Pas de « ${esc(filter.q)} »… vouliez-vous dire :<div class="row" style="justify-content:center;margin-top:10px">${near.map(id=>`<button class="btn" data-act="recSearch" data-q="${esc(recipes[id].name)}">${esc(recipes[id].name)}</button>`).join("")}</div></div>`
+      :'<div class="empty">Aucune recette ne correspond à cette recherche.</div>';return;}
   const shown=list.slice(0,Math.max(recLimit,list.findIndex(([id])=>id===openId)+1));
   el.innerHTML=shown.map(([id,r])=>{
     const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=viewServ[id]||(on?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
@@ -1597,8 +1599,11 @@ document.addEventListener("click",e=>{
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
   else if(a==="pickImport"){const k=pickKey,role=pickRole,w=curWeek;
     sendImport($("#pwLinks").value,t=>{$("#pwMsg").textContent=t;},{w,k,role}).then(ok=>{if(ok){$("#pwLinks").value="";
-      $("#pwMsg").textContent="Le robot lit la recette… dans environ une minute, elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";}});}
+      const t0=Date.now();$("#pwMsg").textContent="⏳ Le robot lit la recette… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";
+      const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
+        m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
   else if(a==="recCat"){const id=recSheetId,r=recipes[id];if(r&&r.cat!==b.dataset.c){saveRecipe(id,Object.assign({},r,{cat:b.dataset.c}));renderRecSheet();toast("Rangée dans « "+b.dataset.c+" »");}}
+  else if(a==="recSearch"){filter.q=b.dataset.q;$("#q").value=b.dataset.q;recLimit=50;renderRecipes();}
   else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
   else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
   else if(a==="prefDissoc"){prefDraft.dissoc=b.dataset.v==="1";$("#pd-on").setAttribute("aria-pressed",prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);}
@@ -1917,6 +1922,12 @@ const LIGHT_RE=/salade|papillote|vapeur|velout|bouillon|soupe|carpaccio|tartare|
 const HEAVY_RE=/gratin|tartiflette|raclette|fondue|lasagnes|cassoulet|choucroute|croziflette|aligot|truffade|mont-d'or|baeckeoffe|potée|pot-au-feu|burger|frites|carbonade|confit|cordon bleu|macaroni|pizza|flammekueche|welsh/i;
 function isLight(r){if(!r)return false;if(r.light)return true;if(HEAVY_RE.test(r.name))return false;return r.cat==="Soupe"||LIGHT_RE.test(r.name);}
 function isHeavy(r){return !!r&&!r.light&&(HEAVY_RE.test(r.name)||(r.time||0)>=90);}
+// likeness of two words from shared letter pairs (tatzaki ~ tzatziki)
+function bigrams(s){const t=deacc(s).replace(/[^a-z0-9]/g,"");const b=[];for(let i=0;i<t.length-1;i++)b.push(t.slice(i,i+2));return b;}
+function likeness(a,b){const x=bigrams(a),y=bigrams(b);if(!x.length||!y.length)return 0;const m=[...y];let c=0;x.forEach(g=>{const i=m.indexOf(g);if(i>=0){c++;m.splice(i,1);}});return 2*c/(x.length+y.length);}
+function closeNames(q,ids){const words=deacc(q).split(/\s+/).filter(w=>w.length>2);if(!words.length)return[];
+  return ids.map(id=>{const nw=deacc(recipes[id].name).split(/[\s,'’-]+/);const s=words.reduce((a,w)=>a+Math.max(...nw.map(n=>likeness(w,n))),0)/words.length;return[id,s];})
+    .filter(x=>x[1]>=0.45).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);}
 function recMatch(r,q,kind,quick,light,fav,theme){
   if(fav&&!r.fav)return false;
   if(theme&&!hasTheme(r,theme))return false;
@@ -2134,7 +2145,9 @@ function renderPick(){
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
-    :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`)+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
+    :(()=>{const near=q?closeNames($("#pickQ").value,Object.keys(recipes)):[];
+      return near.length?`<p class="muted" style="margin-bottom:4px">Pas de « ${esc($("#pickQ").value.trim())} »… vouliez-vous dire :</p>`+near.map(id=>`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${esc(recipes[id].name)}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(recipes[id].cat||"")}</span></button>`).join("")
+        :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`;})())+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
   const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q; $("#pickAllLab").textContent=q?"Résultats":pickRole==="entree"?"Toutes les entrées":pickRole==="dessert"?"Tous les desserts":"Toutes les recettes";
   $("#pwTitle").textContent=all.length?`Pas la bonne ? Chercher « ${$("#pickQ").value.trim()} » sur le web`:`Aucune recette « ${$("#pickQ").value.trim()} » : la trouver sur le web`;
   if(!all.length)$("#pickWeb").open=true;
@@ -2289,7 +2302,7 @@ async function pollImports(){
   if(!sync||!imports.length){clearInterval(importTimer);importTimer=null;return;}
   for(const job of[...imports]){
     if(Date.now()-job.at>8*60e3){imports=imports.filter(x=>x!==job);
-      importMsg("Le robot n'a pas répondu. Vérifiez qu'il est installé dans le dépôt des données (fichier .github/workflows/recettes.yml).");continue;}
+      importMsg("Le robot n'a pas répondu. Vérifiez qu'il est installé dans le dépôt des données (fichier .github/workflows/recettes.yml).");if(job.assign)$("#pwMsg").textContent="✗ Le robot n'a pas répondu à temps. Réessayez un peu plus tard.";continue;}
     let g;try{g=await gh("GET",null,sync.repo,"results/"+job.id+".json");}catch(x){return;}
     if(g.status!==200)continue;
     let d;try{d=JSON.parse(b64d((await g.json()).content));}catch(x){continue;}
@@ -2308,11 +2321,15 @@ async function pollImports(){
       if(role==="main"||!role)wk[k]=Object.assign({},wk[k]||{},{id:firstId,n:wk[k]&&wk[k].n||menu.people});else if(wk[k])wk[k][role]=firstId;
       if(role==="entree"&&!["Entrée","Soupe"].includes(recipes[firstId].cat))recipes[firstId].cat="Entrée";
       if(role==="dessert")recipes[firstId].cat="Dessert";
-      saveMenu();setTimeout(()=>toast(recipes[firstId].name+" placée sur "+slotLabel(k)),2800);}
+      saveMenu();
+      if(!$("#pickSheet").hidden&&pickKey===k&&curWeek===w){$("#pickSheet").hidden=true;$("#pwMsg").textContent="";}
+      if(curWeek===w)flashSlot(k);
+      setTimeout(()=>toast("✓ "+recipes[firstId].name+" placée sur "+slotLabel(k)),300);}
     LS.set("cm_recipes",recipes);render();scheduleSync();
     const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
     importMsg((added?`${added} recette${added>1?"s":""} ajoutée${added>1?"s":""} au carnet.`:"Aucune recette ajoutée.")+(errs.length?" Non importées : "+errs.join(" · "):""));
     if(added)toast(`${added} recette${added>1?"s":""} importée${added>1?"s":""}`);
+    if(job.assign&&!added){$("#pwMsg").textContent="✗ Le robot n'a pas réussi à lire cette page"+(errs.length?" ("+errs.join(" · ")+")":"")+". Essayez un autre lien.";}
   }
   LS.set("cm_imports",imports);
   if(!imports.length){clearInterval(importTimer);importTimer=null;}
