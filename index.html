@@ -204,6 +204,13 @@ input,select,textarea{font-size:16px!important}
 #shopList .item>.q{grid-column:3;grid-row:1;text-align:right}
 #shopList .item>.have,#shopList .item>.x{grid-column:3;grid-row:2;justify-self:end}
 .idea .link{display:inline-block;padding:6px 0;font-size:13px}
+/* taps answer at once on iPhone (no double-tap-zoom wait) and show they were pressed */
+button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.btn:active,.chip:active,.link:active,.dchip button:active,.add:active{transform:scale(.96);opacity:.85}
+/* window title and its Terminé / Fermer button stay visible while the content scrolls */
+.sheet-in>.row:first-child{position:sticky;top:-20px;z-index:2;background:var(--bg);margin-top:-20px;padding-top:20px;padding-bottom:8px;flex-wrap:nowrap}
+.sheet-in>.row:first-child h2{min-width:0}
+.sheet-in>.row:first-child .btn{flex:none;min-height:44px;padding-inline:16px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -2097,6 +2104,7 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
   document.addEventListener("touchmove",e=>{
     const sheet=e.target.closest&&e.target.closest(".sheet");if(!sheet||sheet.hidden)return;
     const t=e.touches[0],dy=t.clientY-y0,dx=t.clientX-x0;
+    if(Math.abs(dx)<6&&Math.abs(dy)<6)return;
     if(Math.abs(dx)>Math.abs(dy)){let el=e.target;while(el&&el!==sheet){const cs=getComputedStyle(el);if(/(auto|scroll)/.test(cs.overflowX)&&el.scrollWidth>el.clientWidth)return;el=el.parentElement;}e.preventDefault();return;}
     const sc=e.target.closest(".sheet-in");
     if(!sc||sc.scrollHeight<=sc.clientHeight+1){e.preventDefault();return;}
