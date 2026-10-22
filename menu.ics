@@ -86,7 +86,7 @@ UID:20261022-soir@carnet-menus
 DTSTAMP:20261022T000000Z
 DTSTART;TZID=Europe/Paris:20261022T193000
 DTEND;TZID=Europe/Paris:20261022T210000
-SUMMARY:Soir : Salade d'endives aux noix et roquefort
+SUMMARY:Soir : Salade d'endives aux pommes
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
