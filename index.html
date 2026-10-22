@@ -225,6 +225,8 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .wine-thumb img{width:100%;height:100%;object-fit:cover}
 .wine-row .sub{display:block;font-size:12px;color:var(--muted)}
 #wineSheet .sheet-in,#winesSheet .sheet-in{height:92%}
+.vivino{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
+.wine-viv{margin:-4px 0 6px 68px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -1467,6 +1469,7 @@ function renderWineForm(){
       <span class="muted" id="w-gnote" style="font-size:12px">${d.grapesAuto?"Cépages typiques de l'appellation : ils peuvent varier selon le domaine.":""}</span>`}
     <div class="field"><span class="label">Ma note</span><div class="stars">${[1,2,3,4,5].map(i=>`<button type="button" data-act="wineNote" data-v="${i}" aria-label="${i} sur 5" class="${d.note>=i?"on":""}">★</button>`).join("")}</div></div>
     <label class="field"><span class="label">Commentaire</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
+    ${d.color!=="bière"&&(d.name||d.app)?`<div>${vivinoLink([d.name,d.app].filter(Boolean).join(" "),"Voir ce vin sur Vivino")}</div>`:""}
     <div class="row"><button type="button" class="btn primary" data-act="wineSave">Enregistrer</button>${d._new?"":`<button type="button" class="btn danger" data-act="wineDel">Supprimer</button>`}</div>`;
   $("#wineFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
     try{wineCollect();wineDraft._photo=await shrinkPhoto(f);renderWineForm();}catch(x){toast("Photo illisible, réessayez");}});
@@ -1474,6 +1477,13 @@ function renderWineForm(){
 }
 function wineCollect(){const d=wineDraft,v=id=>{const e=$(id);return e?e.value.trim():undefined;};
   d.name=v("#w-name")??d.name;if($("#w-app")){d.app=v("#w-app");d.year=v("#w-year");d.grapes=v("#w-grapes");}d.comment=v("#w-comment")??d.comment;}
+/* Vivino: open the search for a wine (its name, else its appellation) */
+function vivinoUrl(q){return"https://www.vivino.com/search/wines?q="+encodeURIComponent(String(q).trim());}
+function vivinoLink(q,label){return q?`<a class="vivino" href="${vivinoUrl(q)}" target="_blank" rel="noopener">${label||"Voir sur Vivino"} ↗</a>`:"";}
+// from a pairing like "Blanc sec (Muscadet, Sancerre)" keep something Vivino can search: "Muscadet"
+function pairingQuery(s){const first=String(s).split(" ou ")[0].trim();if(/^(pas besoin|bière)/i.test(first))return"";
+  const m=first.match(/^(.*?)\s*\((.*)\)/);if(!m)return first;
+  return/^(blanc|rouge|rosé)(?=\s|$)/i.test(m[1])?m[2].split(",")[0].trim():m[1].trim();}
 function wineLabel(w){return[w.name||(w.color==="bière"?"Bière":"Vin"),w.app,w.year].filter(Boolean).join(" · ");}
 function wineSave(){
   wineCollect();const d=wineDraft;if(!d.name&&!d.app&&!d._photo&&!d.photo){toast("Ajoutez au moins une photo ou un nom");return;}
@@ -1491,7 +1501,7 @@ function renderWines(){
   $("#winesList").innerHTML=list.length?list.map(w=>{const src=wPhotoSrc(w);return`<button type="button" class="wine-row" data-act="wineOpen" data-id="${w.id}">
       <span class="wine-thumb">${src?`<img src="${src}" alt="">`:(w.color==="bière"?"🍺":"🍷")}</span>
       <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,w.color].filter(Boolean).join(" · "))}</span>
-      ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span></span></button>`;}).join("")
+      ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span></span></button>${w.color!=="bière"&&(w.name||w.app)?`<div class="wine-viv">${vivinoLink([w.name,w.app].filter(Boolean).join(" "))}</div>`:""}`;}).join("")
     :`<p class="muted">${(menu.wines||[]).length?"Aucun vin ne correspond.":"Aucun vin noté pour l'instant. Dans « En plus » d'un repas, touchez Vin ou Bière puis « Noter ce que j'ai bu »."}</p>`;
 }
 
@@ -2046,7 +2056,7 @@ function renderRecSheet(){
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
