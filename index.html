@@ -185,6 +185,11 @@ button{cursor:pointer}
 .n-fruit{background:#EAF3DE;color:#27500A}.n-fat{background:#FAEEDA;color:#633806}.n-sugar{background:#F4C0D1;color:#4B1528}.n-spice{background:#F1EFE8;color:#444441}.n-unk{background:#FAEEDA;color:#633806;border:1px dashed #BA7517}
 .nat-ing{border:none;background:none;padding:0;font:inherit;color:var(--ink);text-align:left}.nat-ing.unk{color:#854F0B;font-weight:600;text-decoration:underline}
 .nat-pick{background:var(--soft);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
+/* lock the page horizontally (no sideways wobble on iPhone) */
+html,body{overflow-x:hidden;max-width:100%;overscroll-behavior-x:none}
+body{position:relative}
+.wrap,.view,.sheet-in{overflow-x:clip;max-width:100%}
+img,table,pre,code{max-width:100%}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
