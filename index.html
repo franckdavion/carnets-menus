@@ -192,6 +192,8 @@ body{position:relative}
 img,table,pre,code{max-width:100%}
 /* iPhone zooms on any field under 16px: keep fields at 16px so the page never zooms or slides sideways */
 input,select,textarea{font-size:16px!important}
+/* nothing inside a window may be squashed when the content is long */
+.sheet-in>*{flex-shrink:0}
 /* windows follow the visible area when the keyboard is open */
 .sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:var(--vvh,100%)}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
@@ -1913,7 +1915,7 @@ function openPick(k,role,withSugg){
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
   syncFavMode();
   $("#pickRandomBtn").textContent=(role||"main")==="main"?"Choix automatique":"Au hasard";
-  renderSugg(); renderPick(); $("#pickSheet").hidden=false;
+  renderSugg(); renderPick(); $("#pickSheet").hidden=false; $("#pickSheet .sheet-in").scrollTop=0;
 }
 $("#pickQ").addEventListener("input",renderPick);
 $("#pickSheet").addEventListener("click",e=>{if(e.target.id==="pickSheet")$("#pickSheet").hidden=true;});
