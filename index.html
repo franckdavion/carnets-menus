@@ -134,8 +134,9 @@ button{cursor:pointer}
 .badge{font-family:var(--f-mono);font-size:11px;background:var(--mark);color:#2A2108;border-radius:999px;padding:1px 6px;font-variant-numeric:tabular-nums}
 
 /* sheet (new recipe) */
-.sheet{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;align-items:flex-end;justify-content:center}
-.sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+.sheet{position:fixed;inset:0;z-index:20;overscroll-behavior:contain;background:color-mix(in srgb,var(--ink) 45%,transparent);display:flex;align-items:flex-end;justify-content:center}
+body.frozen{position:fixed;left:0;right:0;overflow:hidden}
+.sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field input,.field select,.field textarea,.ing-row input,.ing-row select{padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);width:100%;min-width:0}
 .grid3{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px}
@@ -1456,6 +1457,14 @@ startImportPolling();
 renderNow(); setInterval(renderNow,20000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
+/* freeze the page behind any open sheet (iPhone keeps scrolling the background otherwise) */
+(()=>{let y=0,frozen=false;
+  const sync=()=>{const open=[...document.querySelectorAll(".sheet")].some(s=>!s.hidden);
+    if(open&&!frozen){y=window.scrollY;document.body.style.top=(-y)+"px";document.body.classList.add("frozen");frozen=true;}
+    else if(!open&&frozen){document.body.classList.remove("frozen");document.body.style.top="";window.scrollTo(0,y);frozen=false;}};
+  const mo=new MutationObserver(sync);
+  document.querySelectorAll(".sheet").forEach(s=>mo.observe(s,{attributes:true,attributeFilter:["hidden"]}));
+  sync();})();
 /* updates: check on every opening and reload as soon as a new version is published */
 if("serviceWorker" in navigator){
   const hadSW=!!navigator.serviceWorker.controller; let reloading=false;
