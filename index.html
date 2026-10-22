@@ -123,8 +123,8 @@ button{cursor:pointer}
 .item .from{display:block;font-size:12px;color:var(--muted)}
 .item .q{font-family:var(--f-mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .item.done .nm,.item.done .q{text-decoration:line-through;color:var(--muted)}
-.extra-form{display:flex;gap:8px}
-.extra-form input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
+.extra-form{display:flex;flex-wrap:wrap;gap:8px}
+.extra-form input{flex:1 1 170px;min-width:0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
 
 /* tab bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
@@ -274,6 +274,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
   <!-- COURSES -->
   <section class="view" id="v-shop" hidden>
+    <button class="btn primary" type="button" data-act="openDaily" style="align-self:stretch;padding:12px 14px">Produits du quotidien</button>
     <div class="ticket">
       <div class="tk-head">
         <h2>Liste de courses</h2>
@@ -284,7 +285,6 @@ code{font-family:var(--f-mono);font-size:.92em}
     <form class="extra-form" id="extraForm">
       <input id="extraIn" placeholder="Ajouter un article" autocomplete="off">
       <button class="btn" type="submit">Ajouter</button>
-      <button class="btn primary" type="button" data-act="openDaily">Quotidien</button>
     </form>
     <div class="row">
       <button class="btn primary" data-act="shareList">Envoyer vers Notes</button>
