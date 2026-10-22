@@ -127,6 +127,8 @@ button{cursor:pointer}
 .item .dot{width:8px;height:8px;border-radius:50%;background:var(--line);justify-self:center}
 .item .miss{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--danger);border:1px solid var(--danger);border-radius:999px;padding:0 6px;vertical-align:1px}
 .trip{border-top:1px solid var(--line);padding:10px 0}.trip summary{cursor:pointer;font-weight:600}
+.item .have.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.item.done .have.on{text-decoration:none}
 .item .have{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;font-size:12px;padding:3px 9px;white-space:nowrap}
 .item .q{font-family:var(--f-mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .item.done .nm,.item.done .q{text-decoration:line-through;color:var(--muted)}
@@ -939,14 +941,15 @@ function renderShop(items,extras,ids){
   const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
   if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
-  const drive=n=>!curDrive()?"":`<a class="drive" href="${driveUrl(n)}" target="_blank" rel="noopener" aria-label="Chercher ${esc(n)} sur ${esc((curDrive()||{n:""}).n)}">Drive ↗</a>`;
+  const drive=(n,ref)=>!curDrive()?"":`<a class="drive" href="${driveUrl(n)}" target="_blank" rel="noopener" data-act="driveGo" data-ref="${esc(ref)}" aria-label="Chercher ${esc(n)} sur ${esc((curDrive()||{n:""}).n)}">Drive ↗</a>`;
+  const cartBtn=ref=>`<button type="button" class="have on" data-act="cartUndo" data-ref="${esc(ref)}" aria-label="Retirer du panier">Au panier ✓</button>`;
   const missTag=d=>d?`<span class="miss">Pas trouvé le ${esc(shortDate(parseYmd(d)))}</span>`:"";
   let h=groups.map(g=>`<div class="rayon"><div class="rayon-h"><h4>${esc(g.ry)}</h4><button type="button" class="link" data-act="haveRayon" data-r="${esc(g.ry)}">J'ai tout ce rayon</button></div>${g.its.map(i=>
-    `<div class="item" style="cursor:default"><span class="dot"></span>
-      <span class="nm">${esc(i.n)} ${drive(i.n)}${missTag((menu.missed||{})[i.key])}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button></div>`).join("")}</div>`).join("");
+{const inCart=!!menu.checked[i.key];return`<div class="item${inCart?" done":""}" style="cursor:default"><span class="dot"></span>
+      <span class="nm">${esc(i.n)} ${inCart?"":drive(i.n,"k:"+i.key)}${missTag((menu.missed||{})[i.key])}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span>${inCart?cartBtn("k:"+i.key):`<button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button>`}</div>`;}).join("")}</div>`).join("");
 
-  if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<div class="item" style="cursor:default"><span class="dot"></span>
-      <span class="nm">${esc(x.t)} ${drive(x.t)}${missTag(x.missed)}</span><span></span><button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button></div>`).join("")}</div>`;
+  if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<div class="item${x.done?" done":""}" style="cursor:default"><span class="dot"></span>
+      <span class="nm">${esc(x.t)} ${x.done?"":drive(x.t,"x:"+ix)}${missTag(x.missed)}</span><span></span>${x.done?cartBtn("x:"+ix):`<button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button>`}</div>`).join("")}</div>`;
   el.innerHTML=hint+xrHtml+h+hvHtml;
 }
 
@@ -1208,6 +1211,11 @@ document.addEventListener("click",e=>{
     const have=new Set((menu.extras||[]).map(x=>norm(x.t)));let n=0;
     t.got.forEach(x=>{const lab=x.n+(x.q?" : "+x.q:"");if(!have.has(norm(lab))){menu.extras=[...(menu.extras||[]),{t:lab,done:false}];n++;}});
     render();saveMenu();toast(n+" article"+(n>1?"s":"")+" remis dans la liste");}
+  else if(a==="driveGo"||a==="cartUndo"){const ref=b.dataset.ref,on=a==="driveGo";
+    if(ref.startsWith("k:")){const k=ref.slice(2);if(on)menu.checked[k]=true;else delete menu.checked[k];}
+    else{const x=(menu.extras||[])[Number(ref.slice(2))];if(x)x.done=on;}
+    // let the link open first, then refresh the list
+    if(on)setTimeout(()=>{render();saveMenu(300);},400);else{render();saveMenu(300);}}
   else if(a==="haveIt"){e.preventDefault();const k=b.dataset.k;menu.have=Object.assign({},menu.have,{[k]:haveUntil()});
     for(const x in menu.have)if(menu.have[x]<ymd(new Date()))delete menu.have[x];
     render();saveMenu(300);toast("Retiré de la liste : vous l'avez déjà");}
