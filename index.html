@@ -174,6 +174,17 @@ button{cursor:pointer}
 .day-nut{font-size:12px;color:var(--muted);margin:-2px 0 6px}
 [data-hidewine] .slot-acts .drink,[data-hidenut] .slot-acts .nut,[data-hidenut] .day-nut{display:none}
 .slot-name .chev{color:var(--accent);font-weight:700}
+.dbadge{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px}
+.dbadge.ok{background:#E1F5EE;color:#085041}.dbadge.bad{background:#FAECE7;color:#712B13}.dbadge.unk{background:#FAEEDA;color:#633806}
+.slot-acts .dline{flex-basis:100%}
+.nat-box{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.nat-list{display:flex;flex-direction:column;gap:6px}
+.nat-row{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;font-size:14px}
+.ntag{font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.n-prot{background:#FAECE7;color:#712B13}.n-star{background:#EEEDFE;color:#3C3489}.n-legu{background:#FBEAF0;color:#72243E}.n-veg{background:#E1F5EE;color:#085041}
+.n-fruit{background:#EAF3DE;color:#27500A}.n-fat{background:#FAEEDA;color:#633806}.n-sugar{background:#F4C0D1;color:#4B1528}.n-spice{background:#F1EFE8;color:#444441}.n-unk{background:#FAEEDA;color:#633806;border:1px dashed #BA7517}
+.nat-ing{border:none;background:none;padding:0;font:inherit;color:var(--ink);text-align:left}.nat-ing.unk{color:#854F0B;font-weight:600;text-decoration:underline}
+.nat-pick{background:var(--soft);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -496,6 +507,8 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-fish">2</span><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="1" aria-label="Plus">+</button></div></div>
     <div class="pref-row"><div><strong>Soirs légers</strong><div class="muted" style="font-size:13px">soupes et plats légers en priorité le soir</div></div>
       <div class="chips"><button type="button" class="chip" data-act="prefLight" data-v="1" id="pl-on">Oui</button><button type="button" class="chip" data-act="prefLight" data-v="0" id="pl-off">Non</button></div></div>
+    <div class="pref-row"><div><strong>Dissociation stricte</strong><div class="muted" style="font-size:13px">jamais de protéine (viande, poisson, œuf, fromage, laitage) avec un féculent ou une légumineuse, ni de légumineuse avec un féculent</div></div>
+      <div class="chips"><button type="button" class="chip" data-act="prefDissoc" data-v="1" id="pd-on">Oui</button><button type="button" class="chip" data-act="prefDissoc" data-v="0" id="pd-off">Non</button></div></div>
     <div class="field"><span class="label">Style de chaque jour</span><span class="muted" style="font-size:13px">« Proposer ma semaine » choisit en priorité des plats de ce style, midi et soir.</span><div id="p-days" class="day-styles"></div></div>
     <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
@@ -914,7 +927,7 @@ function renderMenu(){
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)} <span class="chev" aria-hidden="true">›</span></button>
-        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span>${menu.prefs.dissoc?`<span class="dline">${dissocBadge(mealDissoc(s))}</span>`:""}${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -1214,6 +1227,53 @@ function nm(r){return r.name+" "+(r.ing||[]).map(i=>i.n).join(" ");}
 function drinkFor(r){const d=DRINKS.find(x=>x[0](r));return[d[1],d[2]];}
 function drinkLine(r){const d=drinkFor(r);return"🍷 "+d[0]+" · 🥤 "+d[1];}
 
+/* ---------- nature of foods and strict food combining (dissociation) ---------- */
+// families: prot (meat, fish, eggs, cheese and dairy), star (starches), legu (pulses), veg, fruit, fat, sugar, spice
+const NAT_LABEL={prot:"Protéines",star:"Féculents",legu:"Légumineuses",veg:"Légumes",fruit:"Fruits",fat:"Matières grasses",sugar:"Sucres",spice:"Épices et condiments",unk:"À classer"};
+const NAT_ORDER=["prot","star","legu","veg","fruit","fat","sugar","spice","unk"];
+const NAT_RULES=[
+ ["veg",/tomates?|poireaux?|champignons?/],
+ ["fat",/lait de coco|huile|beurre|margarine|crème(?! dessert)|mayonnaise|pesto|olives?|noix|noisettes|amandes?|pignons de pin|pécan|cajou|graines|coco râpée|avocats?/],
+ ["star",/pommes? de terre|patates? douces?|riz|pâtes|pâte brisée|pâte sablée|pâte feuilletée|spaghetti|lasagne|crozets|nouilles|tagliatelle|macaroni|penne|coquillettes|semoule|boulgour|quinoa|polenta|farine|maïzena|fécule|pain|baguette|tortilla|croûtons|chapelure|maïs|céréales|blé|avoine|biscottes|frites|chips|gâteau|biscuits|pâtisserie|crêpes/],
+ ["spice",/sauce soja|soja sauce/],
+ ["legu",/lentilles|pois chiches|haricots (rouges|blancs|secs|noirs)|flageolets|fèves|pois cassés|soja(?! sauce)|tofu|houmous/],
+ ["prot",/poulet|dinde|canard|pintade|volaille|bœuf|boeuf|(?:^|\s)veau|agneau|porc|lardons|jambon|bacon|saucisse|saucisson|chorizo|merguez|steak|viande|pâté|rillettes|terrine|saumon|cabillaud|colin|merlu|lieu|thon|sardine|maquereau|truite|dorade|poisson|crevettes|moules|anchois|œufs?|oeufs?|fromage|gruyère|emmental|comté|cheddar|parmesan|mozzarella|feta|reblochon|raclette|camembert|chèvre|ricotta|mascarpone|lait(?!ue)|yaourts?|skyr|petit-suisse|crème dessert/],
+ ["sugar",/sucre|miel|chocolat|cacao|confiture|sirop|glace|caramel/],
+ ["fruit",/pommes?|poires?|bananes?|citrons?|oranges?|fraises|framboises|myrtilles|cerises|abricots|pêches|raisins|ananas|mangues?|kiwis?|fruits?|compote/],
+ ["spice",/sel|poivre|épices|cumin|curry|paprika|cannelle|muscade|piment|herbes de provence|vanille|bouillon|sauce soja|soja sauce|moutarde|vinaigre|vin|bière|levure|pâte de curry|gingembre en poudre|sauce césar|apéritif|jus|soda/],
+ ["veg",/carottes?|courgettes?|aubergines?|poivrons?|tomates?|coulis|oignons?|échalotes?|ail|champignons?|brocolis?|chou|épinards|pousses|poireaux?|navets?|potiron|butternut|courge|betteraves?|salade|laitues?|mâche|roquette|concombres?|céleri|fenouil|asperges|artichauts?|radis|endives?|haricots verts|petits pois|cornichons|crudités|soupe|persil|ciboulette|basilic|menthe|aneth|coriandre|thym|romarin|laurier|gingembre|légumes?/],
+];
+function natureOf(name){
+  const n=norm(name), ov=(menu.natures||{})[n]; if(ov)return ov;
+  const hit=NAT_RULES.find(([,re])=>re.test(n)); return hit?hit[0]:"unk";
+}
+function famsOf(names){return new Set(names.map(natureOf));}
+// conflicts in strict combining: protein with starch, protein with pulses, pulses with starch
+function dissocCheck(fams){
+  const bad=[];
+  if(fams.has("prot")&&fams.has("star"))bad.push("protéine + féculent");
+  if(fams.has("prot")&&fams.has("legu"))bad.push("protéine + légumineuse");
+  if(fams.has("legu")&&fams.has("star"))bad.push("légumineuse + féculent");
+  return{ok:!bad.length&&!fams.has("unk"),bad,unk:fams.has("unk")};
+}
+function recipeDissoc(r){return dissocCheck(famsOf((r.ing||[]).map(i=>i.n)));}
+function mealDissoc(s){
+  const names=[];[s.id,s.entree,s.dessert].forEach(id=>{const r=id&&recipes[id];if(r)(r.ing||[]).forEach(i=>names.push(i.n));});
+  (s.extra||[]).forEach(x=>names.push(x));
+  return dissocCheck(famsOf(names));
+}
+function dissocBadge(d){
+  return d.bad.length?`<span class="dbadge bad">⚠ ${esc(d.bad[0].charAt(0).toUpperCase()+d.bad[0].slice(1))}</span>`
+    :d.unk?`<span class="dbadge unk">? Dissociation à vérifier</span>`:`<span class="dbadge ok">✓ Dissocié</span>`;
+}
+let natAsk=null;
+function natureHtml(r){
+  const groups={};(r.ing||[]).forEach(i=>{if(!i.n)return;const f=natureOf(i.n);(groups[f]=groups[f]||[]).push(i.n);});
+  return`<span class="label">Nature des aliments</span><div class="nat-list">${NAT_ORDER.filter(f=>groups[f]).map(f=>`<div class="nat-row"><span class="ntag n-${f}">${NAT_LABEL[f]}</span><span class="nat-items">${groups[f].map(n=>
+      `<button type="button" class="nat-ing${f==="unk"?" unk":""}" data-act="natAsk" data-n="${esc(n)}">${esc(n)}${f==="unk"?" ?":""}</button>`).join(", ")}</span></div>`).join("")}</div>
+    ${natAsk?`<div class="nat-pick"><span class="muted" style="font-size:13px">« ${esc(natAsk)} » est :</span><div class="dchips">${NAT_ORDER.filter(f=>f!=="unk").map(f=>`<span class="dchip${natureOf(natAsk)===f?" on":""}"><button type="button" data-act="natSet" data-f="${f}">${NAT_LABEL[f]}</button></span>`).join("")}</div></div>`:""}`;
+}
+
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1282,6 +1342,9 @@ document.addEventListener("click",e=>{
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
+  else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
+  else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
+  else if(a==="prefDissoc"){prefDraft.dissoc=b.dataset.v==="1";$("#pd-on").setAttribute("aria-pressed",prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);}
   else if(a==="showSet"){LS.set("cm_show"+b.dataset.k,b.dataset.v);applyShow();renderShow();}
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
@@ -1566,12 +1629,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
+const THEMES=[["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
 // computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
 function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
 function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
-const hasTheme=(r,t)=>(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
+const hasTheme=(r,t)=>(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -1626,6 +1689,7 @@ function avoidList(){return menu.prefs.avoid.split(",").map(norm).filter(Boolean
 function eligible(){
   const av=avoidList();
   return Object.keys(recipes).filter(id=>{const r=recipes[id];if(NOT_MAIN.includes(r.cat))return false;
+    if(menu.prefs.dissoc&&!recipeDissoc(r).ok)return false;
     return !av.some(a=>norm(r.name).includes(a)||(r.ing||[]).some(i=>norm(i.n).includes(a)));});
 }
 /* style chosen per day in the preferences */
@@ -1720,7 +1784,7 @@ function renderNow(){
 function openPrefs(){
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
-  $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
+  $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pd-on").setAttribute("aria-pressed",!!prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
   prefDraft.days=Object.assign({},prefDraft.days);
   $("#p-days").innerHTML=DAYS.map(d=>`<span>${d}</span><select data-day="${d}" aria-label="Style du ${d}">${DAY_STYLES.map(([v,l])=>`<option value="${v}"${(prefDraft.days[d]||"")===v?" selected":""}>${l}</option>`).join("")}</select>`).join("");
   $("#p-skip").innerHTML=DAYS.map(d=>`<button type="button" class="chip" data-act="prefSkip" data-d="${d}" aria-pressed="${prefDraft.skip.includes(d)}">${d}</button>`).join("");
@@ -1735,20 +1799,21 @@ $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#pr
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
 let recSheetId=null;
-function openRecSheet(id){ if(!recipes[id])return; recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+function openRecSheet(id){ natAsk=null; if(!recipes[id])return; recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
     <ul class="ings">${ings}</ul>
+    <div class="nat-box">${natureHtml(r)}</div>
     ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
     <div class="row"><button type="button" class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.)`:`Ajouter aux courses pour ${p} pers.`}</button>
       ${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine</a>`:""}</div>
