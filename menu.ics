@@ -77,7 +77,8 @@ UID:20261022-midi@carnet-menus
 DTSTAMP:20261022T000000Z
 DTSTART;TZID=Europe/Paris:20261022T120000
 DTEND;TZID=Europe/Paris:20261022T133000
-SUMMARY:Midi : Poulet vapeur sauce yaourt aux herbes
+SUMMARY:Midi : Poulet vapeur sauce yaourt aux herbes (+ Salade d'endives e
+ t mandarines)
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
