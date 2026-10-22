@@ -141,6 +141,9 @@ button{cursor:pointer}
 .sync-chip[data-state="busy"]::before,.sync-chip[data-state="pending"]::before{background:var(--mark)}
 .sync-chip[data-state="err"]{color:var(--danger)}
 .sync-chip[data-state="err"]::before{background:var(--danger)}
+.serv-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.serv-row .ctl{display:flex;align-items:center;gap:6px}
+.serv-row .n{font-family:var(--f-mono);font-size:14px;min-width:6ch;text-align:center;font-variant-numeric:tabular-nums}
 a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:center}
 .week{display:flex;flex-direction:column;gap:10px}
 .day-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px 4px}
@@ -420,7 +423,7 @@ function fmt(q,u){
   if(!q)return"";
   if(u==="g"){if(q>=1000)return num(Math.round(q/100)/10)+" kg";return(q>=100?Math.round(q/10)*10:Math.max(5,Math.round(q/5)*5))+" g";}
   if(u==="ml"){if(q>=1000)return num(Math.round(q/100)/10)+" l";if(q>=50)return Math.round(q/10)+" cl";return Math.max(5,Math.round(q/5)*5)+" ml";}
-  if(u==="pièce"||u==="")return num(Math.ceil(q*2-0.001)/2);
+  if(u==="pièce"||u==="")return q<1?num(Math.max(.5,Math.round(q*2)/2)):String(Math.round(q+0.25));
   if(u==="c. à s."||u==="c. à c.")return num(Math.max(.5,Math.round(q*2)/2))+" "+u;
   const n=Math.max(1,Math.ceil(q-0.001));
   const pl={botte:"bottes",tranche:"tranches",boîte:"boîtes",sachet:"sachets",pincée:"pincées"};
@@ -677,12 +680,16 @@ function renderRecipes(){
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
   if(!list.length){el.innerHTML='<div class="empty">Aucune recette ne correspond à cette recherche.</div>';return;}
   el.innerHTML=list.map(([id,r])=>{
-    const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=on?W()[sl[0]].n:menu.people, f=p/(r.serves||4);
+    const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=viewServ[id]||(on?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
     let det="";
     if(open){
       const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
       const steps=String(r.steps||"").split("\n").map(s=>s.trim()).filter(Boolean);
-      det=`<div class="detail"><span class="label">Ingrédients pour ${p} pers.</span><ul class="ings">${ings}</ul>
+      det=`<div class="detail"><div class="serv-row"><span class="label">Ingrédients pour</span>
+          <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
+          <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
+        ${on?`<div class="muted" style="font-size:12px">Au menu : ${sl.map(k=>slotLabel(k)+" ("+W()[k].n+" p.)").join(", ")}${sl.some(k=>W()[k].n!==p)?` · <button class="link" data-act="vservApply" data-id="${esc(id)}">Mettre ${p} pers. au menu</button>`:""}</div>`:""}
+        <ul class="ings">${ings}</ul>
         ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`:""}
         <div class="row">${confirmDel===id
           ?`<span>Supprimer cette recette ?</span><button class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button class="btn ghost" data-act="delNo">Annuler</button>`
@@ -723,7 +730,7 @@ document.addEventListener("click",e=>{
   else if(a==="toggle"){
     if(onMenu(id)){slotsOf(id).forEach(k=>delete W()[k]);toast("Retiré du menu");}
     else{const k=nextEmptySlot();if(!k){toast("La semaine est complète : libérez une case d'abord");return;}
-      W()[k]={id,n:menu.people};toast("Ajouté : "+slotLabel(k));}
+      W()[k]={id,n:viewServ[id]||menu.people};toast("Ajouté : "+slotLabel(k));}
     if(id===ideaId)ideaId=null;
     if(b.closest("#frOut")){const on=onMenu(id);b.classList.toggle("on",on);b.textContent=on?"✓ Au menu":"+ Menu";}
     render();saveMenu();}
@@ -739,6 +746,9 @@ document.addEventListener("click",e=>{
     const id=bestFor(k,[cur.id]);if(!id){toast("Pas d'autre recette disponible");return;}
     W()[k]={id,n:cur.n};render();saveMenu();}
   else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
+  else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
+    const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
+  else if(a==="vservApply"){const n=viewServ[id];if(n){slotsOf(id).forEach(k=>W()[k].n=n);render();saveMenu();toast("Portions du menu mises à jour");}}
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
@@ -1014,6 +1024,7 @@ $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=
   menu.prefs=prefDraft;$("#prefSheet").hidden=true;render();saveMenu();toast("Préférences enregistrées");});
 $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#prefSheet").hidden=true;});
 
+let viewServ={};
 let pickKey=null;
 function renderPick(){
   const q=norm($("#pickQ").value), cur=W()[pickKey];
