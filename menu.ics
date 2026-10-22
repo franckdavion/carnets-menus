@@ -77,7 +77,7 @@ UID:20261022-midi@carnet-menus
 DTSTAMP:20261022T000000Z
 DTSTART;TZID=Europe/Paris:20261022T120000
 DTEND;TZID=Europe/Paris:20261022T133000
-SUMMARY:Midi : Pâtes aux lardons et petits pois
+SUMMARY:Midi : Tortellinis crème et jambon
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
