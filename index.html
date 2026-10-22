@@ -190,6 +190,10 @@ html,body{overflow-x:hidden;max-width:100%;overscroll-behavior-x:none}
 body{position:relative}
 .wrap,.view,.sheet-in{overflow-x:clip;max-width:100%}
 img,table,pre,code{max-width:100%}
+/* iPhone zooms on any field under 16px: keep fields at 16px so the page never zooms or slides sideways */
+input,select,textarea{font-size:16px!important}
+/* windows follow the visible area when the keyboard is open */
+.sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:var(--vvh,100%)}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -243,7 +247,7 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .idea-name{border:none;background:none;padding:0;text-align:left;color:inherit}
 .slot-sub{border:none;background:none;padding:2px 0;text-align:left;color:var(--ink);font-size:13px;min-width:0}
 .slot-main{min-width:0;display:flex;flex-direction:column}
-.pick-web{border:1px solid var(--accent);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.pick-web{border:1px solid var(--accent);border-radius:12px;padding:10px 12px}.pick-web[open]{display:flex;flex-direction:column;gap:8px}.pick-web summary{cursor:pointer;color:var(--accent);font-size:14px;list-style-position:inside}
 .slot{position:relative}.slot.flash{outline:2px solid var(--accent);outline-offset:3px;border-radius:10px}.slot>.ctl{position:absolute;top:8px;right:0}.slot-main>.slot-name{padding-right:116px}
 .slot-acts{display:flex;gap:8px 8px;align-items:center;flex-wrap:wrap;font-size:12px;margin:4px 0}
 .slot-acts .link{font-size:14px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:36px}
@@ -430,18 +434,18 @@ code{font-family:var(--f-mono);font-size:.92em}
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="pickTitle">Choisir</h2><button type="button" class="btn ghost" data-act="closePick">Fermer</button></div>
     <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn" data-act="pickFavMode" id="pickFavBtn" aria-pressed="false">★ Favoris</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
-    <div id="pickSugg"></div>
-    <input class="search" id="pickQ" type="search" placeholder="Ou cherchez : poisson, poulet, gratin…">
+    <input class="search" id="pickQ" type="search" placeholder="Cherchez : poisson, poulet, gratin, risotto…">
     <div class="chips" id="pickKinds"></div>
-    <div class="pick-list" id="pickList"></div>
-    <div id="pickWeb" class="pick-web" hidden>
-      <strong>La trouver sur le web</strong>
+    <details id="pickWeb" class="pick-web" hidden>
+      <summary><strong id="pwTitle">La trouver sur le web</strong></summary>
       <div class="row"><a class="btn" id="pw-m" target="_blank" rel="noopener">Marmiton ↗</a><a class="btn" id="pw-7" target="_blank" rel="noopener">750g ↗</a><a class="btn" id="pw-j" target="_blank" rel="noopener">Jow ↗</a></div>
       <span class="muted" style="font-size:13px">Sur la recette qui vous plaît : Partager → Copier le lien, puis collez-le ici.</span>
       <textarea id="pwLinks" class="search" rows="2" placeholder="Collez le lien de la recette"></textarea>
       <button type="button" class="btn primary" data-act="pickImport" style="align-self:flex-start">Importer et mettre au menu</button>
       <div id="pwMsg" class="muted" style="font-size:13px"></div>
-    </div>
+    </details>
+    <div id="pickSugg"></div>
+    <div class="pick-list" id="pickList"></div>
   </div>
 </div>
 
@@ -1869,14 +1873,16 @@ function renderPick(){
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`)+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
-  const web=!!q&&!all.length; $("#pickWeb").hidden=!web;
+  const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q;
+  $("#pwTitle").textContent=all.length?`Pas la bonne ? Chercher « ${$("#pickQ").value.trim()} » sur le web`:`Aucune recette « ${$("#pickQ").value.trim()} » : la trouver sur le web`;
+  if(!all.length)$("#pickWeb").open=true;
   if(web){const e=encodeURIComponent($("#pickQ").value.trim());
     $("#pw-m").href=`https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}`;$("#pw-7").href=`https://www.750g.com/recherche?q=${e}`;$("#pw-j").href=`https://www.google.com/search?q=${e}+site%3Ajow.fr`;}
 }
 let suggSeen=[], suggNow=[], favLimit=8;
 function syncFavMode(){
   const btn=$("#pickFavBtn"); btn.setAttribute("aria-pressed",pickFav); btn.classList.toggle("primary",pickFav);
-  $("#pickQ").placeholder=pickFav?"Chercher dans vos favoris":"Ou cherchez : poisson, poulet, gratin…";
+  $("#pickQ").placeholder=pickFav?"Chercher dans vos favoris":"Cherchez : poisson, poulet, gratin, risotto…";
 }
 function renderSugg(){
   const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn||pickFav){box.innerHTML=pickFav?`<span class="label">★ Vos favoris</span>`:"";return;}
@@ -2070,6 +2076,10 @@ startImportPolling();
 renderNow(); setInterval(renderNow,20000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
+/* keep open windows inside the visible area (keyboard on iPhone) */
+(()=>{const vv=window.visualViewport;if(!vv)return;const d=document.documentElement;
+  const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");};
+  vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);fit();})();
 /* freeze the page behind any open sheet (iPhone keeps scrolling the background otherwise) */
 (()=>{let y=0,frozen=false;
   const sync=()=>{const open=[...document.querySelectorAll(".sheet")].some(s=>!s.hidden);
