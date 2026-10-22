@@ -158,6 +158,18 @@ button{cursor:pointer}
 .store-h{margin:16px 0 0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .themes{display:block;font-size:12px;color:var(--accent);margin-top:2px}
 .day-styles{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;margin-top:4px}.day-styles select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;min-width:0;width:100%}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .wd{font-size:11px;color:var(--muted);font-weight:600;padding:2px 0}
+.cal button{border:1px solid transparent;background:none;border-radius:10px;padding:8px 0 6px;font:inherit;font-size:15px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:3px}
+.cal button:disabled{color:var(--line)}
+.cal button .pt{width:6px;height:6px;border-radius:50%;background:transparent}
+.cal button.has .pt{background:var(--accent)}
+.cal button.today{border-color:var(--line)}
+.cal button.sel{background:var(--accent);color:var(--accent-ink)}.cal button.sel .pt{background:var(--accent-ink)}
+.hday{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.hmeal .meal{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.hmeal .dish{display:block;font-weight:600;border:none;padding:0}
+.hmeal .sub{display:block;font-size:13px;color:var(--muted)}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -265,7 +277,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div class="chips" id="weekSel" style="flex-wrap:wrap;overflow:visible">
     </div>
-    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
+    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn" data-act="openHist">Historique</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
     <div id="proposeAsk"></div>
     <p class="muted" id="weekSum" style="margin:0;font-size:13px"></p>
     <div id="menuList"></div>
@@ -446,6 +458,15 @@ code{font-family:var(--f-mono);font-size:.92em}
   </div>
 </div>
 
+<div class="sheet" id="histSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Historique des repas</h2><button type="button" class="btn primary" data-act="closeHist">Fermer</button></div>
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><button type="button" class="step" data-act="histMonth" data-d="-1" aria-label="Mois précédent">‹</button><strong id="histTitle" style="text-transform:capitalize"></strong><button type="button" class="step" data-act="histMonth" data-d="1" aria-label="Mois suivant">›</button></div>
+    <div class="cal" id="histCal"></div>
+    <div id="histDay"></div>
+  </div>
+</div>
+
 <div class="sheet" id="dailySheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2>Produits du quotidien</h2><button type="button" class="btn primary" data-act="closeDaily">Terminé</button></div>
@@ -533,7 +554,7 @@ function normMenu(m){
   }
   if(m.items&&Object.keys(m.slots).length&&!Object.keys(m.weeks).length)m.weeks[ymd(mondayOf(new Date()))]=m.slots;
   delete m.items;delete m.days;delete m.slots;delete m.weekStart;delete m.history;
-  const oldest=ymd(addDays(mondayOf(new Date()),-56));
+  const oldest=ymd(addDays(mondayOf(new Date()),-371)); // one year of history
   for(const k of Object.keys(m.weeks))if(k<oldest||!m.weeks[k]||!Object.keys(m.weeks[k]).length)delete m.weeks[k];
   return m;
 }
@@ -713,8 +734,9 @@ function calendarLog(m,prev){
     DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
       MEALS.forEach(([meal])=>{const sl=slots[slotKey(d,meal)],r=sl&&m.recipes[sl.id],key=date+"|"+meal;
         const extra=sl?["entree","dessert"].map(c=>sl[c]&&m.recipes[sl[c]]&&m.recipes[sl[c]].name).filter(Boolean):[];
-        if(r)cal[key]=r.name+(extra.length?" (+ "+extra.join(", ")+")":""); else if(date>=today)delete cal[key];});});}
-  const limit=ymd(addDays(new Date(),-56));
+        const t=r&&r.name+(extra.length?" (+ "+extra.join(", ")+")":"");
+        if(r)cal[key]=sl.extra&&sl.extra.length?{t,d:"En plus : "+sl.extra.join(", ")}:t; else if(date>=today)delete cal[key];});});}
+  const limit=ymd(addDays(new Date(),-371));
   for(const k of Object.keys(cal))if(k.slice(0,10)<limit)delete cal[k];
   return Object.fromEntries(Object.keys(cal).sort().map(k=>[k,cal[k]]));
 }
@@ -727,10 +749,10 @@ function buildIcs(cal){
     "BEGIN:DAYLIGHT","TZOFFSETFROM:+0100","TZOFFSETTO:+0200","TZNAME:CEST","DTSTART:19700329T020000","RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU","END:DAYLIGHT",
     "BEGIN:STANDARD","TZOFFSETFROM:+0200","TZOFFSETTO:+0100","TZNAME:CET","DTSTART:19701025T030000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD",
     "END:VTIMEZONE"];
-  for(const[k,name]of Object.entries(cal)){const[date,meal]=k.split("|"),d=date.replace(/-/g,""),[t1,t2]=MEAL_TIME[meal]||MEAL_TIME.soir;
+  for(const[k,v]of Object.entries(cal)){const name=typeof v==="string"?v:v.t, desc=typeof v==="string"?"":v.d||"";const[date,meal]=k.split("|"),d=date.replace(/-/g,""),[t1,t2]=MEAL_TIME[meal]||MEAL_TIME.soir;
     L.push("BEGIN:VEVENT","UID:"+d+"-"+meal+"@carnet-menus","DTSTAMP:"+d+"T000000Z",
       "DTSTART;TZID=Europe/Paris:"+d+"T"+t1,"DTEND;TZID=Europe/Paris:"+d+"T"+t2,
-      icsFold("SUMMARY:"+icsEsc((meal==="midi"?"Midi : ":"Soir : ")+name)),"TRANSP:TRANSPARENT","END:VEVENT");}
+      icsFold("SUMMARY:"+icsEsc((meal==="midi"?"Midi : ":"Soir : ")+name)),...(desc?[icsFold("DESCRIPTION:"+icsEsc(desc))]:[]),"TRANSP:TRANSPARENT","END:VEVENT");}
   L.push("END:VCALENDAR");
   return L.join("\r\n")+"\r\n";
 }
@@ -1073,6 +1095,29 @@ function renderDays(){
   $("#proposeDaysBtn").textContent=!n?"Choisissez au moins un jour":!pickMeals.length?"Choisissez midi, soir ou les deux":`Proposer ${both?"":pickMeals[0]==="midi"?"les midis ":"les soirs "}pour ${n} jour${n>1?"s":""}`;
 }
 
+/* ---------- meal history: a month calendar of what was on the menu ---------- */
+let histMonth=null, histSel=null;
+function mealsOn(date){
+  const wk=(menu.weeks||{})[ymd(mondayOf(date))]; if(!wk)return[];
+  const dn=DAYS[(date.getDay()+6)%7];
+  return MEALS.map(([m,l])=>{const s=wk[slotKey(dn,m)],r=s&&recipes[s.id];return r?{l,r,s}:null;}).filter(Boolean);
+}
+function renderHist(){
+  const t=new Date(), m0=histMonth||new Date(t.getFullYear(),t.getMonth(),1);histMonth=m0;
+  $("#histTitle").textContent=m0.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const first=mondayOf(m0), cells=[];
+  for(let i=0;i<42;i++){const d=addDays(first,i);if(i>=35&&d.getMonth()!==m0.getMonth())break;cells.push(d);}
+  const sel=histSel||ymd(t);
+  $("#histCal").innerHTML=["L","M","M","J","V","S","D"].map(x=>`<span class="wd">${x}</span>`).join("")+cells.map(d=>{const out=d.getMonth()!==m0.getMonth(),k=ymd(d),has=mealsOn(d).length;
+    return`<button type="button" data-act="histDay" data-d="${k}" class="${has?"has":""}${k===ymd(t)?" today":""}${k===sel?" sel":""}" ${out?"disabled":""}>${d.getDate()}<span class="pt"></span></button>`;}).join("");
+  const sd=parseYmd(sel), ms=mealsOn(sd);
+  $("#histDay").innerHTML=`<div class="hday"><strong style="text-transform:capitalize">${esc(sd.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}</strong>`+
+    (ms.length?ms.map(({l,r,s})=>`<div class="hmeal"><span class="meal">${l}</span><button type="button" class="link dish" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}</button>
+      ${["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]).map(c=>`<span class="sub">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}
+      ${s.extra&&s.extra.length?`<span class="sub">En plus : ${esc(s.extra.join(", "))}</span>`:""}<span class="sub">${s.n} pers.</span></div>`).join("")
+      :'<span class="muted" style="font-size:14px">Aucun repas noté ce jour-là.</span>')+`</div>`;
+}
+
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1221,6 +1266,10 @@ document.addEventListener("click",e=>{
     render();saveMenu(300);toast("Retiré de la liste : vous l'avez déjà");}
   else if(a==="haveUndo"){if(menu.have){delete menu.have[b.dataset.k];render();saveMenu(300);}}
   else if(a==="haveReset"){menu.have={};render();saveMenu();}
+  else if(a==="openHist"){histMonth=null;histSel=null;renderHist();$("#histSheet").hidden=false;}
+  else if(a==="closeHist"){$("#histSheet").hidden=true;}
+  else if(a==="histMonth"){const m=histMonth;histMonth=new Date(m.getFullYear(),m.getMonth()+Number(b.dataset.d),1);renderHist();}
+  else if(a==="histDay"){histSel=b.dataset.d;renderHist();}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
