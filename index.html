@@ -943,7 +943,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
-      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(r.tags||[]).length?`<span class="themes">${r.tags.filter(t=>!(t==="legumes"&&r.tags.includes("dessert-legumes"))).map(t=>THEME_LABEL[t]).filter(Boolean).map(esc).join(" · ")}</span>`:""}</div></button>
+      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -1529,9 +1529,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["lowcarb","Allégé en glucides"],["dessert-legumes","Desserts aux légumes"]];
+const THEMES=[["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
-const hasTheme=(r,t)=>(r.tags||[]).includes(t);
+// computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
+function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
+function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
+const hasTheme=(r,t)=>(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -1552,6 +1555,7 @@ function recMatch(r,q,kind,quick,light,fav,theme){
   if(/^(desserts? (aux |de |avec des )?legumes|gateaux? (aux )?legumes)$/.test(nq))return hasTheme(r,"dessert-legumes");
   if(/^(reequilibrage|equilibre|equilibres?|sain|sains)$/.test(nq))return hasTheme(r,"reequilibrage");
   if(/^(low ?carb|sans glucides|peu de glucides|pauvre en glucides|allege en glucides|glucides)$/.test(nq))return hasTheme(r,"lowcarb");
+  if(/^(peu calorique|peu de calories|pauvre en calories|calories|leger en calories|minceur)$/.test(nq))return hasTheme(r,"lowkcal");
   const fam=FAMILY.find(([re])=>re.test(nq)); if(fam)return fam[1](r);
   const words=nq.split(/\s+/);
   const hay=deacc(r.name+" "+(r.cat||"")+" "+KIND_LABEL[kindOf(r)]+" "+(r.ing||[]).map(i=>i.n).join(" "));
@@ -1588,13 +1592,14 @@ function eligible(){
     return !av.some(a=>norm(r.name).includes(a)||(r.ing||[]).some(i=>norm(i.n).includes(a)));});
 }
 /* style chosen per day in the preferences */
-const DAY_STYLES=[["","Libre"],["reequilibrage","Rééquilibrage"],["legumes","Légumes"],["vege","Végétarien"],["poisson","Poisson"],["lowcarb","Allégé en glucides"],["rapide","Rapide"],["plaisir","Plaisir"]];
+const DAY_STYLES=[["","Libre"],["reequilibrage","Rééquilibrage"],["legumes","Légumes"],["vege","Végétarien"],["poisson","Poisson"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["rapide","Rapide"],["plaisir","Plaisir"]];
 const STYLE_OK={
   reequilibrage:r=>hasTheme(r,"reequilibrage")||(isLight(r)&&!isHeavy(r)),
   legumes:r=>hasTheme(r,"legumes")||(kindOf(r)==="vege"&&isLight(r)),
   vege:r=>kindOf(r)==="vege",
   poisson:r=>kindOf(r)==="poisson",
   lowcarb:r=>hasTheme(r,"lowcarb"),
+  lowkcal:r=>hasTheme(r,"lowkcal"),
   rapide:r=>r.cat==="Rapide"||(r.time||0)>0&&r.time<=30,
   plaisir:r=>!!r.fav||isHeavy(r)||r.cat==="Plat"&&!isLight(r),
 };
