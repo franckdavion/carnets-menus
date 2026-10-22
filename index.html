@@ -208,9 +208,12 @@ input,select,textarea{font-size:16px!important}
 button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .btn:active,.chip:active,.link:active,.dchip button:active,.add:active{transform:scale(.96);opacity:.85}
 /* window title and its Terminé / Fermer button stay visible while the content scrolls */
-.sheet-in>.row:first-child{position:sticky;top:-20px;z-index:2;background:var(--bg);margin-top:-20px;padding-top:20px;padding-bottom:8px;flex-wrap:nowrap}
+.sheet-in>.row:first-child{position:sticky;top:-20px;z-index:2;background:var(--bg);padding-top:6px;padding-bottom:8px;flex-wrap:nowrap;box-shadow:0 -14px 0 var(--bg)}
 .sheet-in>.row:first-child h2{min-width:0}
 .sheet-in>.row:first-child .btn{flex:none;min-height:44px;padding-inline:16px}
+#pickSugg{display:flex;flex-direction:column;gap:6px}
+#pickSugg .label,#pickAllLab{display:block;margin-top:10px}
+#pickSugg .link{align-self:flex-start;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;background:var(--surface);margin:4px 0 6px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -463,6 +466,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div id="pwMsg" class="muted" style="font-size:13px"></div>
     </details>
     <div id="pickSugg"></div>
+    <span class="label" id="pickAllLab">Toutes les recettes</span>
     <div class="pick-list" id="pickList"></div>
   </div>
 </div>
@@ -1891,7 +1895,7 @@ function renderPick(){
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`)+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
-  const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q;
+  const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q; $("#pickAllLab").textContent=q?"Résultats":"Toutes les recettes";
   $("#pwTitle").textContent=all.length?`Pas la bonne ? Chercher « ${$("#pickQ").value.trim()} » sur le web`:`Aucune recette « ${$("#pickQ").value.trim()} » : la trouver sur le web`;
   if(!all.length)$("#pickWeb").open=true;
   if(web){const e=encodeURIComponent($("#pickQ").value.trim());
@@ -1916,8 +1920,8 @@ function renderSugg(){
   const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&!NOT_MAIN.includes(recipes[id].cat)&&(!cur||id!==cur.id))
     .map(id=>[id,scoreFor(id,pickKey,week)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
   box.innerHTML=(suggNow.length?`<span class="label">Suggestions pour ce repas</span><div class="pick-list">${suggNow.map(item).join("")}</div>
-    <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"")
-    +`<span class="label" style="display:block;margin-top:14px">★ Vos favoris</span>`
+    <button class="link" data-act="moreSugg">↻ D'autres suggestions</button>`:"")
+    +`<span class="label">★ Vos favoris</span>`
     +(favs.length?`<div class="pick-list">${favs.slice(0,favLimit).map(item).join("")}</div>${favs.length>favLimit?`<button class="link" data-act="moreFav" style="margin-top:6px">Voir les ${favs.length-favLimit} autres favoris</button>`:""}`
       :`<p class="muted" style="font-size:13px;margin:4px 0 0">Aucun favori pour l'instant : dans l'onglet Recettes, touchez l'étoile ☆ d'une recette pour l'ajouter.</p>`);
 }
