@@ -225,7 +225,11 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .idea-name{border:none;background:none;padding:0;text-align:left;color:inherit}
 .slot-sub{border:none;background:none;padding:2px 0;text-align:left;color:var(--ink);font-size:13px;min-width:0}
 .slot-main{min-width:0;display:flex;flex-direction:column}
-.slot-acts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px}
+.slot{position:relative}.slot>.ctl{position:absolute;top:8px;right:0}.slot-main>.slot-name{padding-right:116px}
+.slot-acts{display:flex;gap:8px 8px;align-items:center;flex-wrap:wrap;font-size:12px;margin:4px 0}
+.slot-acts .link{font-size:14px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);min-height:36px}
+.slot-acts .kind,.slot-acts .nut,.slot-acts .drink{flex-basis:100%}
+.drink{font-size:12px;color:var(--muted)}
 .kind{color:var(--muted);text-transform:lowercase}
 .link{border:none;background:none;padding:2px 0;color:var(--accent);font-weight:600;font-size:12px}
 .slot.locked .slot-name::after{content:" · fixé";color:var(--muted);font-weight:400;font-size:12px}
@@ -902,7 +906,7 @@ function renderMenu(){
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
-        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><span class="drink">${esc(drinkLine(r))}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -1177,6 +1181,30 @@ function slotNut(s){ // a whole meal for one person: dish + starter + dessert + 
 function sumNut(list){const ns=list.filter(Boolean);return ns.length?{k:ns.reduce((a,n)=>a+n.k,0),g:ns.reduce((a,n)=>a+n.g,0),part:ns.some(n=>n.part)}:null;}
 function fmtNut(n,short){if(!n)return"";const k=Math.round(n.k/10)*10,g=Math.round(n.g);
   return`${n.part?"≥ ":"≈ "}${k.toLocaleString("fr-FR")} kcal · ${g} g ${short?"gluc.":"glucides"}`;}
+
+/* ---------- drink suggestions: simple pairing rules from the dish ---------- */
+const DRINKS=[
+ [r=>r.cat==="Dessert"&&/chocolat|brownie|cacao/i.test(nm(r)),"Banyuls ou Maury","Chocolat chaud ou café"],
+ [r=>r.cat==="Dessert","Muscat ou cidre doux","Thé ou infusion"],
+ [r=>/croziflette|tartiflette|raclette|fondue|reblochon|crozets/i.test(nm(r)),"Blanc de Savoie (Apremont, Chignin)","Jus de pomme"],
+ [r=>/curry|dahl|chili|wok|tacos|sin carne|thaï|asiat/i.test(r.name),"Bière blonde ou blanc aromatique (Gewurztraminer)","Thé glacé maison ou lassi"],
+ [r=>/blanquette/i.test(nm(r)),"Blanc de Bourgogne (Mâcon, Chardonnay)","Jus de raisin blanc"],
+ [r=>kindOf(r)==="poisson"&&/saumon/i.test(nm(r)),"Blanc de Bourgogne (Chardonnay) ou rosé","Eau pétillante au citron"],
+ [r=>kindOf(r)==="poisson","Blanc sec (Muscadet, Sancerre)","Eau pétillante au citron"],
+ [r=>kindOf(r)==="rouge"&&/bourguignon|braiser/i.test(nm(r)),"Bourgogne rouge (Pinot noir)","Jus de raisin"],
+ [r=>r.cat==="Soupe","Pas besoin de vin, ou un blanc léger","Eau ou infusion"],
+ [r=>/pesto|lasagnes|risotto|carbonara|bolognaise|pâtes|spaghetti/i.test(r.name),"Rouge italien (Chianti) ou blanc (Pinot grigio)","Eau pétillante, citron"],
+ [r=>kindOf(r)==="rouge","Rouge (Côtes-du-Rhône, Bordeaux)","Jus de raisin"],
+ [r=>kindOf(r)==="volaille"&&/basquaise|provençal|soleil/i.test(nm(r)),"Rosé (Côtes-de-Provence) ou rouge léger (Irouléguy)","Jus de tomate ou eau pétillante"],
+ [r=>kindOf(r)==="volaille","Rouge léger (Beaujolais) ou blanc (Chardonnay)","Jus de pomme pétillant"],
+ [r=>kindOf(r)==="porc","Blanc d'Alsace (Riesling) ou rouge léger (Beaujolais)","Jus de pomme"],
+ [r=>r.cat==="Soupe","Pas besoin de vin, ou un blanc léger","Eau ou infusion"],
+ [r=>/ratatouille|tian|provençal|tomate|poivron|aubergine/i.test(nm(r)),"Rosé de Provence","Eau pétillante, citron"],
+ [r=>true,"Blanc fruité (Côtes-de-Gascogne) ou rosé","Eau aromatisée maison"],
+];
+function nm(r){return r.name+" "+(r.ing||[]).map(i=>i.n).join(" ");}
+function drinkFor(r){const d=DRINKS.find(x=>x[0](r));return[d[1],d[2]];}
+function drinkLine(r){const d=drinkFor(r);return"🍷 "+d[0]+" · 🥤 "+d[1];}
 
 /* ---------- everyday products ---------- */
 const DAILY=[
@@ -1700,7 +1728,7 @@ function renderRecSheet(){
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div></div>
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
