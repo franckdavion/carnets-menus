@@ -214,6 +214,17 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 #pickSugg{display:flex;flex-direction:column;gap:6px}
 #pickSugg .label,#pickAllLab{display:block;margin-top:10px}
 #pickSugg .link{align-self:flex-start;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;background:var(--surface);margin:4px 0 6px}
+.wine-photo{display:flex;align-items:center;justify-content:center;min-height:120px;border:1.5px dashed var(--line);border-radius:12px;background:var(--surface);cursor:pointer;overflow:hidden;font-weight:600;color:var(--accent)}
+.wine-photo img{display:block;max-width:100%;max-height:260px;object-fit:contain}
+.grid2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px}
+.stars{display:flex;gap:4px}.stars button{border:none;background:none;font-size:28px;line-height:1;color:var(--line);padding:2px}.stars button.on{color:var(--mark)}
+.wine-side{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.wine-chip{border:1px solid var(--accent);background:var(--surface);color:var(--ink);border-radius:10px;padding:8px 10px;text-align:left;font-size:14px}
+.wine-row{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;align-items:start;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;padding:10px 0;color:var(--ink)}
+.wine-thumb{width:56px;height:72px;border-radius:8px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden}
+.wine-thumb img{width:100%;height:100%;object-fit:cover}
+.wine-row .sub{display:block;font-size:12px;color:var(--muted)}
+#wineSheet .sheet-in,#winesSheet .sheet-in{height:92%}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -327,7 +338,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div class="chips" id="weekSel" style="flex-wrap:wrap;overflow:visible">
     </div>
-    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn" data-act="openHist">Historique</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
+    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn" data-act="openHist">Historique</button><button class="btn" data-act="openWines">Mes vins</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
     <div id="proposeAsk"></div>
     <p class="muted" id="weekSum" style="margin:0;font-size:13px"></p>
     <div id="menuList"></div>
@@ -523,6 +534,22 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><button type="button" class="step" data-act="histMonth" data-d="-1" aria-label="Mois précédent">‹</button><strong id="histTitle" style="text-transform:capitalize"></strong><button type="button" class="step" data-act="histMonth" data-d="1" aria-label="Mois suivant">›</button></div>
     <div class="cal" id="histCal"></div>
     <div id="histDay"></div>
+  </div>
+</div>
+
+<div class="sheet" id="wineSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2 id="wineTitle">Noter un vin</h2><button type="button" class="btn ghost" data-act="closeWine">Fermer</button></div>
+    <div id="wineBody" style="display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</div>
+
+<div class="sheet" id="winesSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Mes vins</h2><button type="button" class="btn primary" data-act="closeWines">Fermer</button></div>
+    <input class="search" id="winesQ" type="search" placeholder="Chercher : Bordeaux, Pinot noir, 2018…" autocomplete="off">
+    <button type="button" class="btn" data-act="wineNewFree" style="align-self:flex-start">+ Noter un vin</button>
+    <div id="winesList" style="display:flex;flex-direction:column"></div>
   </div>
 </div>
 
@@ -1139,7 +1166,12 @@ function renderSide(){
   const chip=(t,own)=>`<span class="dchip${has(t)?" on":""}"><button type="button" data-act="sideToggle" data-t="${esc(t)}" aria-pressed="${has(t)}">${has(t)?"✓ ":""}${esc(t)}</button>${own?`<button type="button" class="rm" data-act="sideForget" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes ajouts">✕</button>`:""}</span>`;
   const mine=menu.sides||[];
   $("#sideList").innerHTML=(mine.length?`<div class="field"><span class="label">Mes ajouts</span><div class="dchips">${mine.map(t=>chip(t,true)).join("")}</div></div>`:"")
-    +SIDES.map(([g,its])=>`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}</div></div>`).join("");
+    +SIDES.map(([g,its])=>`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}</div>${g==="Boissons"?wineSideHtml():""}</div>`).join("");
+}
+function wineSideHtml(){
+  const ws=wineFor(sideKey), drank=(W()[sideKey].extra||[]).some(x=>/^(vin|bière|apéritif)$/i.test(x));
+  return`<div class="wine-side">${ws.map(w=>`<button type="button" class="wine-chip" data-act="wineOpen" data-id="${w.id}">${w.color==="bière"?"🍺":"🍷"} ${esc(wineLabel(w))} ›</button>`).join("")}
+    ${drank||ws.length?`<div class="row"><button type="button" class="btn" data-act="wineNew">📷 Noter le vin bu</button><button type="button" class="btn" data-act="wineNew" data-beer="1">📷 Noter la bière</button></div>`:`<span class="muted" style="font-size:12px">Touchez Vin ou Bière pour pouvoir noter ce que vous avez bu.</span>`}</div>`;
 }
 function toggleSide(t){const s=W()[sideKey];if(!s)return;const xs=s.extra||[];const i=xs.findIndex(x=>norm(x)===norm(t));
   if(i>=0)xs.splice(i,1);else xs.push(t);
@@ -1167,7 +1199,7 @@ let histMonth=null, histSel=null;
 function mealsOn(date){
   const wk=(menu.weeks||{})[ymd(mondayOf(date))]; if(!wk)return[];
   const dn=DAYS[(date.getDay()+6)%7];
-  return MEALS.map(([m,l])=>{const s=wk[slotKey(dn,m)],r=s&&recipes[s.id];return r?{l,r,s}:null;}).filter(Boolean);
+  return MEALS.map(([m,l])=>{const k=slotKey(dn,m),s=wk[k],r=s&&recipes[s.id];return r?{l,r,s,k,w:ymd(mondayOf(date))}:null;}).filter(Boolean);
 }
 function renderHist(){
   const t=new Date(), m0=histMonth||new Date(t.getFullYear(),t.getMonth(),1);histMonth=m0;
@@ -1179,9 +1211,9 @@ function renderHist(){
     return`<button type="button" data-act="histDay" data-d="${k}" class="${has?"has":""}${k===ymd(t)?" today":""}${k===sel?" sel":""}" ${out?"disabled":""}>${d.getDate()}<span class="pt"></span></button>`;}).join("");
   const sd=parseYmd(sel), ms=mealsOn(sd);
   $("#histDay").innerHTML=`<div class="hday"><strong style="text-transform:capitalize">${esc(sd.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}</strong>`+
-    (ms.length?ms.map(({l,r,s})=>`<div class="hmeal"><span class="meal">${l}</span><button type="button" class="link dish" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}</button>
+    (ms.length?ms.map(({l,r,s,k,w})=>`<div class="hmeal"><span class="meal">${l}</span><button type="button" class="link dish" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}</button>
       ${["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]).map(c=>`<span class="sub">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}
-      ${s.extra&&s.extra.length?`<span class="sub">En plus : ${esc(s.extra.join(", "))}</span>`:""}<span class="sub">${s.n} pers. · ${esc(fmtNut(slotNut(s),true))}</span></div>`).join("")+`<span class="day-nut">Journée : ${esc(fmtNut(sumNut(ms.map(x=>slotNut(x.s)))))} / pers.</span>`
+      ${s.extra&&s.extra.length?`<span class="sub">En plus : ${esc(s.extra.join(", "))}</span>`:""}${wineFor(k,w).map(x=>`<button type="button" class="link" data-act="wineOpen" data-id="${x.id}" style="display:block;text-align:left">${x.color==="bière"?"🍺":"🍷"} ${esc(wineLabel(x))}${x.grapes?" ("+esc(x.grapes)+")":""}</button>`).join("")}<span class="sub">${s.n} pers. · ${esc(fmtNut(slotNut(s),true))}</span></div>`).join("")+`<span class="day-nut">Journée : ${esc(fmtNut(sumNut(ms.map(x=>slotNut(x.s)))))} / pers.</span>`
       :'<span class="muted" style="font-size:14px">Aucun repas noté ce jour-là.</span>')+`</div>`;
 }
 
@@ -1314,6 +1346,156 @@ function natureHtml(r){
     ${natAsk?`<div class="nat-pick"><span class="muted" style="font-size:13px">« ${esc(natAsk)} » est :</span><div class="dchips">${NAT_ORDER.filter(f=>f!=="unk").map(f=>`<span class="dchip${natureOf(natAsk)===f?" on":""}"><button type="button" data-act="natSet" data-f="${f}">${NAT_LABEL[f]}</button></span>`).join("")}</div></div>`:""}`;
 }
 
+/* ---------- wine (and beer) journal: photo of the label, details, grape varieties ---------- */
+// typical grape varieties by appellation (they can vary from one estate to another)
+const APPELLATIONS=[
+ ["Champagne",/champagne/,"blanc","Chardonnay, Pinot noir, Pinot meunier"],
+ ["Crémant d'Alsace",/crémant d.?alsace/,"blanc","Pinot blanc, Riesling, Pinot gris, Chardonnay"],
+ ["Crémant de Loire",/crémant de loire/,"blanc","Chenin, Chardonnay, Cabernet franc"],
+ ["Crémant de Bourgogne",/crémant de bourgogne/,"blanc","Chardonnay, Pinot noir"],
+ ["Chablis",/chablis/,"blanc","Chardonnay"],
+ ["Pouilly-Fuissé",/pouilly.fuiss/,"blanc","Chardonnay"],
+ ["Pouilly-Fumé",/pouilly.fum/,"blanc","Sauvignon blanc"],
+ ["Meursault",/meursault/,"blanc","Chardonnay"],
+ ["Puligny-Montrachet",/montrachet/,"blanc","Chardonnay"],
+ ["Mâcon",/m[âa]con/,"blanc","Chardonnay"],
+ ["Gevrey-Chambertin",/gevrey|chambertin/,"rouge","Pinot noir"],
+ ["Nuits-Saint-Georges",/nuits.saint.georges/,"rouge","Pinot noir"],
+ ["Pommard",/pommard/,"rouge","Pinot noir"],["Volnay",/volnay/,"rouge","Pinot noir"],
+ ["Beaune",/beaune/,"rouge","Pinot noir"],["Mercurey",/mercurey/,"rouge","Pinot noir"],
+ ["Bourgogne",/bourgogne/,"rouge","Pinot noir (rouge) · Chardonnay (blanc)"],
+ ["Beaujolais",/beaujolais|morgon|fleurie|brouilly|juliénas|moulin.à.vent|chiroubles|chénas|régnié|saint.amour/,"rouge","Gamay"],
+ ["Sancerre",/sancerre/,"blanc","Sauvignon blanc (blanc) · Pinot noir (rouge)"],
+ ["Menetou-Salon",/menetou/,"blanc","Sauvignon blanc · Pinot noir"],
+ ["Muscadet",/muscadet/,"blanc","Melon de Bourgogne"],
+ ["Vouvray",/vouvray/,"blanc","Chenin"],["Montlouis",/montlouis/,"blanc","Chenin"],["Savennières",/savenni/,"blanc","Chenin"],
+ ["Chinon",/chinon/,"rouge","Cabernet franc"],["Bourgueil",/bourgueil/,"rouge","Cabernet franc"],["Saumur-Champigny",/saumur.champigny/,"rouge","Cabernet franc"],
+ ["Saumur",/saumur/,"rouge","Cabernet franc · Chenin (blanc)"],["Anjou",/anjou/,"rouge","Cabernet franc, Cabernet sauvignon · Chenin (blanc)"],
+ ["Pomerol",/pomerol/,"rouge","Merlot, Cabernet franc"],
+ ["Saint-Émilion",/saint.[ée]milion/,"rouge","Merlot, Cabernet franc"],
+ ["Pauillac",/pauillac/,"rouge","Cabernet sauvignon, Merlot"],["Margaux",/margaux/,"rouge","Cabernet sauvignon, Merlot"],
+ ["Saint-Julien",/saint.julien/,"rouge","Cabernet sauvignon, Merlot"],["Saint-Estèphe",/saint.est[èe]phe/,"rouge","Cabernet sauvignon, Merlot"],
+ ["Haut-Médoc",/haut.m[ée]doc/,"rouge","Cabernet sauvignon, Merlot"],["Médoc",/m[ée]doc/,"rouge","Cabernet sauvignon, Merlot"],
+ ["Pessac-Léognan",/pessac/,"rouge","Cabernet sauvignon, Merlot · Sauvignon, Sémillon (blanc)"],
+ ["Graves",/graves/,"rouge","Merlot, Cabernet sauvignon · Sauvignon, Sémillon (blanc)"],
+ ["Sauternes",/sauternes|barsac|loupiac/,"blanc","Sémillon, Sauvignon blanc"],
+ ["Entre-deux-Mers",/entre.deux.mers/,"blanc","Sauvignon blanc, Sémillon"],
+ ["Bordeaux",/bordeaux|côtes de bourg|blaye|fronsac|castillon/,"rouge","Merlot, Cabernet sauvignon, Cabernet franc"],
+ ["Bergerac",/bergerac|monbazillac|pécharmant/,"rouge","Merlot, Cabernet sauvignon · Sémillon (blanc)"],
+ ["Cahors",/cahors/,"rouge","Malbec (Côt), Merlot"],["Madiran",/madiran/,"rouge","Tannat"],
+ ["Jurançon",/jurançon|jurancon/,"blanc","Gros Manseng, Petit Manseng"],["Irouléguy",/iroul/,"rouge","Tannat, Cabernet franc"],
+ ["Gaillac",/gaillac/,"rouge","Duras, Braucol, Syrah · Mauzac (blanc)"],["Fronton",/fronton/,"rouge","Négrette"],
+ ["Côtes de Gascogne",/gascogne/,"blanc","Colombard, Ugni blanc, Gros Manseng"],
+ ["Châteauneuf-du-Pape",/ch[âa]teauneuf/,"rouge","Grenache, Syrah, Mourvèdre"],
+ ["Gigondas",/gigondas/,"rouge","Grenache, Syrah, Mourvèdre"],["Vacqueyras",/vacqueyras/,"rouge","Grenache, Syrah"],
+ ["Côte-Rôtie",/c[ôo]te.r[ôo]tie/,"rouge","Syrah, Viognier"],["Condrieu",/condrieu/,"blanc","Viognier"],
+ ["Hermitage",/hermitage/,"rouge","Syrah · Marsanne, Roussanne (blanc)"],["Saint-Joseph",/saint.joseph/,"rouge","Syrah · Marsanne, Roussanne (blanc)"],
+ ["Cornas",/cornas/,"rouge","Syrah"],["Tavel",/tavel/,"rosé","Grenache, Cinsault"],
+ ["Côtes-du-Rhône",/c[ôo]tes?.du.rh[ôo]ne|ventoux|luberon|rasteau|cairanne/,"rouge","Grenache, Syrah, Mourvèdre"],
+ ["Bandol",/bandol/,"rouge","Mourvèdre, Grenache, Cinsault"],
+ ["Côtes-de-Provence",/provence|bandol ros|cassis/,"rosé","Grenache, Cinsault, Syrah, Mourvèdre"],
+ ["Corse",/corse|patrimonio|ajaccio/,"rouge","Nielluccio, Sciaccarello · Vermentino (blanc)"],
+ ["Picpoul de Pinet",/picpoul/,"blanc","Piquepoul"],
+ ["Banyuls",/banyuls|maury|rivesaltes/,"rouge","Grenache"],
+ ["Languedoc",/languedoc|corbières|minervois|faugères|saint.chinian|pic.saint.loup|fitou|roussillon|terrasses du larzac/,"rouge","Syrah, Grenache, Carignan, Mourvèdre"],
+ ["Savoie",/savoie|apremont|chignin|abymes|jongieux/,"blanc","Jacquère · Mondeuse (rouge)"],
+ ["Jura",/jura|arbois|château.chalon|vin jaune|l.étoile/,"blanc","Savagnin, Chardonnay · Poulsard, Trousseau (rouge)"],
+ ["Alsace",/alsace/,"blanc","Riesling, Gewurztraminer, Pinot gris, Sylvaner, Muscat"],
+ ["Chianti",/chianti/,"rouge","Sangiovese"],["Prosecco",/prosecco/,"blanc","Glera"],
+ ["Rioja",/rioja/,"rouge","Tempranillo"],["Porto",/porto/,"rouge","Touriga nacional, Tinta roriz"],
+];
+const GRAPES=["Cabernet sauvignon","Cabernet franc","Merlot","Malbec","Pinot noir","Pinot gris","Pinot blanc","Pinot meunier","Gamay","Syrah","Grenache","Mourvèdre","Cinsault","Carignan","Tannat","Chardonnay","Sauvignon blanc","Sauvignon","Sémillon","Chenin","Riesling","Gewurztraminer","Sylvaner","Muscat","Viognier","Marsanne","Roussanne","Vermentino","Colombard","Melon de Bourgogne","Jacquère","Mondeuse","Savagnin","Sangiovese","Tempranillo","Nebbiolo","Zinfandel","Albariño"];
+// keep only the grapes of the wine's colour when the appellation lists several ("Sauvignon blanc (blanc) · Pinot noir (rouge)")
+function grapesForColor(s,color){const parts=String(s).split(" · ");if(parts.length<2||!color)return String(s).replace(/ \((blanc|rouge|rosé)\)/g,"");
+  const tagged=parts.find(x=>x.includes("("+color+")"));if(tagged)return tagged.replace(/ \(.*?\)/,"");
+  const plain=parts.find(x=>!/\((blanc|rouge|rosé)\)/.test(x));return(plain||parts[0]).replace(/ \(.*?\)/,"");}
+function findAppellation(text){const n=norm(text);return APPELLATIONS.find(a=>a[1].test(n))||null;}
+function grapesFromText(text){const n=norm(text);return GRAPES.filter(g=>n.includes(norm(g))).filter((g,i,arr)=>!(g==="Sauvignon"&&arr.includes("Sauvignon blanc")));}
+// read what Live Text copied from the label: name, appellation, vintage, colour, grapes
+function parseLabel(text){
+  const lines=String(text).split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const year=(String(text).match(/\b(19[5-9]\d|20[0-4]\d)\b/)||[])[1]||"";
+  const app=findAppellation(text);
+  const nameLine=lines.find(l=>/(ch[âa]teau|domaine|clos|mas |cave|cuv[ée]e|maison)/i.test(l))||lines.find(l=>!/appellation|contr[ôo]l|prot[ée]g|mis en bouteille|produit de|product of|alc|vol|\bcl\b|\bml\b|^\d/.test(norm(l)))||"";
+  const n=norm(text);
+  const color=/champagne|crémant|brut|mousseux|pétillant|prosecco/.test(n)?"effervescent":/ros[ée]/.test(n)?"rosé":/\bblanc\b/.test(n)?"blanc":/\brouge\b/.test(n)?"rouge":app?app[2]:"";
+  const gr=grapesFromText(text);
+  return{name:nameLine,app:app?app[0]:"",year,color,grapes:gr.length?gr.join(", "):(app?grapesForColor(app[3],color):""),grapesAuto:!gr.length&&!!app};
+}
+// photos: small JPEG kept on this phone, copied to the private data repository when sharing is on
+const WPH="cm_wphotos";
+function wPhotos(){return LS.get(WPH,{});}
+function saveWPhoto(id,data){const m=wPhotos();m[id]=data;let keys=Object.keys(m);
+  for(;;){try{localStorage.setItem(WPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];}}}
+async function shrinkPhoto(file){
+  const url=URL.createObjectURL(file);
+  try{const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=url;});
+    const s=Math.min(1,560/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c.toDataURL("image/jpeg",0.68);}
+  finally{URL.revokeObjectURL(url);}
+}
+async function uploadWPhoto(id,data){if(!sync)return;try{const path="photos/"+id+".jpg";let sha;const g=await gh("GET",null,sync.repo,path);if(g.status===200)sha=(await g.json()).sha;
+  await gh("PUT",Object.assign({message:"Photo de vin",content:data.split(",")[1]},sha?{sha}:{}),sync.repo,path);}catch(e){}}
+const wFetching=new Set();
+function wPhotoSrc(w){const m=wPhotos();if(m[w.id])return m[w.id];
+  if(w.photo&&sync&&!wFetching.has(w.id)){wFetching.add(w.id);gh("GET",null,sync.repo,"photos/"+w.id+".jpg").then(r=>r.status===200?r.json():null).then(d=>{if(d&&d.content){saveWPhoto(w.id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));renderWines();if(!$("#wineSheet").hidden)renderWineForm();}}).catch(()=>{});}
+  return"";}
+const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
+let wineDraft=null;
+function wineFor(k,week){return(menu.wines||[]).filter(w=>w.k===k&&w.w===(week||curWeek));}
+function openWine(opts){
+  const ex=opts.id&&(menu.wines||[]).find(w=>w.id===opts.id);
+  wineDraft=ex?JSON.parse(JSON.stringify(ex)):{id:"w"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),w:curWeek,k:opts.k||"",color:opts.beer?"bière":"",name:"",app:"",year:"",grapes:"",note:0,comment:"",photo:false,_new:true,_photo:""};
+  renderWineForm();$("#wineSheet").hidden=false;$("#wineSheet .sheet-in").scrollTop=0;
+}
+function renderWineForm(){
+  const d=wineDraft;if(!d)return;const src=d._photo||wPhotoSrc(d);const beer=d.color==="bière";
+  $("#wineTitle").textContent=(d._new?"Noter ":"")+(beer?"une bière":"un vin")+(d.k?" · "+slotLabel(d.k):"");
+  $("#wineBody").innerHTML=`
+    <label class="wine-photo">${src?`<img src="${src}" alt="Étiquette">`:`<span>📷 Prendre l'étiquette en photo</span>`}<input type="file" accept="image/*" capture="environment" id="wineFile" hidden></label>
+    ${src?`<button type="button" class="link" data-act="winePhotoAgain">Reprendre la photo</button>`:""}
+    <details class="field" ${d._new&&!d.name?"open":""}><summary class="label" style="cursor:pointer">Remplir depuis l'étiquette (texte en direct)</summary>
+      <span class="muted" style="font-size:13px">Dans Photos, appuyez longuement sur le texte de l'étiquette → Copier, puis collez ici.</span>
+      <textarea id="wineText" class="search" rows="3" placeholder="Collez le texte de l'étiquette"></textarea>
+      <button type="button" class="btn" data-act="wineParse" style="align-self:flex-start">Remplir la fiche</button></details>
+    <label class="field"><span class="label">Nom</span><input id="w-name" value="${esc(d.name)}" placeholder="${beer?"Ex. Brasserie du Mont Blanc, La Blonde":"Ex. Château Lagrange"}" autocomplete="off"></label>
+    <div class="dchips">${WCOLORS.map(([v,l])=>`<span class="dchip${d.color===v?" on":""}"><button type="button" data-act="wineColor" data-v="${v}">${l}</button></span>`).join("")}</div>
+    ${beer?"":`<div class="grid2"><label class="field"><span class="label">Appellation</span><input id="w-app" value="${esc(d.app)}" placeholder="Ex. Saint-Julien" autocomplete="off" list="w-apps"></label>
+      <label class="field"><span class="label">Millésime</span><input id="w-year" value="${esc(d.year)}" inputmode="numeric" placeholder="2019" autocomplete="off"></label></div>
+      <datalist id="w-apps">${APPELLATIONS.map(a=>`<option value="${esc(a[0])}">`).join("")}</datalist>
+      <label class="field"><span class="label">Cépages</span><input id="w-grapes" value="${esc(d.grapes)}" placeholder="Remplis selon l'appellation" autocomplete="off"></label>
+      <span class="muted" id="w-gnote" style="font-size:12px">${d.grapesAuto?"Cépages typiques de l'appellation : ils peuvent varier selon le domaine.":""}</span>`}
+    <div class="field"><span class="label">Ma note</span><div class="stars">${[1,2,3,4,5].map(i=>`<button type="button" data-act="wineNote" data-v="${i}" aria-label="${i} sur 5" class="${d.note>=i?"on":""}">★</button>`).join("")}</div></div>
+    <label class="field"><span class="label">Commentaire</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
+    <div class="row"><button type="button" class="btn primary" data-act="wineSave">Enregistrer</button>${d._new?"":`<button type="button" class="btn danger" data-act="wineDel">Supprimer</button>`}</div>`;
+  $("#wineFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+    try{wineCollect();wineDraft._photo=await shrinkPhoto(f);renderWineForm();}catch(x){toast("Photo illisible, réessayez");}});
+  const app=$("#w-app");if(app)app.addEventListener("change",()=>{const a=findAppellation(app.value),g=$("#w-grapes");if(a&&g&&!g.value.trim()){g.value=grapesForColor(a[3],wineDraft.color);$("#w-gnote").textContent="Cépages typiques de l'appellation : ils peuvent varier selon le domaine.";wineDraft.grapesAuto=true;}});
+}
+function wineCollect(){const d=wineDraft,v=id=>{const e=$(id);return e?e.value.trim():undefined;};
+  d.name=v("#w-name")??d.name;if($("#w-app")){d.app=v("#w-app");d.year=v("#w-year");d.grapes=v("#w-grapes");}d.comment=v("#w-comment")??d.comment;}
+function wineLabel(w){return[w.name||(w.color==="bière"?"Bière":"Vin"),w.app,w.year].filter(Boolean).join(" · ");}
+function wineSave(){
+  wineCollect();const d=wineDraft;if(!d.name&&!d.app&&!d._photo&&!d.photo){toast("Ajoutez au moins une photo ou un nom");return;}
+  if(d._photo){saveWPhoto(d.id,d._photo);uploadWPhoto(d.id,d._photo);d.photo=true;}
+  if(!d.date){const wk=parseYmd(d.w),i=d.k?DAYS.indexOf(d.k.split("|")[0]):-1;d.date=i>=0?ymd(addDays(wk,i)):ymd(new Date());}
+  const clean=Object.fromEntries(Object.entries(d).filter(([k])=>!k.startsWith("_")));
+  menu.wines=[...(menu.wines||[]).filter(w=>w.id!==d.id),clean].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if(d.k){const s=(menu.weeks[d.w]||{})[d.k];if(s){const tag=d.color==="bière"?"Bière":"Vin";if(!(s.extra||[]).includes(tag))s.extra=[...(s.extra||[]),tag];}}
+  wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();if(!$("#sideSheet").hidden)renderSide();renderWines();toast("Enregistré dans Mes vins");
+}
+let wineQ="";
+function renderWines(){
+  if(!$("#winesSheet")||$("#winesSheet").hidden)return;
+  const q=norm(wineQ), list=(menu.wines||[]).filter(w=>!q||norm([w.name,w.app,w.year,w.grapes,w.color,w.comment].join(" ")).includes(q));
+  $("#winesList").innerHTML=list.length?list.map(w=>{const src=wPhotoSrc(w);return`<button type="button" class="wine-row" data-act="wineOpen" data-id="${w.id}">
+      <span class="wine-thumb">${src?`<img src="${src}" alt="">`:(w.color==="bière"?"🍺":"🍷")}</span>
+      <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,w.color].filter(Boolean).join(" · "))}</span>
+      ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span></span></button>`;}).join("")
+    :`<p class="muted">${(menu.wines||[]).length?"Aucun vin ne correspond.":"Aucun vin noté pour l'instant. Dans « En plus » d'un repas, touchez Vin ou Bière puis « Noter ce que j'ai bu »."}</p>`;
+}
+
+$("#winesQ").addEventListener("input",e=>{wineQ=e.target.value;renderWines();});
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1473,6 +1655,21 @@ document.addEventListener("click",e=>{
   else if(a==="closeHist"){$("#histSheet").hidden=true;}
   else if(a==="histMonth"){const m=histMonth;histMonth=new Date(m.getFullYear(),m.getMonth()+Number(b.dataset.d),1);renderHist();}
   else if(a==="histDay"){histSel=b.dataset.d;renderHist();}
+  else if(a==="wineNew"){openWine({k:sideKey,beer:b.dataset.beer==="1"});}
+  else if(a==="wineNewFree"){openWine({});}
+  else if(a==="wineOpen"){openWine({id:b.dataset.id});}
+  else if(a==="closeWine"){wineDraft=null;$("#wineSheet").hidden=true;}
+  else if(a==="winePhotoAgain"){$("#wineFile").click();}
+  else if(a==="wineParse"){wineCollect();const t=$("#wineText").value;if(!t.trim()){toast("Collez d'abord le texte de l'étiquette");return;}
+    const r=parseLabel(t),d=wineDraft;["name","app","year","color","grapes"].forEach(f=>{if(r[f]&&!d[f])d[f]=r[f];});if(r.grapes&&!d.grapes)d.grapes=r.grapes;d.grapesAuto=r.grapesAuto;
+    renderWineForm();toast("Fiche remplie : vérifiez et corrigez si besoin");}
+  else if(a==="wineColor"){wineCollect();wineDraft.color=b.dataset.v;renderWineForm();}
+  else if(a==="wineNote"){wineCollect();const v=Number(b.dataset.v);wineDraft.note=wineDraft.note===v?0:v;renderWineForm();}
+  else if(a==="wineSave")wineSave();
+  else if(a==="wineDel"){const id=wineDraft&&wineDraft.id;menu.wines=(menu.wines||[]).filter(w=>w.id!==id);const m=wPhotos();delete m[id];try{localStorage.setItem(WPH,JSON.stringify(m));}catch(x){}
+    wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();renderWines();if(!$("#sideSheet").hidden)renderSide();toast("Vin supprimé");}
+  else if(a==="openWines"){wineQ="";$("#winesQ").value="";$("#winesSheet").hidden=false;renderWines();}
+  else if(a==="closeWines"){$("#winesSheet").hidden=true;}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
