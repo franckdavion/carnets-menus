@@ -461,7 +461,8 @@ let mode="loading", db=null, menuRef=null;
 let view=LS.get("cm_view","menu");
 let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false};
 let openId=null, confirmDel=null, ideaId=null, ideaIds=[], ideaSeen=[];
-const IDEAS_N=3;
+const IDEAS_N=5;
+let ideaMode="sugg", favShown=10;
 
 /* ---------- quantities ---------- */
 function toBase(q,u){q=Number(q)||0;
@@ -716,21 +717,29 @@ function render(){
 
 function renderIdea(){
   const el=$("#idea");
-  const pool=Object.keys(recipes).filter(id=>!onMenu(id)&&!NOT_MAIN.includes(recipes[id].cat));
   if(mode==="loading"){el.innerHTML='<span class="muted">Chargement des recettes…</span>';return;}
-  if(!pool.length){el.innerHTML='<span class="label">Pas d\'idée ?</span><span class="muted">'+(Object.keys(recipes).length?"Toutes vos recettes sont déjà au menu.":"Ajoutez des recettes pour recevoir des idées.")+'</span>';return;}
+  const favIds=Object.keys(recipes).filter(id=>recipes[id].fav).sort((x,y)=>recipes[x].name.localeCompare(recipes[y].name,"fr"));
+  const tabs=`<div class="chips"><button type="button" class="chip" data-act="ideaMode" data-v="sugg" aria-pressed="${ideaMode!=="fav"}">Suggestions</button><button type="button" class="chip" data-act="ideaMode" data-v="fav" aria-pressed="${ideaMode==="fav"}">★ Mes favoris${favIds.length?" ("+favIds.length+")":""}</button></div>`;
+  const row=id=>{const r=recipes[id],on=onMenu(id);return`<div class="dish"><div>
+     <button type="button" class="idea-name" data-act="viewRec" data-id="${esc(id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${r.fav?"★ ":""}${esc(r.name)}</h3></button>
+     <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}<button type="button" class="link" data-act="viewRec" data-id="${esc(id)}">Voir la recette</button></div></div>
+     <div class="ctl"><button type="button" class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div></div>`;};
+  if(ideaMode==="fav"){
+    el.innerHTML=`<span class="label">Pas d'idée ?</span>${tabs}`+(favIds.length
+      ?`<div class="list">${favIds.slice(0,favShown).map(row).join("")}</div>${favIds.length>favShown?`<div class="row"><button type="button" class="btn ghost" data-act="ideaFavMore">Voir les ${favIds.length-favShown} autres favoris</button></div>`:""}`
+      :'<span class="muted">Aucun favori pour l\'instant : touchez ☆ sur une recette pour l\'ajouter.</span>');
+    return;}
+  const pool=Object.keys(recipes).filter(id=>!onMenu(id)&&!NOT_MAIN.includes(recipes[id].cat));
+  if(!pool.length){el.innerHTML='<span class="label">Pas d\'idée ?</span>'+tabs+'<span class="muted">'+(Object.keys(recipes).length?"Toutes vos recettes sont déjà au menu.":"Ajoutez des recettes pour recevoir des idées.")+'</span>';return;}
   ideaIds=ideaIds.filter(id=>pool.includes(id));
   if(ideaIds.length<Math.min(IDEAS_N,pool.length)){
     const rest=pool.filter(id=>!ideaIds.includes(id)&&!ideaSeen.includes(id));
     const src=rest.length?rest:pool.filter(id=>!ideaIds.includes(id));
     while(ideaIds.length<Math.min(IDEAS_N,pool.length)&&src.length)ideaIds.push(src.splice(Math.floor(Math.random()*src.length),1)[0]);
   }
-  el.innerHTML=`<span class="label">Pas d'idée ? Et pourquoi pas…</span>
-   <div class="list">${ideaIds.map(id=>{const r=recipes[id];return`<div class="dish"><div>
-     <button type="button" class="idea-name" data-act="viewRec" data-id="${esc(id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${r.fav?"★ ":""}${esc(r.name)}</h3></button>
-     <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}<button type="button" class="link" data-act="viewRec" data-id="${esc(id)}">Voir la recette</button></div></div>
-     <div class="ctl"><button type="button" class="add" data-act="toggle" data-id="${esc(id)}">+ Menu</button></div></div>`;}).join("")}</div>
-   ${pool.length>ideaIds.length?`<div class="row"><button class="btn ghost" data-act="reroll">Autres idées</button></div>`:""}`;
+  el.innerHTML=`<span class="label">Pas d'idée ? Et pourquoi pas…</span>${tabs}
+   <div class="list">${ideaIds.map(row).join("")}</div>
+   ${pool.length>ideaIds.length?`<div class="row"><button type="button" class="btn ghost" data-act="reroll">Autres idées</button></div>`:""}`;
 }
 
 function renderMenu(){
@@ -869,6 +878,8 @@ document.addEventListener("click",e=>{
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
   else if(a==="shopRm"){if(menu.shopExtra){delete menu.shopExtra[b.dataset.id];render();saveMenu();}}
   else if(a==="closePick")$("#pickSheet").hidden=true;
+  else if(a==="ideaMode"){ideaMode=b.dataset.v;favShown=10;render();}
+  else if(a==="ideaFavMore"){favShown+=20;render();}
   else if(a==="reroll"){ideaSeen=[...ideaSeen,...ideaIds].slice(-30);ideaIds=[];render();}
   else if(a==="open"){openId=openId===id?null:id;confirmDel=null;render();}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
