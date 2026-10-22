@@ -1,4 +1,4 @@
-// Robot du Carnet de menus : lit les recettes dont on lui donne le lien.
+// Robot du Carnet de menus : lit les recettes dont on lui donne le lien et tient l'agenda Google à jour.
 // Exécuté par GitHub Actions dans le dépôt des données. Aucune dépendance.
 const RAYONS=["Fruits & légumes","Boucherie & poisson","Crémerie","Épicerie","Boulangerie","Surgelés","Divers"];
 const UNITS=["g","kg","ml","cl","l","pièce","c. à s.","c. à c.","botte","tranche","boîte","sachet","pincée"];
@@ -127,6 +127,7 @@ function parseRecipeText(text){
 /* ---------- robot: reads requests in inbox/, writes answers in results/ ---------- */
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15 CarnetDeMenus/1.0";
 const MEAT = /(b(?:œ|oe)uf|veau|agneau|porc|lardon|jambon|saucisse|chorizo|bacon|poulet|dinde|canard|volaille|saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|steak)/i;
@@ -272,6 +273,79 @@ async function importOne(url) {
   throw new Error("Recette non reconnue sur cette page. Utilisez « Coller une recette ».");
 }
 
+
+/* ---------- Google Agenda: keep the "Repas" calendar equal to agenda.json ---------- */
+const G_TOKEN = process.env.GOOGLE_TOKEN_URL || "https://oauth2.googleapis.com/token";
+const G_API = process.env.GOOGLE_API_BASE || "https://www.googleapis.com/calendar/v3";
+async function googleToken(keyJson) {
+  let sa; try { sa = JSON.parse(keyJson); } catch { throw new Error("La clé Google (secret GOOGLE_CLE) n'est pas un fichier JSON complet"); }
+  const now = Math.floor(Date.now() / 1000), b64u = o => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const unsigned = b64u({ alg: "RS256", typ: "JWT" }) + "." + b64u({ iss: sa.client_email, scope: "https://www.googleapis.com/auth/calendar.events", aud: G_TOKEN, iat: now, exp: now + 3600 });
+  const sig = crypto.sign("RSA-SHA256", Buffer.from(unsigned), sa.private_key).toString("base64url");
+  const r = await fetch(G_TOKEN, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: unsigned + "." + sig }) });
+  const j = await r.json().catch(() => ({}));
+  if (!j.access_token) throw new Error("Google a refusé la clé du compte robot (" + (j.error_description || j.error || r.status) + ")");
+  return j.access_token;
+}
+async function syncGoogle(agenda) {
+  const token = await googleToken(process.env.GOOGLE_CLE);
+  const cal = String(process.env.GOOGLE_AGENDA || "").trim();
+  const base = `${G_API}/calendars/${encodeURIComponent(cal)}/events`;
+  const H = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
+  const call = async (method, url, body) => {
+    const r = await fetch(url, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+    if (r.status === 404 && method === "GET") return null;
+    if (!r.ok && !(method === "DELETE" && (r.status === 404 || r.status === 410))) {
+      const t = await r.text();
+      if (r.status === 403 || r.status === 404) throw new Error("Le compte robot n'a pas accès à l'agenda : partagez-le avec lui (droit « Modifier les événements ») et vérifiez l'ID de l'agenda");
+      throw new Error("Google Agenda a répondu " + r.status + " : " + t.slice(0, 200));
+    }
+    return r.status === 204 ? {} : r.json().catch(() => ({}));
+  };
+  const times = agenda.times || { midi: ["12:00", "13:30"], soir: ["19:30", "21:00"] };
+  const desired = {};
+  for (const [k, name] of Object.entries(agenda.calendar || {})) {
+    const [date, meal] = k.split("|"); const t = times[meal] || times.soir;
+    desired["carnet" + date.replace(/-/g, "") + meal] = {
+      summary: (meal === "midi" ? "Midi : " : "Soir : ") + name,
+      start: { dateTime: `${date}T${t[0]}:00`, timeZone: "Europe/Paris" },
+      end: { dateTime: `${date}T${t[1]}:00`, timeZone: "Europe/Paris" },
+      transparency: "transparent", description: "Ajouté par le Carnet de menus", status: "confirmed",
+    };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 70 * 864e5).toISOString(), to = new Date(Date.now() + 120 * 864e5).toISOString();
+  const existing = {};
+  let page = "";
+  do {
+    const j = await call("GET", `${base}?showDeleted=true&singleEvents=true&maxResults=2500&timeMin=${encodeURIComponent(from)}&timeMax=${encodeURIComponent(to)}${page ? "&pageToken=" + page : ""}`);
+    for (const e of (j && j.items) || []) if (String(e.id).startsWith("carnet")) existing[e.id] = e;
+    page = j && j.nextPageToken || "";
+  } while (page);
+  let added = 0, changed = 0, removed = 0;
+  for (const [id, ev] of Object.entries(desired)) {
+    const ex = existing[id];
+    const same = ex && ex.status !== "cancelled" && ex.summary === ev.summary &&
+      String(ex.start && ex.start.dateTime || "").slice(11, 16) === ev.start.dateTime.slice(11, 16) &&
+      String(ex.start && ex.start.dateTime || "").slice(0, 10) === ev.start.dateTime.slice(0, 10);
+    if (same) continue;
+    if (!ex) {
+      const r = await fetch(base, { method: "POST", headers: H, body: JSON.stringify({ id, ...ev }) });
+      if (r.status === 409) { await call("PUT", `${base}/${id}`, ev); changed++; }   // a deleted event with this id still exists
+      else if (!r.ok) { if (r.status === 403 || r.status === 404) throw new Error("Le compte robot n'a pas accès à l'agenda : partagez-le avec lui (droit « Modifier les événements ») et vérifiez l'ID de l'agenda"); throw new Error("Google Agenda a répondu " + r.status); }
+      else added++;
+    } else { await call("PUT", `${base}/${id}`, ev); changed++; }
+  }
+  for (const [id, ex] of Object.entries(existing)) {
+    if (desired[id] || ex.status === "cancelled") continue;
+    const day = String(ex.start && (ex.start.dateTime || ex.start.date) || "").slice(0, 10);
+    if (day && day < today) continue;   // past meals stay as history
+    await call("DELETE", `${base}/${id}`); removed++;
+  }
+  return { added, changed, removed, total: Object.keys(desired).length };
+}
+
 async function main() {
   fs.mkdirSync("results", { recursive: true });
   const inbox = fs.existsSync("inbox") ? fs.readdirSync("inbox").filter(f => f.endsWith(".json")) : [];
@@ -287,6 +361,15 @@ async function main() {
     }
     fs.writeFileSync(path.join("results", out.id + ".json"), JSON.stringify(out, null, 1));
     fs.rmSync(file);
+  }
+  if (fs.existsSync("agenda.json") && process.env.GOOGLE_CLE && process.env.GOOGLE_AGENDA) {
+    let st;
+    try {
+      const r = await syncGoogle(JSON.parse(fs.readFileSync("agenda.json", "utf8")));
+      st = { ok: true, at: new Date().toISOString(), msg: `${r.total} repas dans l'agenda (${r.added} ajoutés, ${r.changed} modifiés, ${r.removed} retirés)` };
+    } catch (e) { st = { ok: false, at: new Date().toISOString(), msg: String(e.message || e) }; }
+    console.log("Agenda Google :", st.msg);
+    fs.writeFileSync("agenda-status.json", JSON.stringify(st, null, 1));
   }
   // keep the folder tidy: answers older than 3 days are removed
   for (const f of fs.readdirSync("results")) {

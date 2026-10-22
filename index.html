@@ -303,6 +303,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <label class="field"><span class="label">Dépôt du site, pour l'agenda (facultatif)</span><input id="s-site" placeholder="franckdavion/carnets-menus" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <div id="icsUrlBox" class="field"></div>
     <p class="muted" id="icsStatus" style="font-size:13px;margin:0"></p>
+    <p class="muted" id="gStatus" style="font-size:13px;margin:0"></p>
     <div class="err" id="s-err"></div>
     <div class="row">
       <button class="btn primary" type="submit">Connecter</button>
@@ -527,7 +528,7 @@ async function runSync(){
       LS.set("cm_base",merged);
       setState(merge3(L0,getState(),merged)); // keep edits made while the request was running
       lastOk=new Date(); setStatus("ok"); done=true;
-      publishIcs(merged.calendar);
+      publishIcs(merged.calendar); publishAgenda(merged.calendar);
     }
     if(!done)throw{status:409};
   }catch(e){setStatus("err",e);}
@@ -586,13 +587,41 @@ async function publishIcs(cal){
     if(line)line.textContent=e&&(e.status===403||e.status===404)?"Agenda non publié : la clé n'a pas le droit d'écrire dans "+siteRepo()+" (ajoutez ce dépôt à la clé, Contents : Read and write).":"Agenda non publié pour l'instant, nouvel essai à la prochaine synchronisation.";
   }finally{icsBusy=false;}
 }
+/* agenda.json in the data repository: the robot copies it into Google Agenda */
+let agendaBusy=false;
+async function publishAgenda(cal){
+  if(!sync||agendaBusy)return;
+  const body=J({v:1,times:{midi:["12:00","13:30"],soir:["19:30","21:00"]},calendar:cal||{}});
+  if(LS.get("cm_agenda_last","")===body)return;
+  agendaBusy=true;
+  try{
+    for(let i=0;i<3;i++){
+      const g=await gh("GET",null,sync.repo,"agenda.json");let sha=null;
+      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===body){LS.set("cm_agenda_last",body);break;}}
+      else if(g.status!==404)break;
+      const p=await gh("PUT",Object.assign({message:"Agenda des repas",content:b64e(body)},sha?{sha}:{}),sync.repo,"agenda.json");
+      if(p.status===409||p.status===422)continue;
+      if(p.ok)LS.set("cm_agenda_last",body);
+      break;
+    }
+  }catch(e){}finally{agendaBusy=false;}
+}
+async function showGoogleStatus(){
+  const line=$("#gStatus"); if(!line)return; line.textContent="";
+  if(!sync)return;
+  try{const g=await gh("GET",null,sync.repo,"agenda-status.json");if(g.status!==200)return;
+    const d=JSON.parse(b64d((await g.json()).content)), t=new Date(d.at);
+    line.textContent=(d.ok?"Google Agenda : ":"Google Agenda, problème : ")+d.msg+" · "+t.toLocaleString("fr-FR",{weekday:"short",hour:"2-digit",minute:"2-digit"});
+    line.style.color=d.ok?"":"var(--danger)";
+  }catch(e){}
+}
 function renderIcsBox(){
   const u=icsUrl();
   $("#icsUrlBox").innerHTML=u?`<span class="label">Adresse à ajouter dans Google Agenda</span><div class="row" style="flex-wrap:nowrap"><code style="flex:1;min-width:0;padding:6px 8px;word-break:break-all">${esc(u)}</code><button type="button" class="btn" data-act="copyIcs">Copier</button></div>`:"";
 }
 function openSync(){
   $("#s-repo").value=sync?sync.repo:""; $("#s-token").value=sync?sync.token:""; $("#s-err").textContent="";
-  $("#s-site").value=sync&&sync.site?sync.site:""; renderIcsBox();
+  $("#s-site").value=sync&&sync.site?sync.site:""; renderIcsBox(); showGoogleStatus();
   $("#s-off").hidden=!sync; $("#s-now").hidden=!sync;
   $("#syncSheet").hidden=false;
 }
