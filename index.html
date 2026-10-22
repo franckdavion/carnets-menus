@@ -170,6 +170,8 @@ button{cursor:pointer}
 .hmeal .meal{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .hmeal .dish{display:block;font-weight:600;border:none;padding:0}
 .hmeal .sub{display:block;font-size:13px;color:var(--muted)}
+.nut{font-size:12px;color:var(--muted)}.slot-acts .nut{flex-basis:100%;margin-top:-6px}
+.day-nut{font-size:12px;color:var(--muted);margin:-2px 0 6px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -895,12 +897,12 @@ function renderMenu(){
   if(mode==="loading"){el.innerHTML="";return;}
   const t=todayInWeek(), ws=weekStartDate();
   const diff=filled.some(k=>!isPast(k)&&W()[k].n!==menu.people);
-  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}${(menu.prefs.days||{})[d]?` <span class="muted" style="font-family:var(--f-body);font-size:12px">· ${esc((DAY_STYLES.find(x=>x[0]===menu.prefs.days[d])||["",""])[1])}</span>`:""}</div>
+  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}${(menu.prefs.days||{})[d]?` <span class="muted" style="font-family:var(--f-body);font-size:12px">· ${esc((DAY_STYLES.find(x=>x[0]===menu.prefs.days[d])||["",""])[1])}</span>`:""}</div>${(()=>{const n=sumNut(MEALS.map(([m])=>slotNut(W()[slotKey(d,m)])));return n?`<div class="day-nut">Journée : ${esc(fmtNut(n))} / pers.</div>`:"";})()}
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
-        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+        <div class="slot-acts"><span class="kind">${r.fav?"★ ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span><span class="nut">${esc(fmtNut(slotNut(s),true))}</span><button class="link" data-act="viewRec" data-id="${esc(s.id)}">Recette</button>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -941,7 +943,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
-      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${(r.ing||[]).length} ingrédients${(r.tags||[]).length?`<span class="themes">${r.tags.filter(t=>!(t==="legumes"&&r.tags.includes("dessert-legumes"))).map(t=>THEME_LABEL[t]).filter(Boolean).map(esc).join(" · ")}</span>`:""}</div></button>
+      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(r.tags||[]).length?`<span class="themes">${r.tags.filter(t=>!(t==="legumes"&&r.tags.includes("dessert-legumes"))).map(t=>THEME_LABEL[t]).filter(Boolean).map(esc).join(" · ")}</span>`:""}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -1114,9 +1116,67 @@ function renderHist(){
   $("#histDay").innerHTML=`<div class="hday"><strong style="text-transform:capitalize">${esc(sd.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}))}</strong>`+
     (ms.length?ms.map(({l,r,s})=>`<div class="hmeal"><span class="meal">${l}</span><button type="button" class="link dish" data-act="viewRec" data-id="${esc(s.id)}">${esc(r.name)}</button>
       ${["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]).map(c=>`<span class="sub">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}
-      ${s.extra&&s.extra.length?`<span class="sub">En plus : ${esc(s.extra.join(", "))}</span>`:""}<span class="sub">${s.n} pers.</span></div>`).join("")
+      ${s.extra&&s.extra.length?`<span class="sub">En plus : ${esc(s.extra.join(", "))}</span>`:""}<span class="sub">${s.n} pers. · ${esc(fmtNut(slotNut(s),true))}</span></div>`).join("")+`<span class="day-nut">Journée : ${esc(fmtNut(sumNut(ms.map(x=>slotNut(x.s)))))} / pers.</span>`
       :'<span class="muted" style="font-size:14px">Aucun repas noté ce jour-là.</span>')+`</div>`;
 }
+
+/* ---------- calories and carbs: rough estimate from average values per 100 g ---------- */
+// [pattern, kcal/100 g, carbs g/100 g, grams for one piece/slice/tin/bunch/sachet]
+const NUT=[
+ [/^(riz complet)/,350,72],[/riz/,350,77],[/pâtes complètes/,340,62],[/(pâtes|spaghetti|lasagne|crozets|nouilles|coquillettes|tagliatelle|macaroni|penne)/,355,70],
+ [/semoule/,360,72],[/boulgour/,350,70],[/quinoa/,370,64],[/lentilles.*cuites/,115,16,265],[/lentilles/,330,50],
+ [/pois chiches/,140,17,265],[/haricots rouges/,115,15,265],[/haricots blancs/,100,13,265],[/haricots verts/,30,4],[/petits pois/,80,10],[/maïs/,85,15,285],
+ [/maïzena|fécule/,380,88],[/farine/,360,74],[/patates? douces?/,86,20,300],[/pommes? de terre/,80,17,150],
+ [/pain de mie/,265,48,25],[/baguette/,270,55,250],[/pain/,250,49,400],[/croûtons/,420,65,75],[/tortilla/,300,50,40],
+ [/pâte brisée|pâte feuilletée/,400,45,230],[/pâte sablée/,450,55,230],[/sucre vanillé/,400,100,7.5],[/sucre/,400,100],[/miel/,320,80],
+ [/chocolat/,550,35],[/cacao/,360,12],[/levure/,100,25,11],[/confiture/,250,60],
+ [/beurre/,745,0.5],[/crème légère/,120,4],[/crème/,300,3],[/lait de coco léger/,80,2],[/lait de coco/,180,3],[/lait/,46,4.8],
+ [/fromage frais|ricotta|mascarpone/,230,3],[/yaourt grec|skyr/,110,4],[/yaourt/,60,5,125],[/fromage blanc/,75,4],
+ [/(gruyère|emmental|comté|cheddar)/,400,0.5,20],[/parmesan/,400,0],[/mozzarella/,250,1,125],[/feta/,270,1],[/reblochon/,330,0,450],[/raclette|camembert|chèvre/,320,0.5],
+ [/œufs?|oeufs?/,140,1,55],
+ [/poulet entier/,170,0,1200],[/cuisses? de poulet/,190,0,220],[/(blancs? de poulet|escalopes? de dinde|dinde|poulet)/,110,0,120],
+ [/haché 5/,130,0],[/haché/,250,0],[/(bœuf|boeuf|veau|agneau)/,150,0],[/lardons/,300,0],[/jambon/,115,1,40],[/(saucisse|chorizo|merguez)/,300,1,60],
+ [/saumon fumé/,180,0],[/saumon/,200,0,125],[/(cabillaud|colin|merlu|lieu|poisson)/,80,0,130],[/crevettes/,90,0],[/thon/,110,0,140],[/anchois/,200,0,50],
+ [/graines/,570,5],[/carottes?/,40,7.5,100],[/courgettes?/,17,2,200],[/aubergines?/,25,3,300],[/poivrons?/,30,5,180],[/tomates? cerises?/,20,3],[/tomates? concassées|pulpe/,25,4,400],
+ [/coulis|sauce tomate/,30,5],[/tomates?/,18,3,130],[/oignons? nouveaux/,30,5,100],[/oignons?/,40,8,120],[/échalotes?/,70,15,30],[/ail/,140,30,5],
+ [/champignons?/,25,1],[/brocolis?/,35,4,400],[/chou-fleur/,25,3,800],[/chou/,25,4,800],[/épinards|pousses/,25,1.5],[/poireaux?/,30,5,200],[/navets?/,25,4,150],
+ [/(potiron|butternut|courge)/,30,6,1000],[/betteraves?/,45,8,150],[/(salade|laitues?|mâche|roquette)/,15,1.5,300],[/concombres?/,15,2.5,300],[/avocats?/,200,2,150],
+ [/citrons?/,30,3,100],[/pommes?/,52,12,150],[/bananes?/,90,20,120],[/(persil|ciboulette|basilic|menthe|aneth|coriandre|thym)/,40,5,30],[/gingembre/,80,15,30],
+ [/huile/,900,0,13],[/olives?/,300,2],[/pesto/,450,5,190],[/(noix|noisettes|pécan|pignons|amande|cajou)/,650,8],[/coco râpée/,650,7],
+ [/mayonnaise/,700,1],[/moutarde/,150,5],[/sauce soja/,60,6],[/sauce césar/,450,5],[/vinaigre/,20,1],[/bouillon/,250,30,10],[/pâte de curry/,150,15],[/vin/,35,2],
+ [/(cumin|curry|paprika|cannelle|muscade|poivre|piment|herbes|sel|épices|vanille)/,0,0,1],
+];
+// a portion of each "En plus": [kcal, carbs g]
+const SIDE_NUT={"pâté":[160,1],"jambon":[45,0.5],"saucisson":[120,0.5],"rillettes":[180,0],"terrine":[130,1],"jambon cru":[75,0],"chorizo":[135,1],
+ "fromage":[110,0],"camembert":[85,0],"comté":[125,0],"chèvre":[90,0.5],"yaourt":[75,6],"fromage blanc":[75,4],"petit-suisse":[80,3],
+ "pain":[135,28],"salade verte":[50,2],"crudités":[70,6],"soupe":[100,12],"cornichons":[10,1],"chips":[160,15],"frites":[400,45],"œuf":[75,0.5],
+ "fruit":[70,16],"compote":[70,16],"chocolat":[110,9],"glace":[200,25],"gâteau":[300,35],"biscuits":[130,18],"crème dessert":[140,22],"pâtisserie":[350,40],
+ "vin":[85,1],"bière":[105,9],"jus de fruits":[90,20],"soda":[140,35],"apéritif":[120,8]};
+function ingGrams(i,row){
+  const q=Number(i.q)||0, u=i.u||"", piece=row[3]||100;
+  if(u==="g")return q; if(u==="kg")return q*1000; if(u==="cl")return q*10; if(u==="ml")return q; if(u==="l")return q*1000;
+  if(u==="c. à s.")return q*(row[3]===13?13:15); if(u==="c. à c.")return q*5; if(u==="pincée")return q*0.5;
+  if(u==="boîte")return q*(row[3]||400); if(u==="botte")return q*(row[3]||30); if(u==="sachet")return q*(row[3]||10);
+  return q*piece; // pièce, tranche, empty
+}
+const nutCache=new WeakMap();
+function nutri(r){ // per person: {k: kcal, g: carbs, part: some ingredient unknown}
+  if(!r)return null; if(nutCache.has(r))return nutCache.get(r);
+  let k=0,g=0,part=false;
+  for(const i of r.ing||[]){const n=norm(i.n);if(!n)continue;const row=NUT.find(x=>x[0].test(n));
+    if(!row){part=true;continue;} const gr=ingGrams(i,row)/100; k+=gr*row[1]; g+=gr*row[2];}
+  const s=r.serves||4, res={k:k/s,g:g/s,part};
+  nutCache.set(r,res); return res;
+}
+function slotNut(s){ // a whole meal for one person: dish + starter + dessert + extras
+  if(!s)return null; let k=0,g=0,part=false,any=false;
+  for(const id of [s.id,s.entree,s.dessert]){const r=id&&recipes[id];if(!r)continue;const n=nutri(r);k+=n.k;g+=n.g;part=part||n.part;any=true;}
+  for(const x of s.extra||[]){const v=SIDE_NUT[norm(x)];if(v){k+=v[0];g+=v[1];}else part=true;}
+  return any?{k,g,part}:null;
+}
+function sumNut(list){const ns=list.filter(Boolean);return ns.length?{k:ns.reduce((a,n)=>a+n.k,0),g:ns.reduce((a,n)=>a+n.g,0),part:ns.some(n=>n.part)}:null;}
+function fmtNut(n,short){if(!n)return"";const k=Math.round(n.k/10)*10,g=Math.round(n.g);
+  return`${n.part?"≥ ":"≈ "}${k.toLocaleString("fr-FR")} kcal · ${g} g ${short?"gluc.":"glucides"}`;}
 
 /* ---------- everyday products ---------- */
 const DAILY=[
@@ -1635,7 +1695,7 @@ function renderRecSheet(){
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div></div>
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
