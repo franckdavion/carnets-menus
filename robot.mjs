@@ -362,6 +362,10 @@ async function main() {
     fs.writeFileSync(path.join("results", out.id + ".json"), JSON.stringify(out, null, 1));
     fs.rmSync(file);
   }
+  if (fs.existsSync("agenda.json") && !(process.env.GOOGLE_CLE && process.env.GOOGLE_AGENDA)) {
+    console.log("Agenda Google : secrets GOOGLE_CLE / GOOGLE_AGENDA absents, agenda non mis à jour");
+    fs.writeFileSync("agenda-status.json", JSON.stringify({ ok: false, at: new Date().toISOString(), msg: "les secrets GOOGLE_CLE et GOOGLE_AGENDA ne sont pas enregistrés dans le dépôt" }, null, 1));
+  }
   if (fs.existsSync("agenda.json") && process.env.GOOGLE_CLE && process.env.GOOGLE_AGENDA) {
     let st;
     try {

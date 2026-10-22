@@ -681,8 +681,8 @@ function renderMenu(){
     const opts=[[cur,"Cette semaine"],[nxt,"Semaine prochaine"],[nn,"Dans 2 semaines"]];
     $("#weekSel").innerHTML=opts.map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===w}">${l} · ${shortDate(parseYmd(v))}</button>`).join(""); }
   $("#weekSum").textContent=filled.length?`${filled.length} repas · ${cnt.vege} végé · ${cnt.poisson} poisson${cnt.soupe?` · ${cnt.soupe} soupe${cnt.soupe>1?"s":""}`:""}`:"";
-  $("#proposeAsk").innerHTML=proposeAsk?`<div class="note row" style="justify-content:space-between">Remplacer les ${proposeAsk} repas non verrouillés ?
-    <span class="row"><button class="btn primary" data-act="proposeAll">Tout remplacer</button><button class="btn" data-act="proposeEmpty">Cases vides seulement</button><button class="btn ghost" data-act="proposeNo">Annuler</button></span></div>`:"";
+  $("#proposeAsk").innerHTML=undoWeek&&undoWeek.week===curWeek?`<div class="note row" style="justify-content:space-between">Nouvelle semaine proposée${undoWeek.locked?" (repas verrouillés gardés)":""}.
+    <button class="btn" data-act="proposeUndo">Revenir à l'ancienne</button></div>`:"";
   if(mode==="loading"){el.innerHTML="";return;}
   const t=todayInWeek(), ws=weekStartDate();
   const diff=filled.some(k=>W()[k].n!==menu.people);
@@ -766,11 +766,11 @@ document.addEventListener("click",e=>{
   else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
   else if(a==="applyAll"){for(const k in W())W()[k].n=menu.people;render();saveMenu();}
   else if(a==="clearMenu"){for(const k in W())if(!W()[k].lock)delete W()[k];menu.checked={};proposeAsk=0;render();saveMenu();}
-  else if(a==="propose"){const n=SLOT_ORDER.filter(k=>W()[k]&&!W()[k].lock).length;
-    if(n){proposeAsk=n;render();} else planWeek(false);}
-  else if(a==="proposeAll"){proposeAsk=0;planWeek(true);}
-  else if(a==="proposeEmpty"){proposeAsk=0;planWeek(false);}
-  else if(a==="proposeNo"){proposeAsk=0;render();}
+  else if(a==="propose"){
+    const had=SLOT_ORDER.some(k=>W()[k]&&!W()[k].lock);
+    undoWeek=had?{week:curWeek,slots:JSON.parse(JSON.stringify(W())),locked:SLOT_ORDER.some(k=>W()[k]&&W()[k].lock)}:null;
+    planWeek(true);}
+  else if(a==="proposeUndo"){if(undoWeek&&undoWeek.week===curWeek){menu.weeks[curWeek]=undoWeek.slots;undoWeek=null;render();saveMenu();toast("Ancienne semaine remise");}}
   else if(a==="swap"){const k=b.dataset.k,cur=W()[k];if(!cur)return;
     const id=bestFor(k,[cur.id]);if(!id){toast("Pas d'autre recette disponible");return;}
     W()[k]={id,n:cur.n};render();saveMenu();}
@@ -976,7 +976,7 @@ function parseRecipeText(text){
 }
 
 /* ---------- week planner ---------- */
-let proposeAsk=0, prefDraft=null;
+let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"bœuf / veau",volaille:"volaille",porc:"porc",vege:"végé"};
 const KIND_RE=[["poisson",/saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
   ["rouge",/b(?:œ|oe)uf|veau|agneau|steak|bourguignon|bavette/i],
@@ -1016,6 +1016,7 @@ function scoreFor(id,k,week){
   if(kd==="poisson"){const need=menu.prefs.fish-count("poisson");sc+=need>0?1+need/left*4:-2;}
   const near1=[...weekIds(ymd(addDays(parseYmd(curWeek),-7))),...weekIds(ymd(addDays(parseYmd(curWeek),7)))];
   const near2=[...weekIds(ymd(addDays(parseYmd(curWeek),-14))),...weekIds(ymd(addDays(parseYmd(curWeek),14)))];
+  if(rerollAvoid.includes(id))sc-=4;   // a new proposal should really change the week
   const h=[near1,near2,weekIds(ymd(addDays(parseYmd(curWeek),-21)))];
   if((h[0]||[]).includes(id))sc-=3.5; else if((h[1]||[]).includes(id))sc-=1; else if((h[2]||[]).includes(id))sc-=0.5;
   return sc;
@@ -1031,6 +1032,7 @@ function planWeek(replaceAll){
   const pool=eligible();
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
   const before=filledSlots().map(k=>W()[k].id);
+  rerollAvoid=replaceAll?before:[];
   const week=weekMap(), targets=SLOT_ORDER.filter(k=>!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
   targets.forEach(k=>delete week[k]);
   if(replaceAll)SLOT_ORDER.forEach(k=>{if(skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
