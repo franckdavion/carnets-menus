@@ -257,7 +257,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div class="chips" id="weekSel" style="flex-wrap:wrap;overflow:visible">
     </div>
-    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
+    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
     <div id="proposeAsk"></div>
     <p class="muted" id="weekSum" style="margin:0;font-size:13px"></p>
     <div id="menuList"></div>
@@ -406,6 +406,16 @@ code{font-family:var(--f-mono);font-size:.92em}
       <span class="label">Ajouter autre chose</span>
       <div class="extra-form"><input id="sideIn" placeholder="Ex. quiche de mamie, sushis" autocomplete="off"><button class="btn" type="submit">Ajouter</button></div>
     </form>
+  </div>
+</div>
+
+<div class="sheet" id="daysSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Proposer certains repas</h2><button type="button" class="btn ghost" data-act="closeDays">Fermer</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Choisissez les jours et les repas à remplir. Les repas verrouillés sont gardés, le reste du menu ne bouge pas.</p>
+    <div class="dchips" id="daysPick"></div>
+    <div class="field"><span class="label">Repas</span><div class="dchips" id="mealsPick"></div></div>
+    <button type="button" class="btn primary" data-act="proposeDays" id="proposeDaysBtn">Proposer pour ces jours</button>
   </div>
 </div>
 
@@ -963,6 +973,18 @@ $("#sideForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#side
   const s=W()[sideKey];if(!(s.extra||[]).some(x=>norm(x)===norm(v)))s.extra=[...(s.extra||[]),v];
   $("#sideIn").value="";render();renderSide();saveMenu();});
 
+/* ---------- propose only some days ---------- */
+let pickDays=[], pickMeals=["midi","soir"];
+function renderDays(){
+  const ws=weekStartDate();
+  $("#daysPick").innerHTML=DAYS.map((d,i)=>{const past=isPast(slotKey(d,"soir")),on=pickDays.includes(d);
+    return`<span class="dchip${on?" on":""}"${past?' style="opacity:.45"':""}><button type="button" data-act="dayToggle" data-d="${d}" aria-pressed="${on}" ${past?"disabled":""}>${on?"✓ ":""}${d} ${addDays(ws,i).getDate()}</button></span>`;}).join("");
+  $("#mealsPick").innerHTML=MEALS.map(([m,l])=>{const on=pickMeals.includes(m);return`<span class="dchip${on?" on":""}"><button type="button" data-act="mealToggle" data-m="${m}" aria-pressed="${on}">${on?"✓ ":""}${l}</button></span>`;}).join("");
+  const n=pickDays.length, both=pickMeals.length===2, ok=n&&pickMeals.length;
+  $("#proposeDaysBtn").disabled=!ok;
+  $("#proposeDaysBtn").textContent=!n?"Choisissez au moins un jour":!pickMeals.length?"Choisissez midi, soir ou les deux":`Proposer ${both?"":pickMeals[0]==="midi"?"les midis ":"les soirs "}pour ${n} jour${n>1?"s":""}`;
+}
+
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1012,6 +1034,14 @@ document.addEventListener("click",e=>{
     const had=SLOT_ORDER.some(k=>W()[k]&&!W()[k].lock&&!isPast(k));
     undoWeek=had?{week:curWeek,slots:JSON.parse(JSON.stringify(W())),locked:SLOT_ORDER.some(k=>W()[k]&&W()[k].lock)}:null;
     planWeek(true);}
+  else if(a==="openDays"){pickDays=pickDays.filter(d=>!isPast(slotKey(d,"soir")));renderDays();$("#daysSheet").hidden=false;}
+  else if(a==="closeDays"){$("#daysSheet").hidden=true;}
+  else if(a==="mealToggle"){const m=b.dataset.m;pickMeals=pickMeals.includes(m)?pickMeals.filter(x=>x!==m):[...pickMeals,m];renderDays();}
+  else if(a==="dayToggle"){const d=b.dataset.d;pickDays=pickDays.includes(d)?pickDays.filter(x=>x!==d):[...pickDays,d];renderDays();}
+  else if(a==="proposeDays"){if(!pickDays.length||!pickMeals.length)return;
+    const had=SLOT_ORDER.some(k=>W()[k]&&!W()[k].lock&&!isPast(k));
+    undoWeek=had?{week:curWeek,slots:JSON.parse(JSON.stringify(W())),locked:SLOT_ORDER.some(k=>W()[k]&&W()[k].lock)}:null;
+    $("#daysSheet").hidden=true;planWeek(true,DAYS.filter(d=>pickDays.includes(d)),pickMeals);}
   else if(a==="proposeUndo"){if(undoWeek&&undoWeek.week===curWeek){menu.weeks[curWeek]=undoWeek.slots;undoWeek=null;render();saveMenu();toast("Ancienne semaine remise");}}
   else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
   else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
@@ -1385,14 +1415,15 @@ function bestFor(k,exclude){
   if(!c.length)return null;
   return c.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
 }
-function planWeek(replaceAll){
+function planWeek(replaceAll,days,meals){
+  const inDays=k=>(!days||days.includes(k.split("|")[0]))&&(!meals||meals.includes(k.split("|")[1]));
   const pool=eligible();
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
   const before=filledSlots().map(k=>W()[k].id);
   rerollAvoid=replaceAll?before:[];
-  const week=weekMap(), targets=SLOT_ORDER.filter(k=>!isPast(k)&&!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
+  const week=weekMap(), targets=SLOT_ORDER.filter(k=>inDays(k)&&!isPast(k)&&!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
   targets.forEach(k=>delete week[k]);
-  if(replaceAll)SLOT_ORDER.forEach(k=>{if(!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
+  if(replaceAll)SLOT_ORDER.forEach(k=>{if(inDays(k)&&!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
   for(const k of targets){
     const best=pool.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
     week[k]=best; const old=W()[k];
