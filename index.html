@@ -149,6 +149,7 @@ button{cursor:pointer}
 .srow.on .nm{text-decoration:line-through;color:var(--muted)}
 .store-h{margin:16px 0 0;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .themes{display:block;font-size:12px;color:var(--accent);margin-top:2px}
+.day-styles{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;margin-top:4px}.day-styles select{padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;min-width:0;width:100%}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -429,6 +430,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-fish">2</span><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="1" aria-label="Plus">+</button></div></div>
     <div class="pref-row"><div><strong>Soirs légers</strong><div class="muted" style="font-size:13px">soupes et plats légers en priorité le soir</div></div>
       <div class="chips"><button type="button" class="chip" data-act="prefLight" data-v="1" id="pl-on">Oui</button><button type="button" class="chip" data-act="prefLight" data-v="0" id="pl-off">Non</button></div></div>
+    <div class="field"><span class="label">Style de chaque jour</span><span class="muted" style="font-size:13px">« Proposer ma semaine » choisit en priorité des plats de ce style, midi et soir.</span><div id="p-days" class="day-styles"></div></div>
     <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
     <button class="btn primary" type="submit">Enregistrer</button>
@@ -832,7 +834,7 @@ function renderMenu(){
   if(mode==="loading"){el.innerHTML="";return;}
   const t=todayInWeek(), ws=weekStartDate();
   const diff=filled.some(k=>!isPast(k)&&W()[k].n!==menu.people);
-  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
+  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}${(menu.prefs.days||{})[d]?` <span class="muted" style="font-family:var(--f-body);font-size:12px">· ${esc((DAY_STYLES.find(x=>x[0]===menu.prefs.days[d])||["",""])[1])}</span>`:""}</div>
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}${r?extrasHtml(k,s):""}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
@@ -1338,6 +1340,17 @@ function eligible(){
   return Object.keys(recipes).filter(id=>{const r=recipes[id];if(NOT_MAIN.includes(r.cat))return false;
     return !av.some(a=>norm(r.name).includes(a)||(r.ing||[]).some(i=>norm(i.n).includes(a)));});
 }
+/* style chosen per day in the preferences */
+const DAY_STYLES=[["","Libre"],["reequilibrage","Rééquilibrage"],["legumes","Légumes"],["vege","Végétarien"],["poisson","Poisson"],["lowcarb","Allégé en glucides"],["rapide","Rapide"],["plaisir","Plaisir"]];
+const STYLE_OK={
+  reequilibrage:r=>hasTheme(r,"reequilibrage")||(isLight(r)&&!isHeavy(r)),
+  legumes:r=>hasTheme(r,"legumes")||(kindOf(r)==="vege"&&isLight(r)),
+  vege:r=>kindOf(r)==="vege",
+  poisson:r=>kindOf(r)==="poisson",
+  lowcarb:r=>hasTheme(r,"lowcarb"),
+  rapide:r=>r.cat==="Rapide"||(r.time||0)>0&&r.time<=30,
+  plaisir:r=>!!r.fav||isHeavy(r)||r.cat==="Plat"&&!isLight(r),
+};
 function scoreFor(id,k,week){
   const r=recipes[id], kd=kindOf(r), t=r.time||0, midi=k.endsWith("midi"), wd=isWeekday(k);
   let sc=Math.random()*1.5;
@@ -1345,6 +1358,8 @@ function scoreFor(id,k,week){
   if(t>=75)sc+=wd?-3:1.5;
   if(r.cat==="Soupe")sc+=midi?-1.5:0.8;
   if(r.fav)sc+=1;
+  const st=(menu.prefs.days||{})[k.split("|")[0]];
+  if(st&&STYLE_OK[st])sc+=STYLE_OK[st](r)?6:-2;
   if(!midi&&menu.prefs.lightEve){sc+=isLight(r)?3.5:-1.5;if(isHeavy(r))sc-=3;}
   const idx=SLOT_ORDER.indexOf(k), near=[-2,-1,1,2].map(o=>week[SLOT_ORDER[idx+o]]).map(x=>x&&recipes[x]);
   [near[1],near[2]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=3;});
@@ -1411,11 +1426,14 @@ function openPrefs(){
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
   $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
+  prefDraft.days=Object.assign({},prefDraft.days);
+  $("#p-days").innerHTML=DAYS.map(d=>`<span>${d}</span><select data-day="${d}" aria-label="Style du ${d}">${DAY_STYLES.map(([v,l])=>`<option value="${v}"${(prefDraft.days[d]||"")===v?" selected":""}>${l}</option>`).join("")}</select>`).join("");
   $("#p-skip").innerHTML=DAYS.map(d=>`<button type="button" class="chip" data-act="prefSkip" data-d="${d}" aria-pressed="${prefDraft.skip.includes(d)}">${d}</button>`).join("");
   renderLook();
   $("#prefSheet").hidden=false;
 }
 $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=$("#p-avoid").value.trim();
+  prefDraft.days={};document.querySelectorAll("#p-days select").forEach(s=>{if(s.value)prefDraft.days[s.dataset.day]=s.value;});
   menu.prefs=prefDraft;$("#prefSheet").hidden=true;render();saveMenu();toast("Préférences enregistrées");});
 $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#prefSheet").hidden=true;});
 
