@@ -204,6 +204,8 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between">
       <h2>Menu de la semaine</h2>
     </div>
+    <div class="chips" id="weekSel" style="flex-wrap:wrap;overflow:visible">
+    </div>
     <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
     <div id="proposeAsk"></div>
     <p class="muted" id="weekSum" style="margin:0;font-size:13px"></p>
@@ -281,6 +283,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     <p style="margin:0">Recettes, menu et liste de courses sont enregistrés dans le fichier <code>carnet.json</code> d'un dépôt GitHub privé. Chaque téléphone connecté au même dépôt voit les mêmes données.</p>
     <label class="field"><span class="label">Dépôt GitHub</span><input id="s-repo" placeholder="nom/carnet-donnees" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
     <label class="field"><span class="label">Clé d'accès</span><input id="s-token" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <label class="field"><span class="label">Dépôt du site, pour l'agenda (facultatif)</span><input id="s-site" placeholder="franckdavion/carnets-menus" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <div id="icsUrlBox" class="field"></div>
+    <p class="muted" id="icsStatus" style="font-size:13px;margin:0"></p>
     <div class="err" id="s-err"></div>
     <div class="row">
       <button class="btn primary" type="submit">Connecter</button>
@@ -336,18 +341,25 @@ const MEALS=[["midi","Midi"],["soir","Soir"]];
 const slotKey=(d,m)=>d+"|"+m;
 const SLOT_ORDER=DAYS.flatMap(d=>MEALS.map(([m])=>slotKey(d,m)));
 const slotLabel=k=>k.replace("|"," ");
-const todayIdx=()=>(new Date().getDay()+6)%7;
+function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
+const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+function parseYmd(t){const[a,b,c]=String(t).split("-").map(Number);return new Date(a,b-1,c);}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function weekStartDate(m){m=m||menu;return m.weekStart?parseYmd(m.weekStart):mondayOf(new Date());}
+function todayInWeek(){const t=ymd(new Date()),w=weekStartDate();for(let i=0;i<7;i++)if(ymd(addDays(w,i))===t)return i;return -1;}
+const shortDate=d=>d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
 function slotsOf(id){return SLOT_ORDER.filter(k=>menu.slots[k]&&menu.slots[k].id===id);}
 function onMenu(id){return slotsOf(id).length>0;}
 function filledSlots(){return SLOT_ORDER.filter(k=>menu.slots[k]&&recipes[menu.slots[k].id]);}
 function nextEmptySlot(){
-  const start=todayIdx()*2+(new Date().getHours()>=14?1:0);
+  const ti=todayInWeek(), start=ti<0?0:ti*2+(new Date().getHours()>=14?1:0);
   for(let i=0;i<14;i++){const k=SLOT_ORDER[(start+i)%14];if(!menu.slots[k])return k;}
   return null;
 }
 function normMenu(m){
   m=Object.assign({people:4,slots:{},checked:{},extras:[],history:[]},m||{});
   m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:""},m.prefs||{});
+  if(!m.weekStart)m.weekStart=ymd(mondayOf(new Date()));
   if(m.items&&Object.keys(m.items).length&&!Object.keys(m.slots).length){ // older menus: one list + optional day
     for(const[id,n]of Object.entries(m.items)){
       let k=m.days&&m.days[id]?slotKey(m.days[id],"soir"):null;
@@ -430,9 +442,9 @@ function merge3(b,l,r){
 }
 const b64e=s=>{const by=new TextEncoder().encode(s);let bin="";for(let i=0;i<by.length;i+=0x8000)bin+=String.fromCharCode.apply(null,by.subarray(i,i+0x8000));return btoa(bin);};
 const b64d=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g,"")),c=>c.charCodeAt(0)));
-function gh(method,body){
-  const[o,r]=sync.repo.split("/");
-  return fetch(`https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/carnet.json`,{
+function gh(method,body,repo,path){
+  const[o,r]=(repo||sync.repo).split("/");
+  return fetch(`https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/${path||"carnet.json"}`,{
     method,cache:"no-store",
     headers:Object.assign({"Authorization":"Bearer "+sync.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"},body?{"Content-Type":"application/json"}:{}),
     body:body?J(body):undefined});
@@ -475,6 +487,10 @@ async function runSync(){
         for(const[id,r]of Object.entries(L0.recipes))if(!merged.recipes[id]&&!SEED[id])merged.recipes[id]=r;}
       else merged=merge3(base,L0,remote)||{};
       merged={v:1,recipes:merged.recipes||{},menu:normMenu(merged.menu)};
+      // Plain-language plan for Home Assistant: {"Lundi|midi":"Dahl de lentilles corail", ...}
+      merged.planning=Object.fromEntries(SLOT_ORDER.filter(k=>merged.menu.slots[k]&&merged.recipes[merged.menu.slots[k].id])
+        .map(k=>[k,merged.recipes[merged.menu.slots[k].id].name]));
+      merged.calendar=calendarLog(merged,(remote&&remote.calendar)||(base&&base.calendar)||{});
       if(!remote||J(merged)!==J(remote)){
         const p=await gh("PUT",Object.assign({message:"Carnet de menus : mise à jour",content:b64e(J(merged))},sha?{sha}:{}));
         if(p.status===409||p.status===422)continue;
@@ -483,13 +499,71 @@ async function runSync(){
       LS.set("cm_base",merged);
       setState(merge3(L0,getState(),merged)); // keep edits made while the request was running
       lastOk=new Date(); setStatus("ok"); done=true;
+      publishIcs(merged.calendar);
     }
     if(!done)throw{status:409};
   }catch(e){setStatus("err",e);}
   finally{syncBusy=false;if(syncAgain){syncAgain=false;scheduleSync(300);}}
 }
+/* ---------- agenda file (menu.ics) on the app's own site ---------- */
+const MEAL_TIME={midi:["120000","133000"],soir:["193000","210000"]};
+function calendarLog(m,prev){
+  const today=ymd(new Date()), ws=weekStartDate(m.menu);
+  // past days stay as history; today and later only come from the current menu
+  const cal=Object.fromEntries(Object.entries(prev||{}).filter(([k])=>k.slice(0,10)<today));
+  DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
+    MEALS.forEach(([meal])=>{const sl=m.menu.slots[slotKey(d,meal)],r=sl&&m.recipes[sl.id],key=date+"|"+meal;
+      if(r)cal[key]=r.name; else delete cal[key];});});
+  const limit=ymd(addDays(new Date(),-56));
+  for(const k of Object.keys(cal))if(k.slice(0,10)<limit)delete cal[k];
+  return Object.fromEntries(Object.keys(cal).sort().map(k=>[k,cal[k]]));
+}
+function icsEsc(t){return String(t).replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");}
+function icsFold(line){const out=[];let cur="";for(const ch of line){if(new TextEncoder().encode(cur+ch).length>74){out.push(cur);cur=" "+ch;}else cur+=ch;}out.push(cur);return out.join("\r\n");}
+function buildIcs(cal){
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Carnet de menus//FR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Repas","X-WR-TIMEZONE:Europe/Paris",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT1H","X-PUBLISHED-TTL:PT1H",
+    "BEGIN:VTIMEZONE","TZID:Europe/Paris",
+    "BEGIN:DAYLIGHT","TZOFFSETFROM:+0100","TZOFFSETTO:+0200","TZNAME:CEST","DTSTART:19700329T020000","RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU","END:DAYLIGHT",
+    "BEGIN:STANDARD","TZOFFSETFROM:+0200","TZOFFSETTO:+0100","TZNAME:CET","DTSTART:19701025T030000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD",
+    "END:VTIMEZONE"];
+  for(const[k,name]of Object.entries(cal)){const[date,meal]=k.split("|"),d=date.replace(/-/g,""),[t1,t2]=MEAL_TIME[meal]||MEAL_TIME.soir;
+    L.push("BEGIN:VEVENT","UID:"+d+"-"+meal+"@carnet-menus","DTSTAMP:"+d+"T000000Z",
+      "DTSTART;TZID=Europe/Paris:"+d+"T"+t1,"DTEND;TZID=Europe/Paris:"+d+"T"+t2,
+      icsFold("SUMMARY:"+icsEsc((meal==="midi"?"Midi : ":"Soir : ")+name)),"TRANSP:TRANSPARENT","END:VEVENT");}
+  L.push("END:VCALENDAR");
+  return L.join("\r\n")+"\r\n";
+}
+const siteRepo=()=>sync&&(sync.site||"");
+const icsUrl=()=>{const s=siteRepo();if(!s)return"";const[o,r]=s.split("/");return`https://${o.toLowerCase()}.github.io/${r}/menu.ics`;};
+let icsBusy=false;
+async function publishIcs(cal){
+  if(!sync||!siteRepo()||icsBusy)return;
+  const ics=buildIcs(cal||{});
+  if(LS.get("cm_ics_last","")===ics)return;
+  icsBusy=true; const line=$("#icsStatus");
+  try{
+    for(let i=0;i<3;i++){
+      const g=await gh("GET",null,siteRepo(),"menu.ics");let sha=null;
+      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===ics){LS.set("cm_ics_last",ics);break;}}
+      else if(g.status!==404)throw{status:g.status};
+      const p=await gh("PUT",Object.assign({message:"Agenda des repas",content:b64e(ics)},sha?{sha}:{}),siteRepo(),"menu.ics");
+      if(p.status===409||p.status===422)continue;
+      if(!p.ok)throw{status:p.status};
+      LS.set("cm_ics_last",ics);break;
+    }
+    if(line)line.textContent="Agenda publié à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". Google le relit toutes les quelques heures.";
+  }catch(e){
+    if(line)line.textContent=e&&(e.status===403||e.status===404)?"Agenda non publié : la clé n'a pas le droit d'écrire dans "+siteRepo()+" (ajoutez ce dépôt à la clé, Contents : Read and write).":"Agenda non publié pour l'instant, nouvel essai à la prochaine synchronisation.";
+  }finally{icsBusy=false;}
+}
+function renderIcsBox(){
+  const u=icsUrl();
+  $("#icsUrlBox").innerHTML=u?`<span class="label">Adresse à ajouter dans Google Agenda</span><div class="row" style="flex-wrap:nowrap"><code style="flex:1;min-width:0;padding:6px 8px;word-break:break-all">${esc(u)}</code><button type="button" class="btn" data-act="copyIcs">Copier</button></div>`:"";
+}
 function openSync(){
   $("#s-repo").value=sync?sync.repo:""; $("#s-token").value=sync?sync.token:""; $("#s-err").textContent="";
+  $("#s-site").value=sync&&sync.site?sync.site:""; renderIcsBox();
   $("#s-off").hidden=!sync; $("#s-now").hidden=!sync;
   $("#syncSheet").hidden=false;
 }
@@ -499,8 +573,11 @@ $("#syncForm").addEventListener("submit",e=>{
   const token=$("#s-token").value.trim();
   if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){$("#s-err").textContent="Écrivez le dépôt sous la forme nom/depot, par ex. franck/carnet-donnees.";return;}
   if(!token){$("#s-err").textContent="Collez la clé d'accès GitHub.";return;}
+  const site=$("#s-site").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/+$/,"").replace(/\.git$/,"");
+  if(site&&!/^[\w.-]+\/[\w.-]+$/.test(site)){$("#s-err").textContent="Écrivez le dépôt du site sous la forme nom/depot, par ex. franckdavion/carnets-menus.";return;}
   const changed=!sync||sync.repo!==repo;
-  sync={repo,token}; LS.set("cm_sync",sync);
+  if(!sync||sync.site!==site){try{localStorage.removeItem("cm_ics_last");}catch(x){}}
+  sync={repo,token,site}; LS.set("cm_sync",sync); renderIcsBox();
   if(changed){try{localStorage.removeItem("cm_base");}catch(x){}}
   $("#s-off").hidden=false; $("#s-now").hidden=false; $("#s-err").textContent="";
   runSync();
@@ -525,7 +602,7 @@ function render(){
 
 function renderIdea(){
   const el=$("#idea");
-  const pool=Object.keys(recipes).filter(id=>!onMenu(id));
+  const pool=Object.keys(recipes).filter(id=>!onMenu(id)&&recipes[id].cat!=="Dessert");
   if(mode==="loading"){el.innerHTML='<span class="muted">Chargement des recettes…</span>';return;}
   if(!pool.length){el.innerHTML='<span class="label">Pas d\'idée ?</span><span class="muted">'+(Object.keys(recipes).length?"Toutes vos recettes sont déjà au menu.":"Ajoutez des recettes pour recevoir des idées.")+'</span>';return;}
   if(!ideaId||!pool.includes(ideaId))ideaId=pool[Math.floor(Math.random()*pool.length)];
@@ -542,13 +619,16 @@ function renderMenu(){
   $("#clearBtn").hidden=!filled.length;
   const cnt={vege:0,poisson:0,soupe:0};
   for(const k of filled){const r=recipes[menu.slots[k].id],kd=kindOf(r);if(kd in cnt)cnt[kd]++;if(r.cat==="Soupe")cnt.soupe++;}
+  { const cur=ymd(mondayOf(new Date())), nxt=ymd(addDays(mondayOf(new Date()),7)), w=menu.weekStart;
+    const opts=[[cur,"Cette semaine"],[nxt,"Semaine prochaine"]]; if(w!==cur&&w!==nxt)opts.unshift([w,"Semaine du "+shortDate(parseYmd(w))]);
+    $("#weekSel").innerHTML=opts.map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===w}">${l} · ${shortDate(parseYmd(v))}</button>`).join(""); }
   $("#weekSum").textContent=filled.length?`${filled.length} repas · ${cnt.vege} végé · ${cnt.poisson} poisson${cnt.soupe?` · ${cnt.soupe} soupe${cnt.soupe>1?"s":""}`:""}`:"";
   $("#proposeAsk").innerHTML=proposeAsk?`<div class="note row" style="justify-content:space-between">Remplacer les ${proposeAsk} repas non verrouillés ?
     <span class="row"><button class="btn primary" data-act="proposeAll">Tout remplacer</button><button class="btn" data-act="proposeEmpty">Cases vides seulement</button><button class="btn ghost" data-act="proposeNo">Annuler</button></span></div>`:"";
   if(mode==="loading"){el.innerHTML="";return;}
-  const t=todayIdx();
+  const t=todayInWeek(), ws=weekStartDate();
   const diff=filled.some(k=>menu.slots[k].n!==menu.people);
-  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}"><div class="day-h">${d}${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
+  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=menu.slots[k],r=s&&recipes[s.id];
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
         <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div></div>
@@ -633,6 +713,7 @@ document.addEventListener("click",e=>{
     const id=bestFor(k,[cur.id]);if(!id){toast("Pas d'autre recette disponible");return;}
     menu.slots[k]={id,n:cur.n};render();saveMenu();}
   else if(a==="lock"){const sl=menu.slots[b.dataset.k];if(sl){if(sl.lock)delete sl.lock;else sl.lock=true;render();saveMenu();}}
+  else if(a==="week"){menu.weekStart=b.dataset.w;render();saveMenu();}
   else if(a==="openPrefs")openPrefs();
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
@@ -662,6 +743,7 @@ document.addEventListener("click",e=>{
     $("#pasteBox").open=false;$("#f-name").scrollIntoView({block:"start",behavior:"smooth"});
   }
   else if(a==="openSync")openSync();
+  else if(a==="copyIcs"){const u=icsUrl();try{navigator.clipboard.writeText(u).then(()=>toast("Adresse copiée"),()=>toast(u));}catch(x){toast(u);}}
   else if(a==="closeSync")$("#syncSheet").hidden=true;
   else if(a==="syncNow")runSync();
   else if(a==="syncOff"){sync=null;["cm_sync","cm_base"].forEach(k=>{try{localStorage.removeItem(k);}catch(x){}});clearTimeout(syncTimer);setStatus("off");$("#syncSheet").hidden=true;toast("Ce téléphone n'est plus synchronisé. Vos données restent ici.");}
@@ -881,6 +963,7 @@ function bestFor(k,exclude){
 function planWeek(replaceAll){
   const pool=eligible();
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
+  if(addDays(weekStartDate(),7)<=new Date())menu.weekStart=ymd(mondayOf(new Date())); // the plan was for a past week
   const before=filledSlots().map(k=>menu.slots[k].id);
   if(replaceAll&&before.length){menu.history=[[...new Set(before)],...(menu.history||[])].slice(0,3);}
   const week=weekMap(), targets=SLOT_ORDER.filter(k=>!skipped(k)&&(!menu.slots[k]||(replaceAll&&!menu.slots[k].lock)));
