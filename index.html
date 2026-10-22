@@ -1598,6 +1598,7 @@ document.addEventListener("click",e=>{
   else if(a==="pickImport"){const k=pickKey,role=pickRole,w=curWeek;
     sendImport($("#pwLinks").value,t=>{$("#pwMsg").textContent=t;},{w,k,role}).then(ok=>{if(ok){$("#pwLinks").value="";
       $("#pwMsg").textContent="Le robot lit la recette… dans environ une minute, elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";}});}
+  else if(a==="recCat"){const id=recSheetId,r=recipes[id];if(r&&r.cat!==b.dataset.c){saveRecipe(id,Object.assign({},r,{cat:b.dataset.c}));renderRecSheet();toast("Rangée dans « "+b.dataset.c+" »");}}
   else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
   else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
   else if(a==="prefDissoc"){prefDraft.dissoc=b.dataset.v==="1";$("#pd-on").setAttribute("aria-pressed",prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);}
@@ -2083,6 +2084,7 @@ function renderRecSheet(){
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
+    <div class="field"><span class="label">Catégorie</span><div class="dchips">${CATS.map(c=>`<span class="dchip${r.cat===c?" on":""}"><button type="button" data-act="recCat" data-c="${c}">${c}</button></span>`).join("")}</div></div>
     <ul class="ings">${ings}</ul>
     <div class="nat-box">${natureHtml(r)}</div>
     ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
@@ -2127,8 +2129,8 @@ function renderPick(){
   const q=norm($("#pickQ").value), cur=W()[pickKey], cats=ROLE_CATS[pickRole];
   const curId=cur&&(pickRole==="main"?cur.id:cur[pickRole]);
   $("#pickKinds").innerHTML=kindChipsHtml("pkind",pickKind,pickQuick,pickLight,pickFav,pickTheme);
-  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat))&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight,pickFav,pickTheme))
-    .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
+  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat)||!!q)&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight,pickFav,pickTheme))
+    .sort((a,b)=>(cats?(cats.includes(b[1].cat)-cats.includes(a[1].cat)):0)||a[1].name.localeCompare(b[1].name,"fr"));
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
@@ -2304,6 +2306,8 @@ async function pollImports(){
     }
     if(firstId&&job.assign){const{w,k,role}=job.assign;menu.weeks=menu.weeks||{};const wk=menu.weeks[w]=menu.weeks[w]||{};
       if(role==="main"||!role)wk[k]=Object.assign({},wk[k]||{},{id:firstId,n:wk[k]&&wk[k].n||menu.people});else if(wk[k])wk[k][role]=firstId;
+      if(role==="entree"&&!["Entrée","Soupe"].includes(recipes[firstId].cat))recipes[firstId].cat="Entrée";
+      if(role==="dessert")recipes[firstId].cat="Dessert";
       saveMenu();setTimeout(()=>toast(recipes[firstId].name+" placée sur "+slotLabel(k)),2800);}
     LS.set("cm_recipes",recipes);render();scheduleSync();
     const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
