@@ -262,6 +262,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </form>
     <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
     <div class="chips" id="chips"></div>
+    <div class="chips" id="kindChips"></div>
     <div class="cards" id="recList"></div>
   </section>
 
@@ -355,7 +356,8 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between"><h2 id="pickTitle">Choisir</h2><button type="button" class="btn ghost" data-act="closePick">Fermer</button></div>
     <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
     <div id="pickSugg"></div>
-    <input class="search" id="pickQ" type="search" placeholder="Ou cherchez dans toutes vos recettes">
+    <input class="search" id="pickQ" type="search" placeholder="Ou cherchez : poisson, poulet, gratin…">
+    <div class="chips" id="pickKinds"></div>
     <div class="pick-list" id="pickList"></div>
   </div>
 </div>
@@ -367,6 +369,8 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="veg" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-veg">3</span><button type="button" class="step sm" data-act="prefStep" data-f="veg" data-d="1" aria-label="Plus">+</button></div></div>
     <div class="pref-row"><div><strong>Repas de poisson</strong><div class="muted" style="font-size:13px">par semaine, environ</div></div>
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-fish">2</span><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="1" aria-label="Plus">+</button></div></div>
+    <div class="pref-row"><div><strong>Soirs légers</strong><div class="muted" style="font-size:13px">soupes et plats légers en priorité le soir</div></div>
+      <div class="chips"><button type="button" class="chip" data-act="prefLight" data-v="1" id="pl-on">Oui</button><button type="button" class="chip" data-act="prefLight" data-v="0" id="pl-off">Non</button></div></div>
     <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
     <button class="btn primary" type="submit">Enregistrer</button>
@@ -412,7 +416,7 @@ function nextEmptySlot(){
 }
 function normMenu(m){
   m=Object.assign({people:4,weeks:{},checked:{},extras:[],shopExtra:{}},m||{});
-  m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:""},m.prefs||{});
+  m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:"",lightEve:false},m.prefs||{});
   m.weeks=Object.assign({},m.weeks);
   if(m.slots){ // older versions kept a single week
     const wk=m.weekStart||ymd(mondayOf(new Date()));
@@ -447,7 +451,7 @@ let recipes={};
 let menu={people:4,weeks:{},checked:{},extras:[]};
 let mode="loading", db=null, menuRef=null;
 let view=LS.get("cm_view","menu");
-let filter={q:"",cat:"Toutes"};
+let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false};
 let openId=null, confirmDel=null, ideaId=null;
 
 /* ---------- quantities ---------- */
@@ -730,7 +734,7 @@ function renderMenu(){
       const courses=s?["entree","dessert"].filter(c=>s[c]&&recipes[s[c]]):[];
       if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}${courses.map(c=>`<span class="course">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</span>`).join("")}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
-        <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
+        <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div>
         ${courses.map(c=>`<div class="course"><button class="slot-sub" data-act="pick" data-k="${k}" data-role="${c}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}</div></div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -742,10 +746,10 @@ function renderRecipes(){
   const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>r.cat===c))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
   $("#chips").innerHTML=cats.map(c=>`<button class="chip" data-act="cat" data-c="${esc(c)}" aria-pressed="${filter.cat===c}">${esc(c)}</button>`).join("");
-  const q=norm(filter.q);
+  $("#kindChips").innerHTML=kindChipsHtml("kind",filter.kind,filter.quick,filter.light);
   const list=Object.entries(recipes)
     .filter(([,r])=>filter.cat==="Toutes"||r.cat===filter.cat)
-    .filter(([,r])=>!q||norm(r.name).includes(q)||(r.ing||[]).some(i=>norm(i.n).includes(q)))
+    .filter(([,r])=>recMatch(r,filter.q,filter.kind,filter.quick,filter.light))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
@@ -830,6 +834,7 @@ document.addEventListener("click",e=>{
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
+  else if(a==="prefLight"){prefDraft.lightEve=b.dataset.v==="1";$("#pl-on").setAttribute("aria-pressed",prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);}
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k,b.dataset.role||"main");
   else if(a==="pickSet")setPicked(id);
@@ -846,6 +851,12 @@ document.addEventListener("click",e=>{
   else if(a==="open"){openId=openId===id?null:id;confirmDel=null;render();}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
   else if(a==="more"){recLimit+=50;renderRecipes();}
+  else if(a==="kind"){filter.kind=b.dataset.v;recLimit=50;renderRecipes();}
+  else if(a==="kindQuick"){filter.quick=!filter.quick;recLimit=50;renderRecipes();}
+  else if(a==="kindLight"){filter.light=!filter.light;recLimit=50;renderRecipes();}
+  else if(a==="pkind"){pickKind=b.dataset.v;renderPick();}
+  else if(a==="pkindQuick"){pickQuick=!pickQuick;renderPick();}
+  else if(a==="pkindLight"){pickLight=!pickLight;renderPick();}
   else if(a==="del"){confirmDel=id;render();}
   else if(a==="delNo"){confirmDel=null;render();}
   else if(a==="delYes"){confirmDel=null;openId=null;removeRecipe(id);toast("Recette supprimée");}
@@ -1041,11 +1052,38 @@ function parseRecipeText(text){
 
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
-const KIND_LABEL={poisson:"poisson",rouge:"bœuf / veau",volaille:"volaille",porc:"porc",vege:"végé"};
+const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
+const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
+const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
+/* search words that mean a family of recipes */
+const FAMILY=[[/^(leger|legers|legere|legeres|light)$/,r=>isLight(r)],[/^(poissons?|fruits? de mer|mer)$/,r=>kindOf(r)==="poisson"],[/^viandes?$/,r=>["rouge","volaille","porc"].includes(kindOf(r))],
+  [/^(vege|vegetariens?|vegetariennes?|sans viande)$/,r=>kindOf(r)==="vege"],[/^(volailles?)$/,r=>kindOf(r)==="volaille"],
+  [/^(viande rouge|boeuf)$/,r=>kindOf(r)==="rouge"],[/^(rapides?|express)$/,r=>r.cat==="Rapide"||(r.time||0)&&r.time<=30]];
+const LIGHT_RE=/salade|papillote|vapeur|velout|bouillon|soupe|carpaccio|tartare|gaspacho|omelette|po(?:ê|e)l(?:é|e)e de l(?:é|e)gumes|wok de l(?:é|e)gumes|bowl|ceviche|gravlax|rouleaux de printemps/i;
+const HEAVY_RE=/gratin|tartiflette|raclette|fondue|lasagnes|cassoulet|choucroute|croziflette|aligot|truffade|mont-d'or|baeckeoffe|potée|pot-au-feu|burger|frites|carbonade|confit|cordon bleu|macaroni|pizza|flammekueche|welsh/i;
+function isLight(r){if(!r)return false;if(r.light)return true;if(HEAVY_RE.test(r.name))return false;return r.cat==="Soupe"||LIGHT_RE.test(r.name);}
+function isHeavy(r){return !!r&&!r.light&&(HEAVY_RE.test(r.name)||(r.time||0)>=90);}
+function recMatch(r,q,kind,quick,light){
+  if(light&&!isLight(r))return false;
+  if(kind&&kindOf(r)!==kind)return false;
+  if(quick&&!(r.time&&r.time<=30))return false;
+  const nq=deacc(q||"").trim(); if(!nq)return true;
+  const fam=FAMILY.find(([re])=>re.test(nq)); if(fam)return fam[1](r);
+  const words=nq.split(/\s+/);
+  const hay=deacc(r.name+" "+(r.cat||"")+" "+KIND_LABEL[kindOf(r)]+" "+(r.ing||[]).map(i=>i.n).join(" "));
+  return words.every(w=>hay.includes(w));
+}
+function kindChipsHtml(act,cur,quick,light){
+  return KIND_CHIPS.map(([v,l])=>`<button type="button" class="chip" data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join("")
+    +`<button type="button" class="chip" data-act="${act}Quick" aria-pressed="${quick}">30 min et moins</button>`
+    +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`;
+}
 const KIND_RE=[["poisson",/saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
   ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez/i],
   ["volaille",/poulet|dinde|canard|volaille|pintade/i],
   ["porc",/porc|lardon|jambon|saucisse|chorizo|bacon|rôti de porc|chipolata/i]];
+// match only at the start of a word ("moule" must not match "semoule")
+KIND_RE.forEach(x=>{x[1]=new RegExp("(?:^|[^a-zà-ÿœ])(?:"+x[1].source+")","i");});
 const kindCache=new Map();
 function kindOf(r){
   const key=r.name+"|"+(r.ing||[]).map(i=>i.n).join(",");
@@ -1068,6 +1106,7 @@ function scoreFor(id,k,week){
   if(midi&&wd){if(r.cat==="Rapide"||t<=30)sc+=2;else if(t>45)sc-=2.5;}
   if(t>=75)sc+=wd?-3:1.5;
   if(r.cat==="Soupe")sc+=midi?-1.5:0.8;
+  if(!midi&&menu.prefs.lightEve){sc+=isLight(r)?3.5:-1.5;if(isHeavy(r))sc-=3;}
   const idx=SLOT_ORDER.indexOf(k), near=[-2,-1,1,2].map(o=>week[SLOT_ORDER[idx+o]]).map(x=>x&&recipes[x]);
   [near[1],near[2]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=3;});
   [near[0],near[3]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=1;});
@@ -1132,6 +1171,7 @@ function renderNow(){
 function openPrefs(){
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
+  $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
   $("#p-skip").innerHTML=DAYS.map(d=>`<button type="button" class="chip" data-act="prefSkip" data-d="${d}" aria-pressed="${prefDraft.skip.includes(d)}">${d}</button>`).join("");
   renderLook();
   $("#prefSheet").hidden=false;
@@ -1157,7 +1197,8 @@ function setPicked(id){
 function renderPick(){
   const q=norm($("#pickQ").value), cur=W()[pickKey], cats=ROLE_CATS[pickRole];
   const curId=cur&&(pickRole==="main"?cur.id:cur[pickRole]);
-  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat))&&(!q||norm(r.name).includes(q)||(r.ing||[]).some(i=>norm(i.n).includes(q))))
+  $("#pickKinds").innerHTML=kindChipsHtml("pkind",pickKind,pickQuick,pickLight);
+  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat))&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
@@ -1180,7 +1221,9 @@ function renderSugg(){
     <button class="link" data-act="moreSugg" style="margin-top:6px">D'autres suggestions</button>`:"";
 }
 let suggOn=false;
+let pickKind="", pickQuick=false, pickLight=false;
 function openPick(k,role,withSugg){
+  pickKind=""; pickQuick=false; pickLight=false;
   suggOn=!!withSugg; suggSeen=[];
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
