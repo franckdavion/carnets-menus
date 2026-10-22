@@ -227,6 +227,7 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 #wineSheet .sheet-in,#winesSheet .sheet-in{height:92%}
 .vivino{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
 .wine-viv{margin:-4px 0 6px 68px}
+.psec{display:block;font-size:14px!important;font-weight:700;letter-spacing:.06em;color:var(--accent)!important;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:9px 12px;margin-top:12px!important}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -479,7 +480,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div id="pwMsg" class="muted" style="font-size:13px"></div>
     </details>
     <div id="pickSugg"></div>
-    <span class="label" id="pickAllLab">Toutes les recettes</span>
+    <span class="label psec" id="pickAllLab">Toutes les recettes</span>
     <div class="pick-list" id="pickList"></div>
   </div>
 </div>
@@ -2079,6 +2080,16 @@ function openRecipe(id){
 }
 let pickKey=null, pickRole="main";
 const ROLE_CATS={entree:["Entrée","Soupe"],dessert:["Dessert"]};
+// starters and desserts: favourites, not already eaten this week, light in the evening, compatible with strict combining
+function roleScore(id){
+  const r=recipes[id], s=W()[pickKey]; let sc=Math.random()*1.5;
+  if(r.fav)sc+=1.5;
+  const usedWeek=Object.entries(W()).some(([k,x])=>k!==pickKey&&x&&(x.entree===id||x.dessert===id));if(usedWeek)sc-=3;
+  if(pickKey.endsWith("soir")&&menu.prefs.lightEve)sc+=isLowKcal(r)?1.5:-0.5;
+  if(s&&menu.prefs.dissoc){const t=Object.assign({},s,{[pickRole]:id});sc+=mealDissoc(t).ok?4:-3;}
+  if(s&&s.id&&recipes[s.id]&&isHeavy(recipes[s.id])&&isLowKcal(r))sc+=1;
+  return sc;
+}
 function pickPool(){
   const cats=ROLE_CATS[pickRole];
   return Object.keys(recipes).filter(x=>cats?cats.includes(recipes[x].cat):!NOT_MAIN.includes(recipes[x].cat)&&!onMenu(x));
@@ -2102,7 +2113,7 @@ function renderPick(){
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`)+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
-  const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q; $("#pickAllLab").textContent=q?"Résultats":"Toutes les recettes";
+  const web=!!q; $("#pickWeb").hidden=!web; $("#pickSugg").hidden=!!q; $("#pickAllLab").textContent=q?"Résultats":pickRole==="entree"?"Toutes les entrées":pickRole==="dessert"?"Tous les desserts":"Toutes les recettes";
   $("#pwTitle").textContent=all.length?`Pas la bonne ? Chercher « ${$("#pickQ").value.trim()} » sur le web`:`Aucune recette « ${$("#pickQ").value.trim()} » : la trouver sur le web`;
   if(!all.length)$("#pickWeb").open=true;
   if(web){const e=encodeURIComponent($("#pickQ").value.trim());
@@ -2111,24 +2122,27 @@ function renderPick(){
 let suggSeen=[], suggNow=[], favLimit=8;
 function syncFavMode(){
   const btn=$("#pickFavBtn"); btn.setAttribute("aria-pressed",pickFav); btn.classList.toggle("primary",pickFav);
-  $("#pickQ").placeholder=pickFav?"Chercher dans vos favoris":"Cherchez : poisson, poulet, gratin, risotto…";
+  $("#pickQ").placeholder=pickFav?"Chercher dans vos favoris":pickRole==="dessert"?"Cherchez : chocolat, pomme, tarte…":pickRole==="entree"?"Cherchez : soupe, salade, velouté…":"Cherchez : poisson, poulet, gratin, risotto…";
 }
 function renderSugg(){
-  const box=$("#pickSugg"); if(pickRole!=="main"||!suggOn||pickFav){box.innerHTML=pickFav?`<span class="label">★ Vos favoris</span>`:"";return;}
+  const box=$("#pickSugg"); if(!suggOn||pickFav){box.innerHTML=pickFav?`<span class="label psec">★ Vos favoris</span>`:"";return;}
   const week=weekMap(); delete week[pickKey];
-  const cur=W()[pickKey], skip=new Set([...(cur?[cur.id]:[]),...suggSeen]);
-  let cands=eligible().filter(id=>!skip.has(id));
-  if(cands.length<4){suggSeen=[];cands=eligible().filter(id=>!cur||id!==cur.id);}
-  const ranked=cands.map(id=>[id,scoreFor(id,pickKey,week)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  const cur=W()[pickKey], main=pickRole==="main", curId=cur&&(main?cur.id:cur[pickRole]);
+  const base=main?eligible():pickPool(), skip=new Set([...(curId?[curId]:[]),...suggSeen]);
+  let cands=base.filter(id=>!skip.has(id));
+  if(cands.length<4){suggSeen=[];cands=base.filter(id=>id!==curId);}
+  const score=id=>main?scoreFor(id,pickKey,week):roleScore(id);
+  const ranked=cands.map(id=>[id,score(id)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
   const kinds=new Set(); suggNow=[];
   for(const id of ranked){const kd=kindOf(recipes[id]);if(!kinds.has(kd)){kinds.add(kd);suggNow.push(id);}if(suggNow.length>=5)break;}
   for(const id of ranked){if(suggNow.length>=5)break;if(!suggNow.includes(id))suggNow.push(id);}
-  const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${KIND_LABEL[kindOf(r)]}${r.time?" · "+r.time+" min":""}</span></button>`;};
-  const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&!NOT_MAIN.includes(recipes[id].cat)&&(!cur||id!==cur.id))
-    .map(id=>[id,scoreFor(id,pickKey,week)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
-  box.innerHTML=(suggNow.length?`<span class="label">Suggestions pour ce repas</span><div class="pick-list">${suggNow.map(item).join("")}</div>
+  const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${pickRole==="main"?KIND_LABEL[kindOf(r)]:Math.round(nutri(r).k/10)*10+" kcal"}${r.time?" · "+r.time+" min":""}</span></button>`;};
+  const cats=ROLE_CATS[pickRole];
+  const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&(cats?cats.includes(recipes[id].cat):!NOT_MAIN.includes(recipes[id].cat))&&id!==curId)
+    .map(id=>[id,score(id)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  box.innerHTML=(suggNow.length?`<span class="label psec">${main?"Suggestions pour ce repas":pickRole==="entree"?"Entrées suggérées":"Desserts suggérés"}</span><div class="pick-list">${suggNow.map(item).join("")}</div>
     <button class="link" data-act="moreSugg">↻ D'autres suggestions</button>`:"")
-    +`<span class="label">★ Vos favoris</span>`
+    +`<span class="label psec">★ Vos favoris</span>`
     +(favs.length?`<div class="pick-list">${favs.slice(0,favLimit).map(item).join("")}</div>${favs.length>favLimit?`<button class="link" data-act="moreFav" style="margin-top:6px">Voir les ${favs.length-favLimit} autres favoris</button>`:""}`
       :`<p class="muted" style="font-size:13px;margin:4px 0 0">Aucun favori pour l'instant : dans l'onglet Recettes, touchez l'étoile ☆ d'une recette pour l'ajouter.</p>`);
 }
@@ -2136,7 +2150,7 @@ let suggOn=false;
 let pickKind="", pickQuick=false, pickLight=false, pickFav=false, pickTheme="";
 function openPick(k,role,withSugg){
   pickKind=""; pickQuick=false; pickLight=false; pickFav=false; pickTheme="";
-  suggOn=!!withSugg; suggSeen=[]; favLimit=8;
+  suggOn=true; suggSeen=[]; favLimit=8;
   pickKey=k; pickRole=role||"main";
   $("#pickTitle").textContent=slotLabel(k)+(pickRole==="entree"?" · entrée":pickRole==="dessert"?" · dessert":"");
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
