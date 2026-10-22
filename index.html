@@ -156,6 +156,9 @@ a.btn{color:var(--ink);text-decoration:none;display:inline-flex;align-items:cent
 .slot .ctl{display:flex;align-items:center;gap:4px}
 .slot .n{font-family:var(--f-mono);font-size:13px;min-width:4ch;text-align:center;font-variant-numeric:tabular-nums}
 .step.sm{width:28px;height:28px;font-size:15px}
+.day-card.past{background:transparent}
+.day-card.past .day-h{color:var(--muted)}
+.slot-done{color:var(--muted);font-size:15px;min-width:0}
 .slot-main{min-width:0;display:flex;flex-direction:column}
 .slot-acts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px}
 .kind{color:var(--muted);text-transform:lowercase}
@@ -369,6 +372,7 @@ function weekIds(wk){const sl=(menu.weeks||{})[wk]||{};return Object.values(sl).
 function weekStartDate(){return parseYmd(curWeek);}
 function todayInWeek(){const t=ymd(new Date()),w=weekStartDate();for(let i=0;i<7;i++)if(ymd(addDays(w,i))===t)return i;return -1;}
 const shortDate=d=>d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+function isPast(k){const i=DAYS.indexOf(k.split("|")[0]);return ymd(addDays(weekStartDate(),i))<ymd(new Date());}
 function slotsOf(id){return SLOT_ORDER.filter(k=>W()[k]&&W()[k].id===id);}
 function onMenu(id){return slotsOf(id).length>0;}
 function filledSlots(){return SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]);}
@@ -433,7 +437,7 @@ function fmt(q,u){
 function shopping(){
   const acc={};
   for(const k of SLOT_ORDER){
-    const sl=W()[k]; if(!sl)continue;
+    const sl=W()[k]; if(!sl||isPast(k))continue;
     const r=recipes[sl.id]; if(!r)continue;
     const f=sl.n/(r.serves||4);
     for(const i of r.ing||[]){
@@ -685,9 +689,10 @@ function renderMenu(){
     <button class="btn" data-act="proposeUndo">Revenir à l'ancienne</button></div>`:"";
   if(mode==="loading"){el.innerHTML="";return;}
   const t=todayInWeek(), ws=weekStartDate();
-  const diff=filled.some(k=>W()[k].n!==menu.people);
-  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
+  const diff=filled.some(k=>!isPast(k)&&W()[k].n!==menu.people);
+  el.innerHTML=`<div class="week">${DAYS.map((d,i)=>`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}</div>
     ${MEALS.map(([m,lab])=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id];
+      if(isPast(k))return`<div class="slot"><span class="meal">${lab}</span><span class="slot-done">${r?esc(r.name):"—"}</span>${r?`<span class="n muted">${s.n} p.</span>`:"<span></span>"}</div>`;
       return r?`<div class="slot${s.lock?" locked":""}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-name" data-act="pick" data-k="${k}">${esc(r.name)}</button>
         <div class="slot-acts"><span class="kind">${KIND_LABEL[kindOf(r)]}</span>${s.lock?"":`<button class="link" data-act="swap" data-k="${k}">↻ Autre</button>`}<button class="link" data-act="lock" data-k="${k}">${s.lock?"Déverrouiller":"Verrouiller"}</button></div></div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
@@ -732,7 +737,7 @@ function renderRecipes(){
 }
 
 function renderShop(items,extras,ids){
-  const meals=ids.length;
+  const meals=ids.filter(k=>!isPast(k)).length;
   $("#shopSum").textContent=`Semaine du ${shortDate(weekStartDate())} · `+(meals?`${meals} repas · ${items.length+extras.length} articles`:`${extras.length} articles`);
   const el=$("#shopList");
   if(!items.length&&!extras.length){el.innerHTML='<div class="muted" style="padding:16px 0">La liste se remplit dès que vous ajoutez des repas au menu.</div>';return;}
@@ -763,11 +768,12 @@ document.addEventListener("click",e=>{
     if(id===ideaId)ideaId=null;
     if(b.closest("#frOut")){const on=onMenu(id);b.classList.toggle("on",on);b.textContent=on?"✓ Au menu":"+ Menu";}
     render();saveMenu();}
+  else if(["serv","swap","lock","pick"].includes(a)&&b.dataset.k&&isPast(b.dataset.k)){toast("Ce jour est passé : son menu ne se modifie plus");}
   else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
-  else if(a==="applyAll"){for(const k in W())W()[k].n=menu.people;render();saveMenu();}
-  else if(a==="clearMenu"){for(const k in W())if(!W()[k].lock)delete W()[k];menu.checked={};proposeAsk=0;render();saveMenu();}
+  else if(a==="applyAll"){for(const k in W())if(!isPast(k))W()[k].n=menu.people;render();saveMenu();}
+  else if(a==="clearMenu"){for(const k in W())if(!W()[k].lock&&!isPast(k))delete W()[k];menu.checked={};proposeAsk=0;render();saveMenu();}
   else if(a==="propose"){
-    const had=SLOT_ORDER.some(k=>W()[k]&&!W()[k].lock);
+    const had=SLOT_ORDER.some(k=>W()[k]&&!W()[k].lock&&!isPast(k));
     undoWeek=had?{week:curWeek,slots:JSON.parse(JSON.stringify(W())),locked:SLOT_ORDER.some(k=>W()[k]&&W()[k].lock)}:null;
     planWeek(true);}
   else if(a==="proposeUndo"){if(undoWeek&&undoWeek.week===curWeek){menu.weeks[curWeek]=undoWeek.slots;undoWeek=null;render();saveMenu();toast("Ancienne semaine remise");}}
@@ -1033,9 +1039,9 @@ function planWeek(replaceAll){
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
   const before=filledSlots().map(k=>W()[k].id);
   rerollAvoid=replaceAll?before:[];
-  const week=weekMap(), targets=SLOT_ORDER.filter(k=>!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
+  const week=weekMap(), targets=SLOT_ORDER.filter(k=>!isPast(k)&&!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
   targets.forEach(k=>delete week[k]);
-  if(replaceAll)SLOT_ORDER.forEach(k=>{if(skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
+  if(replaceAll)SLOT_ORDER.forEach(k=>{if(!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
   for(const k of targets){
     const best=pool.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
     week[k]=best; const old=W()[k];
