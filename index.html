@@ -116,11 +116,17 @@ button{cursor:pointer}
 .tk-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px dashed var(--line);padding-bottom:12px}
 .tk-head .sum{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
 .rayon{padding:12px 0 4px}
+.rayon-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.rayon-h .link{font-size:12px}
 .rayon h4{margin:0 0 4px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700}
 .item{display:grid;grid-template-columns:24px 1fr auto auto;gap:10px;align-items:center;padding:7px 0;cursor:pointer}
 .item input{width:20px;height:20px;accent-color:var(--accent);margin:0}
 .item .nm{min-width:0}
 .item .from{display:block;font-size:12px;color:var(--muted)}
+.drive-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;font-size:14px}.drive-row .muted{grid-column:1 / -1;font-size:12px;word-break:break-all}
+.item .drive{font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
+.item .dot{width:8px;height:8px;border-radius:50%;background:var(--line);justify-self:center}
+.item .miss{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--danger);border:1px solid var(--danger);border-radius:999px;padding:0 6px;vertical-align:1px}
+.trip{border-top:1px solid var(--line);padding:10px 0}.trip summary{cursor:pointer;font-weight:600}
 .item .have{border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:999px;font-size:12px;padding:3px 9px;white-space:nowrap}
 .item .q{font-family:var(--f-mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .item.done .nm,.item.done .q{text-decoration:line-through;color:var(--muted)}
@@ -291,7 +297,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </form>
   </section>
 
-  <!-- COURSES -->
+  <!-- COURSES (prepare at home, tick in the store, then "Courses terminées") -->
   <section class="view" id="v-shop" hidden>
     <div class="store-top"><button class="btn primary" type="button" data-act="openStore">Je fais mes courses</button><button class="btn" type="button" data-act="openDaily">Produits du quotidien</button></div>
     <div class="ticket">
@@ -300,8 +306,10 @@ code{font-family:var(--f-mono);font-size:.92em}
         <span class="sum" id="shopSum"></span>
       </div>
       <div class="field" id="shopDays" style="padding:12px 0 4px;border-bottom:1px dashed var(--line)"></div>
+      <div class="field" id="driveBar" style="padding:10px 0;border-bottom:1px dashed var(--line)"></div>
       <div id="shopList"></div>
     </div>
+    <div id="finishNote"></div>
     <form class="extra-form" id="extraForm">
       <input id="extraIn" placeholder="Ajouter un article" autocomplete="off">
       <button class="btn" type="submit">Ajouter</button>
@@ -309,8 +317,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row">
       <button class="btn primary" data-act="shareList">Envoyer vers Notes</button>
       <button class="btn" data-act="copy">Copier la liste</button>
-      <button class="btn ghost" data-act="uncheck">Tout décocher</button>
+
     </div>
+      <div id="tripList"></div>
   </section>
 </div>
 
@@ -394,6 +403,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Au magasin</h2><button type="button" class="btn primary" data-act="closeStore">Terminé</button></div>
     <div class="store-prog"><div class="track"><div class="fill" id="storeFill"></div></div><span class="count" id="storeCount"></span></div>
     <div id="storeList"></div>
+    <div id="storeEnd" style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px"></div>
   </div>
 </div>
 
@@ -416,6 +426,21 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="dchips" id="daysPick"></div>
     <div class="field"><span class="label">Repas</span><div class="dchips" id="mealsPick"></div></div>
     <button type="button" class="btn primary" data-act="proposeDays" id="proposeDaysBtn">Proposer pour ces jours</button>
+  </div>
+</div>
+
+<div class="sheet" id="drivesSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Mes drives</h2><button type="button" class="btn primary" data-act="closeDrives">Terminé</button></div>
+    <div id="drivesList" style="display:flex;flex-direction:column;gap:10px"></div>
+    <form class="field" id="driveForm" style="border-top:1px solid var(--line);padding-top:14px;gap:8px">
+      <span class="label">Ajouter ou remplacer un drive</span>
+      <p class="muted" style="margin:0;font-size:13px">Sur le site du drive, cherchez <strong>lait</strong>, copiez l'adresse de la page de résultats et collez-la ici. Même nom qu'un drive existant = son adresse est remplacée.</p>
+      <input id="driveName" class="search" placeholder="Nom (ex. Match)" autocomplete="off">
+      <input id="driveAddr" class="search" placeholder="Adresse de la recherche « lait »" autocomplete="off" inputmode="url">
+      <div class="err" id="driveErr"></div>
+      <button class="btn" type="submit" style="align-self:flex-start">Enregistrer</button>
+    </form>
   </div>
 </div>
 
@@ -584,7 +609,9 @@ function shopping(all){
     add(sl.id,sl.n,when); if(sl.entree)add(sl.entree,sl.n,when); if(sl.dessert)add(sl.dessert,sl.n,when);
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n,"hors menu");
-  const list=Object.values(acc);
+  const today=ymd(new Date()), bt=menu.bought||{};
+  const list=Object.values(acc).map(i=>{const b=bt[i.key];if(b&&b.until>=today)i.q=Math.max(0,i.q-b.q);return i;})
+    .filter(i=>!(bt[i.key]&&bt[i.key].until>=today&&i.q<=0.0001));
   return all?list:list.filter(i=>!isHave(i));
 }
 
@@ -795,12 +822,12 @@ function render(){
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
   const items=shopping(), extras=menu.extras||[];
-  const left=items.filter(i=>!menu.checked[i.key]).length+extras.filter(x=>!x.done).length;
+  const left=items.length+extras.length;
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
   if($("#now"))renderNow();
   if(!$("#recSheet").hidden)renderRecSheet();
   if($("#storeSheet")&&!$("#storeSheet").hidden)renderStore();
-  renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids);
+  renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids); renderTrips(); renderDrives();
 }
 
 function renderIdea(){
@@ -912,13 +939,14 @@ function renderShop(items,extras,ids){
   const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
   if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
-  let h=groups.map(g=>`<div class="rayon"><h4>${esc(g.ry)}</h4>${g.its.map(i=>{
-    const done=!!menu.checked[i.key];
-    return`<label class="item${done?" done":""}"><input type="checkbox" data-act="check" data-k="${esc(i.key)}" ${done?"checked":""}>
-      <span class="nm">${esc(i.n)}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button></label>`;}).join("")}</div>`).join("");
+  const drive=n=>!curDrive()?"":`<a class="drive" href="${driveUrl(n)}" target="_blank" rel="noopener" aria-label="Chercher ${esc(n)} sur ${esc((curDrive()||{n:""}).n)}">Drive ↗</a>`;
+  const missTag=d=>d?`<span class="miss">Pas trouvé le ${esc(shortDate(parseYmd(d)))}</span>`:"";
+  let h=groups.map(g=>`<div class="rayon"><div class="rayon-h"><h4>${esc(g.ry)}</h4><button type="button" class="link" data-act="haveRayon" data-r="${esc(g.ry)}">J'ai tout ce rayon</button></div>${g.its.map(i=>
+    `<div class="item" style="cursor:default"><span class="dot"></span>
+      <span class="nm">${esc(i.n)} ${drive(i.n)}${missTag((menu.missed||{})[i.key])}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button></div>`).join("")}</div>`).join("");
 
-  if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<label class="item${x.done?" done":""}"><input type="checkbox" data-act="checkX" data-i="${ix}" ${x.done?"checked":""}>
-      <span class="nm">${esc(x.t)}</span><button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button></label>`).join("")}</div>`;
+  if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<div class="item" style="cursor:default"><span class="dot"></span>
+      <span class="nm">${esc(x.t)} ${drive(x.t)}${missTag(x.missed)}</span><span></span><button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button></div>`).join("")}</div>`;
   el.innerHTML=hint+xrHtml+h+hvHtml;
 }
 
@@ -939,6 +967,63 @@ function renderStore(){
   else if(!todo.length)h='<p class="note" style="margin-top:12px">Tout est dans le caddie !</p>';
   if(done.length)h+=`<h4 class="store-h" style="color:var(--muted)">Dans le caddie (${done.length})</h4>${done.sort((a,b)=>a.n.localeCompare(b.n,"fr")).map(row).join("")}`;
   $("#storeList").innerHTML=h;
+  $("#storeEnd").innerHTML=!rows.length?"":finishAsk
+    ?`<p style="margin:0"><strong>${done.length} article${done.length>1?"s":""} acheté${done.length>1?"s":""}</strong>${todo.length?`, ${todo.length} non trouvé${todo.length>1?"s":""} (${todo.length>1?"ils restent":"il reste"} dans la liste)`:""}. Terminer les courses ?</p>
+       <div class="row"><button type="button" class="btn primary" data-act="finishYes">Oui, terminer</button><button type="button" class="btn ghost" data-act="finishNo">Pas encore</button></div>`
+    :`<button type="button" class="btn primary" data-act="finishAsk" ${done.length?"":"disabled"}>Courses terminées</button><span class="muted" style="font-size:12px">${done.length?"Ce qui est coché sort de la liste et va dans l'historique. Le reste est gardé pour la prochaine fois.":"Cochez ce que vous mettez dans le caddie."}</span>`;
+}
+
+/* ---------- Intermarché drive: open the site's search for an item ---------- */
+function driveTerm(n){return String(n).replace(/\([^)]*\)/g," ").replace(/^\s*(bou\.|botte de|boîtes? de|sachets? de|pots? de|tranches? de)\s*/i,"").replace(/\s*:.*$/,"").replace(/\s+/g," ").trim();}
+const DRIVES0=[{n:"Intermarché",u:"https://www.intermarche.com/recherche/{q}"},{n:"Leclerc",u:"https://fd16-courses.leclercdrive.fr/magasin-088001-088001-Doullens/recherche.aspx?TexteRecherche={q}"},{n:"Match",u:"https://www.supermarchesmatch.fr/fr/recherche?recherche={q}"}];
+function drives(){return Array.isArray(menu.drives)?menu.drives:DRIVES0;}
+function curDrive(){const ds=drives();return ds.find(d=>d.n===menu.driveSel)||ds[0]||null;}
+function driveUrl(n){const d=curDrive();return d?d.u.split("{q}").join(encodeURIComponent(driveTerm(n))):"#";}
+function renderDrives(){
+  const ds=drives(),cur=curDrive();
+  $("#driveBar").innerHTML=`<span class="label">Mon drive</span><div class="row" style="gap:6px;align-items:center">${ds.map(d=>`<span class="dchip${cur&&cur.n===d.n?" on":""}"><button type="button" data-act="driveSel" data-n="${esc(d.n)}">${cur&&cur.n===d.n?"✓ ":""}${esc(d.n)}</button></span>`).join("")}<button type="button" class="link" data-act="openDrives">Gérer</button></div>`;
+  if($("#drivesSheet").hidden)return;
+  $("#drivesList").innerHTML=ds.length?ds.map((d,i)=>`<div class="drive-row"><strong>${esc(d.n)}</strong><button type="button" class="x" data-act="driveDel" data-i="${i}" aria-label="Supprimer ${esc(d.n)}">✕</button><span class="muted">${esc(d.u.replace("{q}","…"))}</span></div>`).join(""):'<p class="muted" style="margin:0">Aucun drive enregistré.</p>';
+}
+
+$("#driveForm").addEventListener("submit",e=>{e.preventDefault();
+  const n=$("#driveName").value.trim(),raw=$("#driveAddr").value.trim(),err=$("#driveErr");err.textContent="";
+  if(!n){err.textContent="Donnez un nom au drive.";return;}
+  if(!/^https?:\/\//i.test(raw)){err.textContent="Collez l'adresse complète de la page (elle commence par https://).";return;}
+  const m=raw.match(/lait/i);if(!m){err.textContent="L'adresse doit contenir le mot « lait » : faites la recherche « lait » sur le site puis copiez l'adresse.";return;}
+  const u=raw.slice(0,m.index)+"{q}"+raw.slice(m.index+4);
+  const ds=drives().filter(d=>norm(d.n)!==norm(n));menu.drives=[...ds,{n,u}];menu.driveSel=n;
+  $("#driveName").value="";$("#driveAddr").value="";render();renderDrives();saveMenu();toast(n+" enregistré");});
+
+/* ---------- finishing a trip: bought items leave the list, missed ones stay, the trip goes to history ---------- */
+let finishAsk=false, lastFinish=null;
+function finishTrip(){
+  const snap=JSON.stringify({checked:menu.checked,bought:menu.bought,missed:menu.missed,extras:menu.extras,trips:menu.trips});
+  const today=ymd(new Date()), until=haveUntil()>today?haveUntil():today;
+  const items=shopping(), got=[], miss=[];
+  menu.bought=Object.assign({},menu.bought); menu.missed=Object.assign({},menu.missed);
+  for(const k in menu.bought)if(menu.bought[k].until<today)delete menu.bought[k];
+  for(const i of items){
+    if(menu.checked[i.key]){const b=menu.bought[i.key];menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+i.q,until:b&&b.until>until?b.until:until};
+      delete menu.missed[i.key];got.push({n:i.n,q:fmt(i.q,i.u),r:RAYONS.includes(i.r)?i.r:"Divers"});}
+    else{menu.missed[i.key]=today;miss.push(i.n);}
+  }
+  const keep=[];
+  for(const x of menu.extras||[]){if(x.done)got.push({n:x.t,q:"",r:"En plus"});else{miss.push(x.t);keep.push(Object.assign({},x,{missed:today}));}}
+  menu.extras=keep; menu.checked={};
+  menu.trips=[{d:today,got,miss},...(menu.trips||[])].slice(0,20);
+  lastFinish=snap; finishAsk=false;
+  $("#storeSheet").hidden=true; render(); saveMenu();
+  toast(`Courses terminées : ${got.length} article${got.length>1?"s":""} acheté${got.length>1?"s":""}`);
+}
+function undoFinish(){if(!lastFinish)return;const o=JSON.parse(lastFinish);["checked","bought","missed","extras","trips"].forEach(k=>{if(k in o)menu[k]=o[k];else delete menu[k];});lastFinish=null;render();saveMenu();toast("Courses remises comme avant");}
+function renderTrips(){
+  $("#finishNote").innerHTML=lastFinish?`<div class="note row" style="justify-content:space-between">Courses terminées.<button type="button" class="btn" data-act="finishUndo">Annuler</button></div>`:"";
+  const tr=menu.trips||[];
+  $("#tripList").innerHTML=tr.length?`<details class="field" style="margin-top:8px"><summary class="label" style="cursor:pointer">Courses précédentes (${tr.length})</summary>${tr.map((t,ti)=>`<details class="trip"><summary>${esc(parseYmd(t.d).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"short"}))} · ${t.got.length} article${t.got.length>1?"s":""}</summary>
+      ${[...RAYONS,"En plus"].map(ry=>{const its=t.got.filter(x=>x.r===ry);return its.length?`<div class="rayon"><h4>${esc(ry)}</h4>${its.map(x=>`<div class="item" style="cursor:default"><span class="dot"></span><span class="nm">${esc(x.n)}</span><span class="q">${esc(x.q)}</span><span></span></div>`).join("")}</div>`:"";}).join("")}
+      ${t.miss.length?`<p class="muted" style="font-size:13px;margin:8px 0 0">Non trouvé : ${esc(t.miss.join(", "))}</p>`:""}
+      <button type="button" class="link" data-act="tripReuse" data-i="${ti}" style="margin-top:8px">Remettre dans la liste</button></details>`).join("")}</details>`:"";
 }
 
 /* ---------- what we ate in addition (history only, never in the shopping list) ---------- */
@@ -1093,7 +1178,7 @@ document.addEventListener("click",e=>{
   else if(a==="delNo"){confirmDel=null;render();}
   else if(a==="delYes"){confirmDel=null;openId=null;removeRecipe(id);toast("Recette supprimée");}
   else if(a==="uncheck"){menu.checked={};(menu.extras||[]).forEach(x=>x.done=false);render();saveMenu();}
-  else if(a==="openStore"){renderStore();$("#storeSheet").hidden=false;$("#storeSheet .sheet-in").scrollTop=0;}
+  else if(a==="openStore"){finishAsk=false;renderStore();$("#storeSheet").hidden=false;$("#storeSheet .sheet-in").scrollTop=0;}
   else if(a==="closeStore"){$("#storeSheet").hidden=true;}
   else if(a==="storeTick"){const s=b.dataset.s;
     if(s.startsWith("k:")){const k=s.slice(2);if(menu.checked[k])delete menu.checked[k];else menu.checked[k]=true;}
@@ -1108,6 +1193,21 @@ document.addEventListener("click",e=>{
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
   else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
+  else if(a==="haveRayon"){const ry=b.dataset.r,u=haveUntil();menu.have=Object.assign({},menu.have);
+    shopping().filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).forEach(i=>{menu.have[i.key]=u;});
+    render();saveMenu(300);toast("Rayon « "+ry+" » retiré : vous avez déjà tout");}
+  else if(a==="finishAsk"){finishAsk=true;renderStore();$("#storeEnd").scrollIntoView({block:"end",behavior:"smooth"});}
+  else if(a==="finishNo"){finishAsk=false;renderStore();}
+  else if(a==="finishYes")finishTrip();
+  else if(a==="finishUndo")undoFinish();
+  else if(a==="driveSel"){menu.driveSel=b.dataset.n;render();saveMenu();}
+  else if(a==="openDrives"){$("#drivesSheet").hidden=false;renderDrives();}
+  else if(a==="closeDrives"){$("#drivesSheet").hidden=true;}
+  else if(a==="driveDel"){const ds=[...drives()];ds.splice(Number(b.dataset.i),1);menu.drives=ds;render();renderDrives();saveMenu();}
+  else if(a==="tripReuse"){const t=(menu.trips||[])[Number(b.dataset.i)];if(!t)return;
+    const have=new Set((menu.extras||[]).map(x=>norm(x.t)));let n=0;
+    t.got.forEach(x=>{const lab=x.n+(x.q?" : "+x.q:"");if(!have.has(norm(lab))){menu.extras=[...(menu.extras||[]),{t:lab,done:false}];n++;}});
+    render();saveMenu();toast(n+" article"+(n>1?"s":"")+" remis dans la liste");}
   else if(a==="haveIt"){e.preventDefault();const k=b.dataset.k;menu.have=Object.assign({},menu.have,{[k]:haveUntil()});
     for(const x in menu.have)if(menu.have[x]<ymd(new Date()))delete menu.have[x];
     render();saveMenu(300);toast("Retiré de la liste : vous l'avez déjà");}
