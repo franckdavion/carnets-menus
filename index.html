@@ -64,8 +64,13 @@ button{cursor:pointer}
 .tag.news{color:var(--accent);font-weight:700}
 .lk-meals{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:4px}
 .lk-ry h4{margin:6px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
-.lk-it{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:15px}
-.lk-it small{display:block;font-size:12px}.lk-it b{white-space:nowrap;font-family:var(--f-mono);font-weight:500}
+.lk-it{display:flex;align-items:center;gap:12px;width:100%;padding:9px 0;border:0;border-bottom:1px dashed var(--line);background:none;font:inherit;font-size:15px;color:var(--muted);text-align:left;min-height:48px;touch-action:manipulation}
+.lk-it.on{color:var(--ink)}
+.lk-box{flex:0 0 24px;height:24px;border-radius:7px;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent-ink)}
+.lk-it.on .lk-box{background:var(--accent);border-color:var(--accent)}
+.lk-n{flex:1;min-width:0}.lk-n small{display:block;font-size:12px;color:var(--muted)}
+.lk-it:not(.on) .lk-n{text-decoration:line-through}
+.lk-it b{white-space:nowrap;font-family:var(--f-mono);font-weight:500}
 .sub-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .sub-row .av{width:32px;height:32px;border-radius:50%;background:var(--soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 32px}
 .sub-row small{display:block;font-size:12px;color:var(--muted)}
@@ -1279,30 +1284,39 @@ function renderRecipes(){
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
 }
 
-/* before validating: show exactly what will be added to the shopping list */
-let lockPend=[];
+/* before validating: a page with the planned ingredients; tick what to buy, the rest counts as "j'ai déjà" */
+let lockPend=[], lockItems=[], lockMeals="";
 function lockPreview(targets){ // targets: [{w,k}] of meals not yet locked
   const sl=t=>((menu.weeks||{})[t.w]||{})[t.k];targets=targets.filter(t=>sl(t)&&recipes[sl(t).id]&&!sl(t).lock);if(!targets.length)return;
   const before=Object.fromEntries(shopping(true).map(i=>[i.key,i.q]));
   targets.forEach(t=>sl(t).lock=true);const after=shopping(true);targets.forEach(t=>delete sl(t).lock);
-  const added=after.map(i=>Object.assign({},i,{d:i.q-(before[i.key]||0),was:before[i.key]||0})).filter(i=>i.d>0.0001);
-  const toBuy=added.filter(i=>!isHave(i)),home=added.filter(i=>isHave(i));
+  lockItems=after.map(i=>{const d=i.q-(before[i.key]||0),home=isHave(i);return Object.assign({},i,{d,was:before[i.key]||0,home,buy:!home});}).filter(i=>i.d>0.0001);
   lockPend=targets;
-  const meals=targets.map(t=>{const s=sl(t),dn=t.k.split("|")[0],date=addDays(parseYmd(t.w),DAYS.indexOf(dn));
+  lockMeals=targets.map(t=>{const s=sl(t),dn=t.k.split("|")[0],date=addDays(parseYmd(t.w),DAYS.indexOf(dn));
     const parts=[recipes[s.id].name,s.entree&&recipes[s.entree]?"entrée "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert "+recipes[s.dessert].name:""].filter(Boolean).join(" + ");
     return`<li><b>${esc(dn)} ${date.getDate()} · ${t.k.endsWith("midi")?"midi":"soir"}</b> : ${esc(parts)} <span class="muted">(${s.n} pers.)</span></li>`;}).join("");
-  const groups=RAYONS.map(ry=>({ry,its:toBuy.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   $("#lockTitle").textContent=targets.length>1?`Valider ${targets.length} repas`:"Valider ce repas";
-  $("#lockBody").innerHTML=`<ul class="lk-meals">${meals}</ul>
-    <span class="label">${toBuy.length?`${toBuy.length} ingrédient${toBuy.length>1?"s":""} ajouté${toBuy.length>1?"s":""} à la liste`:"Rien de nouveau à acheter"}</span>
-    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-it"><span>${esc(i.n)}${i.was?` <small class="muted">déjà ${esc(fmt(i.was,i.u))} dans la liste</small>`:""}</span><b>${i.was?"+ ":""}${esc(fmt(i.d,i.u))||"✓"}</b></div>`).join("")}</div>`).join("")}
-    ${home.length?`<div class="lk-ry"><h4>Déjà à la maison (pas ajouté)</h4>${home.map(i=>`<div class="lk-it muted"><span>${esc(i.n)}</span><span>${esc(fmt(i.d,i.u))}</span></div>`).join("")}</div>`:""}`;
-  $("#lockYesBtn").textContent=toBuy.length?`✓ Valider et ajouter ${toBuy.length} ingrédient${toBuy.length>1?"s":""}`:"✓ Valider";
-  $("#lockSheet").hidden=false;$("#lockSheet .sheet-in").scrollTop=0;
+  renderLock();$("#lockSheet").hidden=false;$("#lockSheet .sheet-in").scrollTop=0;
 }
-function lockConfirm(){const n0=shopping().length;let n=0;
+function renderLock(){
+  const groups=RAYONS.map(ry=>({ry,its:lockItems.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
+  const nb=lockItems.filter(i=>i.buy).length;
+  $("#lockBody").innerHTML=`<ul class="lk-meals">${lockMeals}</ul>
+    <div class="row" style="justify-content:space-between;align-items:baseline"><span class="label">Ingrédients prévus · cochez ce qu'il faut acheter</span></div>
+    <div class="row" style="gap:14px;margin-top:-4px"><button type="button" class="link" data-act="lockAll" data-v="1">Tout cocher</button><button type="button" class="link" data-act="lockAll" data-v="0">Tout décocher</button></div>
+    ${lockItems.length?"":`<p class="muted" style="margin:0">Ces recettes n'ont pas d'ingrédients notés.</p>`}
+    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<button type="button" class="lk-it${i.buy?" on":""}" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${esc(i.n)}<small>${i.buy?(i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:""):"j'ai déjà · pas acheté"}</small></span><b>${i.was?"+ ":""}${esc(fmt(i.d,i.u))||"✓"}</b></button>`).join("")}</div>`).join("")}`;
+  $("#lockYesBtn").textContent=nb?`✓ Valider · ${nb} en liste de courses`:"✓ Valider (rien à acheter)";
+}
+function lockConfirm(){const n0=shopping().length,until=haveUntil(),today=ymd(new Date());let n=0;
   for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s&&!s.lock){s.lock=true;n++;}}
-  lockPend=[];$("#lockSheet").hidden=true;render();saveMenu();
+  menu.have=Object.assign({},menu.have);menu.bought=Object.assign({},menu.bought);
+  for(const i of lockItems){
+    if(i.buy){if(i.home)delete menu.have[i.key];}
+    else if(!i.was)menu.have[i.key]=until; // nothing of it was on the list: "j'ai déjà"
+    else{const b=menu.bought[i.key];menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+i.d,until:b&&b.until>until?b.until:until};} // keep only what was already listed
+  }
+  lockPend=[];lockItems=[];$("#lockSheet").hidden=true;render();saveMenu();
   const n1=shopping().length;toast(`${n} repas validé${n>1?"s":""} · liste à jour : ${n1} article${n1>1?"s":""}${n1>n0?` (+${n1-n0})`:""}`);}
 // what is planned on the chosen shopping days, with the lock of each meal (only locked meals go into the list)
 function shopPlanHtml(sel){
@@ -2221,6 +2235,8 @@ document.addEventListener("click",e=>{
   else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock){delete s.lock;render();saveMenu();toast("Repas dévalidé : ses ingrédients sortent de la liste");}else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
   else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock)t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
   else if(a==="lockYes")lockConfirm();
+  else if(a==="lockTog"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){i.buy=!i.buy;renderLock();}}
+  else if(a==="lockAll"){lockItems.forEach(i=>i.buy=b.dataset.v==="1");renderLock();}
   else if(a==="lockNo"){lockPend=[];$("#lockSheet").hidden=true;}
   else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
