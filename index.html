@@ -304,6 +304,8 @@ input,select,textarea{font-size:16px!important}
 .rv{padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;text-align:left;font:inherit;color:var(--ink)}
 .rv img,.rv-none{width:100%;aspect-ratio:1;object-fit:cover;display:flex;align-items:center;justify-content:center;background:var(--soft);font-size:22px}
 .rv-n{font-size:11px;line-height:1.25;padding:5px 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ph-w{position:relative}.ph-w .ph-c{width:100%}
+.ph-x{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:15px;font-weight:700;touch-action:manipulation}
 .ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-c.on{border-color:var(--accent)}
@@ -1894,10 +1896,13 @@ async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"
   $("#photoGoogle").href="https://www.google.com/search?tbm=isch&q="+encodeURIComponent(q+" recette");
   $("#photoMsg").textContent="Recherche de photos…";$("#photoGrid").innerHTML="";
   let list=first?autoList(id):[];if(list.length<6){try{list=[...list,...(await findPhotos({name:q},16))];}catch(e){}}
-  const seen=new Set();list=list.filter(x=>x&&x.u&&!seen.has(x.u)&&seen.add(x.u));if(photoId!==id)return;
+  const seen=new Set(),nope=rejected(recipes[id]);list=list.filter(x=>x&&x.u&&!nope.has(x.u)&&!seen.has(x.u)&&seen.add(x.u));if(photoId!==id)return;
   photoCands=list;const cur=rPhotoSrc(id);
   $("#photoMsg").textContent=list.length?"Touchez une photo pour la choisir.":"Aucune photo trouvée : essayez un autre mot (ex. le plat principal), ou collez l'adresse d'une image.";
-  $("#photoGrid").innerHTML=list.map((x,i)=>`<button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");}
+  renderPhotoGrid();}
+function renderPhotoGrid(){const id=photoId,cur=rPhotoSrc(id),nope=rejected(recipes[id]);
+  $("#photoGrid").innerHTML=photoCands.map((x,i)=>nope.has(x.u)?"":`<div class="ph-w"><button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.closest('.ph-w').remove()"></button><button type="button" class="ph-x" data-act="photoReject" data-i="${i}" aria-label="Supprimer cette photo">✕</button></div>`).join("");
+  if(!$("#photoGrid").children.length)$("#photoMsg").textContent="Plus de photo ici : cherchez avec d'autres mots, ou utilisez Google Images.";}
 let photoCands=[];
 let reviewMode="all",reviewLimit=60;
 function renderReview(){const all=Object.entries(recipes).sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
@@ -1922,7 +1927,8 @@ document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IM
   if(!im.dataset.auto)return;
   const r=recipes[im.dataset.auto];if(!r)return;const c=autoCache[autoKey(r)];if(!c||!c.list)return;
   const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);}},true);
-function autoPhoto(id){const r=recipes[id],l=autoList(id);if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
+const rejected=r=>new Set((r&&r.noPh)||[]);
+function autoPhoto(id){const r=recipes[id],nope=rejected(r),l=autoList(id).filter(x=>!nope.has(x.u));if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
     if(r.pick&&r.pick.u)return r.pick.u; // chosen in "Choisir une photo"
@@ -2603,6 +2609,8 @@ document.addEventListener("click",e=>{
   else if(a==="reviewMore"){reviewLimit+=60;renderReview();}
   else if(a==="reviewPick"){openPhotoPick(id);}
   else if(a==="closePhoto"){$("#photoSheet").hidden=true;}
+  else if(a==="photoReject"){const c=photoCands[Number(b.dataset.i)],r=recipes[photoId];if(c&&r){const n=Object.assign({},r,{noPh:[...new Set([...(r.noPh||[]),c.u])].slice(-40)});
+      if(n.pick&&n.pick.u===c.u)delete n.pick;saveRecipe(photoId,n);renderPhotoGrid();toast("Photo supprimée pour ce plat");}}
   else if(a==="photoChoose"){choosePhoto(photoCands[Number(b.dataset.i)]);}
   else if(a==="photoPaste"){pasteImage();}
   else if(a==="photoUrlOk"){const u=$("#photoUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){toast("Collez une adresse qui commence par https://");return;}
