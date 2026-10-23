@@ -527,7 +527,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="set-sec">Affichage</div>
     <div class="set-list">
       <button class="set-row" data-act="openPrefsAt" data-to="show"><span class="si">👁️</span><span class="st"><b>Afficher dans le menu</b><small>vins et boissons, calories</small></span><span class="chev">›</span></button>
-      <button class="set-row" data-act="openPrefsAt" data-to="look"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, mode sombre</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="look"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, relief, mode sombre</small></span><span class="chev">›</span></button>
     </div>
     <div class="set-sec">Données</div>
     <div class="set-list">
@@ -706,7 +706,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="daysSheet" hidden>
   <div class="sheet-in">
-    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Proposer certains repas</h2><button type="button" class="btn ghost" data-act="closeDays">Fermer</button></div>
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Choisir les jours</h2><button type="button" class="btn ghost" data-act="closeDays">Fermer</button></div>
     <p class="muted" style="margin:0;font-size:13px">Choisissez les jours et les repas à remplir. Les repas verrouillés sont gardés, le reste du menu ne bouge pas.</p>
     <div class="dchips" id="daysPick"></div>
     <div class="field"><span class="label">Repas</span><div class="dchips" id="mealsPick"></div></div>
@@ -2590,7 +2590,7 @@ document.addEventListener("click",e=>{
   else if(a==="copy")copyList();
   else if(a==="shareList")shareList();
   else if(a==="backup")backup();
-  else if(a==="pasteRecipe"){openSheet();$("#pasteBox").open=true;setTimeout(()=>$("#pasteIn").focus(),80);}
+  else if(a==="pasteRecipe"){openSheet();$("#f-title").textContent="Coller une recette";$("#pasteBox").open=true;setTimeout(()=>$("#pasteIn").focus(),80);}
   else if(a==="parsePaste"){
     const r=parseRecipeText($("#pasteIn").value), msg=$("#pasteMsg");
     if(!r.ing.length&&!r.steps.length){msg.textContent="Je n'ai pas reconnu de recette dans ce texte.";return;}
