@@ -252,6 +252,9 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .as small{display:block;font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}
 .as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}
 #addSheet .sheet-in{height:92%}
+/* "+ Menu" chooser: the confirm button always stays in view at the bottom */
+.add-foot{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));margin:auto -16px 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -10px 14px -10px rgba(0,0,0,.4);z-index:2}
+.add-foot .btn{width:100%;min-height:48px;font-size:17px}
 .set-sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:6px 0 -6px}
 .set-list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .set-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;font:inherit;color:var(--ink);cursor:pointer}
@@ -652,7 +655,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <span class="label">En tant que</span><div class="chips" id="addRoles" style="flex-wrap:wrap"></div>
     <span class="label">Quand ? (plusieurs possibles)</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
-    <button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button>
+    <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
   </div>
 </div>
 
@@ -1880,7 +1883,7 @@ document.addEventListener("click",e=>{
   else if(a==="addWeekSel"){addWeek=b.dataset.w;renderAdd();}
   else if(a==="addCell"){const key=b.dataset.key;if(addSel.has(key))addSel.delete(key);else addSel.add(key);renderAdd();}
   else if(a==="addOk")applyAdd();
-  else if(a==="closeAdd"){$("#addSheet").hidden=true;}
+  else if(a==="closeAdd"){if(!$("#addOk").disabled)applyAdd();else $("#addSheet").hidden=true;} // closing keeps what was ticked
   else if(["serv","swap","lock","pick"].includes(a)&&b.dataset.k&&isPast(b.dataset.k)){toast("Ce jour est passé : son menu ne se modifie plus");}
   else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
   else if(a==="applyAll"){for(const k in W())if(!isPast(k))W()[k].n=menu.people;render();saveMenu();}
