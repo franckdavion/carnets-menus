@@ -156,6 +156,10 @@ button{cursor:pointer}
 
 /* tab bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
+.foot-copy{margin:28px 0 0;text-align:center;font-size:11px;color:var(--muted);opacity:.8}
+/* the tab bar stays at the bottom on every page, even over an open window; it hides only while typing */
+.tabs{z-index:25}
+:root.kb .tabs{display:none}
 .tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
 .tab{border:none;background:none;padding:8px 2px 10px;font-weight:600;font-size:11px;color:var(--muted);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;position:relative;min-width:0}
 .tab .ti{font-size:20px;line-height:1}.tab .badge{position:absolute;top:4px;left:calc(50% + 8px);font-size:10px;padding:0 5px}
@@ -217,7 +221,8 @@ input,select,textarea{font-size:16px!important}
 /* windows whose content changes while you tap keep a fixed height, so their top edge never jumps */
 #sideSheet .sheet-in,#dailySheet .sheet-in,#pickSheet .sheet-in,#histSheet .sheet-in,#storeSheet .sheet-in{height:92%}
 /* windows follow the visible area when the keyboard is open */
-.sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:var(--vvh,100%)}
+.sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:calc(var(--vvh,100%) - var(--tabh,0px))}
+:root.kb .sheet{height:var(--vvh,100%)}
 #shopList .item{grid-template-columns:12px minmax(0,1fr) auto;row-gap:4px;align-items:start}
 #shopList .item>.dot{grid-row:1 / span 2;margin-top:8px}
 #shopList .item>.nm{grid-row:1 / span 2}
@@ -502,6 +507,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
       <div id="tripList"></div>
   </section>
+  <p class="foot-copy" id="footCopy">© 2026 Franck Davion · Carnet de menus</p>
 </div>
 
 <div class="tabs"><nav role="tablist">
@@ -1085,7 +1091,7 @@ function render(){
   $("#pplN").textContent=menu.people;
   $("#pplMinus").disabled=menu.people<=1;
   for(const v of["menu","week","rec","shop","set"]){
-    $("#v-"+v).hidden=view!==v;
+    $("#v-"+v).hidden=view!==v;$("#footCopy").hidden=view==="set";
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
   applyPacks();
@@ -1889,19 +1895,30 @@ function copyShared(id){const r=recipes[id];if(!r)return;const n=JSON.parse(JSON
   const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
   saveRecipe(nid,n);toast("Copiée dans votre carnet : vous pouvez la modifier");openRecSheet(nid);}
 // the message sent with the link: a short how-to for iPhone and Android
-function shareInvite(){const who=(menu.share&&menu.share.name)||"moi";
-  return`Voici le carnet de recettes de ${who} 🍽️
-${shareLink()}
+function shareInvite(){const who=(menu.share&&menu.share.name)||"";
+  return`Bonjour,
 
-1. Ouvre ce lien
-   • iPhone : dans Safari
-   • Android : dans Chrome
-2. Installe l'appli sur ton écran d'accueil
-   • iPhone : bouton Partager (carré avec flèche) → « Sur l'écran d'accueil »
-   • Android : menu ⋮ → « Installer l'application »
-3. Ouvre l'appli depuis sa nouvelle icône : mes recettes y sont, marquées « de ${who} » (filtre « Partagées »).
+Je te partage mon carnet de recettes sur « Carnet de menus », une appli que j'ai imaginée et créée pour organiser nos repas de la semaine.
 
-Tu gardes tes propres menus et ta liste de courses. Mes nouvelles recettes arrivent toutes seules. Pour en modifier une, fais « Copier dans mon carnet ».`;}
+Avec elle, tu peux :
+• consulter toutes mes recettes, avec les ingrédients et les étapes
+• composer tes menus de la semaine (midi, soir, entrée, dessert)
+• avoir ta liste de courses toute faite, rayon par rayon
+• trouver un vin ou une boisson pour chaque plat
+• savoir quoi cuisiner avec ce qu'il reste dans le frigo
+
+Pour l'installer (2 minutes) :
+1. Ouvre ce lien : ${shareLink()}
+   iPhone : dans Safari · Android : dans Chrome
+2. Ajoute l'appli sur ton écran d'accueil
+   iPhone : bouton Partager (carré avec flèche) → « Sur l'écran d'accueil »
+   Android : menu ⋮ → « Installer l'application »
+3. Ouvre-la depuis sa nouvelle icône : mes recettes sont marquées « de ${who||"moi"} ».
+
+Bon à savoir : tes menus et tes courses restent à toi. Mes nouvelles recettes arrivent toutes seules, et tu peux copier une recette dans ton carnet pour l'adapter.
+
+Bonne cuisine !
+${who}`.trim();}
 function renderShare(){
   const sh=menu.share||{},can=!!(sync&&siteRepo());
   const at=LS.get("cm_share_at",0);
@@ -1949,7 +1966,7 @@ document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b)return;
   const a=b.dataset.act, id=b.dataset.id;
   if(a==="check"||a==="checkX")return; // handled on change
-  if(a==="tab"){view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
+  if(a==="tab"){document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
   else if(a==="toggle"){openAdd(id);}
   else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
@@ -2803,8 +2820,11 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 /* keep open windows inside the visible area (keyboard on iPhone) */
 (()=>{const vv=window.visualViewport;if(!vv)return;const d=document.documentElement;
-  const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");};
-  vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);fit();})();
+  const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");
+    const kb=window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open
+    const t=document.querySelector(".tabs");if(t&&!kb)d.style.setProperty("--tabh",t.offsetHeight+"px");};
+  vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);window.addEventListener("orientationchange",()=>setTimeout(fit,300));
+  new MutationObserver(fit).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});fit();})();
 /* inside a window, a drag only scrolls the window's own content: no bounce of the whole window */
 (()=>{let y0=0,x0=0;
   document.addEventListener("touchstart",e=>{const t=e.touches[0];y0=t.clientY;x0=t.clientX;},{passive:true});
