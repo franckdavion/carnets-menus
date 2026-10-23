@@ -59,6 +59,7 @@ button{cursor:pointer}
 .top h1{font-size:26px}
 /* "Aujourd'hui" card at the top of the Menu tab: today's two meals and three shortcuts */
 .today{display:flex;flex-direction:column;gap:10px}
+.fr-web{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:12px;margin-top:4px}
 .today-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
 .tl{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer;touch-action:manipulation}
 .tl+.tl{border-top:1px solid var(--line)}
@@ -1974,6 +1975,7 @@ document.addEventListener("click",e=>{
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k,b.dataset.role||"main");
   else if(a==="todayPick"){const cw=ymd(mondayOf(new Date()));if(curWeek!==cw){curWeek=cw;LS.set("cm_week",cw);render();}openPick(b.dataset.k,"main");}
+  else if(a==="frImport"){sendImport($("#frLinks").value,t=>{$("#frWebMsg").textContent=t;},{fr:true}).then(ok=>{if(ok)$("#frLinks").value="";});}
   else if(a==="goFridge"){const f=$("#frForm");f.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("#frIn").focus({preventScroll:true}),350);}
   else if(a==="pickSet")setPicked(id);
   else if(a==="pickRandom"){
@@ -2626,8 +2628,8 @@ function parseHave(){return $("#frIn").value.split(/[,;\n]| et /).map(norm).filt
 const sing=s=>s.replace(/(s|x)$/,"");
 function matchIng(have,name){const n=sing(norm(name));return have.some(h=>{const x=sing(h);return n.includes(x)||x.includes(n);});}
 const PANTRY=/sel|poivre|huile|bouillon|farine|piment|sauce soja|pâte de curry/i;
-$("#frForm").addEventListener("submit",e=>{
-  e.preventDefault();
+$("#frForm").addEventListener("submit",e=>{e.preventDefault();runFridge();});
+function runFridge(){
   const have=parseHave(), out=$("#frOut");
   if(!have.length){out.innerHTML='<p class="muted" style="margin:0">Indiquez au moins un ingrédient, séparés par des virgules.</p>';return;}
   const scored=Object.entries(recipes).map(([id,r])=>{
@@ -2640,8 +2642,16 @@ $("#frForm").addEventListener("submit",e=>{
       <button type="button" class="link" data-act="viewRec" data-id="${esc(x.id)}">Voir la recette</button></div>
       <div class="ctl"><button type="button" class="add${onMenu(x.id)?" on":""}" data-act="toggle" data-id="${esc(x.id)}">${onMenu(x.id)?"✓ Au menu":"+ Menu"}</button></div></div>`).join("")}</div>`
     :'<p class="muted" style="margin:0">Aucune recette du carnet n\'utilise ces ingrédients.</p>';
-  out.innerHTML=`<span class="label">Dans votre carnet</span>${rows}`;
-});
+  // and on the web: search the recipe sites with these ingredients, then save the one you like by its link
+  const q=$("#frIn").value.split(/[,;\n]| et /).map(s=>s.trim()).filter(Boolean).join(" "), e=encodeURIComponent(q);
+  const web=`<div class="fr-web"><span class="label">Sur internet</span>
+    <div class="row"><a class="btn" target="_blank" rel="noopener" href="https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}">Marmiton ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.750g.com/recherche?q=${e}">750g ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/search?q=${e}+site%3Ajow.fr">Jow ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/search?q=recette+${e}">Google ↗</a></div>
+    <span class="muted" style="font-size:13px">Une recette vous plaît ? Partager → Copier le lien, puis collez-le ici pour l'enregistrer dans votre carnet.</span>
+    <textarea id="frLinks" class="search" rows="2" placeholder="Collez le lien de la recette"></textarea>
+    <button type="button" class="btn primary" data-act="frImport" style="align-self:flex-start">Enregistrer dans mon carnet</button>
+    <div id="frWebMsg" class="muted" style="font-size:13px"></div></div>`;
+  out.innerHTML=`<span class="label">Dans votre carnet</span>${rows}${web}`;
+}
 
 /* ---------- backup ---------- */
 async function backup(){
@@ -2673,18 +2683,18 @@ function updateFindLinks(){
 $("#findIn").addEventListener("input",updateFindLinks);
 $("#findIn").addEventListener("keydown",e=>{if(e.key==="Enter")e.preventDefault();});
 let imports=LS.get("cm_imports",[]), importTimer=null;
-function importMsg(t){$("#importStatus").textContent=t;}
+function importMsg(t){$("#importStatus").textContent=t;const f=$("#frWebMsg");if(f)f.textContent=t;}
 async function sendImport(text,msg,assign){
   const urls=[...new Set((text.match(/https?:\/\/[^\s<>"'«»]+/g)||[]).map(u=>u.replace(/[).,;]+$/,"")))].slice(0,15);
   if(!urls.length){msg("Collez au moins un lien de recette (il commence par https://).");return false;}
-  if(!sync){msg("L'import passe par le robot de votre dépôt GitHub : connectez d'abord la synchro (pastille sous le titre).");return false;}
+  if(!sync){msg("L'import passe par le robot de votre dépôt GitHub : activez d'abord « Partage entre téléphones » dans Réglages.");return false;}
   const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   msg("Envoi au robot…");
   try{
     const p=await gh("PUT",{message:"Demande d'import",content:b64e(J({id,type:"import",urls,at:new Date().toISOString()}))},sync.repo,"inbox/"+id+".json");
     if(!p.ok)throw{status:p.status};
   }catch(err){msg(err&&err.status?"Envoi impossible ("+err.status+") : vérifiez la synchro.":"Pas de connexion : réessayez quand le réseau revient.");return false;}
-  imports.push(Object.assign({id,n:urls.length,at:Date.now()},assign?{assign}:{}));LS.set("cm_imports",imports);
+  imports.push(Object.assign({id,n:urls.length,at:Date.now()},assign&&assign.fr?{fr:true}:assign?{assign}:{}));LS.set("cm_imports",imports);
   msg(`Le robot lit ${urls.length} recette${urls.length>1?"s":""}… environ une minute. Vous pouvez continuer à utiliser l'app.`);
   startImportPolling();return true;
 }
@@ -2724,6 +2734,7 @@ async function pollImports(){
     const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
     importMsg((added?`${added} recette${added>1?"s":""} ajoutée${added>1?"s":""} au carnet.`:"Aucune recette ajoutée.")+(errs.length?" Non importées : "+errs.join(" · "):""));
     if(added)toast(`${added} recette${added>1?"s":""} importée${added>1?"s":""}`);
+    if(added&&job.fr&&$("#frIn").value.trim()){const m=$("#frWebMsg")&&$("#frWebMsg").textContent;runFridge();if($("#frWebMsg"))$("#frWebMsg").innerHTML=esc(m)+` <button type="button" class="link" data-act="viewRec" data-id="${esc(firstId)}">Voir « ${esc(recipes[firstId].name)} »</button>`;}
     if(job.assign&&!added){$("#pwMsg").textContent="✗ Le robot n'a pas réussi à lire cette page"+(errs.length?" ("+errs.join(" · ")+")":"")+". Essayez un autre lien.";}
   }
   LS.set("cm_imports",imports);
