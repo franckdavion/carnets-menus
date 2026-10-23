@@ -3328,6 +3328,7 @@ setStatus(sync?"pending":"off");
 if(sync)runSync();
 startImportPolling();
 renderNow(); setInterval(renderNow,20000);
+setTimeout(resumeIfNeeded,120); // back from a website after the phone closed the app: reopen the same place
 // the link stays in the address: an app added to the home screen from it keeps following the book (on iPhone its storage is separate from Safari)
 (()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){const u=followUrl(decodeURIComponent(m[1]));if(u&&!follows.some(f=>f.url===u))addFollow(u);}
   refreshFollows();pollSubs();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){refreshFollows();pollSubs();}});})();
@@ -3356,6 +3357,18 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
     if(!sc||sc.scrollHeight<=sc.clientHeight+1){e.preventDefault();return;}
     if((dy>0&&sc.scrollTop<=0)||(dy<0&&sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1))e.preventDefault();
   },{passive:false});})();
+/* leaving for a website (Google Images, a recipe site, a drive…): remember where we were, in case the phone restarts the app on return */
+document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest('a[target="_blank"]');if(!a)return;
+  const open=id=>!$("#"+id).hidden;
+  LS.set("cm_resume",{at:Date.now(),view,y:window.scrollY,week:curWeek,rec:open("recSheet")||open("photoSheet")?recSheetId:null,photo:open("photoSheet")?photoId:null,review:open("reviewSheet"),slot:open("slotSheet")?slotK:null,openId});},true);
+function resumeIfNeeded(){const r=LS.get("cm_resume",null);if(!r)return;LS.set("cm_resume",null);if(Date.now()-r.at>45*60e3)return;
+  view=r.view||view;if(r.week)curWeek=r.week;if(r.openId)openId=r.openId;render();setTimeout(()=>window.scrollTo(0,r.y||0),50);
+  if(r.review){reviewMode="all";reviewLimit=60;renderReview();$("#reviewSheet").hidden=false;}
+  if(r.slot&&W()[r.slot]!==undefined){slotK=r.slot;renderSlotSheet();$("#slotSheet").hidden=false;}
+  if(r.rec&&recipes[r.rec]){openRecSheet(r.rec);}
+  if(r.photo&&recipes[r.photo])setTimeout(()=>openPhotoPick(r.photo),60);}
+// the app is still alive when we come back: nothing to restore
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")LS.set("cm_resume",null);});
 /* swipe left / right on a page to go to the next / previous tab */
 (()=>{const ORDER=["menu","week","rec","shop","set"];let x0=0,y0=0,t0=0,ok=false;
   document.addEventListener("touchstart",e=>{const t=e.touches[0];ok=e.touches.length===1;x0=t.clientX;y0=t.clientY;t0=Date.now();
