@@ -576,7 +576,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="sheet" hidden>
   <form class="sheet-in" id="recForm" novalidate>
-    <div class="row" style="justify-content:space-between"><h2>Nouvelle recette</h2><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>
+    <div class="row" style="justify-content:space-between"><h2 id="f-title">Nouvelle recette</h2><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>
     <details class="paste" id="pasteBox">
       <summary>Coller une recette</summary>
       <p class="muted" style="font-size:13px;margin:6px 0">Photo d'un livre ou d'une fiche : ouvrez-la dans Photos, restez appuyé sur le texte, « Tout sélectionner » puis Copier. Collez ici, ou collez le texte d'un site ou d'un message.</p>
@@ -1270,7 +1270,7 @@ function renderRecipes(){
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
       const role=r.cat==="Entrée"?"entree":r.cat==="Dessert"?"dessert":undefined,dk=r.linkOnly?null:drinkFor(r,role);
       const drinkRow=dk&&showOn("wine")?`<div class="drink">🍷 Vin : ${esc(dk[0])} ${vivinoLink(pairingQuery(dk[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(dk[1])}</div>`:"";
-      det=`<div class="detail">${catRow}<div class="row">${photoBtn(r)}</div>${drinkRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
+      det=`<div class="detail">${catRow}<div class="row">${photoBtn(r)}<button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser":"Modifier"}</button></div>${drinkRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
           <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
           <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
         <div class="row"><button class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.) · mettre à ${p} p.`:`Ajouter aux courses pour ${p} pers.`}</button></div>
@@ -2358,7 +2358,8 @@ document.addEventListener("click",e=>{
   else if(a==="syncOff"){sync=null;["cm_sync","cm_base"].forEach(k=>{try{localStorage.removeItem(k);}catch(x){}});clearTimeout(syncTimer);setStatus("off");$("#syncSheet").hidden=true;toast("Ce téléphone n'est plus synchronisé. Vos données restent ici.");}
   else if(a==="newRecipe")openSheet();
   else if(a==="goFind"){$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
-  else if(a==="closeSheet")$("#sheet").hidden=true;
+  else if(a==="closeSheet"){$("#sheet").hidden=true;const back=editId&&editBack;editId=null;if(back)openRecSheet(recSheetId);}
+  else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
 });
@@ -2734,6 +2735,7 @@ function renderRecSheet(){
       <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span><span style="flex:1"></span>${photoBtn(r)}</div>
+    <div class="row"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser (copie dans mon carnet)":"Modifier la recette"}</button></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
@@ -2847,12 +2849,25 @@ function fillForm(r){
   if(Array.isArray(r.ing)&&r.ing.length){$("#f-ings").innerHTML="";r.ing.filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));}
   if(Array.isArray(r.steps))$("#f-steps").value=r.steps.map(String).join("\n");
 }
-function openSheet(){
+let editId=null, editBack=false;
+function openSheet(id){
   $("#recForm").reset();$("#f-ings").innerHTML="";$("#f-err").textContent="";
   $("#pasteBox").open=false;$("#pasteIn").value="";$("#pasteMsg").textContent="";
-  for(let k=0;k<3;k++)addIngRow();
-  $("#sheet").hidden=false;setTimeout(()=>$("#f-name").focus(),50);
+  const r=id&&recipes[id];editId=r?id:null;
+  $("#f-title").textContent=r?"Modifier la recette":"Nouvelle recette";$("#pasteBox").hidden=!!r;
+  $("#recForm button[type=submit]").textContent=r?"Enregistrer les modifications":"Enregistrer la recette";
+  if(r){$("#f-name").value=r.name||"";$("#f-cat").value=CATS.includes(r.cat)?r.cat:"Plat";$("#f-time").value=Number(r.time)||"";$("#f-serves").value=Number(r.serves)||4;
+    (r.ing||[]).filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));addIngRow();
+    $("#f-steps").value=Array.isArray(r.steps)?r.steps.join("\n"):String(r.steps||"");}
+  else for(let k=0;k<3;k++)addIngRow();
+  $("#sheet").hidden=false;$("#recForm").scrollTop=0;if(!r)setTimeout(()=>$("#f-name").focus(),50);
 }
+// edit any recipe from anywhere; a recipe shared by a relative is first copied into my notebook
+function editRecipe(id){const r=recipes[id];if(!r)return;
+  if(r.shared){const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
+    const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
+    saveRecipe(nid,n);toast("Copiée dans votre carnet pour la personnaliser");id=nid;}
+  editBack=!$("#recSheet").hidden;if(editBack){recSheetId=id;$("#recSheet").hidden=true;}openSheet(id);}
 $("#sheet").addEventListener("click",e=>{if(e.target.id==="sheet")$("#sheet").hidden=true;});
 $("#syncSheet").addEventListener("click",e=>{if(e.target.id==="syncSheet")$("#syncSheet").hidden=true;});
 $("#recForm").addEventListener("submit",async e=>{
@@ -2861,6 +2876,11 @@ $("#recForm").addEventListener("submit",async e=>{
   const ing=[...document.querySelectorAll(".ing-block")].map(b=>({q:Number(b.querySelector(".iq").value)||0,u:b.querySelector(".iu").value,n:b.querySelector(".in").value.trim(),r:b.querySelector(".ir").value})).filter(i=>i.n);
   if(!name){$("#f-err").textContent="Donnez un nom à la recette.";return;}
   if(!ing.length){$("#f-err").textContent="Ajoutez au moins un ingrédient avec son nom.";return;}
+  if(editId&&recipes[editId]){const old=recipes[editId],cat=$("#f-cat").value;
+    const data=Object.assign({},old,{name,cat,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),updatedAt:new Date().toISOString()});
+    if(Array.isArray(old.cats)){data.cats=old.cats.filter(c=>c!==cat);if(old.cat!==cat&&old.cat)data.cats.push(old.cat);data.cats=[...new Set(data.cats)].filter(c=>c!==cat);if(!data.cats.length)delete data.cats;}
+    const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);
+    if(editBack&&recipes[id]){openRecSheet(id);}else{openId=id;render();}toast("Recette modifiée");return;}
   const slug=norm(name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette";
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
   const data={name,cat:$("#f-cat").value,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
