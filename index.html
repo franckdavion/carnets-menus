@@ -666,8 +666,9 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="row" style="margin-top:8px"><button type="button" class="btn primary" data-act="parsePaste">Remplir le formulaire</button><span class="muted" id="pasteMsg" style="font-size:13px"></span></div>
     </details>
     <label class="field"><span class="label">Nom</span><input id="f-name" placeholder="Ex. Tarte aux poireaux" required></label>
+    <div class="field"><span class="label">Catégories (touchez-en plusieurs ; la première choisie est la principale)</span><div class="dchips" id="f-cats"></div></div>
     <div class="grid3">
-      <label class="field"><span class="label">Catégorie</span><select id="f-cat"></select></label>
+      <label class="field" hidden><span class="label">Catégorie</span><select id="f-cat"></select></label>
       <label class="field"><span class="label">Minutes</span><input id="f-time" type="number" min="0" inputmode="numeric" value="30"></label>
       <label class="field"><span class="label">Pour (pers.)</span><input id="f-serves" type="number" min="1" inputmode="numeric" value="4"></label>
     </div>
@@ -1349,10 +1350,10 @@ function renderIdea(){
 }
 
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
-function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return["p1","proposé"];
-  const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","validé"];
+function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return["p1","🔓 à valider"];
+  const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","🔒 validé"];
   const r=recipes[s.id],dd=parseYmd(date),when=`${k.split("|")[0]} ${dd.getDate()} ${k.split("|")[1]}`;
-  const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","validé"]:["p3","courses faites"];}
+  const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","🔒 validé"]:["p3","🔒 courses faites"];}
 function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
   const side=s?[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"en plus : "+s.extra.join(", "):""].filter(Boolean):[];
   if(!r&&!side.length)return past?""
@@ -1369,7 +1370,7 @@ function weekToValidate(){const ws=weekStartDate(),today=ymd(new Date()),out=[];
 function renderWeekFrame(){const grid=LS.get("cm_wmode","list")==="grid";
   $("#wmodeSeg").innerHTML=[["list","☰ Liste"],["grid","▦ Tableau"]].map(([v,l])=>`<button type="button" class="chip" data-act="weekMode" data-v="${v}" aria-pressed="${(v==="grid")===grid}">${l}</button>`).join("");
   $("#menuList").hidden=grid;$("#weekGrid").hidden=!grid;$("#weekEditBtn").hidden=!grid;
-  const t=weekToValidate();$("#weekValidate").innerHTML=t.length?`<button type="button" class="btn primary week-cta" data-act="weekValidate">✓ Valider la semaine (${t.length} repas) → voir les ingrédients</button>`:"";
+  const t=weekToValidate();$("#weekValidate").innerHTML=t.length?`<button type="button" class="btn primary week-cta" data-act="weekValidate">🔓 Valider la semaine (${t.length} repas) → voir les ingrédients</button>`:"";
   $("#weekTitle").textContent="Semaine du "+shortDate(weekStartDate());}
 function renderMenu(){
   const el=$("#menuList"), filled=filledSlots();renderWeekFrame();
@@ -1509,7 +1510,7 @@ function shopPlanHtml(sel){
         <button type="button" class="sp-swap" data-act="shopSwap" data-w="${w}" data-k="${k}" aria-label="Changer de plat">↻</button>
         <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"🔒 Validé":"🔓 Valider"}</button></div>`;}).join("");
     return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
-  return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas à valider`:"· tout est validé ✓"}</span></summary>${days}
+  return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· 🔓 ${unl} repas à valider`:"· 🔒 tout est validé"}</span></summary>${days}
     ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🔒 Tout valider (${unl} repas)</button><span class="muted" style="font-size:12px">Seuls les repas validés (verrouillés) mettent leurs ingrédients dans la liste.</span>`:""}</details>`;
 }
 /* clearing the list, all at once or line by line: what is erased counts as already bought until the last shopping day (the menus stay as they are) */
@@ -1520,7 +1521,7 @@ function eraseItem(i){const until=haveUntil(),today=ymd(new Date());menu.bought=
 function renderShop(items,extras,ids){
   const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
-  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🔒":on?" ⚠️":"";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
+  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🔒":" 🔓";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
     <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>${shopPlanHtml(sel)}`
     :`<span class="muted" style="font-size:13px">Aucun repas prévu dans les 3 prochaines semaines.</span>`;
   const range=sel.length?(sel.length===1?dayShort(sel[0]):`Du ${dayShort(sel[0])} au ${dayShort(sel[sel.length-1])}`):"Aucun jour choisi";
@@ -1996,13 +1997,20 @@ function renderPhotoGrid(){const id=photoId,cur=rPhotoSrc(id),nope=rejected(reci
   if(!$("#photoGrid").children.length)$("#photoMsg").textContent="Plus de photo ici : cherchez avec d'autres mots, ou utilisez Google Images.";}
 let photoCands=[];
 // a pasted image (or image link) in the paste box: works on iPhone and Android with the long-press "Coller"
-$("#pasteZone").addEventListener("paste",async e=>{e.preventDefault();const id=photoId;if(!id)return;const dt=e.clipboardData;
-  const f=[...(dt&&dt.files||[])].find(x=>x.type.startsWith("image/"))||[...(dt&&dt.items||[])].filter(i=>i.kind==="file"&&i.type.startsWith("image/")).map(i=>i.getAsFile())[0];
-  if(f){$("#photoSheet").hidden=true;await setRecipePhoto(id,f);return;}
-  const html=dt&&dt.getData("text/html")||"",m=html.match(/<img[^>]+src="(https:[^"]+)"/i),t=(dt&&dt.getData("text/plain")||"").trim();
-  const u=m?m[1].replace(/&amp;/g,"&"):(/^https:\/\/\S+$/.test(t)?t:"");
-  if(u){$("#photoUrl").value=u;document.querySelector('[data-act=photoUrlOk]').click();return;}
-  $("#pasteZone").textContent="Rien d'utilisable dans ce qui a été collé : sur Google, restez appuyé sur la photo puis « Copier ».";});
+// pasted image: from the clipboard data when the phone gives it, otherwise let the phone insert it in the box and read what it inserted
+async function usePastedSrc(id,src){if(!src)return false;
+  if(/^(data:image|blob:)/.test(src)){try{const bl=await(await fetch(src)).blob();if(bl.size&&/^image\//.test(bl.type||"image/")){$("#photoSheet").hidden=true;await setRecipePhoto(id,new File([bl],"photo",{type:bl.type||"image/jpeg"}));return true;}}catch(e){}return false;}
+  if(/^https?:\/\//.test(src)){$("#photoUrl").value=src.replace(/^http:/,"https:");document.querySelector('[data-act=photoUrlOk]').click();return true;}return false;}
+function pasteFail(){$("#pasteZone").innerHTML="Ce collage n'a pas marché. Sur Google, ouvrez d'abord la photo en grand, restez appuyé dessus → « Copier », puis réessayez ici. Sinon : « Choisir dans mes photos » après l'avoir enregistrée.";}
+$("#pasteZone").addEventListener("paste",e=>{const id=photoId;if(!id){e.preventDefault();return;}const dt=e.clipboardData;
+  const f=[...(dt&&dt.files||[])].find(x=>!x.type||x.type.startsWith("image/"))||[...(dt&&dt.items||[])].filter(i=>i.kind==="file").map(i=>i.getAsFile()).filter(Boolean)[0];
+  const html=dt&&dt.getData("text/html")||"",m=html.match(/<img[^>]+src=["']([^"']+)["']/i),t=((dt&&(dt.getData("text/uri-list")||dt.getData("text/plain")))||"").trim().split(/\s+/)[0];
+  const src=m?m[1].replace(/&amp;/g,"&"):(/^(https?:\/\/|data:image)\S+$/.test(t)?t:"");
+  if(f){e.preventDefault();$("#photoSheet").hidden=true;setRecipePhoto(id,f.type?f:new File([f],"photo",{type:"image/jpeg"}));return;}
+  if(src){e.preventDefault();usePastedSrc(id,src).then(ok=>{if(!ok)pasteFail();});return;}
+  // nothing readable: let the phone paste into the box, then look for the picture it inserted
+  $("#pasteZone").textContent="";
+  setTimeout(async()=>{const img=$("#pasteZone").querySelector("img");const ok=img&&await usePastedSrc(id,img.currentSrc||img.src);if(!ok)pasteFail();},150);});
 $("#pasteZone").addEventListener("beforeinput",e=>{if(e.inputType!=="insertFromPaste")e.preventDefault();});
 let reviewMode="all",reviewLimit=60;
 function renderReview(){const all=Object.entries(recipes).sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
@@ -2134,7 +2142,7 @@ function renderWeek(){
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
     const side=!r&&hasSide(s), ed=weekEdit&&!past&&(r||side), x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
     const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
-    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
+    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="validé">🔒</span>':' <span class="wl" aria-label="à valider">🔓</span>'),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
       +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
       +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
       +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
@@ -2158,7 +2166,7 @@ function renderSlotSheet(){
     if(r&&!past){const nut=slotNut(s);const info=[showOn("nut")&&nut?fmtNut(nut,true):"",showOn("wine")?drinkLine(r):""].filter(Boolean).join(" · ");if(info)h+=`<span class="muted" style="font-size:13px">${esc(info)}</span>`;}
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
-      (r?btn("slotValidate",s.lock?"🔒 Validé · ingrédients":"✓ Valider (ingrédients)","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
+      (r?btn("slotValidate",s.lock?"🔒 Validé · ingrédients":"🔓 Valider (ingrédients)","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
   }else h+=past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:`<div class="slot-acts2">${btn("pick","+ Choisir un plat")}</div>`;
@@ -2210,7 +2218,7 @@ function renderAdd(){
   const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date());
   const nm=id=>recipes[id]?recipes[id].name:"";
   const cell=(d,i,m)=>{const k=slotKey(d,m),key=addWeek+"#"+k,s=wk[k],past=ymd(addDays(ws,i))<today,role=addSel.get(key);
-    let note=past?"passé":!slotUsed(s)?"Libre":recipes[s.id]?nm(s.id)+(s.lock?" 🔒":""):"plat à choisir";
+    let note=past?"passé":!slotUsed(s)?"Libre":recipes[s.id]?nm(s.id)+(s.lock?" 🔒":" 🔓"):"plat à choisir";
     if(role)note=ROLE_AS[role]+(role==="main"&&s&&recipes[s.id]&&s.id!==addId?" · remplace "+nm(s.id):"");
     else if(!past&&slotUsed(s))note+=" · toucher pour choisir";
     return`<button type="button" class="as${role?" on":""}${past?" dis":""}${addAsk===key?" ask":""}" data-act="addCell" data-key="${key}" ${past?"disabled":""}>${role?"✓ ":""}${m==="midi"?"Midi":"Soir"}<small>${esc(note)}</small></button>`;};
@@ -2514,6 +2522,7 @@ document.addEventListener("click",e=>{
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
   else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
+  else if(a==="fCat"){const c=b.dataset.c;if(formCats.includes(c)){if(formCats.length===1){toast("Gardez au moins une catégorie");return;}formCats=formCats.filter(x=>x!==c);}else formCats=[...formCats,c];renderFormCats();}
   else if(a==="recCat"){const id=b.dataset.id||recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
     if(list.includes(c)){if(list.length===1){toast("Une recette garde au moins une catégorie");return;}list=list.filter(x=>x!==c);}else list=[...list,c];
     const n=Object.assign({},r,{cat:list[0]});delete n.alsoMain;delete n.alsoEntree;if(list.length>1)n.cats=list.slice(1);else delete n.cats;
@@ -2791,6 +2800,9 @@ function copyList(){
 
 /* ---------- new recipe sheet ---------- */
 $("#f-cat").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
+let formCats=["Plat"];
+function renderFormCats(){if(!formCats.length)formCats=["Plat"];$("#f-cat").value=formCats[0];
+  $("#f-cats").innerHTML=CATS.map(c=>{const on=formCats.includes(c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="fCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${on&&formCats[0]===c&&formCats.length>1?" (principale)":""}</button></span>`;}).join("");}
 let ingSeq=0;
 function addIngRow(init){
   const i=ingSeq++;
@@ -3443,7 +3455,7 @@ $("#pickQ").addEventListener("input",renderPick);
 $("#pickSheet").addEventListener("click",e=>{if(e.target.id==="pickSheet")$("#pickSheet").hidden=true;});
 function fillForm(r){
   if(r.name)$("#f-name").value=r.name;
-  if(CATS.includes(r.cat))$("#f-cat").value=r.cat;
+  if(CATS.includes(r.cat)){$("#f-cat").value=r.cat;formCats=[r.cat];renderFormCats();}
   if(r.time)$("#f-time").value=Number(r.time)||"";
   if(r.serves)$("#f-serves").value=Number(r.serves)||4;
   if(Array.isArray(r.ing)&&r.ing.length){$("#f-ings").innerHTML="";r.ing.filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));}
@@ -3458,7 +3470,8 @@ function openSheet(id){
   $("#f-stepsNote").textContent="Quand vous renommez un ingrédient, son nom est aussi changé dans les étapes. Relisez-les et adaptez la préparation si besoin.";$("#f-stepsNote").style.color="";
   $("#f-title").textContent=r?"Modifier la recette":"Nouvelle recette";$("#pasteBox").hidden=!!r;
   $("#f-save").textContent=r?"Enregistrer les modifications":"Enregistrer la recette";
-  if(r){$("#f-name").value=r.name||"";$("#f-cat").value=CATS.includes(r.cat)?r.cat:"Plat";$("#f-time").value=Number(r.time)||"";$("#f-serves").value=Number(r.serves)||4;
+  formCats=r?catsOf(r).filter(c=>CATS.includes(c)):["Plat"];renderFormCats();
+  if(r){$("#f-name").value=r.name||"";$("#f-time").value=Number(r.time)||"";$("#f-serves").value=Number(r.serves)||4;
     (r.ing||[]).filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));addIngRow();
     $("#f-steps").value=Array.isArray(r.steps)?r.steps.join("\n"):String(r.steps||"");}
   else for(let k=0;k<3;k++)addIngRow();
@@ -3478,14 +3491,15 @@ $("#recForm").addEventListener("submit",async e=>{
   const ing=[...document.querySelectorAll(".ing-block")].map(b=>({q:Number(b.querySelector(".iq").value)||0,u:b.querySelector(".iu").value,n:b.querySelector(".in").value.trim(),r:b.querySelector(".ir").value})).filter(i=>i.n);
   if(!name){$("#f-err").textContent="Donnez un nom à la recette.";return;}
   if(!ing.length){$("#f-err").textContent="Ajoutez au moins un ingrédient avec son nom.";return;}
-  if(editId&&recipes[editId]){const old=recipes[editId],cat=$("#f-cat").value;
+  const fc=formCats.length?formCats:["Plat"];
+  if(editId&&recipes[editId]){const old=recipes[editId],cat=fc[0];
     const data=Object.assign({},old,{name,cat,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),updatedAt:new Date().toISOString()});
-    if(Array.isArray(old.cats)){data.cats=old.cats.filter(c=>c!==cat);if(old.cat!==cat&&old.cat)data.cats.push(old.cat);data.cats=[...new Set(data.cats)].filter(c=>c!==cat);if(!data.cats.length)delete data.cats;}
+    delete data.alsoMain;delete data.alsoEntree;if(fc.length>1)data.cats=fc.slice(1);else delete data.cats;
     const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
     if(!editBack)openId=id;render();toast("Recette modifiée");return;}
   const slug=norm(name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette";
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
-  const data={name,cat:$("#f-cat").value,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
+  const data={name,cat:fc[0],...(fc.length>1?{cats:fc.slice(1)}:{}),time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
   $("#sheet").hidden=true;
   await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
   view="rec";openId=id;render();toast("Recette enregistrée");
