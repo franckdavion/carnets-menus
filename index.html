@@ -328,6 +328,24 @@ input,select,textarea{font-size:16px!important}
 .dish.has-ph{grid-template-columns:56px minmax(0,1fr) auto}.dish-ph{width:56px;height:56px;border-radius:12px;object-fit:cover}
 button.pick-item{align-items:center}.pi-ph{width:40px;height:40px;border-radius:9px;object-fit:cover;flex:0 0 40px}.pi-n{flex:1;min-width:0}
 .ph-none{display:flex;align-items:center;justify-content:center;background:var(--soft);font-size:18px}
+.rs-head{justify-content:flex-end;margin-bottom:-6px}
+.rs-acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.rs-acts button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font:inherit;font-size:12px;color:var(--ink);touch-action:manipulation}
+.rs-acts button span{font-size:20px;line-height:1}.rs-acts button[aria-pressed="true"] span{color:var(--mark)}
+.rs-cook,.today-cook{width:100%;min-height:50px;font-size:16px}.rs-stars{color:var(--mark);font-weight:400}
+.rs-tabs{flex-wrap:nowrap}
+.sheet.cook .sheet-in{background:#17201b;color:#eef3ee;height:100%;max-height:100%;border-radius:0}
+.sheet.cook .sheet-in>.row:first-child{background:#17201b;box-shadow:0 -14px 0 #17201b}
+.cook-top{justify-content:space-between;flex-wrap:nowrap;font-size:13px;opacity:.85}.cook-top .btn{background:rgba(255,255,255,.12);color:#fff;border-color:transparent}
+.cook-dots{display:flex;gap:4px}.cook-dots i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}.cook-dots i.on{background:#7CC594}
+.cook-big{font-size:24px;line-height:1.4;font-family:var(--f-body);margin:6px 0}
+.cook-ing{display:flex;gap:6px;flex-wrap:wrap}.cook-ing span{background:rgba(255,255,255,.12);border-radius:999px;padding:6px 12px;font-size:14px}
+.cook-timer{background:#7CC594;color:#10301A;border:0;min-height:52px;font-size:17px;font-weight:700}
+.cook-all{font-size:14px;opacity:.85}.cook-all summary{cursor:pointer;padding:6px 0}
+.cook-nav{margin-top:auto;flex-wrap:nowrap}.cook-nav .btn{flex:1;min-height:52px;font-size:16px}.cook-nav .btn:not(.primary){background:rgba(255,255,255,.12);color:#fff;border-color:transparent}
+.rate-stars{display:flex;gap:6px}.rate-stars button{font-size:34px;line-height:1;background:none;border:0;color:var(--mark);padding:2px;touch-action:manipulation}
+.sheet.cook .rate-stars button{color:#F2C14E}.sheet.cook .chip{background:rgba(255,255,255,.1);color:#fff;border-color:transparent}.sheet.cook .chip[aria-pressed="true"]{background:#7CC594;color:#10301A}
+.rate-card{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--mark);border-radius:14px;background:var(--surface)}
 .day-past{font-size:13px;color:var(--muted);padding:6px 4px}
 .week-cta{width:100%;min-height:48px;margin-top:10px}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
@@ -788,6 +806,14 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="agrid" id="addGrid"></div>
     <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
   </div>
+</div>
+
+<div class="sheet cook" id="cookSheet" hidden>
+  <div class="sheet-in" id="cookIn"></div>
+</div>
+
+<div class="sheet" id="rateSheet" hidden>
+  <div class="sheet-in" id="rateIn"></div>
 </div>
 
 <div class="sheet" id="reviewSheet" hidden>
@@ -2495,7 +2521,21 @@ document.addEventListener("click",e=>{
   else if(a==="ideaMode"){ideaMode=b.dataset.v;favShown=10;render();}
   else if(a==="ideaFavMore"){favShown+=20;render();}
   else if(a==="reroll"){ideaSeen=[...ideaSeen,...ideaIds].slice(-30);ideaIds=[];render();}
-  else if(a==="open"){openId=openId===id?null:id;confirmDel=null;if(openId)seenNews(id);render();}
+  else if(a==="open"){confirmDel=null;seenNews(id);openRecSheet(id);} // one recipe sheet everywhere
+  else if(a==="cook"){const r=recipes[id];const sl=slotsOf(id);$("#recSheet").hidden=true;startCook(id,viewServ[id]||(sl.length?W()[sl[0]].n:menu.people));}
+  else if(a==="cookNext"){if(!cook)return;if(cook.i<cook.steps.length-1)cook.i++;else cook.done=true;renderCook();$("#cookIn").scrollTop=0;}
+  else if(a==="cookPrev"){if(cook&&cook.i>0){cook.i--;renderCook();}}
+  else if(a==="cookClose"){stopCook();}
+  else if(a==="cookTimer"){if(cookTimer){cookTimer=null;}else{const s=Number(b.dataset.s)||0;if(s)cookTimer={end:Date.now()+s*1000,label:"étape "+(cook.i+1)+" · "+recipes[cook.id].name};
+      try{const c=new(window.AudioContext||window.webkitAudioContext)();c.resume&&c.resume();}catch(e){} /* unlock sound on iPhone */}renderCook();}
+  else if(a==="rateOpen"){$("#recSheet").hidden=true;openRate(id);}
+  else if(a==="rateMeal"){const[w,k]=b.dataset.key.split("#");const s=((menu.weeks||{})[w]||{})[k];if(s)openRate(s.id,b.dataset.key);}
+  else if(a==="rateSkip"){const[w,k]=b.dataset.key.split("#");const s=((menu.weeks||{})[w]||{})[k];if(s){s.noRate=true;saveMenu();render();}}
+  else if(a==="rateStar"){const d=rateDraft[id]=rateDraft[id]||{stars:0,tags:[]};d.stars=Number(b.dataset.n);const box=cook&&cook.done&&!$("#cookSheet").hidden?$("#cookIn"):$("#rateBody");if(box===$("#cookIn"))renderCook();else box.innerHTML=rateHtml(id);}
+  else if(a==="rateTag"){const d=rateDraft[id]=rateDraft[id]||{stars:0,tags:[]};const t=b.dataset.t;d.tags=d.tags.includes(t)?d.tags.filter(x=>x!==t):[...d.tags,t];if(cook&&cook.done&&!$("#cookSheet").hidden)renderCook();else $("#rateBody").innerHTML=rateHtml(id);}
+  else if(a==="rateSave"){saveRating(id);if(cook&&cook.done)stopCook();$("#rateSheet").hidden=true;render();}
+  else if(a==="rateClose"){$("#rateSheet").hidden=true;}
+  else if(a==="recTab"){recTab=b.dataset.v;renderRecSheet();}
   else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
   else if(a==="more"){recLimit+=50;renderRecipes();}
@@ -2949,6 +2989,7 @@ const STYLE_OK={
 function scoreFor(id,k,week){
   const r=recipes[id], kd=kindOf(r), t=r.time||0, midi=k.endsWith("midi"), wd=isWeekday(k);
   let sc=Math.random()*1.5;
+  {const rt=ratingOf(r);if(rt)sc+=(rt.avg-3)*0.8;} // well-rated dishes come back more often
   if(midi&&wd){if(r.cat==="Rapide"||t<=30)sc+=2;else if(t>45)sc-=2.5;}
   if(t>=75)sc+=wd?-3:1.5;
   if(r.cat==="Soupe")sc+=midi?-1.5:0.8;
@@ -3031,7 +3072,10 @@ function renderToday(){
     return`<button type="button" class="tl tl-empty${done?" done":""}" data-act="todayPick" data-k="${k}"><span class="tm">${lab}</span><span class="tn">${done?"—":"+ Choisir un plat"}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;};
   const left=+($("#b-shop")&&$("#b-shop").textContent)||0;
   const nn=newsCount(),who=[...new Set(Object.entries(shNews).filter(([id])=>recipes[id]).map(([,v])=>v.by))].join(", ");
-  el.innerHTML=(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
+  const tr=mealsToRate();const rateCards=tr.map(x=>`<div class="rate-card"><span>C'était comment, <b>${esc(recipes[x.id].name)}</b> <span class="muted">(${x.dn.toLowerCase()} ${x.m})</span> ?</span><div class="row"><button type="button" class="btn primary" data-act="rateMeal" data-key="${x.w}#${x.k}">★ Noter</button><button type="button" class="btn ghost" data-act="rateSkip" data-key="${x.w}#${x.k}">Passer</button></div></div>`).join("");
+  const next=(()=>{for(const[m]of MEALS){const k=slotKey(day,m),s=sl[k];if(s&&recipes[s.id]&&!(m==="midi"?hr>=15:hr>=22)&&String(recipes[s.id].steps||"").trim())return s;}return null;})();
+  el.innerHTML=rateCards+(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
+    ${next?`<button type="button" class="btn primary today-cook" data-act="cook" data-id="${esc(next.id)}">👨‍🍳 Cuisiner : ${esc(recipes[next.id].name)}</button>`:""}
     <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="tab" data-v="week">📅 Ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
@@ -3053,7 +3097,59 @@ $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#pr
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
 let recSheetId=null;
-function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+let recTab="ing";
+/* ---------- cooking mode: one step per screen, screen kept on, timers ---------- */
+let cook=null,cookWake=null,cookTimer=null;
+function stepIngs(r,txt,f){const t=norm(txt);return(r.ing||[]).filter(i=>{const w=norm(i.n).replace(/\([^)]*\)/g," ").split(/[\s,'’-]+/).filter(x=>x.length>3);return w.some(x=>t.includes(x.replace(/s$/,"")));})
+  .map(i=>{const[b,u]=toBase(i.q,i.u);const q=fmt(b*f,u);return(q?q+" ":"")+i.n;});}
+function stepDuration(txt){const t=txt.toLowerCase();let m=t.match(/(\d+)\s*h(?:eures?)?\s*(\d+)?/);if(m)return(+m[1])*3600+(m[2]?+m[2]*60:0);
+  m=t.match(/(\d+)\s*(?:à\s*\d+\s*)?min/);if(m)return(+m[1])*60;m=t.match(/(\d+)\s*(?:secondes|sec)\b/);return m?+m[1]:0;}
+const dur=s=>s>=3600?`${Math.floor(s/3600)} h ${String(Math.floor(s%3600/60)).padStart(2,"0")}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+async function startCook(id,n){const r=recipes[id];if(!r)return;const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);if(!steps.length)return;
+  cook={id,i:0,steps,n:n||viewServ[id]||menu.people,done:false};renderCook();$("#cookSheet").hidden=false;
+  try{if(navigator.wakeLock)cookWake=await navigator.wakeLock.request("screen");}catch(e){}}
+function stopCook(){cook=null;try{cookWake&&cookWake.release();}catch(e){}cookWake=null;$("#cookSheet").hidden=true;}
+document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&cook&&!cookWake){try{cookWake=await navigator.wakeLock.request("screen");}catch(e){}}});
+function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook();return;}const f=cook.n/(r.serves||4);
+  if(cook.done){$("#cookIn").innerHTML=`<div class="row cook-top"><span>${esc(r.name)}</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
+    <div class="cook-big">Bon appétit ! 🍽️</div><p style="opacity:.8;margin:0">C'était comment ?</p>${rateHtml(cook.id)}`;return;}
+  const s=cook.steps[cook.i],ing=stepIngs(r,s,f),d=stepDuration(s);
+  $("#cookIn").innerHTML=`<div class="row cook-top"><span>Étape ${cook.i+1} sur ${cook.steps.length} · ${esc(r.name)} · ${cook.n} pers.</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
+    <div class="cook-dots">${cook.steps.map((_,j)=>`<i class="${j<=cook.i?"on":""}"></i>`).join("")}</div>
+    <div class="cook-big">${esc(s)}</div>
+    ${ing.length?`<div class="cook-ing">${ing.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+    ${d?`<button type="button" class="btn cook-timer" data-act="cookTimer" data-s="${d}">${cookTimer?`⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter`:`⏱ Lancer le minuteur · ${dur(d)}`}</button>`:(cookTimer?`<button type="button" class="btn cook-timer" data-act="cookTimer">⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter</button>`:"")}
+    <details class="cook-all"><summary>Tous les ingrédients</summary>${(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<div>${esc(fmt(b*f,u))} ${esc(i.n)}</div>`;}).join("")}</details>
+    <div class="row cook-nav"><button type="button" class="btn" data-act="cookPrev" ${cook.i?"":"disabled"}>← Précédente</button><button type="button" class="btn primary" data-act="cookNext">${cook.i<cook.steps.length-1?"Suivante →":"Terminé ✓"}</button></div>`;}
+function beep(){try{const c=new(window.AudioContext||window.webkitAudioContext)();[0,.35,.7].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.25,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.3);o.start(c.currentTime+t);o.stop(c.currentTime+t+.3);});}catch(e){}
+  try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300]);}catch(e){}}
+setInterval(()=>{if(!cookTimer)return;if(Date.now()>=cookTimer.end){const l=cookTimer.label;cookTimer=null;beep();toast("⏱ Minuteur terminé : "+l);}if(cook)renderCook();},1000);
+// swipe between steps
+(()=>{let x0=0,y0=0;document.addEventListener("touchstart",e=>{if(!cook||$("#cookSheet").hidden)return;x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
+  document.addEventListener("touchend",e=>{if(!cook||$("#cookSheet").hidden||cook.done)return;const t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.5)return;
+    if(dx<0&&cook.i<cook.steps.length-1)cook.i++;else if(dx>0&&cook.i>0)cook.i--;renderCook();},{passive:true});})();
+/* ---------- rating after the meal ---------- */
+let rateDraft={};
+function rateHtml(id){const d=rateDraft[id]||{stars:0,tags:[]};
+  return`<div class="rate-stars">${[1,2,3,4,5].map(n=>`<button type="button" data-act="rateStar" data-id="${esc(id)}" data-n="${n}" aria-label="${n} étoile${n>1?"s":""}">${n<=d.stars?"★":"☆"}</button>`).join("")}</div>
+    <div class="chips" style="flex-wrap:wrap">${RATE_TAGS.map(t=>`<button type="button" class="chip" data-act="rateTag" data-id="${esc(id)}" data-t="${esc(t)}" aria-pressed="${d.tags.includes(t)}">${esc(t)}</button>`).join("")}</div>
+    <button type="button" class="btn primary" data-act="rateSave" data-id="${esc(id)}" ${d.stars?"":"disabled"} style="align-self:flex-start">Enregistrer la note</button>`;}
+function openRate(id,slot){rateDraft[id]={stars:0,tags:[],slot};const r=recipes[id];
+  $("#rateIn").innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>C'était comment ?</h2><button type="button" class="btn ghost" data-act="rateClose">Plus tard</button></div><p style="margin:0"><b>${esc(r.name)}</b></p><div id="rateBody">${rateHtml(id)}</div>`;$("#rateSheet").hidden=false;}
+function saveRating(id){const d=rateDraft[id],r=recipes[id];if(!d||!d.stars||!r)return;
+  saveRecipe(id,Object.assign({},r,{ratings:[...(r.ratings||[]),{at:Date.now(),stars:d.stars,tags:d.tags}].slice(-20)}));
+  if(d.slot){const[w,k]=d.slot.split("#");const s=((menu.weeks||{})[w]||{})[k];if(s){s.rated=true;saveMenu();}}
+  delete rateDraft[id];toast("Merci ! Note enregistrée");}
+// the meals already eaten (today and the 2 days before) that are not rated yet
+function mealsToRate(){const out=[],now=new Date(),h=now.getHours();
+  for(let back=0;back<3;back++){const d=addDays(new Date(now.getFullYear(),now.getMonth(),now.getDate()),-back),w=ymd(mondayOf(d)),dn=DAYS[(d.getDay()+6)%7],wk=(menu.weeks||{})[w]||{};
+    for(const[m]of MEALS){if(back===0&&(m==="midi"?h<14:h<21))continue;const k=slotKey(dn,m),s=wk[k];if(s&&recipes[s.id]&&!s.rated&&!s.noRate)out.push({w,k,id:s.id,dn,m});}}
+  return out.slice(0,2);}
+// ratings: [{at,stars,tags}] kept in the recipe (synced); the average shows on the sheet and steers suggestions
+const RATE_TAGS=["À refaire","Trop long","Trop salé","Pas assez relevé","Les enfants ont aimé","Léger et bon"];
+function ratingOf(r){const l=(r&&r.ratings)||[];if(!l.length)return null;return{avg:l.reduce((a,x)=>a+x.stars,0)/l.length,n:l.length,last:l[l.length-1]};}
+const starTxt=v=>"★".repeat(Math.round(v))+"☆".repeat(5-Math.round(v));
 function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
@@ -3061,24 +3157,35 @@ function renderRecSheet(){
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   const shBox=r.shared?`<div class="note" style="display:flex;flex-direction:column;gap:8px"><span>Recette de <b>${esc(r.sharedBy||"un proche")}</b> (lecture seule).${r.linkOnly?" Elle vient d'un site : ouvrez-la avec « Voir la recette d'origine ».":""}</span>
       <div class="row">${r.linkOnly&&r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine ↗</a>`:`<button type="button" class="btn" data-act="copyShared">Copier dans mon carnet</button>`}</div></div>`:"";
-  $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
-      <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
-    <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span><span style="flex:1"></span>${photoBtn(r)}</div>
-    <div class="row"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser (copie dans mon carnet)":"Modifier la recette"}</button>${rPhotoSrc(id)?"":recPhotoBlock(id)}</div>
-    ${rPhotoSrc(id)?recPhotoBlock(id,true):""}
-    <div class="serv-row"><span class="label">Ingrédients pour</span>
+  const ph=rPhotoSrc(id),rt=ratingOf(r),nut=nutri(r);
+  const tab=(v,l)=>`<button type="button" class="chip" data-act="recTab" data-v="${v}" aria-pressed="${recTab===v}">${l}</button>`;
+  const cats=`<div class="field"${r.shared?' hidden':""}><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
+      ${r.cat==="Entrée"&&canMain(r)?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en plat, les quantités sont multipliées (« pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["2","×2"],["1.5","×1,5"]].map(([v,l])=>`<span class="dchip${String(r.mainFactor||2)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}" aria-pressed="${String(r.mainFactor||2)===v}">${l}</button></span>`).join("")}</div>`
+       :MAIN_CATS.includes(r.cat)&&inCat(r,"Entrée")?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en entrée, elle compte pour une demi-portion.</span>`:""}</div>`;
+  let body="";
+  if(recTab==="ing")body=`<div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
-    ${shBox}<div class="field"${r.shared?' hidden':""}><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
-      ${r.cat==="Entrée"&&canMain(r)?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en plat, les quantités sont multipliées (« pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["2","×2"],["1.5","×1,5"]].map(([v,l])=>`<span class="dchip${String(r.mainFactor||2)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}">${l}</button></span>`).join("")}</div>`
-       :MAIN_CATS.includes(r.cat)&&inCat(r,"Entrée")?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en entrée, elle compte pour une demi-portion.</span>`:""}</div>
-    <ul class="ings">${ings}</ul>
-    <div class="nat-box">${natureHtml(r)}</div>
-    ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
-    <div class="row">${shopBtn(id,p)}
-      ${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine</a>`:""}</div>
-    <div class="row" style="justify-content:space-between"><button type="button" class="link" data-act="recInList">Modifier ou supprimer dans Recettes</button><button type="button" class="btn primary" data-act="closeRec">Revenir</button></div>`;
+    ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
+  else if(recTab==="steps")body=steps.length?`<ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`;
+  else body=`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
+    <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
+    <div class="nat-box">${natureHtml(r)}</div>${cats}
+    ${rt?`<div class="field"><span class="label">Vos notes</span>${(r.ratings||[]).slice(-5).reverse().map(x=>`<span style="font-size:13px">${starTxt(x.stars)} · ${new Date(x.at).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}${x.tags&&x.tags.length?" · "+esc(x.tags.join(", ")):""}</span>`).join("")}</div>`:""}
+    <div class="row">${photoBtn(r)}${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine ↗</a>`:""}<button type="button" class="btn" data-act="rateOpen" data-id="${esc(id)}">★ Noter</button></div>
+    ${r.shared?"":`<div class="row">${confirmDel===id?`<span>Supprimer cette recette ?</span><button class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button class="btn ghost" data-act="delNo">Annuler</button>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}</div>`}`;
+  $("#recSheetIn").innerHTML=`<div class="row rs-head"><span></span><button type="button" class="btn" data-act="closeRec">Fermer</button></div>
+    ${ph?recPhotoBlock(id,true):`<div class="row">${recPhotoBlock(id)}</div>`}
+    <div><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}${showOn("nut")?" · "+esc(fmtNut(nut,true)):""}${rt?` · <b class="rs-stars">${starTxt(rt.avg)}</b> (${rt.n})`:""}</div></div>
+    ${shBox}
+    <div class="rs-acts">
+      <button type="button" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}"><span>${r.fav?"★":"☆"}</span>Favori</button>
+      <button type="button" data-act="toggle" data-id="${esc(id)}"><span>📅</span>+ Menu</button>
+      <button type="button" data-act="recTab" data-v="ing"><span>🛒</span>Courses</button>
+      <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button></div>
+    ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
+    <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
+    ${body}`;
 }
 $("#recSheet").addEventListener("click",e=>{if(e.target.id==="recSheet")$("#recSheet").hidden=true;});
 function openRecipe(id){
