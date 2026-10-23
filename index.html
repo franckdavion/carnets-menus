@@ -3183,7 +3183,7 @@ function renderEquip(){const e=equip(),box=$("#equipBox");if(!box)return;
    <span class="label" style="margin-top:8px">Autocuiseur (cocotte-minute)</span><div class="chips">${ch("pc",1,"Oui")}${ch("pc",0,"Non")}</div>`;
   const se=$("#setEquip");if(se)se.textContent=[e.hob==="gaz"?"Gaz":(e.hob==="induction"?"Induction":"Vitro")+" 1 à "+e.crans,e.oven==="ct"?"chaleur tournante":"four traditionnel",e.af?"air fryer "+e.af+" L":"sans air fryer"].join(" · ");}
 try{renderEquip();}catch(e){}
-const MODE_ICON={four:"🔥",poele:"🍳",cocotte:"🍲",marmite:"🍲",airfryer:"🌀",autocuiseur:"♨️"};
+const MODE_ICON={cocottefour:"🍲",four:"🔥",poele:"🍳",cocotte:"🍲",marmite:"🍲",airfryer:"🌀",autocuiseur:"♨️"};
 function stepsToggle(id,x){if(!x.d)return"";
   return`<div class="row step-mode"><button type="button" class="chip" data-act="stepMode" data-v="det" aria-pressed="${x.useDet}">📝 Détaillée</button><button type="button" class="chip" data-act="stepMode" data-v="court" aria-pressed="${!x.useDet}">Courte</button></div>
     ${!x.d.same&&x.short.length?`<p class="muted" style="font-size:13px;margin:4px 0">${x.useDet?"Cette version détaillée a été écrite pour la recette d'origine : vous avez modifié les étapes depuis.":"Vous avez modifié les étapes : votre version est affichée. La version détaillée (écrite pour la recette d'origine) reste disponible."}</p>`:""}`;}
