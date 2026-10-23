@@ -281,6 +281,7 @@ input,select,textarea{font-size:16px!important}
 .sp-m{flex:0 0 34px;font-size:12px;color:var(--muted)}
 .sp-n{flex:1;min-width:0;background:none;border:0;padding:0;font:inherit;font-size:14px;font-weight:600;color:var(--ink);text-align:left}
 .sp-n small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.sp-swap{flex:0 0 36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--accent);font-size:17px;font-weight:700;touch-action:manipulation}
 .sp-lock{flex:0 0 auto;border:1px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;min-height:36px;touch-action:manipulation}
 .sp-lock.on{background:var(--soft);border-color:var(--line);color:var(--ink)}
 #shopList .item{grid-template-columns:12px minmax(0,1fr) auto;row-gap:4px;align-items:start}
@@ -1368,6 +1369,7 @@ function shopPlanHtml(sel){
     const lines=MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];if(!s||!recipes[s.id])return"";if(!s.lock)unl++;
       const sub=[s.entree&&recipes[s.entree]?"Entrée : "+nm(s.entree):"",s.dessert&&recipes[s.dessert]?"Dessert : "+nm(s.dessert):""].filter(Boolean).join(" · ");
       return`<div class="sp-meal${s.lock?" ok":""}"><span class="sp-m">${lab}</span><button type="button" class="sp-n" data-act="viewRec" data-id="${esc(s.id)}">${esc(nm(s.id))}${sub?`<small>${esc(sub)}</small>`:""}<small>${s.n} pers.</small></button>
+        <button type="button" class="sp-swap" data-act="shopSwap" data-w="${w}" data-k="${k}" aria-label="Changer de plat">↻</button>
         <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"🔒 Validé":"🔓 Valider"}</button></div>`;}).join("");
     return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
   return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas à valider`:"· tout est validé ✓"}</span></summary>${days}
@@ -2254,7 +2256,7 @@ document.addEventListener("click",e=>{
     const v=validatedUses(id);if(v.length){toast(`Déjà dans la liste avec le menu validé (${v.join(", ")}) : pour changer les quantités, touchez « Validé » dans Courses`);return;}const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
   else if(a==="shopRm"){if(menu.shopExtra){delete menu.shopExtra[b.dataset.id];render();saveMenu();}}
-  else if(a==="closePick")$("#pickSheet").hidden=true;
+  else if(a==="closePick"){$("#pickSheet").hidden=true;shopSwapCtx=null;}
   else if(a==="ideaMode"){ideaMode=b.dataset.v;favShown=10;render();}
   else if(a==="ideaFavMore"){favShown+=20;render();}
   else if(a==="reroll"){ideaSeen=[...ideaSeen,...ideaIds].slice(-30);ideaIds=[];render();}
@@ -2295,6 +2297,7 @@ document.addEventListener("click",e=>{
   else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
   else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
+  else if(a==="shopSwap"){const w=b.dataset.w,k=b.dataset.k;shopSwapCtx={w,k};if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}openPick(k,"main");}
   else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock)t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
   else if(a==="lockYes")lockConfirm();
   else if(a==="lockTog"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){i.buy=!i.buy;renderLock();}}
@@ -2826,8 +2829,24 @@ function pickPool(){
 }
 function flashSlot(k){setTimeout(()=>{const el=document.querySelector(view==="week"?`[data-wslot="${k}"]`:`[data-slot="${k}"]`);if(!el||(view!=="menu"&&view!=="week"))return;
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1600);},90);}
+// changing a dish from Courses: if the meal was already validated, its old ingredients leave the list first
+let shopSwapCtx=null;
+function releaseMeal(w,k){const s=((menu.weeks||{})[w]||{})[k];if(!s||!s.lock)return 0;
+  const q=()=>Object.fromEntries(shopping(true).map(i=>[i.key,i.q]));const bt=menu.bought;
+  const L1=q();menu.bought={};const R1=q();menu.bought=bt;delete s.lock;const L0=q();menu.bought={};const R0=q();menu.bought=bt;
+  const today=ymd(new Date());let gone=0;menu.bought=Object.assign({},menu.bought);menu.have=Object.assign({},menu.have);
+  for(const key of Object.keys(R1)){const d=R1[key]-(R0[key]||0),cur=(L1[key]||0)-(L0[key]||0);if(d<=1e-6)continue;
+    if(cur>1e-6)gone++;
+    const red=d-cur,b=menu.bought[key];if(red>1e-6&&b&&b.until>=today){const nq=b.q-red;if(nq<=1e-6)delete menu.bought[key];else b.q=nq;} // undo this meal's "j'en ai déjà"
+    if(menu.have[key]&&!R0[key])delete menu.have[key];}
+  return gone;}
 function setPicked(id){
   const k=pickKey, old=W()[k];
+  const sw=shopSwapCtx&&shopSwapCtx.k===k&&shopSwapCtx.w===curWeek&&pickRole==="main"&&old&&old.id!==id?shopSwapCtx:null;shopSwapCtx=null;
+  if(sw&&old.lock){const gone=releaseMeal(sw.w,k),was=recipes[old.id]?recipes[old.id].name:"l'ancien plat";
+    W()[k]=Object.assign({},old,{id});delete W()[k].lock;$("#pickSheet").hidden=true;render();saveMenu();
+    toast(`« ${was} » retiré de la liste (${gone} ingrédient${gone>1?"s":""})`);
+    setTimeout(()=>lockPreview([{w:sw.w,k}]),120);return;}
   if(pickRole==="main")W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});
   else{if(!old)return;old[pickRole]=id;}
   $("#pickSheet").hidden=true;render();saveMenu();flashSlot(k);
