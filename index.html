@@ -1857,9 +1857,9 @@ const PH_PLACE=/commune|ville|village|hameau|rivi[eè]re|fleuve|d[ée]partement|
 const autoKey=r=>norm(r.name);
 function autoList(id){const r=recipes[id];if(!r)return[];const c=autoCache[autoKey(r)];if(c)return c.list||[];
   if(!autoPend.has(id)){autoPend.add(id);autoQ.push(id);autoPump();}return[];}
-function autoPump(){while(autoBusy<2&&autoQ.length){const id=autoQ.shift();autoBusy++;
+function autoPump(){while(autoBusy<4&&autoQ.length){const id=autoQ.shift();autoBusy++;
   findPhotos(recipes[id]).then(list=>{const r=recipes[id];if(r){autoCache[autoKey(r)]={list,t:Date.now()};try{LS.set(AUTOPH,autoCache);}catch(e){}}})
-    .catch(()=>{}).finally(()=>{autoBusy--;autoPend.delete(id);clearTimeout(autoT);autoT=setTimeout(()=>{render();},400);autoPump();});}}
+    .catch(()=>{}).finally(()=>{autoBusy--;autoPend.delete(id);if(!autoT)autoT=setTimeout(()=>{autoT=null;render();},600);autoPump();});}}
 // "Gratin de chou-fleur léger au fromage frais" → "gratin chou-fleur": the words that name the dish
 const PH_STOP=new Set("de du des d la le les l au aux à a et en avec sans sur pour façon style ma mon mes maison express rapide facile léger légère légers légères allégé allégée crémeux crémeuse crémeuses fondant fondante simple simplifié simplifiée revisité revisitée minute moelleux moelleuse croustillant croustillante gourmand gourmande healthy recette meilleure".split(" "));
 function phKeywords(name){return name.toLowerCase().replace(/[()&,:;!?.«»"]/g," ").replace(/(pommes?|noix|fruits?|haricots?) de (terre|saint-jacques|coco|mer|cajou)/g,"$1_de_$2").split(/\s+/).filter(w=>w&&!PH_STOP.has(w)&&!/^\d/.test(w)&&!/^(d|l|qu)'/.test(w)).slice(0,3).join(" ").replace(/_/g," ");}
@@ -1878,7 +1878,7 @@ async function findPhotos(r,max){
       if(x.ok){const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
         for(const pg of pages){if(pg.thumbnail&&pg.thumbnail.source&&!PH_PLACE.test(pg.description||"")&&!PH_BAD.test(pg.thumbnail.source))add({u:pg.thumbnail.source,page:"https://fr.wikipedia.org/wiki/"+encodeURIComponent((pg.title||"").replace(/ /g,"_")),src:"Wikipédia"});}}}catch(e){}}
   // 3. Wikimedia Commons
-  for(const q of [...new Set([key,head,key2].filter(Boolean))]){if(out.length>=want)break;
+  for(const q of [...new Set([key,head,key2].filter(Boolean))]){if(out.length>=(max?want:2))break; // automatic: Commons only when Wikipédia found little
     try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+want+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?|pdf|djvu)$/i.test(pg.title||"")&&!PH_BAD.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
@@ -1918,10 +1918,10 @@ function choosePhoto(c){const r=recipes[photoId];if(!r||!c)return;const n=Object
   saveRecipe(photoId,n);$("#photoSheet").hidden=true;toast("Photo choisie");}
 $("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("#photoQ").value);});
 document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG")return;
-  if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(render,200);return;}
+  if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);return;}
   if(!im.dataset.auto)return;
   const r=recipes[im.dataset.auto];if(!r)return;const c=autoCache[autoKey(r)];if(!c||!c.list)return;
-  const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(render,200);}},true);
+  const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);}},true);
 function autoPhoto(id){const r=recipes[id],l=autoList(id);if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
