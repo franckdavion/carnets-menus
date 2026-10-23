@@ -325,6 +325,9 @@ input,select,textarea{font-size:16px!important}
 :root[data-pal="ardoise"] .pill.p3{color:#9DBCF0}@media (prefers-color-scheme: dark){:root[data-dark="auto"] .pill.p3{color:#9DBCF0}}
 .tl-ph{width:48px;height:48px;border-radius:10px;object-fit:cover;flex:0 0 48px}
 .set-head{justify-content:space-between;align-items:center;flex-wrap:nowrap;position:sticky;top:0;z-index:3;background:var(--bg);padding:10px 0;margin-top:-10px}
+.dish.has-ph{grid-template-columns:56px minmax(0,1fr) auto}.dish-ph{width:56px;height:56px;border-radius:12px;object-fit:cover}
+button.pick-item{align-items:center}.pi-ph{width:40px;height:40px;border-radius:9px;object-fit:cover;flex:0 0 40px}.pi-n{flex:1;min-width:0}
+.ph-none{display:flex;align-items:center;justify-content:center;background:var(--soft);font-size:18px}
 .day-past{font-size:13px;color:var(--muted);padding:6px 4px}
 .week-cta{width:100%;min-height:48px;margin-top:10px}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
@@ -1277,7 +1280,7 @@ function renderIdea(){
   if(mode==="loading"){el.innerHTML='<span class="muted">Chargement des recettes…</span>';return;}
   const favIds=Object.keys(recipes).filter(id=>recipes[id].fav).sort((x,y)=>recipes[x].name.localeCompare(recipes[y].name,"fr"));
   const tabs=`<div class="chips"><button type="button" class="chip" data-act="ideaMode" data-v="sugg" aria-pressed="${ideaMode!=="fav"}">Suggestions</button><button type="button" class="chip" data-act="ideaMode" data-v="fav" aria-pressed="${ideaMode==="fav"}">★ Mes favoris${favIds.length?" ("+favIds.length+")":""}</button></div>`;
-  const row=id=>{const r=recipes[id],on=onMenu(id);return`<div class="dish"><div>
+  const row=id=>{const r=recipes[id],on=onMenu(id);return`<div class="dish has-ph">${thumbHtml(id,"dish-ph")}<div>
      <button type="button" class="idea-name" data-act="viewRec" data-id="${esc(id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${r.fav?"★ ":""}${esc(r.name)}</h3></button>
      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}<button type="button" class="link" data-act="viewRec" data-id="${esc(id)}">Voir la recette</button></div></div>
      <div class="ctl"><button type="button" class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div></div>`;};
@@ -1984,6 +1987,9 @@ async function setRecipePhoto(id,file){const r=recipes[id];if(!r||!file)return;
   catch(e){toast("Cette image n'a pas pu être lue");}}
 function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,null);const n=Object.assign({},r);delete n.photo;saveRecipe(id,n);toast("Photo retirée");}
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";$("#photoSheet").hidden=true;}});
+// small photo of a recipe for lists (suggestions, favourites, choosing a dish)
+function thumbHtml(id,cls){const r=recipes[id],s=r?rPhotoSrc(id):"";
+  return s?`<img class="${cls}" src="${esc(s)}" alt="" loading="lazy"${r&&!r.photo&&!r.pick&&s!==r.image?` data-auto="${esc(id)}"`:""}>`:`<span class="${cls} ph-none" aria-hidden="true">🍽️</span>`;}
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
@@ -3131,7 +3137,7 @@ function renderPick(){
     .sort((a,b)=>(cats?(inCats(b[1],cats)-inCats(a[1],cats)):0)||a[1].name.localeCompare(b[1].name,"fr"));
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
-    <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
+    ${thumbHtml(id,"pi-ph")}<span class="pi-n">${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
     :(()=>{const near=q?closeNames($("#pickQ").value,Object.keys(recipes)):[];
       return near.length?`<p class="muted" style="margin-bottom:4px">Pas de « ${esc($("#pickQ").value.trim())} »… vouliez-vous dire :</p>`+near.map(id=>`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${esc(recipes[id].name)}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(recipes[id].cat||"")}</span></button>`).join("")
         :`<p class="muted">${q?`Aucune recette « ${esc($("#pickQ").value.trim())} » dans votre carnet.`:"Aucune recette ne correspond."}</p>`;})())+(all.length>list.length?`<p class="muted" style="font-size:13px">${all.length-list.length} autres : précisez la recherche.</p>`:"");
@@ -3158,7 +3164,7 @@ function renderSugg(){
   const kinds=new Set(); suggNow=[];
   for(const id of ranked){const kd=kindOf(recipes[id]);if(!kinds.has(kd)){kinds.add(kd);suggNow.push(id);}if(suggNow.length>=5)break;}
   for(const id of ranked){if(suggNow.length>=5)break;if(!suggNow.includes(id))suggNow.push(id);}
-  const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${pickRole==="main"?KIND_LABEL[kindOf(r)]:Math.round(nutri(r).k/10)*10+" kcal"}${r.time?" · "+r.time+" min":""}</span></button>`;};
+  const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}">${thumbHtml(id,"pi-ph")}<span class="pi-n">${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${pickRole==="main"?KIND_LABEL[kindOf(r)]:Math.round(nutri(r).k/10)*10+" kcal"}${r.time?" · "+r.time+" min":""}</span></button>`;};
   const cats=ROLE_CATS[pickRole];
   const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&(cats?inCats(recipes[id],cats):canMain(recipes[id]))&&id!==curId)
     .map(id=>[id,score(id)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
@@ -3247,7 +3253,7 @@ function runFridge(){
     const hit=main.filter(i=>matchIng(have,i.n));
     return{id,r,hit:hit.length,tot:main.length,miss:main.filter(i=>!matchIng(have,i.n)).map(i=>i.n)};
   }).filter(x=>x.hit>0).sort((a,b)=>(b.hit/b.tot)-(a.hit/a.tot)||b.hit-a.hit).slice(0,4);
-  const rows=scored.length?`<div class="list">${scored.map(x=>`<div class="dish"><div><button type="button" class="idea-name" data-act="viewRec" data-id="${esc(x.id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${esc(x.r.name)}</h3></button>
+  const rows=scored.length?`<div class="list">${scored.map(x=>`<div class="dish has-ph">${thumbHtml(x.id,"dish-ph")}<div><button type="button" class="idea-name" data-act="viewRec" data-id="${esc(x.id)}" style="border:none;background:none;padding:0;text-align:left"><h3>${esc(x.r.name)}</h3></button>
       <div class="meta">${x.hit} sur ${x.tot} ingrédients${x.miss.length?" · manque : "+esc(x.miss.slice(0,4).join(", "))+(x.miss.length>4?"…":""):""}</div>
       <button type="button" class="link" data-act="viewRec" data-id="${esc(x.id)}">Voir la recette</button></div>
       <div class="ctl"><button type="button" class="add${onMenu(x.id)?" on":""}" data-act="toggle" data-id="${esc(x.id)}">${onMenu(x.id)?"✓ Au menu":"+ Menu"}</button></div></div>`).join("")}</div>`
