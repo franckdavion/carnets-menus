@@ -525,7 +525,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
   <!-- RÉGLAGES -->
   <section class="view" id="v-set" hidden>
-    <h2>Réglages</h2>
+    <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap"><h2>Réglages</h2><button type="button" class="btn primary" data-act="closeSet">Fermer</button></div>
     <div class="set-sec">Menus</div>
     <div class="set-list">
       <div class="set-row"><span class="si">👥</span><span class="st"><b>Nombre de personnes</b><small>par défaut pour chaque repas</small></span>
@@ -2404,6 +2404,8 @@ document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b)return;
   const a=b.dataset.act, id=b.dataset.id;
   if(a==="check"||a==="checkX")return; // handled on change
+  if(a==="closeSet"||(a==="tab"&&b.dataset.v==="set"&&view==="set")){view=LS.get("cm_prevview","menu");if(view==="set")view="menu";LS.set("cm_view",view);render();window.scrollTo(0,0);return;} // back to the page we came from
+  if(a==="tab"&&b.dataset.v==="set"&&view!=="set")LS.set("cm_prevview",view);
   if(a==="tab"){clearSheetBack();document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="startView"){LS.set("cm_start",b.dataset.v);renderStart();toast(b.dataset.v==="last"?"L'appli rouvrira la dernière page utilisée":"L'appli s'ouvrira sur « "+b.textContent+" »");}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
