@@ -261,6 +261,14 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .set-row .chev{color:var(--muted);font-size:20px}.set-row .ctl{display:flex;align-items:center;gap:6px}.set-row .n{font-family:var(--f-mono);min-width:2ch;text-align:center}
 .set-row .sync-chip{border:none;background:none;margin:0;padding:0 0 0 14px;font-size:12px;color:var(--muted)}.set-row .sync-chip::before{left:2px}
 .copyright{text-align:center;font-size:12px;color:var(--muted);margin:18px 0 8px;line-height:1.6}
+.wc .wn,.wc .ws{display:flex;align-items:flex-start;gap:4px}.wc .wn>span:first-child,.wc .ws>span:first-child{flex:1;min-width:0}
+.wx{flex:none;width:24px;height:24px;border-radius:50%;border:none;background:#FCEBEB;color:#A32D2D;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-2px -2px 0 0}
+.wc.editing{background:color-mix(in srgb,var(--surface) 85%,#FCEBEB)}
+.sl-line{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:4px 0}.sl-line>:first-child{flex:1;min-width:0}
+.rx{flex:none;border:1px solid #E24B4A;color:#A32D2D;background:transparent;border-radius:999px;font-size:13px;font-weight:600;padding:6px 10px}
+.undo-bar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:40;max-width:560px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px}
+.undo-bar[hidden]{display:none!important}.undo-bar span{flex:1;min-width:0}
+.undo-bar button{border:none;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -381,7 +389,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
   <!-- SEMAINE -->
   <section class="view" id="v-week" hidden>
-    <div class="row" style="justify-content:space-between;align-items:baseline"><h2 id="weekTitle">Semaine</h2></div>
+    <div class="row" style="justify-content:space-between;align-items:baseline;flex-wrap:nowrap"><h2 id="weekTitle">Semaine</h2><button class="btn" data-act="weekEdit" id="weekEditBtn">Modifier</button></div>
     <div class="chips" id="weekChips"></div>
     <div class="wgrid" id="weekGrid"></div>
     <p class="muted" style="font-size:13px;margin:0">Touchez un repas pour le voir ou le modifier.</p>
@@ -693,6 +701,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<div class="undo-bar" id="undoBar" hidden><span id="undoText"></span><button type="button" data-act="undoRemove">Annuler</button></div>
 <div id="printArea"></div>
 
 <script>
@@ -1633,14 +1642,22 @@ $("#winesQ").addEventListener("input",e=>{wineQ=e.target.value;renderWines();});
 /* ---------- "Semaine" tab: the whole week at a glance, editable, shareable, printable ---------- */
 let slotK=null;
 function weekOptions(){const cur=ymd(mondayOf(new Date()));return[[cur,"Cette semaine"],[ymd(addDays(parseYmd(cur),7)),"Prochaine"],[ymd(addDays(parseYmd(cur),14)),"Dans 2 sem."]];}
+let weekEdit=false;
 function renderWeek(){
+  const eb=$("#weekEditBtn");if(eb){eb.textContent=weekEdit?"Terminé":"Modifier";eb.classList.toggle("primary",weekEdit);}
   const el=$("#weekGrid");if(!el)return;
   const ws=weekStartDate(), today=ymd(new Date());
   $("#weekTitle").textContent="Semaine du "+shortDate(ws);
   $("#weekChips").innerHTML=weekOptions().map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===curWeek}">${l}</button>`).join("");
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
-    const sub=s?[s.entree&&recipes[s.entree]?"Entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"Dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"+ "+s.extra.join(", "):""].filter(Boolean):[];
-    return`<button type="button" class="wc${isT?" today":""}${past?" past":""}${r?"":" empty"}" data-act="wcell" data-k="${k}" data-wslot="${k}">${r?`<span class="wn">${esc(r.name)}${s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""}</span>${sub.map(x=>`<span class="ws">${esc(x)}</span>`).join("")}${s.n!==menu.people?`<span class="ws">${s.n} pers.</span>`:""}`:(past?"—":"+ Choisir")}</button>`;};
+    const ed=weekEdit&&!past&&r, x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
+    const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
+    let inner=r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""),"main")
+      +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
+      +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
+      +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
+      +(s.n!==menu.people?`<span class="ws">${s.n} pers.</span>`:""):(past?"—":"+ Choisir");
+    return`<div role="button" tabindex="0" class="wc${isT?" today":""}${past?" past":""}${r?"":" empty"}${ed?" editing":""}" data-act="wcell" data-k="${k}" data-wslot="${k}">${inner}</div>`;};
   el.innerHTML=`<span class="wh"></span><span class="wh">MIDI</span><span class="wh">SOIR</span>`+DAYS.map((d,i)=>{const date=addDays(ws,i),isT=ymd(date)===today;
     return`<span class="wd${isT?" today":""}">${d.slice(0,3)}<small>${date.getDate()}</small></span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;}).join("");
 }
@@ -1651,9 +1668,10 @@ function renderSlotSheet(){
   const btn=(act,label,extra="",cls="btn")=>`<button type="button" class="${cls}" data-act="${act}" data-k="${k}" ${extra}>${label}</button>`;
   let h="";
   if(r){
-    h+=`<button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>`;
-    ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>`;});
-    if(s.extra&&s.extra.length)h+=`<span class="muted" style="font-size:13px">En plus : ${esc(s.extra.join(", "))}</span>`;
+    const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
+    h+=`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>${s.lock?"":rx("main")}</div>`;
+    ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
+    (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
       (s.lock?"":btn("swap","↻ Changer"))+btn("lock",s.lock?"Déverrouiller":"Verrouiller")
@@ -1721,6 +1739,26 @@ function applyAdd(){
   $("#addSheet").hidden=true;if(addId===ideaId)ideaId=null;render();saveMenu();
   document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
   toast(n?`« ${recipes[addId].name} » ajouté à ${n} repas`:"Menu mis à jour");
+}
+
+/* ---------- removing with "Annuler" ---------- */
+let undoStack=[], undoTimer=null;
+function snapshotSlot(k){const s=W()[k];return{w:curWeek,k,before:s?JSON.parse(JSON.stringify(s)):null};}
+function showUndo(label,snap){undoStack.push(snap);if(undoStack.length>20)undoStack.shift();
+  const bar=$("#undoBar");$("#undoText").textContent="Retiré : "+label;bar.hidden=false;clearTimeout(undoTimer);undoTimer=setTimeout(()=>{bar.hidden=true;},7000);}
+function undoRemove(){const u=undoStack.pop();if(!u)return;menu.weeks[u.w]=menu.weeks[u.w]||{};
+  if(u.before)menu.weeks[u.w][u.k]=u.before;else delete menu.weeks[u.w][u.k];
+  render();saveMenu();if(u.w===curWeek)flashSlot(u.k);
+  if(undoStack.length){$("#undoText").textContent="Remis. Encore "+undoStack.length+" retrait"+(undoStack.length>1?"s":"")+" à annuler";clearTimeout(undoTimer);undoTimer=setTimeout(()=>{$("#undoBar").hidden=true;},7000);}
+  else $("#undoBar").hidden=true;toast("Remis comme avant");}
+// remove part of a meal: main dish (whole meal), starter, dessert or one "en plus"
+function removePart(k,part,i){
+  const s=W()[k];if(!s||isPast(k))return;if(part==="main"&&s.lock){toast("Repas verrouillé : déverrouillez-le d'abord");return;}
+  const snap=snapshotSlot(k);let label="";
+  if(part==="main"){label=(recipes[s.id]||{}).name||"le repas";delete W()[k];}
+  else if(part==="entree"||part==="dessert"){label=(recipes[s[part]]||{}).name||part;delete s[part];}
+  else if(part==="extra"){const xs=s.extra||[];label=xs[Number(i)]||"";xs.splice(Number(i),1);if(!xs.length)delete s.extra;}
+  render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
 }
 
 /* ---------- everyday products ---------- */
@@ -1815,7 +1853,7 @@ document.addEventListener("click",e=>{
     if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
   else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
-  else if(a==="rmCourse"){const sl=W()[b.dataset.k];if(sl&&!isPast(b.dataset.k)){delete sl[b.dataset.role];render();saveMenu();}}
+  else if(a==="rmCourse"){removePart(b.dataset.k,b.dataset.role);}
   else if(a==="shopAdd"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
   else if(a==="shopRm"){if(menu.shopExtra){delete menu.shopExtra[b.dataset.id];render();saveMenu();}}
@@ -1855,7 +1893,7 @@ document.addEventListener("click",e=>{
   else if(a==="closeSide"){$("#sideSheet").hidden=true;}
   else if(a==="sideToggle"){toggleSide(b.dataset.t);render();renderSide();saveMenu(300);}
   else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
-  else if(a==="rmSide"){const s=W()[b.dataset.k];if(s&&s.extra){s.extra.splice(Number(b.dataset.i),1);if(!s.extra.length)delete s.extra;render();saveMenu();}}
+  else if(a==="rmSide"){removePart(b.dataset.k,"extra",b.dataset.i);}
   else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
   else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
@@ -1906,7 +1944,10 @@ document.addEventListener("click",e=>{
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
   else if(a==="wcell"){const k=b.dataset.k;slotK=k;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
   else if(a==="closeSlot"){$("#slotSheet").hidden=true;slotK=null;}
-  else if(a==="slotClear"){const k=b.dataset.k;if(W()[k]&&!W()[k].lock){delete W()[k];$("#slotSheet").hidden=true;slotK=null;render();saveMenu();flashSlot(k);toast("Case vidée");}}
+  else if(a==="slotClear"){const k=b.dataset.k;if(W()[k]&&!W()[k].lock){const snap=snapshotSlot(k);delete W()[k];$("#slotSheet").hidden=true;slotK=null;render();saveMenu();showUndo("toute la case ("+slotLabel(k)+")",snap);}}
+  else if(a==="wRm"){e.stopPropagation();removePart(b.dataset.k,b.dataset.part,b.dataset.i);if(!W()[b.dataset.k]){$("#slotSheet").hidden=true;slotK=null;}}
+  else if(a==="weekEdit"){weekEdit=!weekEdit;renderWeek();}
+  else if(a==="undoRemove")undoRemove();
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
   else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to;setTimeout(()=>{const el=to&&document.getElementById(to);const sc=$("#prefSheet .sheet-in");if(el){sc.scrollTop=0;el.scrollIntoView({block:"start",behavior:"smooth"});}else sc.scrollTop=0;},80);}
