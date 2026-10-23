@@ -55,7 +55,22 @@ button{cursor:pointer}
 .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 
 /* header */
-.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.top h1{font-size:26px}
+/* "Aujourd'hui" card at the top of the Menu tab: today's two meals and three shortcuts */
+.today{display:flex;flex-direction:column;gap:10px}
+.today-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
+.tl{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer;touch-action:manipulation}
+.tl+.tl{border-top:1px solid var(--line)}
+.tl .tm{flex:0 0 40px;font-size:13px;color:var(--muted)}
+.tl .tn{flex:1;min-width:0;font-size:16px;font-weight:600;line-height:1.3}
+.tl .tn small{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}
+.tl .tc{color:var(--accent);font-size:20px}
+.tl.empty .tn{color:var(--accent);font-weight:600}
+.tl.done .tn{color:var(--muted);font-weight:400}
+.today-acts{display:flex;gap:8px;flex-wrap:wrap}
+.today-acts .pill{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:9px 14px;font:inherit;font-size:14px;min-height:40px;touch-action:manipulation}
+.today-acts .pill b{color:var(--accent)}
 .top p{margin:4px 0 0;color:var(--muted)}
 .people{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 14px}
 .people span.n{font-family:var(--f-mono);font-size:17px;min-width:2ch;text-align:center;font-variant-numeric:tabular-nums}
@@ -286,7 +301,7 @@ body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .ing-block{display:flex;flex-direction:column;gap:6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .err{color:var(--danger);font-size:13px;min-height:1em}
 
-.now{margin:6px 0 0;font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.now{margin:0;font-size:14px;color:var(--muted)}
 .now b{font-weight:600;color:var(--accent)}
 .look-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .look{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;text-align:left;display:flex;align-items:center;gap:8px;font-size:14px}
@@ -363,16 +378,14 @@ code{font-family:var(--f-mono);font-size:.92em}
 </head><body>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1>Carnet de menus</h1>
-      <p id="now" class="now"></p>
-      <p id="sub">Choisissez les repas, la liste se fait toute seule.</p>
-    </div>
+    <h1>Carnet de menus</h1>
+    <p id="now" class="now"></p>
   </header>
 
 
   <!-- MENU -->
   <section class="view" id="v-menu">
+    <div class="today" id="today"></div>
     <div class="idea" id="idea"></div>
     <form class="idea" id="frForm">
       <span class="label">Qu'est-ce que je fais avec…</span>
@@ -1960,6 +1973,8 @@ document.addEventListener("click",e=>{
   else if(a==="prefLight"){prefDraft.lightEve=b.dataset.v==="1";$("#pl-on").setAttribute("aria-pressed",prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);}
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k,b.dataset.role||"main");
+  else if(a==="todayPick"){const cw=ymd(mondayOf(new Date()));if(curWeek!==cw){curWeek=cw;LS.set("cm_week",cw);render();}openPick(b.dataset.k,"main");}
+  else if(a==="goFridge"){const f=$("#frForm");f.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("#frIn").focus({preventScroll:true}),350);}
   else if(a==="pickSet")setPicked(id);
   else if(a==="pickRandom"){
     if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
@@ -2425,12 +2440,20 @@ function renderLook(){
   $("#lookDark").innerHTML=[["auto","Comme l'iPhone"],["off","Jamais"]].map(([v,n])=>`<button type="button" class="look" data-act="look" data-k="dark" data-v="${v}" aria-pressed="${L.dark===v}">${n}</button>`).join("");
 }
 function renderNow(){
-  const d=new Date(), txt=d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
-  let next="";
-  const h=d.getHours(), cw=ymd(mondayOf(d)), sl=(menu.weeks||{})[cw]||{}, day=DAYS[(d.getDay()+6)%7];
-  const pick=(meal,lab)=>{const s=sl[slotKey(day,meal)];return s&&recipes[s.id]?`${lab} : <b>${esc(recipes[s.id].name)}</b>`:"";};
-  if(h<14)next=pick("midi","Ce midi")||pick("soir","Ce soir"); else if(h<22)next=pick("soir","Ce soir");
-  $("#now").innerHTML=`${txt.charAt(0).toUpperCase()+txt.slice(1)} · ${d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${next?"<br>"+next:""}`;
+  const d=new Date(), txt=d.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});
+  $("#now").textContent=txt.charAt(0).toUpperCase()+txt.slice(1);
+  renderToday();
+}
+function renderToday(){
+  const el=$("#today");if(!el)return;
+  const d=new Date(),hr=d.getHours(),sl=(menu.weeks||{})[ymd(mondayOf(d))]||{},day=DAYS[(d.getDay()+6)%7];
+  const line=(meal,lab)=>{const k=slotKey(day,meal),s=sl[k],r=s&&recipes[s.id],done=meal==="midi"?hr>=15:hr>=22;
+    const sub=s?[s.entree&&recipes[s.entree]?"Entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"Dessert : "+recipes[s.dessert].name:""].filter(Boolean).join(" · "):"";
+    if(r)return`<button type="button" class="tl${done?" done":""}" data-act="viewRec" data-id="${esc(s.id)}"><span class="tm">${lab}</span><span class="tn">${esc(r.name)}${sub?`<small>${esc(sub)}</small>`:""}</span><span class="tc" aria-hidden="true">›</span></button>`;
+    return`<button type="button" class="tl empty${done?" done":""}" data-act="todayPick" data-k="${k}"><span class="tm">${lab}</span><span class="tn">${done?"—":"+ Choisir un plat"}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;};
+  const left=+($("#b-shop")&&$("#b-shop").textContent)||0;
+  el.innerHTML=`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
+    <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="propose">Proposer ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
