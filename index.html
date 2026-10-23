@@ -250,7 +250,9 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .ad{font-size:13px;font-weight:700;padding-top:10px}
 .as{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px;text-align:left;font:inherit;font-size:14px;font-weight:600;color:var(--ink);min-width:0}
 .as small{display:block;font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}
-.as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}
+.as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}.as.ask{border:2px dashed var(--accent)}
+.aask{grid-column:1/-1;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.aask b{font-size:14px}.aask .btn{text-align:left;justify-content:flex-start;min-height:44px}.aask small{display:block;font-weight:400;color:var(--muted);font-size:12px}
 #addSheet .sheet-in{height:92%}
 /* "+ Menu" chooser: the confirm button always stays in view at the bottom */
 .add-foot{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));margin:auto -16px 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -10px 14px -10px rgba(0,0,0,.4);z-index:2}
@@ -652,8 +654,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 <div class="sheet" id="addSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="addTitle">Ajouter</h2><button type="button" class="btn ghost" data-act="closeAdd">Fermer</button></div>
-    <span class="label">En tant que</span><div class="chips" id="addRoles" style="flex-wrap:wrap"></div>
-    <span class="label">Quand ? (plusieurs possibles)</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
+    <span class="label">Quand ? Touchez un ou plusieurs repas</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
     <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
   </div>
@@ -1135,6 +1136,9 @@ function renderMenu(){
           <div class="course-acts"><button class="link" data-act="pick" data-k="${k}" data-role="${c}">↻ Autre</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer ${c==="entree"?"l'entrée":"le dessert"}">✕</button></div></div>`).join("")}
         <div class="slot-acts">${s.entree?"":`<button class="link" data-act="pick" data-k="${k}" data-role="entree">+ Entrée</button>`}${s.dessert?"":`<button class="link" data-act="pick" data-k="${k}" data-role="dessert">+ Dessert</button>`}<button class="link" data-act="openSide" data-k="${k}">+ En plus</button></div>${extrasHtml(k,s,true)}</div>
         <div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une part de moins">−</button><span class="n">${s.n} p.</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une part de plus">+</button></div></div>`
+      :hasSide(s)?`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><div class="slot-main"><button class="slot-add" data-act="pick" data-k="${k}">+ Choisir le plat</button>
+        ${courses.map(c=>`<div class="course"><div class="course-main"><button class="slot-sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;<span class="chev" aria-hidden="true">›</span></button></div>
+          <div class="course-acts"><button class="link" data-act="pick" data-k="${k}" data-role="${c}">↻ Autre</button><button class="x" data-act="rmCourse" data-k="${k}" data-role="${c}" aria-label="Retirer">✕</button></div></div>`).join("")}${extrasHtml(k,s,true)}</div></div>`
       :`<div class="slot" data-slot="${k}"><span class="meal">${lab}</span><button class="slot-add${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir"}</button></div>`;}).join("")}</div>`).join("")}</div>`
     +(diff?`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="applyAll">Mettre tous les repas à ${menu.people} pers.</button></div>`:"");
 }
@@ -1675,9 +1679,9 @@ function renderWeek(){
   $("#weekTitle").textContent="Semaine du "+shortDate(ws);
   $("#weekChips").innerHTML=weekOptions().map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===curWeek}">${l}</button>`).join("");
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
-    const ed=weekEdit&&!past&&r, x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
+    const side=!r&&hasSide(s), ed=weekEdit&&!past&&(r||side), x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
     const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
-    let inner=r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""),"main")
+    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
       +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
       +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
       +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
@@ -1692,14 +1696,15 @@ function renderSlotSheet(){
   $("#slotTitle").textContent=slotLabel(k)+" · "+shortDate(addDays(weekStartDate(),DAYS.indexOf(k.split("|")[0])));
   const btn=(act,label,extra="",cls="btn")=>`<button type="button" class="${cls}" data-act="${act}" data-k="${k}" ${extra}>${label}</button>`;
   let h="";
-  if(r){
+  if(r||hasSide(s)){
     const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
-    h+=`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>${s.lock?"":rx("main")}</div>`;
+    h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>${s.lock?"":rx("main")}</div>`
+      :`<div class="sl-line"><span class="muted">Plat à choisir</span>${past?"":btn("pick","+ Choisir un plat","","btn primary")}</div>`;
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
     (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
-      (s.lock?"":btn("swap","↻ Changer"))+btn("lock",s.lock?"Déverrouiller":"Verrouiller")
+      (r?(s.lock?"":btn("swap","↻ Changer"))+btn("lock",s.lock?"Déverrouiller":"Verrouiller"):"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
   }else h+=past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:`<div class="slot-acts2">${btn("pick","+ Choisir un plat")}</div>`;
@@ -1725,43 +1730,63 @@ function printWeek(){
 }
 
 $("#slotSheet").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b&&["viewRec","swap","pick","openSide"].includes(b.dataset.act))$("#slotSheet").hidden=true;},true);
-/* ---------- "+ Menu": choose the role and one or several meals ---------- */
-let addId=null, addRole="main", addWeek=null, addSel=new Set(), addInit=new Set();
+/* ---------- "+ Menu": pick one or several meals; on a meal already planned, choose what to do ---------- */
+let addId=null, addRole="main", addWeek=null, addSel=new Map(), addInit=new Map(), addAsk=null;
 const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
+const ROLE_AS={main:"en plat",entree:"en entrée",dessert:"en dessert"};
+// a meal can hold a starter or dessert while its main dish is still to choose
+const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length);
+const slotUsed=s=>!!s&&(!!recipes[s.id]||hasSide(s));
 function openAdd(id){
   const r=recipes[id];if(!r)return;addId=id;
-  addRole=r.cat==="Dessert"?"dessert":(r.cat==="Entrée"&&!canMain(r))?"entree":"main";
-  addWeek=curWeek;addPick();$("#addSheet").hidden=false;$("#addSheet .sheet-in").scrollTop=0;
+  addRole=r.cat==="Dessert"?"dessert":(r.cat==="Entrée"&&!canMain(r))?"entree":"main"; // used on free meals
+  addWeek=curWeek;addAsk=null;addSel=new Map();
+  for(const w of weekOptions().map(x=>x[0]))for(const[k,s]of Object.entries((menu.weeks||{})[w]||{})){if(!s)continue;
+    const role=s.id===addId?"main":s.entree===addId?"entree":s.dessert===addId?"dessert":null;if(role)addSel.set(w+"#"+k,role);}
+  addInit=new Map(addSel);renderAdd();$("#addSheet").hidden=false;$("#addSheet .sheet-in").scrollTop=0;
 }
-function addPick(){ // what is already planned for this recipe in this role
-  addSel=new Set();const f=ROLE_FIELD[addRole];
-  for(const w of weekOptions().map(x=>x[0]))for(const [k,s] of Object.entries((menu.weeks||{})[w]||{}))if(s&&s[f]===addId)addSel.add(w+"#"+k);
-  addInit=new Set(addSel);renderAdd();
-}
+function addChanges(){let add=0,rem=0;for(const k of new Set([...addInit.keys(),...addSel.keys()])){const a=addInit.get(k),b=addSel.get(k);if(a===b)continue;if(b)add++;else rem++;}return[add,rem];}
 function renderAdd(){
   const r=recipes[addId];if(!r){$("#addSheet").hidden=true;return;}
   $("#addTitle").textContent="Ajouter « "+r.name+" »";
-  $("#addRoles").innerHTML=[["main","Plat"],["entree","Entrée"],["dessert","Dessert"]].map(([v,l])=>`<button type="button" class="chip" data-act="addRole" data-v="${v}" aria-pressed="${addRole===v}">${l}</button>`).join("");
   $("#addWeeks").innerHTML=weekOptions().slice(0,2).map(([v,l])=>`<button type="button" class="chip" data-act="addWeekSel" data-w="${v}" aria-pressed="${addWeek===v}">${l} · ${shortDate(parseYmd(v))}</button>`).join("");
-  const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date()), f=ROLE_FIELD[addRole];
-  const cell=(d,i,m)=>{const k=slotKey(d,m),key=addWeek+"#"+k,s=wk[k],past=ymd(addDays(ws,i))<today,on=addSel.has(key);
-    let note="Libre",dis=past;
-    if(addRole==="main"){if(s&&recipes[s.id]){note=s.id===addId?"déjà prévu":recipes[s.id].name;if(s.lock&&s.id!==addId){dis=true;note+=" 🔒";}}}
-    else{if(!s||!recipes[s.id]){dis=true;note="pas de plat";}else note=s[f]&&recipes[s[f]]?(s[f]===addId?"déjà prévu":recipes[s[f]].name):"à "+recipes[s.id].name;}
-    const repl=!dis&&!on&&note!=="Libre"&&!note.startsWith("à ")&&note!=="déjà prévu";
-    return`<button type="button" class="as${on?" on":""}${dis?" dis":""}" data-act="addCell" data-key="${key}" ${dis?"disabled":""}>${on?"✓ ":""}${m==="midi"?"Midi":"Soir"}<small>${past?"passé":esc(note)}${repl?" · remplacer":""}</small></button>`;};
-  $("#addGrid").innerHTML=DAYS.map((d,i)=>`<span class="ad">${d.slice(0,3)} ${addDays(ws,i).getDate()}</span>${cell(d,i,"midi")}${cell(d,i,"soir")}`).join("");
-  const add=[...addSel].filter(x=>!addInit.has(x)).length, rem=[...addInit].filter(x=>!addSel.has(x)).length;
-  $("#addOk").textContent=add||rem?[add?`Ajouter à ${add} repas`:"",rem?`retirer de ${rem}`:""].filter(Boolean).join(", "):"Touchez un ou plusieurs repas";
+  const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date());
+  const nm=id=>recipes[id]?recipes[id].name:"";
+  const cell=(d,i,m)=>{const k=slotKey(d,m),key=addWeek+"#"+k,s=wk[k],past=ymd(addDays(ws,i))<today,role=addSel.get(key);
+    let note=past?"passé":!slotUsed(s)?"Libre":recipes[s.id]?nm(s.id)+(s.lock?" 🔒":""):"plat à choisir";
+    if(role)note=ROLE_AS[role]+(role==="main"&&s&&recipes[s.id]&&s.id!==addId?" · remplace "+nm(s.id):"");
+    else if(!past&&slotUsed(s))note+=" · toucher pour choisir";
+    return`<button type="button" class="as${role?" on":""}${past?" dis":""}${addAsk===key?" ask":""}" data-act="addCell" data-key="${key}" ${past?"disabled":""}>${role?"✓ ":""}${m==="midi"?"Midi":"Soir"}<small>${esc(note)}</small></button>`;};
+  const ask=()=>{if(!addAsk||!addAsk.startsWith(addWeek+"#"))return"";const k=addAsk.split("#")[1],s=wk[k]||{};
+    const opt=(role,title,sub,dis)=>`<button type="button" class="btn" data-act="addAs" data-role="${role}" ${dis?"disabled":""}><span>${title}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;
+    return`<div class="aask"><b>${esc(slotLabel(k))} : que faire de « ${esc(r.name)} » ?</b>
+      ${opt("main",recipes[s.id]?"Remplacer le plat":"Mettre en plat",recipes[s.id]?(s.lock?"repas verrouillé":"à la place de "+nm(s.id)):"",s.lock&&recipes[s.id])}
+      ${opt("entree","Mettre en entrée",s.entree&&recipes[s.entree]?"à la place de "+nm(s.entree):recipes[s.id]?"avant "+nm(s.id):"")}
+      ${opt("dessert","Mettre en dessert",s.dessert&&recipes[s.dessert]?"à la place de "+nm(s.dessert):recipes[s.id]?"après "+nm(s.id):"")}
+      <button type="button" class="btn ghost" data-act="addAskNo">Annuler</button></div>`;};
+  $("#addGrid").innerHTML=DAYS.map((d,i)=>{const row=`<span class="ad">${d.slice(0,3)} ${addDays(ws,i).getDate()}</span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;
+    return row+(addAsk&&addAsk.startsWith(addWeek+"#"+d+"|")?ask():"");}).join("");
+  const[add,rem]=addChanges();
+  $("#addOk").textContent=add||rem?[add?`Valider ${add} repas`:"",rem?`retirer de ${rem}`:""].filter(Boolean).join(", "):"Touchez un ou plusieurs repas";
   $("#addOk").disabled=!(add||rem);
 }
+function addCellTap(key){
+  if(addSel.has(key)){addSel.delete(key);addAsk=null;renderAdd();return;}
+  const[w,k]=key.split("#"),s=((menu.weeks||{})[w]||{})[k];
+  if(!slotUsed(s)){addSel.set(key,addRole);addAsk=null;}else addAsk=addAsk===key?null:key; // a planned meal: ask what to do
+  renderAdd();
+}
 function applyAdd(){
-  const f=ROLE_FIELD[addRole];let n=0;
-  for(const key of addInit)if(!addSel.has(key)){const[w,k]=key.split("#"),s=(menu.weeks[w]||{})[k];if(!s)continue;
-    if(addRole==="main"){if(!s.lock)delete menu.weeks[w][k];}else delete s[f];}
-  for(const key of addSel)if(!addInit.has(key)){const[w,k]=key.split("#");menu.weeks[w]=menu.weeks[w]||{};const s=menu.weeks[w][k];
-    if(addRole==="main")menu.weeks[w][k]=Object.assign({},s||{},{id:addId,n:s&&s.n||viewServ[addId]||menu.people});else if(s)s[f]=addId;n++;}
-  $("#addSheet").hidden=true;if(addId===ideaId)ideaId=null;render();saveMenu();
+  let n=0;
+  for(const key of new Set([...addInit.keys(),...addSel.keys()])){const was=addInit.get(key),now=addSel.get(key);if(was===now)continue;
+    const[w,k]=key.split("#");menu.weeks[w]=menu.weeks[w]||{};const wk=menu.weeks[w];
+    if(was&&wk[k]){const s=wk[k];
+      if(was==="main"){if(!s.lock){if(hasSide(s))delete s.id;else delete wk[k];}}
+      else{delete s[ROLE_FIELD[was]];if(!slotUsed(s))delete wk[k];}}
+    if(now){const s=wk[k]||{};
+      wk[k]=Object.assign({n:s.n||viewServ[addId]||menu.people},s,{[ROLE_FIELD[now]]:addId});if(now==="main")wk[k].n=s.n||viewServ[addId]||menu.people;n++;}
+  }
+  $("#addSheet").hidden=true;addAsk=null;if(addId===ideaId)ideaId=null;render();saveMenu();
   document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
   toast(n?`« ${recipes[addId].name} » ajouté à ${n} repas`:"Menu mis à jour");
 }
@@ -1780,9 +1805,10 @@ function undoRemove(){const u=undoStack.pop();if(!u)return;menu.weeks[u.w]=menu.
 function removePart(k,part,i){
   const s=W()[k];if(!s||isPast(k))return;if(part==="main"&&s.lock){toast("Repas verrouillé : déverrouillez-le d'abord");return;}
   const snap=snapshotSlot(k);let label="";
-  if(part==="main"){label=(recipes[s.id]||{}).name||"le repas";delete W()[k];}
+  if(part==="main"){label=(recipes[s.id]||{}).name||"le plat";if(hasSide(s)){delete s.id;delete s.lock;}else delete W()[k];} // the starter and dessert stay
   else if(part==="entree"||part==="dessert"){label=(recipes[s[part]]||{}).name||part;delete s[part];}
   else if(part==="extra"){const xs=s.extra||[];label=xs[Number(i)]||"";xs.splice(Number(i),1);if(!xs.length)delete s.extra;}
+  if(W()[k]&&!slotUsed(W()[k]))delete W()[k];
   render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
 }
 
@@ -1881,9 +1907,10 @@ document.addEventListener("click",e=>{
   if(a==="tab"){view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
   else if(a==="toggle"){openAdd(id);}
-  else if(a==="addRole"){addRole=b.dataset.v;addPick();}
-  else if(a==="addWeekSel"){addWeek=b.dataset.w;renderAdd();}
-  else if(a==="addCell"){const key=b.dataset.key;if(addSel.has(key))addSel.delete(key);else addSel.add(key);renderAdd();}
+  else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
+  else if(a==="addCell")addCellTap(b.dataset.key);
+  else if(a==="addAs"){if(addAsk){addSel.set(addAsk,b.dataset.role);addAsk=null;renderAdd();}}
+  else if(a==="addAskNo"){addAsk=null;renderAdd();}
   else if(a==="addOk")applyAdd();
   else if(a==="closeAdd"){if(!$("#addOk").disabled)applyAdd();else $("#addSheet").hidden=true;} // closing keeps what was ticked
   else if(["serv","swap","lock","pick"].includes(a)&&b.dataset.k&&isPast(b.dataset.k)){toast("Ce jour est passé : son menu ne se modifie plus");}
