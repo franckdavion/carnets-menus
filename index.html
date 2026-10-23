@@ -312,6 +312,10 @@ input,select,textarea{font-size:16px!important}
 .prep-box{display:flex;flex-direction:column;gap:4px;margin:8px 0 10px;padding:10px 12px;border-radius:12px;background:var(--accent-soft,rgba(31,122,77,.08));border-left:4px solid var(--accent);font-size:15px;line-height:1.45}
 .prep-box.dark{background:rgba(255,255,255,.08);border-left-color:#9ED9B0;color:#eef3ee;margin-top:0}
 .step-mode{gap:6px;margin-bottom:4px}
+.mode-chips{display:flex;flex-direction:column;gap:6px;margin:8px 0}.mode-chips .row{gap:6px}
+.batch-note{margin:6px 0;padding:8px 10px;border-radius:10px;background:rgba(186,117,23,.12);font-size:14px}
+#cookSheet .batch-note{background:rgba(250,199,117,.15);color:#FAC775}
+.cook-modes{display:flex;flex-direction:column;gap:10px}#cookSheet .cook-modes .btn:not(.primary){background:rgba(255,255,255,.1);color:#eef3ee;border-color:rgba(255,255,255,.2)}.cook-modes .btn{font-size:18px;padding:14px;justify-content:flex-start}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -564,6 +568,7 @@ code{font-family:var(--f-mono);font-size:.92em}
         <span class="ctl"><button class="step sm" data-act="ppl" data-d="-1" id="pplMinus" aria-label="Une personne de moins">−</button><span class="n" id="pplN">4</span><button class="step sm" data-act="ppl" data-d="1" aria-label="Une personne de plus">+</button></span></div>
       <button class="set-row" data-act="openPrefsAt" data-to="menus"><span class="si">⚙️</span><span class="st"><b>Préférences des menus</b><small>végé, poisson, soirs légers, dissociation</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="days"><span class="si">📅</span><span class="st"><b>Style de chaque jour</b><small>rééquilibrage, poisson, fête…</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="equip"><span class="si">🍳</span><span class="st"><b>Mon équipement</b><small id="setEquip">plaque, four, air fryer, cocotte-minute</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="avoid"><span class="si">🚫</span><span class="st"><b>Ingrédients à éviter</b><small>et midis sans repas à la maison</small></span><span class="chev">›</span></button>
     </div>
     <div class="set-sec">Courses</div>
@@ -917,6 +922,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <label class="field" data-sec="avoid"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
     <div class="field" data-sec="avoid"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <button class="btn primary" type="submit" data-sec="menus days avoid">Enregistrer</button>
+    <div class="field" data-sec="equip" id="equipBox"></div>
     <div class="field" data-sec="show" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Afficher dans le menu (ce téléphone)</span>
       <div class="pref-row"><div><strong>Vins et boissons</strong></div><div class="chips" id="showWine"></div></div>
@@ -1424,7 +1430,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${esc(r.name)}</h3>
-      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&t!=="airfryer"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -2550,7 +2556,7 @@ document.addEventListener("click",e=>{
   else if(a==="cookNext"){if(!cook)return;if(cook.i<cook.steps.length-1)cook.i++;else cook.done=true;renderCook();$("#cookIn").scrollTop=0;}
   else if(a==="cookPrev"){if(cook&&cook.i>0){cook.i--;renderCook();}}
   else if(a==="cookClose"){stopCook();}
-  else if(a==="cookTimer"){if(cookTimer){cookTimer=null;}else{const s=Number(b.dataset.s)||0;if(s)cookTimer={end:Date.now()+s*1000,label:"étape "+(cook.i+1)+" · "+recipes[cook.id].name};
+  else if(a==="cookTimer"){if(cookTimer){cookTimer=null;}else{const s=Number(b.dataset.s)||0;if(s){const st=cook.steps[cook.i]||"";cookTimer={end:Date.now()+s*1000,label:"étape "+(cook.i+1)+" · "+recipes[cook.id].name,half:/mi-cuisson/i.test(st)&&s>=240?Date.now()+s*500:0,halfMsg:/secou/i.test(st)?"secouez le panier":/arros/i.test(st)?"arrosez":"retournez"};}
       try{const c=new(window.AudioContext||window.webkitAudioContext)();c.resume&&c.resume();}catch(e){} /* unlock sound on iPhone */}renderCook();}
   else if(a==="rateOpen"){$("#recSheet").hidden=true;openRate(id);}
   else if(a==="rateMeal"){const[w,k]=b.dataset.key.split("#");const s=((menu.weeks||{})[w]||{})[k];if(s)openRate(s.id,b.dataset.key);}
@@ -2559,6 +2565,8 @@ document.addEventListener("click",e=>{
   else if(a==="rateTag"){const d=rateDraft[id]=rateDraft[id]||{stars:0,tags:[]};const t=b.dataset.t;d.tags=d.tags.includes(t)?d.tags.filter(x=>x!==t):[...d.tags,t];if(cook&&cook.done&&!$("#cookSheet").hidden)renderCook();else $("#rateBody").innerHTML=rateHtml(id);}
   else if(a==="rateSave"){saveRating(id);if(cook&&cook.done)stopCook();$("#rateSheet").hidden=true;render();}
   else if(a==="rateClose"){$("#rateSheet").hidden=true;}
+  else if(a==="cookModeSet"){cookModePick[b.dataset.id]=b.dataset.v;LS.set("cm_cookmode",cookModePick);lastRecHtml="";renderRecSheet();}
+  else if(a==="cookModeGo"){if(!cook)return;cookModePick[cook.id]=b.dataset.v;LS.set("cm_cookmode",cookModePick);const sx=stepsFor(cook.id,b.dataset.v);Object.assign(cook,{steps:sx.steps,prep:sx.prep,mode:sx.mode,sx,i:0,choose:false});renderCook();}
   else if(a==="stepMode"){const v=b.dataset.v==="det"?"det":"court",d=detailOf(recipes[recSheetId],recSheetId);stepPick[recSheetId]=v;if(d&&d.same){stepMode=v;LS.set("cm_stepmode",v);}lastRecHtml="";renderRecSheet();}
   else if(a==="recTab"){switchRecTab(b.dataset.v,!b.closest(".rs-tabs"));}
   else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
@@ -2666,9 +2674,10 @@ document.addEventListener("click",e=>{
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
   else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to||"menus"; // each Réglages row shows only its own part
-    const T={menus:"Préférences des menus",days:"Style de chaque jour",avoid:"Ingrédients à éviter",show:"Afficher dans le menu",look:"Apparence"};
+    const T={equip:"Mon équipement",menus:"Préférences des menus",days:"Style de chaque jour",avoid:"Ingrédients à éviter",show:"Afficher dans le menu",look:"Apparence"};
     $("#prefTitle").textContent=T[to]||"Préférences";document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=!el.dataset.sec.split(" ").includes(to);});
-    $("#prefSheet .sheet-in").scrollTop=0;}
+    if(to==="equip")renderEquip();$("#prefSheet .sheet-in").scrollTop=0;}
+  else if(a==="equipSet"){const e=Object.assign({},menu.equip||{}),k=b.dataset.k,v=b.dataset.v;e[k]=k==="crans"||k==="af"?+v:k==="pc"?v==="1":v;menu.equip=e;saveMenu();lastRecHtml="";renderEquip();render();}
   else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;pollSubs();}
   else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}
     const mn=$("#myNameIn").value.trim().slice(0,40);if(mn&&mn!==myName()){LS.set("cm_myname",mn);pingFollows();}$("#shareSheet").hidden=true;}
@@ -2927,12 +2936,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["nouveau","🆕 Nouveautés"],["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"],["detail","📝 Étapes détaillées"]];
+const THEMES=[["nouveau","🆕 Nouveautés"],["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"],["detail","📝 Étapes détaillées"],["airfryer","🌀 Faisable à l'air fryer"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
 // computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
 function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
 function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
-const hasTheme=(r,t)=>(t==="detail"&&!!detailOf(r))||(t==="nouveau"&&!!r.shared&&Object.keys(shNews).some(id=>recipes[id]===r))||(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
+const hasTheme=(r,t)=>(t==="detail"&&!!detailOf(r))||(t==="airfryer"&&(()=>{const d=detailOf(r);return!!(d&&d.modes&&d.modes.airfryer);})())||(t==="nouveau"&&!!r.shared&&Object.keys(shNews).some(id=>recipes[id]===r))||(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -3132,12 +3141,49 @@ indexDetail();
 fetch(APP_URL+"etapes-detaillees.json",{cache:"no-cache"}).then(x=>x.ok?x.json():null).then(d=>{if(d&&d.recipes&&JSON.stringify(d)!==JSON.stringify(DETAIL)){DETAIL=d;LS.set("cm_detail",d);indexDetail();lastRecHtml="";render();}}).catch(()=>{});
 // the detailed version of a recipe; .same = written from the steps the recipe has now (not changed by you since)
 function detailOf(r,id){if(!r)return null;const R=DETAIL.recipes||{};let d=id&&(R[id]||R[String(id).replace(/^sh-.*?-(r\d*-)/,"$1")]);if(!d)d=DETAIL_NAME[deacc(r.name||"")];
-  if(!d||!Array.isArray(d.steps)||!d.steps.length)return null;return{prep:d.prep||"",steps:d.steps,same:d.src===stepHash(r.steps)};}
+  if(!d||!Array.isArray(d.steps)||!d.steps.length)return null;return{prep:d.prep||"",steps:d.steps,same:d.src===stepHash(r.steps),base:d.base||null,modes:d.modes&&typeof d.modes==="object"?d.modes:{}};}
 let stepMode=LS.get("cm_stepmode","det"),stepPick={};
 // what to show/cook: the detailed version by default, unless you rewrote the steps yourself (then yours) — the toggle switches
-function stepsFor(id){const r=recipes[id],d=detailOf(r,id),short=String((r&&r.steps)||"").split("\n").map(x=>x.trim()).filter(Boolean);
+/* ---------- my equipment (synced): hob type and levels, oven, air fryer, pressure cooker ---------- */
+const EQ_DEF={hob:"induction",crans:9,oven:"ct",af:5,pc:true};
+const equip=()=>Object.assign({},EQ_DEF,menu.equip||{});
+const MODE_NEED={airfryer:"af",autocuiseur:"pc"};
+const hasEq=(k)=>{const e=equip(),n=MODE_NEED[k];return !n||(n==="af"?e.af>0:!!e[n]);};
+// turns "feu moyen (5/9)" into your hob's levels, and fan-oven temperatures into a traditional oven's
+function adaptTxt(t,mode){const e=equip();t=String(t||"");
+  t=t.replace(/\s?\((\d)(?:-(\d))?\/9\)/g,(m,a,b)=>{if(e.hob==="gaz")return"";const N=Math.max(3,Math.min(20,+e.crans||9)),c=x=>Math.max(1,Math.min(N,Math.round(x*N/9)));
+    const A=c(+a),B=b?c(+b):A;return` (${A===B?A:A+"-"+B} sur ${N})`;});
+  if(mode!=="airfryer"&&e.oven==="trad")t=t.replace(/(\d{3}) °C \(four chaleur tournante \(ou 10 °C de plus en chaleur traditionnelle\), grille au milieu\)/g,(m,x)=>`${+x+15} °C (grille au milieu)`)
+    .replace(/(\d{3}) °C \(four chaleur tournante, grille au milieu\)/g,(m,x)=>`${+x+15} °C (grille au milieu)`).replace(/(\d{3}) °C \(four chaleur tournante\)/g,(m,x)=>`${+x+15} °C`);
+  else t=t.replace(/four chaleur tournante \(ou 10 °C de plus en chaleur traditionnelle\), /g,"");
+  return t;}
+let cookModePick=LS.get("cm_cookmode",{});
+// the ways this recipe can be cooked with your equipment: [{k,label,time}]
+function modesOf(id){const r=recipes[id],d=detailOf(r,id);if(!d||!d.base)return[];
+  const l=[{k:d.base.k,label:d.base.label,time:r.time||0}].concat(Object.entries(d.modes).filter(([k])=>hasEq(k)).map(([k,v])=>({k,label:v.label,time:v.time||0})));
+  return l.length>1?l:[];}
+// what to show/cook: the detailed version by default, unless you rewrote the steps yourself (then yours) — the toggle switches
+function stepsFor(id,modeK){const r=recipes[id],d=detailOf(r,id),short=String((r&&r.steps)||"").split("\n").map(x=>x.trim()).filter(Boolean);
   const pick=stepPick[id]||(d&&!d.same&&short.length?"court":stepMode),useDet=!!d&&(pick==="det"||!short.length);
-  return{d,short,useDet,steps:useDet?d.steps:short,prep:useDet?d.prep:""};}
+  const ms=useDet?modesOf(id):[];let mk=modeK||cookModePick[id];if(!ms.some(m=>m.k===mk))mk=ms.length?ms[0].k:"";
+  const mv=ms.length&&d.base&&mk!==d.base.k?d.modes[mk]:null,mode=ms.find(m=>m.k===mk)||null;
+  const steps=useDet?(mv?mv.steps:d.steps).map(x=>adaptTxt(x,mk)):short;
+  return{d,short,useDet,steps,prep:useDet?adaptTxt(mv?mv.prep:d.prep,mk):"",modes:ms,mode,batch:!!(mv&&mv.batch)};}
+function batchNote(x,n){if(!x.batch||!x.mode||x.mode.k!=="airfryer")return"";const L=equip().af||5,per=Math.max(1,Math.round(L/2)),k=Math.ceil(n/per);
+  return k>1?`<p class="batch-note">🧺 Avec votre air fryer de ${L} L : prévoyez ${k} fournées pour ${n} pers. (environ ${per} pers. par fournée).</p>`:"";}
+function modeChips(id,x){if(!x.modes.length)return"";
+  return`<div class="mode-chips"><span class="label">Comment le cuire ?</span><div class="row">${x.modes.map(m=>`<button type="button" class="chip" data-act="cookModeSet" data-id="${esc(id)}" data-v="${esc(m.k)}" aria-pressed="${x.mode&&x.mode.k===m.k}">${MODE_ICON[m.k]||""} ${esc(m.label)}${m.time?" · "+m.time+" min":""}</button>`).join("")}</div></div>`;}
+function renderEquip(){const e=equip(),box=$("#equipBox");if(!box)return;
+  const ch=(k,v,l)=>`<button type="button" class="chip" data-act="equipSet" data-k="${k}" data-v="${v}" aria-pressed="${(k==="pc"?(e.pc?"1":"0"):String(e[k]))===String(v)}">${l}</button>`;
+  box.innerHTML=`<span class="muted" style="font-size:13px">Les recettes détaillées s'adaptent : crans de votre plaque, température de votre four, modes de cuisson proposés. Partagé entre vos appareils.</span>
+   <span class="label" style="margin-top:8px">Plaque de cuisson</span><div class="chips" style="flex-wrap:wrap">${ch("hob","induction","Induction")}${ch("hob","vitro","Vitrocéramique / électrique")}${ch("hob","gaz","Gaz")}</div>
+   ${e.hob==="gaz"?`<span class="muted" style="font-size:13px">Au gaz, les recettes parlent de « feu doux / moyen / vif » (taille de la flamme), sans numéro.</span>`:`<span class="muted" style="font-size:13px;margin-top:4px">Nombre de crans (le plus fort)</span><div class="chips" style="flex-wrap:wrap">${[6,9,10,12,14,18].map(n=>ch("crans",n,n)).join("")}</div>`}
+   <span class="label" style="margin-top:8px">Four</span><div class="chips" style="flex-wrap:wrap">${ch("oven","ct","Chaleur tournante")}${ch("oven","trad","Traditionnel (haut + bas)")}</div>
+   <span class="label" style="margin-top:8px">Air fryer</span><div class="chips" style="flex-wrap:wrap">${ch("af",0,"Je n'en ai pas")}${[3,4,5,6,8,10].map(n=>ch("af",n,n+" L")).join("")}</div>
+   <span class="label" style="margin-top:8px">Autocuiseur (cocotte-minute)</span><div class="chips">${ch("pc",1,"Oui")}${ch("pc",0,"Non")}</div>`;
+  const se=$("#setEquip");if(se)se.textContent=[e.hob==="gaz"?"Gaz":(e.hob==="induction"?"Induction":"Vitro")+" 1 à "+e.crans,e.oven==="ct"?"chaleur tournante":"four traditionnel",e.af?"air fryer "+e.af+" L":"sans air fryer"].join(" · ");}
+try{renderEquip();}catch(e){}
+const MODE_ICON={four:"🔥",poele:"🍳",cocotte:"🍲",marmite:"🍲",airfryer:"🌀",autocuiseur:"♨️"};
 function stepsToggle(id,x){if(!x.d)return"";
   return`<div class="row step-mode"><button type="button" class="chip" data-act="stepMode" data-v="det" aria-pressed="${x.useDet}">📝 Détaillée</button><button type="button" class="chip" data-act="stepMode" data-v="court" aria-pressed="${!x.useDet}">Courte</button></div>
     ${!x.d.same&&x.short.length?`<p class="muted" style="font-size:13px;margin:4px 0">${x.useDet?"Cette version détaillée a été écrite pour la recette d'origine : vous avez modifié les étapes depuis.":"Vous avez modifié les étapes : votre version est affichée. La version détaillée (écrite pour la recette d'origine) reste disponible."}</p>`:""}`;}
@@ -3194,17 +3240,20 @@ function stepDuration(txt){const t=txt.toLowerCase();let m=t.match(/(\d+)\s*h(?:
   {const all=[...t.matchAll(/(\d+)\s*(?:à\s*\d+\s*)?min/g)].map(x=>+x[1]);if(all.length)return Math.max(...all)*60;}m=t.match(/(\d+)\s*(?:secondes|sec)\b/);return m?+m[1]:0;}
 const dur=s=>s>=3600?`${Math.floor(s/3600)} h ${String(Math.floor(s%3600/60)).padStart(2,"0")}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
 async function startCook(id,n){const r=recipes[id];if(!r)return;const sx=stepsFor(id),steps=sx.steps;if(!steps.length)return;
-  cook={id,i:0,steps,prep:sx.prep,n:n||viewServ[id]||menu.people,done:false};renderCook();$("#cookSheet").hidden=false;
+  cook={id,i:0,steps,prep:sx.prep,mode:sx.mode,sx,n:n||viewServ[id]||menu.people,done:false,choose:sx.modes.length>1};renderCook();$("#cookSheet").hidden=false;
   try{if(navigator.wakeLock)cookWake=await navigator.wakeLock.request("screen");}catch(e){}}
 function stopCook(){cook=null;try{cookWake&&cookWake.release();}catch(e){}cookWake=null;$("#cookSheet").hidden=true;}
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&cook&&!cookWake){try{cookWake=await navigator.wakeLock.request("screen");}catch(e){}}});
 function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook();return;}const f=cook.n/(r.serves||4);
   if(cook.done){$("#cookIn").innerHTML=`<div class="row cook-top"><span>${esc(r.name)}</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
     <div class="cook-big">Bon appétit ! 🍽️</div><p style="opacity:.8;margin:0">C'était comment ?</p>${rateHtml(cook.id)}`;return;}
+  if(cook.choose){const sx=stepsFor(cook.id);$("#cookIn").innerHTML=`<div class="row cook-top"><span>${esc(r.name)} · ${cook.n} pers.</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
+    <div class="cook-big">Comment le cuisez-vous ?</div><div class="cook-modes">${sx.modes.map(m=>`<button type="button" class="btn${sx.mode&&sx.mode.k===m.k?" primary":""}" data-act="cookModeGo" data-v="${esc(m.k)}">${MODE_ICON[m.k]||""} ${esc(m.label)}${m.time?` · ${m.time} min`:""}</button>`).join("")}</div>
+    <p style="opacity:.75;margin:0;font-size:14px">Le choix fait dans la recette est en vert. Vous ne pourrez plus changer une fois commencé.</p>`;return;}
   const s=cook.steps[cook.i],ing=stepIngs(r,s,f),d=stepDuration(s);
-  $("#cookIn").innerHTML=`<div class="row cook-top"><span>Étape ${cook.i+1} sur ${cook.steps.length} · ${esc(r.name)} · ${cook.n} pers.</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
+  $("#cookIn").innerHTML=`<div class="row cook-top"><span>Étape ${cook.i+1} sur ${cook.steps.length}${cook.mode?" · "+esc(cook.mode.label):""} · ${esc(r.name)} · ${cook.n} pers.</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
     <div class="cook-dots">${cook.steps.map((_,j)=>`<i class="${j<=cook.i?"on":""}"></i>`).join("")}</div>
-    ${cook.i===0?prepHtml(cook.prep,"dark"):""}<div class="cook-big">${esc(s)}</div>
+    ${cook.i===0?prepHtml(cook.prep,"dark")+batchNote(cook.sx,cook.n):""}<div class="cook-big">${esc(s)}</div>
     ${ing.length?`<div class="cook-ing">${ing.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
     ${techHtml(techsIn(s),"dark")}
     ${d?`<button type="button" class="btn cook-timer" data-act="cookTimer" data-s="${d}">${cookTimer?`⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter`:`⏱ Lancer le minuteur · ${dur(d)}`}</button>`:(cookTimer?`<button type="button" class="btn cook-timer" data-act="cookTimer">⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter</button>`:"")}
@@ -3212,7 +3261,7 @@ function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook()
     <div class="row cook-nav"><button type="button" class="btn" data-act="cookPrev" ${cook.i?"":"disabled"}>← Précédente</button><button type="button" class="btn primary" data-act="cookNext">${cook.i<cook.steps.length-1?"Suivante →":"Terminé ✓"}</button></div>`;}
 function beep(){try{const c=new(window.AudioContext||window.webkitAudioContext)();[0,.35,.7].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.25,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.3);o.start(c.currentTime+t);o.stop(c.currentTime+t+.3);});}catch(e){}
   try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300]);}catch(e){}}
-setInterval(()=>{if(!cookTimer)return;if(Date.now()>=cookTimer.end){const l=cookTimer.label;cookTimer=null;beep();toast("⏱ Minuteur terminé : "+l);}if(cook)renderCook();},1000);
+setInterval(()=>{if(!cookTimer)return;if(cookTimer.half&&Date.now()>=cookTimer.half){cookTimer.half=0;beep();toast("⏱ Mi-cuisson : "+cookTimer.halfMsg);}if(Date.now()>=cookTimer.end){const l=cookTimer.label;cookTimer=null;beep();toast("⏱ Minuteur terminé : "+l);}if(cook)renderCook();},1000);
 // swipe between steps
 (()=>{let x0=0,y0=0;document.addEventListener("touchstart",e=>{if(!cook||$("#cookSheet").hidden)return;x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
   document.addEventListener("touchend",e=>{if(!cook||$("#cookSheet").hidden||cook.done)return;const t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*1.5)return;
@@ -3255,7 +3304,7 @@ function renderRecSheet(){
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
-  else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+prepHtml(sx.prep)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
+  else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+modeChips(id,sx)+prepHtml(sx.prep)+batchNote(sx,p)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
   else body=`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
     <div class="nat-box">${natureHtml(r)}</div>${cats}
