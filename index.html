@@ -615,6 +615,12 @@ const RAYONS=["Fruits & légumes","Boucherie & poisson","Crémerie","Épicerie",
 const UNITS=["g","kg","ml","cl","l","pièce","c. à s.","c. à c.","botte","tranche","boîte","sachet","pincée"];
 const CATS=["Plat","Végé","Rapide","Soupe","Entrée","Dessert"];
 const NOT_MAIN=["Dessert","Entrée"]; // never proposed automatically as a meal
+const MAIN_CATS=["Plat","Végé","Rapide","Soupe"];
+// a recipe can sit in several categories: the first one is its main category
+function catsOf(r){return r?[...new Set([r.cat,...(r.cats||[]),...(r.alsoMain?["Plat"]:[]),...(r.alsoEntree?["Entrée"]:[])].filter(Boolean))]:[];}
+const inCat=(r,c)=>catsOf(r).includes(c);
+const inCats=(r,cs)=>catsOf(r).some(c=>cs.includes(c));
+const canMain=r=>inCats(r,MAIN_CATS);
 const DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
 const MEALS=[["midi","Midi"],["soir","Soir"]];
 const slotKey=(d,m)=>d+"|"+m;
@@ -975,7 +981,7 @@ function renderIdea(){
       ?`<div class="list">${favIds.slice(0,favShown).map(row).join("")}</div>${favIds.length>favShown?`<div class="row"><button type="button" class="btn ghost" data-act="ideaFavMore">Voir les ${favIds.length-favShown} autres favoris</button></div>`:""}`
       :'<span class="muted">Aucun favori pour l\'instant : touchez ☆ sur une recette pour l\'ajouter.</span>');
     return;}
-  const pool=Object.keys(recipes).filter(id=>!onMenu(id)&&!NOT_MAIN.includes(recipes[id].cat));
+  const pool=Object.keys(recipes).filter(id=>!onMenu(id)&&canMain(recipes[id]));
   if(!pool.length){el.innerHTML='<span class="label">Pas d\'idée ?</span>'+tabs+'<span class="muted">'+(Object.keys(recipes).length?"Toutes vos recettes sont déjà au menu.":"Ajoutez des recettes pour recevoir des idées.")+'</span>';return;}
   ideaIds=ideaIds.filter(id=>pool.includes(id));
   if(ideaIds.length<Math.min(IDEAS_N,pool.length)){
@@ -1018,12 +1024,12 @@ function renderMenu(){
 }
 
 function renderRecipes(){
-  const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>r.cat===c))];
+  const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>inCat(r,c)))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
   $("#chips").innerHTML=cats.map(c=>`<button class="chip" data-act="cat" data-c="${esc(c)}" aria-pressed="${filter.cat===c}">${esc(c)}</button>`).join("");
   $("#kindChips").innerHTML=kindChipsHtml("kind",filter.kind,filter.quick,filter.light,filter.fav,filter.theme);
   const list=Object.entries(recipes)
-    .filter(([,r])=>filter.cat==="Toutes"||r.cat===filter.cat)
+    .filter(([,r])=>filter.cat==="Toutes"||inCat(r,filter.cat))
     .filter(([,r])=>recMatch(r,filter.q,filter.kind,filter.quick,filter.light,filter.fav,filter.theme))
     .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const el=$("#recList");
@@ -1052,7 +1058,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
-      <div class="meta"><span class="tag">${esc(r.cat||"")}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -1611,9 +1617,11 @@ document.addEventListener("click",e=>{
       const t0=Date.now();$("#pwMsg").textContent="⏳ Le robot lit la recette… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
-  else if(a==="recAlso"){const id=recSheetId,r=recipes[id],v=Number(b.dataset.v);if(!r)return;const n=Object.assign({},r);if(v){n.alsoMain=true;n.mainFactor=v;}else{delete n.alsoMain;delete n.mainFactor;}saveRecipe(id,n);renderRecSheet();toast(v?"Proposée aussi comme plat (×"+String(v).replace(".",",")+")":"Seulement en entrée");}
-  else if(a==="recAlsoE"){const id=recSheetId,r=recipes[id];if(!r)return;const n=Object.assign({},r);if(b.dataset.v==="1")n.alsoEntree=true;else delete n.alsoEntree;saveRecipe(id,n);renderRecSheet();toast(b.dataset.v==="1"?"Proposée aussi en entrée (demi-portion)":"Seulement en plat");}
-  else if(a==="recCat"){const id=recSheetId,r=recipes[id];if(r&&r.cat!==b.dataset.c){saveRecipe(id,Object.assign({},r,{cat:b.dataset.c}));renderRecSheet();toast("Rangée dans « "+b.dataset.c+" »");}}
+  else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
+  else if(a==="recCat"){const id=recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
+    if(list.includes(c)){if(list.length===1){toast("Une recette garde au moins une catégorie");return;}list=list.filter(x=>x!==c);}else list=[...list,c];
+    const n=Object.assign({},r,{cat:list[0]});delete n.alsoMain;delete n.alsoEntree;if(list.length>1)n.cats=list.slice(1);else delete n.cats;
+    saveRecipe(id,n);renderRecSheet();toast(list.join(" · "));}
   else if(a==="recSearch"){filter.q=b.dataset.q;$("#q").value=b.dataset.q;recLimit=50;renderRecipes();}
   else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
   else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
@@ -1982,7 +1990,7 @@ const skipped=k=>k.endsWith("|midi")&&menu.prefs.skip.includes(k.split("|")[0]);
 function avoidList(){return menu.prefs.avoid.split(",").map(norm).filter(Boolean);}
 function eligible(){
   const av=avoidList();
-  return Object.keys(recipes).filter(id=>{const r=recipes[id];if(NOT_MAIN.includes(r.cat)&&!(r.cat==="Entrée"&&r.alsoMain))return false;
+  return Object.keys(recipes).filter(id=>{const r=recipes[id];if(!canMain(r))return false;
     if(menu.prefs.dissoc&&!recipeDissoc(r).ok)return false;
     return !av.some(a=>norm(r.name).includes(a)||(r.ing||[]).some(i=>norm(i.n).includes(a)));});
 }
@@ -2101,15 +2109,15 @@ function renderRecSheet(){
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
-      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(r.cat||"")}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
+      <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
-    <div class="field"><span class="label">Catégorie</span><div class="dchips">${CATS.map(c=>`<span class="dchip${r.cat===c?" on":""}"><button type="button" data-act="recCat" data-c="${c}">${c}</button></span>`).join("")}</div>
-      ${r.cat==="Entrée"?`<span class="muted" style="font-size:13px;margin-top:6px">Peut aussi servir de plat (quantités ×2 : « pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["0","Non"],["2","Oui, ×2"],["1.5","Oui, ×1,5"]].map(([v,l])=>`<span class="dchip${String(r.alsoMain?(r.mainFactor||2):0)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}">${l}</button></span>`).join("")}</div>`
-       :["Plat","Végé","Rapide"].includes(r.cat)?`<span class="muted" style="font-size:13px;margin-top:6px">Peut aussi servir d'entrée (demi-portion)</span><div class="dchips">${[["0","Non"],["1","Oui"]].map(([v,l])=>`<span class="dchip${(r.alsoEntree?"1":"0")===v?" on":""}"><button type="button" data-act="recAlsoE" data-v="${v}">${l}</button></span>`).join("")}</div>`:""}</div>
+    <div class="field"><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
+      ${r.cat==="Entrée"&&canMain(r)?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en plat, les quantités sont multipliées (« pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["2","×2"],["1.5","×1,5"]].map(([v,l])=>`<span class="dchip${String(r.mainFactor||2)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}">${l}</button></span>`).join("")}</div>`
+       :MAIN_CATS.includes(r.cat)&&inCat(r,"Entrée")?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en entrée, elle compte pour une demi-portion.</span>`:""}</div>
     <ul class="ings">${ings}</ul>
     <div class="nat-box">${natureHtml(r)}</div>
     ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
@@ -2139,7 +2147,7 @@ function roleScore(id){
 }
 function pickPool(){
   const cats=ROLE_CATS[pickRole];
-  return Object.keys(recipes).filter(x=>cats?(cats.includes(recipes[x].cat)||(pickRole==="entree"&&recipes[x].alsoEntree)):!NOT_MAIN.includes(recipes[x].cat)&&!onMenu(x));
+  return Object.keys(recipes).filter(x=>cats?inCats(recipes[x],cats):canMain(recipes[x])&&!onMenu(x));
 }
 function flashSlot(k){setTimeout(()=>{const el=document.querySelector(`[data-slot="${k}"]`);if(!el||view!=="menu")return;
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1600);},90);}
@@ -2154,8 +2162,8 @@ function renderPick(){
   const q=norm($("#pickQ").value), cur=W()[pickKey], cats=ROLE_CATS[pickRole];
   const curId=cur&&(pickRole==="main"?cur.id:cur[pickRole]);
   $("#pickKinds").innerHTML=kindChipsHtml("pkind",pickKind,pickQuick,pickLight,pickFav,pickTheme);
-  const all=Object.entries(recipes).filter(([,r])=>(!cats||cats.includes(r.cat)||(pickRole==="entree"&&r.alsoEntree)||!!q)&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight,pickFav,pickTheme))
-    .sort((a,b)=>(cats?(cats.includes(b[1].cat)-cats.includes(a[1].cat)):0)||a[1].name.localeCompare(b[1].name,"fr"));
+  const all=Object.entries(recipes).filter(([,r])=>(!cats||inCats(r,cats)||!!q)&&recMatch(r,$("#pickQ").value,pickKind,pickQuick,pickLight,pickFav,pickTheme))
+    .sort((a,b)=>(cats?(inCats(b[1],cats)-inCats(a[1],cats)):0)||a[1].name.localeCompare(b[1].name,"fr"));
   const list=all.slice(0,80);
   $("#pickList").innerHTML=(list.length?list.map(([id,r])=>`<button class="pick-item${curId===id?" cur":""}" data-act="pickSet" data-id="${esc(id)}">
     <span>${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${esc(r.cat||"")}${r.time?" · "+r.time+" min":""}</span></button>`).join("")
@@ -2187,7 +2195,7 @@ function renderSugg(){
   for(const id of ranked){if(suggNow.length>=5)break;if(!suggNow.includes(id))suggNow.push(id);}
   const item=id=>{const r=recipes[id];return`<button class="pick-item" data-act="pickSet" data-id="${esc(id)}"><span>${r.fav?"★ ":""}${esc(r.name)}${onMenu(id)?' <span class="muted" style="font-size:12px">· déjà au menu</span>':""}</span><span class="muted" style="font-size:13px;white-space:nowrap">${pickRole==="main"?KIND_LABEL[kindOf(r)]:Math.round(nutri(r).k/10)*10+" kcal"}${r.time?" · "+r.time+" min":""}</span></button>`;};
   const cats=ROLE_CATS[pickRole];
-  const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&(cats?cats.includes(recipes[id].cat):!NOT_MAIN.includes(recipes[id].cat))&&id!==curId)
+  const favs=Object.keys(recipes).filter(id=>recipes[id].fav&&(cats?inCats(recipes[id],cats):canMain(recipes[id]))&&id!==curId)
     .map(id=>[id,score(id)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
   box.innerHTML=(suggNow.length?`<span class="label psec">${main?"Suggestions pour ce repas":pickRole==="entree"?"Entrées suggérées":"Desserts suggérés"}</span><div class="pick-list">${suggNow.map(item).join("")}</div>
     <button class="link" data-act="moreSugg">↻ D'autres suggestions</button>`:"")
