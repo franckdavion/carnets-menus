@@ -169,6 +169,10 @@ button{cursor:pointer}
 .card.on{border-color:var(--accent)}
 .card-h{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 16px}
 .card-h .open{border:none;background:none;text-align:left;padding:0;min-width:0}
+.card-h .open.has-ph{display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:12px;align-items:center}.card-h .open.has-ph>*:not(.rp-th){grid-column:2}
+.rp-th{grid-row:1 / span 3;width:56px;height:56px;border-radius:12px;object-fit:cover}
+.rp img{width:100%;max-height:240px;object-fit:cover;border-radius:14px;display:block}.rp-acts{margin-top:8px}
+.rp-pick{cursor:pointer}
 .card-h .meta{font-size:13px;color:var(--muted);margin-top:2px}
 .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);margin-right:6px}
 .add{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:999px;padding:7px 12px;font-weight:600;font-size:13px;white-space:nowrap}
@@ -1286,7 +1290,7 @@ function renderRecipes(){
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
       const role=r.cat==="Entrée"?"entree":r.cat==="Dessert"?"dessert":undefined,dk=r.linkOnly?null:drinkFor(r,role);
       const drinkRow=dk&&showOn("wine")?`<div class="drink">🍷 Vin : ${esc(dk[0])} ${vivinoLink(pairingQuery(dk[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(dk[1])}</div>`:"";
-      det=`<div class="detail">${catRow}<div class="row">${photoBtn(r)}<button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser":"Modifier"}</button></div>${drinkRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
+      det=`<div class="detail">${rPhotoSrc(id)?recPhotoBlock(id,true):""}${catRow}<div class="row">${photoBtn(r)}${rPhotoSrc(id)?"":recPhotoBlock(id)}<button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser":"Modifier"}</button></div>${drinkRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
           <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
           <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
         <div class="row">${shopBtn(id,p)}</div>
@@ -1298,7 +1302,7 @@ function renderRecipes(){
           :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}${r.shared?`<span class="muted" style="font-size:12px">Recette de ${esc(r.sharedBy||"un proche")} · lecture seule</span>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
-      <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
+      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${rPhotoSrc(id)}" alt="">`:""}<h3>${esc(r.name)}</h3>
       <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
@@ -1799,6 +1803,26 @@ const wFetching=new Set();
 function wPhotoSrc(w){const m=wPhotos();if(m[w.id])return m[w.id];
   if(w.photo&&sync&&!wFetching.has(w.id)){wFetching.add(w.id);gh("GET",null,sync.repo,"photos/"+w.id+".jpg").then(r=>r.status===200?r.json():null).then(d=>{if(d&&d.content){saveWPhoto(w.id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));renderWines();if(!$("#wineSheet").hidden)renderWineForm();}}).catch(()=>{});}
   return"";}
+/* ---------- recipe photos: taken or chosen on the phone, kept small here and copied to the private data repository ---------- */
+const RPH="cm_rphotos";
+function rPhotos(){return LS.get(RPH,{});}
+function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[id];let keys=Object.keys(m);
+  for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
+const rFetching=new Set();
+function rPhotoSrc(id){const r=recipes[id];if(!r||!r.photo)return"";const m=rPhotos();if(m[id])return m[id];
+  if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
+  return"";}
+async function setRecipePhoto(id,file){const r=recipes[id];if(!r||!file)return;
+  try{const data=await shrinkPhoto(file);saveRPhoto(id,data);saveRecipe(id,Object.assign({},r,{photo:Date.now()}));toast("Photo ajoutée à la recette");
+    if(sync){try{const path="photos/r-"+id+".jpg";let sha;const g=await gh("GET",null,sync.repo,path);if(g.status===200)sha=(await g.json()).sha;
+      await gh("PUT",Object.assign({message:"Photo de recette",content:data.split(",")[1]},sha?{sha}:{}),sync.repo,path);}catch(e){}}}
+  catch(e){toast("Cette image n'a pas pu être lue");}}
+function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,null);const n=Object.assign({},r);delete n.photo;saveRecipe(id,n);toast("Photo retirée");}
+document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";}});
+function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
+  const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
+  if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}">${r.shared?"":`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`}</div>`;
+  return pick("📷 Ajouter ma photo");}
 const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
 let wineDraft=null;
 function wineFor(k,week){return(menu.wines||[]).filter(w=>w.k===k&&w.w===(week||curWeek));}
@@ -2405,6 +2429,7 @@ document.addEventListener("click",e=>{
   else if(a==="newRecipe")openSheet();
   else if(a==="goFind"){$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
   else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
+  else if(a==="rphotoRm"){removeRecipePhoto(id);}
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
@@ -2792,7 +2817,8 @@ function renderRecSheet(){
       <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span><span style="flex:1"></span>${photoBtn(r)}</div>
-    <div class="row"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser (copie dans mon carnet)":"Modifier la recette"}</button></div>
+    <div class="row"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser (copie dans mon carnet)":"Modifier la recette"}</button>${rPhotoSrc(id)?"":recPhotoBlock(id)}</div>
+    ${rPhotoSrc(id)?recPhotoBlock(id,true):""}
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
