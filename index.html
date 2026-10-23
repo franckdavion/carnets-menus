@@ -404,7 +404,8 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}.as.ask{border:2px dashed var(--accent)}
 .aask{grid-column:1/-1;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .aask b{font-size:14px}.aask .btn{text-align:left;justify-content:flex-start;min-height:44px}.aask small{display:block;font-weight:400;color:var(--muted);font-size:12px}
-#addSheet .sheet-in,#photoSheet .sheet-in,#reviewSheet .sheet-in{height:92%}
+#addSheet .sheet-in,#photoSheet .sheet-in,#reviewSheet .sheet-in,#recSheet .sheet-in{height:92%}
+#recSheet .rs-body{min-height:40vh;display:flex;flex-direction:column;gap:12px}
 /* "+ Menu" chooser: the confirm button always stays in view at the bottom */
 .add-foot{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));margin:auto -16px 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -10px 14px -10px rgba(0,0,0,.4);z-index:2}
 .add-foot .btn{width:100%;min-height:48px;font-size:17px}
@@ -2555,7 +2556,7 @@ document.addEventListener("click",e=>{
   else if(a==="rateTag"){const d=rateDraft[id]=rateDraft[id]||{stars:0,tags:[]};const t=b.dataset.t;d.tags=d.tags.includes(t)?d.tags.filter(x=>x!==t):[...d.tags,t];if(cook&&cook.done&&!$("#cookSheet").hidden)renderCook();else $("#rateBody").innerHTML=rateHtml(id);}
   else if(a==="rateSave"){saveRating(id);if(cook&&cook.done)stopCook();$("#rateSheet").hidden=true;render();}
   else if(a==="rateClose"){$("#rateSheet").hidden=true;}
-  else if(a==="recTab"){recTab=b.dataset.v;renderRecSheet();}
+  else if(a==="recTab"){switchRecTab(b.dataset.v,!b.closest(".rs-tabs"));}
   else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
   else if(a==="more"){recLimit+=50;renderRecipes();}
@@ -3117,7 +3118,7 @@ $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#pr
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
 let recSheetId=null;
-function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; lastRecHtml=""; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 let recTab="ing";
 /* ---------- "Comment faire ?": the basic techniques found in a step, explained (béchamel, roux, blancs en neige…) ---------- */
 const TECH=[
@@ -3239,7 +3240,7 @@ function renderRecSheet(){
     ${rt?`<div class="field"><span class="label">Vos notes</span>${(r.ratings||[]).slice(-5).reverse().map(x=>`<span style="font-size:13px">${starTxt(x.stars)} · ${new Date(x.at).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}${x.tags&&x.tags.length?" · "+esc(x.tags.join(", ")):""}</span>`).join("")}</div>`:""}
     <div class="row">${photoBtn(r)}${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine ↗</a>`:""}<button type="button" class="btn" data-act="rateOpen" data-id="${esc(id)}">★ Noter</button></div>
     ${r.shared?"":`<div class="row">${confirmDel===id?`<span>Supprimer cette recette ?</span><button class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button class="btn ghost" data-act="delNo">Annuler</button>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}</div>`}`;
-  $("#recSheetIn").innerHTML=`<div class="row rs-head"><span></span><button type="button" class="btn" data-act="closeRec">Fermer</button></div>
+  const html=`<div class="row rs-head"><span></span><button type="button" class="btn" data-act="closeRec">Fermer</button></div>
     ${ph?recPhotoBlock(id,true):`<div class="row">${recPhotoBlock(id)}</div>`}
     <div><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}${showOn("nut")?" · "+esc(fmtNut(nut,true)):""}${rt?` · <b class="rs-stars">${starTxt(rt.avg)}</b> (${rt.n})`:""}</div></div>
     ${shBox}
@@ -3250,8 +3251,17 @@ function renderRecSheet(){
       <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button></div>
     ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
     <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
-    ${body}`;
+    <div class="rs-body">${body}</div>`;
+  // only redraw when something changed (photos arriving in the background must not reset what you are reading)
+  const box=$("#recSheetIn");if(html===lastRecHtml&&box.childElementCount)return;lastRecHtml=html;
+  const opened=[...box.querySelectorAll("details[open] summary")].map(s=>s.textContent);
+  box.innerHTML=html;box.querySelectorAll("details summary").forEach(s=>{if(opened.includes(s.textContent))s.parentNode.open=true;});
 }
+let lastRecHtml="";
+// switching tab: the tab bar stays exactly where it was under the finger
+function switchRecTab(v,toTop){const sc=$("#recSheetIn"),t0=sc.querySelector(".rs-tabs"),before=t0?t0.offsetTop-sc.scrollTop:0;
+  recTab=v;renderRecSheet();const t1=sc.querySelector(".rs-tabs");if(!t1)return;
+  sc.scrollTop=toTop?Math.max(0,t1.offsetTop-70):Math.max(0,t1.offsetTop-before);}
 $("#recSheet").addEventListener("click",e=>{if(e.target.id==="recSheet")$("#recSheet").hidden=true;});
 function openRecipe(id){
   if(!recipes[id])return;
