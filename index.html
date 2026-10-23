@@ -62,6 +62,9 @@ button{cursor:pointer}
 .news-bar{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:10px 14px;border-radius:14px;border:1px solid var(--accent);background:var(--soft);color:var(--ink);font:inherit;font-size:15px;text-align:left;touch-action:manipulation}
 .news-bar span:nth-child(2){flex:1}.news-bar b{color:var(--accent)}
 .tag.news{color:var(--accent);font-weight:700}
+.sub-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.sub-row .av{width:32px;height:32px;border-radius:50%;background:var(--soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 32px}
+.sub-row small{display:block;font-size:12px;color:var(--muted)}
 /* ---------- Relief (Réglages → Apparence): three looks with depth, on top of any colour palette ---------- */
 :root{--hi:rgba(255,255,255,.9);--lo:color-mix(in srgb,var(--ink) 18%,transparent)}
 :root[data-pal="ardoise"]{--hi:rgba(255,255,255,.06);--lo:rgba(0,0,0,.6)}
@@ -723,14 +726,26 @@ code{font-family:var(--f-mono);font-size:.92em}
   </div>
 </div>
 
+<div class="sheet" id="welcomeSheet" hidden>
+  <div class="sheet-in" style="gap:12px">
+    <div class="row" style="justify-content:space-between"><h2>Bienvenue !</h2><button type="button" class="btn ghost" data-act="welcomeSkip">Plus tard</button></div>
+    <p style="margin:0" id="welcomeTxt">On te partage un carnet de recettes.</p>
+    <label class="field"><span class="label">Comment t'appelles-tu ?</span><input id="welcomeName" placeholder="Ton prénom" autocomplete="given-name"></label>
+    <button type="button" class="btn primary" data-act="welcomeOk" style="align-self:flex-start">Ouvrir le carnet</button>
+    <p class="muted" style="margin:0;font-size:12px" id="welcomeNote"></p>
+  </div>
+</div>
+
 <div class="sheet" id="shareSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2>Carnet partagé</h2><button type="button" class="btn primary" data-act="closeShare">Fermer</button></div>
     <p class="muted" style="margin:0;font-size:13px">Vos proches voient vos recettes, sans pouvoir les modifier. Chacun garde ses propres menus, courses, favoris et vins.</p>
     <div id="shareMine" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="shareSubs"></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Carnets que je suis</span>
       <div id="shareFollow"></div>
+      <label class="field" id="myNameRow" style="margin-top:8px"><span class="label">Mon prénom (envoyé aux carnets que je suis)</span><input id="myNameIn" placeholder="Ex. Marie" autocomplete="given-name"></label>
       <form class="extra-form" id="followForm" style="margin-top:8px"><input id="followIn" placeholder="Collez le lien reçu" autocomplete="off" inputmode="url"><button class="btn" type="submit">Ajouter</button></form>
     </div>
   </div>
@@ -1901,7 +1916,7 @@ function shareData(){
   for(const[id,r]of Object.entries(recipes)){if(r.shared||builtIn(id))continue;
     out[id]=r.source?{name:r.name,cat:r.cat,cats:r.cats,time:r.time,source:r.source,linkOnly:true}
       :{name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:r.ing,steps:r.steps,tags:r.tags,light:r.light,mainFactor:r.mainFactor};}
-  return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",updated:new Date().toISOString(),recipes:out};
+  return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",inbox:shareInbox(),updated:new Date().toISOString(),recipes:out};
 }
 let shareBusy=false;
 async function publishShare(force){
@@ -1915,6 +1930,42 @@ async function publishShare(force){
 }
 // Follower: books I follow, refreshed when the app opens; their recipes are read only in my notebook
 let follows=LS.get("cm_follows",[]);
+/* ---------- who follows my book: followers drop their first name in a private mailbox on ntfy.sh ---------- */
+const NTFY="https://ntfy.sh";
+function shareInbox(){const sh=menu.share;if(!sh)return"";if(!sh.inbox){sh.inbox="cm-"+Array.from(crypto.getRandomValues(new Uint8Array(15)),b=>"abcdefghijklmnopqrstuvwxyz0123456789"[b%36]).join("");saveMenu();}return sh.inbox;}
+const myUid=()=>{let u=LS.get("cm_uid","");if(!u){u=Math.random().toString(36).slice(2,12);LS.set("cm_uid",u);}return u;};
+const myName=()=>LS.get("cm_myname","");
+// follower side: say hello once (with a real notification), then a silent "seen" at most once a day
+async function pingBook(f,kind){
+  if(!f.inbox||!myName())return;
+  const name=myName(),join=kind==="join";
+  try{await fetch(NTFY+"/",{method:"POST",body:J({topic:f.inbox,title:"Carnet de menus",
+      message:join?`${name} a rejoint ton carnet de recettes 🍽️`:`${name} a ouvert ton carnet`,
+      tags:[join?"join":"seen","uid-"+myUid()],priority:join?4:1})});
+    if(join)f.joined=myName();f.ping=Date.now();LS.set("cm_follows",follows);}catch(e){}
+}
+function pingFollows(){follows.forEach(f=>{if(!f.inbox||!myName())return;if(f.joined!==myName())pingBook(f,"join");else if(Date.now()-(f.ping||0)>20*3600e3)pingBook(f,"seen");});}
+// publisher side: read the mailbox (ntfy keeps messages about 12 h) and keep the list in my synced menu
+let subsBusy=false;
+async function pollSubs(){
+  const sh=menu.share;if(!sh||!sh.on||!sh.inbox||subsBusy)return;subsBusy=true;
+  try{const r=await fetch(`${NTFY}/${sh.inbox}/json?poll=1&since=${sh.subsSince||"all"}`,{cache:"no-store"});if(!r.ok)throw 0;
+    const lines=(await r.text()).split("\n").filter(Boolean);let fresh=[],changed=false;sh.subs=sh.subs||{};
+    for(const l of lines){let m;try{m=JSON.parse(l);}catch(e){continue;}if(m.event!=="message")continue;sh.subsSince=m.id;
+      const uid=((m.tags||[]).find(t=>/^uid-/.test(t))||"").slice(4),nm=String(m.message||"").match(/^(.+?) a (?:rejoint|ouvert) ton carnet/);
+      if(!uid||!nm)continue;const name=nm[1].slice(0,40),at=(m.time||0)*1000,s=sh.subs[uid];
+      if(!s){sh.subs[uid]={name,joined:at,seen:at};fresh.push(name);}else{s.name=name;s.seen=Math.max(s.seen||0,at);}changed=true;}
+    if(changed||lines.length){saveMenu();if(!$("#shareSheet").hidden)renderShare();}
+    if(fresh.length)toast(`🆕 ${fresh.join(", ")} ${fresh.length>1?"ont":"a"} rejoint ton carnet`);
+  }catch(e){}finally{subsBusy=false;}
+}
+const ago=t=>{const d=Math.floor((Date.now()-t)/864e5);return d<=0?"aujourd'hui":d===1?"hier":d<14?`il y a ${d} jours`:`il y a ${Math.round(d/7)} sem.`;};
+function subsHtml(){const sh=menu.share||{};if(!sh.on)return"";const list=Object.entries(sh.subs||{}).filter(([,s])=>!s.hidden).sort((a,b)=>b[1].seen-a[1].seen);
+  return`<div class="field" style="border-top:1px solid var(--line);padding-top:14px"><span class="label">Qui suit mon carnet${list.length?" · "+list.length:""}</span>
+    ${list.length?list.map(([u,s])=>`<div class="sub-row"><span class="av">${esc((s.name||"?").charAt(0).toUpperCase())}</span><span style="flex:1;min-width:0"><b>${esc(s.name)}</b><small>a rejoint le ${new Date(s.joined).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · vu ${ago(s.seen)}</small></span><button type="button" class="x" data-act="subHide" data-u="${esc(u)}" aria-label="Retirer ${esc(s.name)} de la liste">✕</button></div>`).join("")
+      :`<p class="muted" style="margin:0;font-size:13px">Personne pour l'instant. Quand un proche ouvre votre lien et donne son prénom, il apparaît ici.</p>`}
+    <span class="muted" style="font-size:12px">Astuce : installez l'appli gratuite « ntfy » et abonnez-vous à <code style="user-select:all">${esc(sh.inbox||"")}</code> pour être prévenu même appli fermée.</span></div>`;}
+function openWelcome(owner){if(myName())return;$("#welcomeTxt").textContent=`${owner||"Un proche"} te partage son carnet de recettes 🍽️`;$("#welcomeNote").textContent=`${owner||"Il"} saura que tu as rejoint son carnet.`;$("#welcomeSheet").hidden=false;}
 // what changed in a followed book since last time: shown as "Nouveautés" until the recipe is opened
 let shNews=LS.get("cm_sh_news",{}); // {recipeId:{k:"new"|"maj",by,at}}
 const strHash=s=>{let x=5381;for(let i=0;i<s.length;i++)x=(x*33^s.charCodeAt(i))>>>0;return x.toString(36);};
@@ -1934,7 +1985,8 @@ async function refreshFollow(f,quiet){
     for(const k of Object.keys(recipes))if(recipes[k].shared===f.url)delete recipes[k];
     for(const[id,x]of Object.entries(d.recipes)){if(!x||!x.name)continue;const nid="sh-"+f.key+"-"+id;
       recipes[nid]=Object.assign({ing:[],steps:""},x,{shared:f.url,sharedBy:d.owner||f.name},favs.has(nid)?{fav:true}:{});}
-    f.name=d.owner||f.name;f.n=Object.keys(d.recipes).length;f.at=Date.now();f.err="";
+    f.name=d.owner||f.name;f.n=Object.keys(d.recipes).length;f.at=Date.now();f.err="";f.inbox=typeof d.inbox==="string"&&/^[\w-]{1,64}$/.test(d.inbox)?d.inbox:"";
+    if(f.inbox){if(!myName()&&f.fresh)openWelcome(f.name);else pingFollows();}delete f.fresh;
   }catch(e){f.err=quiet?f.err:"Carnet introuvable pour l'instant (il peut mettre quelques minutes à être publié).";}
   LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();if(!$("#shareSheet").hidden)renderShare();
 }
@@ -1943,7 +1995,7 @@ function followUrl(raw){let u=String(raw).trim();try{const m=u.match(/[?&]carnet
   if(!/^https:\/\/[^\s]+\.json$/i.test(u))return"";return u;}
 function addFollow(raw){const url=followUrl(raw);if(!url){toast("Ce lien de carnet n'est pas reconnu");return false;}
   if(follows.some(f=>f.url===url)){toast("Ce carnet est déjà suivi");return false;}
-  const f={url,key:Math.random().toString(36).slice(2,7),name:"Carnet partagé"};follows.push(f);LS.set("cm_follows",follows);refreshFollow(f);toast("Carnet ajouté : ses recettes arrivent");return true;}
+  const f={url,key:Math.random().toString(36).slice(2,7),name:"Carnet partagé",fresh:true};follows.push(f);LS.set("cm_follows",follows);refreshFollow(f);toast("Carnet ajouté : ses recettes arrivent");return true;}
 function removeFollow(url){for(const k of Object.keys(recipes))if(recipes[k].shared===url)delete recipes[k];follows=follows.filter(f=>f.url!==url);LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();renderShare();toast("Carnet retiré");}
 function copyShared(id){const r=recipes[id];if(!r)return;const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
   const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
@@ -1983,6 +2035,7 @@ function renderShare(){
         <div class="row"><button type="button" class="btn primary" data-act="shareMail">✉️ Par mail</button><button type="button" class="btn" data-act="shareSend">💬 SMS, WhatsApp…</button><button type="button" class="btn" data-act="shareCopy">Copier le lien</button></div>
         <details class="share-msg"><summary class="muted" style="font-size:13px">Le lien part avec une petite procédure (iPhone et Android) · voir le message</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;margin:8px 0 0">${esc(shareInvite())}</pre></details>
         <span class="muted" style="font-size:12px">${at?"Mis à jour le "+new Date(at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+". ":""}Les nouvelles recettes sont ajoutées automatiquement. Comptez quelques minutes avant que le lien marche la première fois.</span></div>`:""}`;
+  $("#shareSubs").innerHTML=subsHtml();if(document.activeElement!==$("#myNameIn"))$("#myNameIn").value=myName();$("#myNameRow").hidden=!follows.length;
   $("#shareFollow").innerHTML=(follows.length?follows.map(f=>`<div class="pref-row"><div><strong>${esc(f.name)}</strong><div class="muted" style="font-size:13px">${f.err?esc(f.err):(f.n||0)+" recettes"+(f.at?" · mis à jour "+new Date(f.at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"")}</div></div>
       <div class="row" style="gap:6px"><button type="button" class="btn" data-act="followRefresh" data-u="${esc(f.url)}">↻</button><button type="button" class="btn danger" data-act="followRm" data-u="${esc(f.url)}">Retirer</button></div></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">Aucun carnet suivi.</p>`);
 }
@@ -2185,9 +2238,13 @@ document.addEventListener("click",e=>{
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
   else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to;setTimeout(()=>{const el=to&&document.getElementById(to);const sc=$("#prefSheet .sheet-in");if(el){sc.scrollTop=0;el.scrollIntoView({block:"start",behavior:"smooth"});}else sc.scrollTop=0;},80);}
-  else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;}
-  else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}$("#shareSheet").hidden=true;}
-  else if(a==="shareOn"){const on=b.dataset.v==="1";menu.share=Object.assign({id:Math.random().toString(36).slice(2,12),name:""},menu.share,{on});saveMenu();renderShare();if(on)publishShare(true);}
+  else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;pollSubs();}
+  else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}
+    const mn=$("#myNameIn").value.trim().slice(0,40);if(mn&&mn!==myName()){LS.set("cm_myname",mn);pingFollows();}$("#shareSheet").hidden=true;}
+  else if(a==="shareOn"){const on=b.dataset.v==="1";menu.share=Object.assign({id:Math.random().toString(36).slice(2,12),name:""},menu.share,{on});shareInbox();saveMenu();renderShare();if(on){publishShare(true);pollSubs();}}
+  else if(a==="welcomeOk"){const n=$("#welcomeName").value.trim().slice(0,40);if(!n){$("#welcomeName").focus();toast("Indique ton prénom");return;}LS.set("cm_myname",n);$("#welcomeSheet").hidden=true;pingFollows();toast("Bienvenue "+n+" !");}
+  else if(a==="welcomeSkip"){$("#welcomeSheet").hidden=true;}
+  else if(a==="subHide"){const s=((menu.share||{}).subs||{})[b.dataset.u];if(s){s.hidden=true;saveMenu();renderShare();}}
   else if(a==="shareMail"){ // a real mail keeps its line breaks and paragraphs
     location.href="mailto:?subject="+encodeURIComponent("Mon carnet de recettes 🍽️")+"&body="+encodeURIComponent(shareInvite().replace(/\n/g,"\r\n"));}
   else if(a==="shareSend"){const t=shareInvite();
@@ -2875,7 +2932,7 @@ if(sync)runSync();
 startImportPolling();
 renderNow(); setInterval(renderNow,20000);
 (()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){addFollow(decodeURIComponent(m[1]));history.replaceState(null,"",location.pathname);}
-  refreshFollows();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshFollows();});})();
+  refreshFollows();pollSubs();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){refreshFollows();pollSubs();}});})();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 /* keep open windows inside the visible area (keyboard on iPhone) */
