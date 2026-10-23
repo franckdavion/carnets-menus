@@ -1303,7 +1303,7 @@ function renderRecipes(){
           :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}${r.shared?`<span class="muted" style="font-size:12px">Recette de ${esc(r.sharedBy||"un proche")} · lecture seule</span>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
-      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${rPhotoSrc(id)}" alt="">`:""}<h3>${esc(r.name)}</h3>
+      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?` data-auto="${esc(id)}"`:""}>`:""}<h3>${esc(r.name)}</h3>
       <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
@@ -1811,7 +1811,7 @@ function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[
   for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
 const rFetching=new Set();
 /* matching photo for every recipe: free photos from Wikipédia / Wikimedia Commons, found by the recipe's name; "Autre photo" cycles */
-const AUTOPH="cm_autoph";let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
+/* v2: the first version asked Wikipédia for sizes that do not exist */ const AUTOPH="cm_autoph2";try{localStorage.removeItem("cm_autoph");}catch(e){}let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
 const autoKey=r=>norm(r.name);
 function autoList(id){const r=recipes[id];if(!r)return[];const c=autoCache[autoKey(r)];if(c)return c.list||[];
   if(!autoPend.has(id)){autoPend.add(id);autoQ.push(id);autoPump();}return[];}
@@ -1823,12 +1823,16 @@ async function findPhotos(r){
   const add=x=>{if(x&&x.u&&!seen.has(x.u)){seen.add(x.u);out.push(x);}};
   const head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),words=name.split(" ");
   for(const t of [...new Set([name,head])]){if(out.length)break;try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
-    if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source)add({u:d.thumbnail.source.replace(/\/\d+px-/,"/640px-"),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}catch(e){}}
+    if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source){const o=d.originalimage||{};
+      add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}}catch(e){}}
   for(const q of [...new Set([name,head,words.slice(0,2).join(" ")])]){if(out.length>=3)break;
     try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?)$/i.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
   return out.slice(0,8);}
+document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG"||!im.dataset.auto)return;
+  const r=recipes[im.dataset.auto];if(!r)return;const c=autoCache[autoKey(r)];if(!c||!c.list)return;
+  const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(render,200);}},true);
 function autoPhoto(id){const r=recipes[id],l=autoList(id);if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
@@ -1845,7 +1849,7 @@ document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.cla
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,auto=!r.photo&&!from&&src?autoPhoto(id):null;
-  if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="Photo : ${esc(r.name)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
+  if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-auto="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
     ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="autoNext" data-id="${esc(id)}">↻ Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
   return pick("📷 Ajouter ma photo")+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
