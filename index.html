@@ -62,6 +62,7 @@ button{cursor:pointer}
 .news-bar{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:10px 14px;border-radius:14px;border:1px solid var(--accent);background:var(--soft);color:var(--ink);font:inherit;font-size:15px;text-align:left;touch-action:manipulation}
 .news-bar span:nth-child(2){flex:1}.news-bar b{color:var(--accent)}
 .tag.news{color:var(--accent);font-weight:700}
+#f-steps.flash{outline:2px solid var(--accent);outline-offset:2px}
 .lk-meals{display:flex;flex-direction:column;gap:6px}
 .lk-meal{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px}
 .lk-meal b,.lk-meal span,.lk-meal small{display:block}.lk-meal small{font-size:12px;margin-top:2px}.lk-meal .ctl{display:flex;flex-wrap:nowrap;align-items:center;gap:6px;flex:0 0 auto;position:static}.lk-meal .ctl .n{display:inline;min-width:56px;text-align:center;font-weight:600}
@@ -594,9 +595,9 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div id="f-ings" style="display:flex;flex-direction:column;gap:8px"></div>
       <button type="button" class="btn ghost" data-act="addIng" style="align-self:flex-start">+ Ingrédient</button>
     </div>
-    <label class="field"><span class="label">Étapes (une par ligne)</span><textarea id="f-steps" rows="4"></textarea></label>
+    <label class="field"><span class="label">Étapes (une par ligne)</span><textarea id="f-steps" rows="6"></textarea><span class="muted" id="f-stepsNote" style="font-size:12px">Quand vous renommez un ingrédient, son nom est aussi changé dans les étapes. Relisez-les et adaptez la préparation si besoin.</span></label>
     <div class="err" id="f-err"></div>
-    <button class="btn primary" type="submit">Enregistrer la recette</button>
+    <div class="add-foot"><button class="btn primary" type="submit" id="f-save">Enregistrer la recette</button></div>
   </form>
 </div>
 
@@ -2409,11 +2410,22 @@ function addIngRow(init){
    <button type="button" class="del" data-act="rmIng" aria-label="Retirer l'ingrédient">×</button>
    <span></span><select id="ir${i}" class="ir r" aria-label="Rayon">${RAYONS.map(r=>`<option${r==="Épicerie"?" selected":""}>${r}</option>`).join("")}</select></div>`;
   const nameIn=d.querySelector(".in"), ry=d.querySelector(".ir");
+  nameIn.addEventListener("change",()=>{const was=nameIn.dataset.cur||"",now=nameIn.value.trim();if(was&&now&&norm(was)!==norm(now))renameInSteps(was,now);nameIn.dataset.cur=now;});
   ry.addEventListener("change",()=>ry.dataset.touched="1");
   nameIn.addEventListener("input",()=>{if(ry.dataset.touched)return;const g=GUESS.find(([re])=>re.test(nameIn.value));ry.value=g?g[1]:"Épicerie";});
-  if(init){d.querySelector(".iq").value=init.q||"";d.querySelector(".iu").value=UNITS.includes(init.u)?init.u:"pièce";nameIn.value=init.n||"";
+  if(init){d.querySelector(".iq").value=init.q||"";d.querySelector(".iu").value=UNITS.includes(init.u)?init.u:"pièce";nameIn.value=init.n||"";nameIn.dataset.cur=init.n||"";
     ry.value=RAYONS.includes(init.r)?init.r:"Divers";ry.dataset.touched="1";}
   $("#f-ings").appendChild(d);
+}
+// "lentilles vertes (cuites)" → "crème de soja": change the name in the steps too (with or without what is in brackets)
+function renameInSteps(was,now){const ta=$("#f-steps");if(!ta||!ta.value)return;
+  const core=s=>s.replace(/\s*\([^)]*\)\s*/g," ").replace(/\s+/g," ").trim();
+  const forms=[...new Set([was.trim(),core(was)])].filter(f=>f.length>=3).sort((a,b)=>b.length-a.length);
+  let txt=ta.value,n=0;
+  if(forms.length){const re=new RegExp("(^|[^a-zà-ÿœæ])("+forms.map(f=>f.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")(?=$|[^a-zà-ÿœæ])","gi");
+    txt=txt.replace(re,(m,pre)=>{n++;return pre+core(now);});} // one pass, longest form first
+  if(n){ta.value=txt;const note=$("#f-stepsNote");note.textContent=`✓ « ${core(was)} » remplacé par « ${core(now)} » dans ${n} étape${n>1?"s":""}. Relisez la préparation et adaptez-la si besoin.`;note.style.color="var(--accent)";ta.classList.add("flash");setTimeout(()=>ta.classList.remove("flash"),1200);}
+  else{const note=$("#f-stepsNote");note.textContent=`« ${core(was)} » n'apparaît pas dans les étapes : pensez à adapter la préparation pour « ${core(now)} ».`;note.style.color="";}
 }
 /* ---------- paste a recipe (text from Live Text, a site, a message) ---------- */
 const NB="(?![a-zà-ÿ])";
@@ -2854,8 +2866,9 @@ function openSheet(id){
   $("#recForm").reset();$("#f-ings").innerHTML="";$("#f-err").textContent="";
   $("#pasteBox").open=false;$("#pasteIn").value="";$("#pasteMsg").textContent="";
   const r=id&&recipes[id];editId=r?id:null;
+  $("#f-stepsNote").textContent="Quand vous renommez un ingrédient, son nom est aussi changé dans les étapes. Relisez-les et adaptez la préparation si besoin.";$("#f-stepsNote").style.color="";
   $("#f-title").textContent=r?"Modifier la recette":"Nouvelle recette";$("#pasteBox").hidden=!!r;
-  $("#recForm button[type=submit]").textContent=r?"Enregistrer les modifications":"Enregistrer la recette";
+  $("#f-save").textContent=r?"Enregistrer les modifications":"Enregistrer la recette";
   if(r){$("#f-name").value=r.name||"";$("#f-cat").value=CATS.includes(r.cat)?r.cat:"Plat";$("#f-time").value=Number(r.time)||"";$("#f-serves").value=Number(r.serves)||4;
     (r.ing||[]).filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));addIngRow();
     $("#f-steps").value=Array.isArray(r.steps)?r.steps.join("\n"):String(r.steps||"");}
@@ -3037,10 +3050,13 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 /* keep open windows inside the visible area (keyboard on iPhone) */
 (()=>{const vv=window.visualViewport;if(!vv)return;const d=document.documentElement;
+  let tall=vv.height;const typing=()=>{const a=document.activeElement;return!!a&&(a.tagName==="TEXTAREA"||(a.tagName==="INPUT"&&!/^(checkbox|radio|button|submit|file|range)$/.test(a.type)));};
   const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");
-    const kb=window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open
+    tall=Math.max(tall,vv.height);
+    const kb=typing()||tall-vv.height>150||window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open: tab bar hidden, window uses all the room
     const t=document.querySelector(".tabs");if(t&&!kb)d.style.setProperty("--tabh",t.offsetHeight+"px");};
-  vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);window.addEventListener("orientationchange",()=>setTimeout(fit,300));
+  vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);window.addEventListener("orientationchange",()=>{tall=0;setTimeout(fit,400);});
+  document.addEventListener("focusin",fit);document.addEventListener("focusout",()=>setTimeout(fit,120));
   new MutationObserver(fit).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});fit();})();
 /* inside a window, a drag only scrolls the window's own content: no bounce of the whole window */
 (()=>{let y0=0,x0=0;
