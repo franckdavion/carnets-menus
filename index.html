@@ -727,6 +727,9 @@ const NOT_MAIN=["Dessert","Entrée"]; // never proposed automatically as a meal
 const MAIN_CATS=["Plat","Végé","Rapide","Soupe"];
 // a recipe can sit in several categories: the first one is its main category
 function catsOf(r){return r?[...new Set([r.cat,...(r.cats||[]),...(r.alsoMain?["Plat"]:[]),...(r.alsoEntree?["Entrée"]:[])].filter(Boolean))]:[];}
+// photos of the dish: an image search on its name, works for every recipe, even future ones
+const photoUrl=r=>"https://www.google.com/search?tbm=isch&q="+encodeURIComponent(r.name+" recette");
+const photoBtn=r=>`<a class="btn photo-btn" href="${esc(photoUrl(r))}" target="_blank" rel="noopener">📷 Voir à quoi ça ressemble</a>`;
 const inCat=(r,c)=>catsOf(r).includes(c);
 const inCats=(r,cs)=>catsOf(r).some(c=>cs.includes(c));
 const canMain=r=>inCats(r,MAIN_CATS);
@@ -1156,7 +1159,7 @@ function renderRecipes(){
       const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
       const steps=String(r.steps||"").split("\n").map(s=>s.trim()).filter(Boolean);
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
-      det=`<div class="detail">${catRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
+      det=`<div class="detail">${catRow}<div class="row">${photoBtn(r)}</div><div class="serv-row"><span class="label">Ingrédients pour</span>
           <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
           <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
         <div class="row"><button class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.) · mettre à ${p} p.`:`Ajouter aux courses pour ${p} pers.`}</button></div>
@@ -2426,7 +2429,7 @@ function renderRecSheet(){
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
       <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
-    <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span></div>
+    <div class="row"><button type="button" class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}">${r.fav?"★":"☆"}</button><span class="muted" style="font-size:13px">${r.fav?"Dans vos favoris":"Ajouter aux favoris"}</span><span style="flex:1"></span>${photoBtn(r)}</div>
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
