@@ -2481,7 +2481,7 @@ document.addEventListener("click",e=>{
   if(a==="tab"){clearSheetBack();document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="startView"){LS.set("cm_start",b.dataset.v);renderStart();toast(b.dataset.v==="last"?"L'appli rouvrira la dernière page utilisée":"L'appli s'ouvrira sur « "+b.textContent+" »");}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
-  else if(a==="toggle"){openAdd(id);}
+  else if(a==="toggle"){if(b.closest("#recSheet"))$("#recSheet").hidden=true; /* the recipe comes back when this window closes */ openAdd(id);}
   else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
   else if(a==="addCell")addCellTap(b.dataset.key);
   else if(a==="addNum"){addN=Math.max(1,Math.min(50,addN+Number(b.dataset.d)));renderAdd();}
