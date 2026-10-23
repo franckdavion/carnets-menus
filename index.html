@@ -59,6 +59,9 @@ button{cursor:pointer}
 .top h1{font-size:26px}
 /* "Aujourd'hui" card at the top of the Menu tab: today's two meals and three shortcuts */
 .today{display:flex;flex-direction:column;gap:10px}
+.news-bar{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:10px 14px;border-radius:14px;border:1px solid var(--accent);background:var(--soft);color:var(--ink);font:inherit;font-size:15px;text-align:left;touch-action:manipulation}
+.news-bar span:nth-child(2){flex:1}.news-bar b{color:var(--accent)}
+.tag.news{color:var(--accent);font-weight:700}
 .fr-web{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:12px;margin-top:4px}
 .today-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
 .tl{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer;touch-action:manipulation}
@@ -67,7 +70,7 @@ button{cursor:pointer}
 .tl .tn{flex:1;min-width:0;font-size:16px;font-weight:600;line-height:1.3}
 .tl .tn small{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}
 .tl .tc{color:var(--accent);font-size:20px}
-.tl.empty .tn{color:var(--accent);font-weight:600}
+.tl.tl-empty .tn{color:var(--accent);font-weight:600}
 .tl.done .tn{color:var(--muted);font-weight:400}
 .today-acts{display:flex;gap:8px;flex-wrap:wrap}
 .today-acts .pill{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:9px 14px;font:inherit;font-size:14px;min-height:40px;touch-action:manipulation}
@@ -504,7 +507,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 <div class="tabs"><nav role="tablist">
   <button class="tab" role="tab" data-act="tab" data-v="menu" id="t-menu"><span class="ti" aria-hidden="true">🍽️</span>Menu <span class="badge" id="b-menu"></span></button>
   <button class="tab" role="tab" data-act="tab" data-v="week" id="t-week"><span class="ti" aria-hidden="true">📅</span>Semaine</button>
-  <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec"><span class="ti" aria-hidden="true">📖</span>Recettes</button>
+  <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec"><span class="ti" aria-hidden="true">📖</span>Recettes <span class="badge" id="b-rec" hidden></span></button>
   <button class="tab" role="tab" data-act="tab" data-v="shop" id="t-shop"><span class="ti" aria-hidden="true">🛒</span>Courses <span class="badge" id="b-shop"></span></button>
   <button class="tab" role="tab" data-act="tab" data-v="set" id="t-set"><span class="ti" aria-hidden="true">⚙️</span>Réglages</button>
 </nav></div>
@@ -1091,6 +1094,7 @@ function render(){
   const items=shopping(), extras=menu.extras||[];
   const left=items.length+extras.length;
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
+  {const nn=newsCount();$("#b-rec").textContent=nn||"";$("#b-rec").hidden=!nn;if(!nn&&filter.theme==="nouveau")filter.theme="";}
   if($("#now"))renderNow();
   if(!$("#recSheet").hidden)renderRecSheet();
   if($("#storeSheet")&&!$("#storeSheet").hidden)renderStore();
@@ -1195,7 +1199,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
-      <div class="meta">${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -1851,9 +1855,21 @@ async function publishShare(force){
 }
 // Follower: books I follow, refreshed when the app opens; their recipes are read only in my notebook
 let follows=LS.get("cm_follows",[]);
+// what changed in a followed book since last time: shown as "Nouveautés" until the recipe is opened
+let shNews=LS.get("cm_sh_news",{}); // {recipeId:{k:"new"|"maj",by,at}}
+const strHash=s=>{let x=5381;for(let i=0;i<s.length;i++)x=(x*33^s.charCodeAt(i))>>>0;return x.toString(36);};
+function seenNews(id){if(shNews[id]){delete shNews[id];LS.set("cm_sh_news",shNews);}}
+const newsCount=()=>Object.keys(shNews).filter(id=>recipes[id]).length;
 async function refreshFollow(f,quiet){
   try{const r=await fetch(f.url+(f.url.includes("?")?"&":"?")+"t="+Date.now(),{cache:"no-store"});if(!r.ok)throw r.status;
     const d=await r.json();if(!d||typeof d.recipes!=="object")throw"format";
+    const first=!f.sig, sig={};let nNew=0,nMaj=0;
+    for(const[id,x]of Object.entries(d.recipes)){if(!x||!x.name)continue;const nid="sh-"+f.key+"-"+id,hs=strHash(J(x));sig[id]=hs;
+      if(first)continue;const was=f.sig[id];
+      if(!was){shNews[nid]={k:"new",by:d.owner||f.name,at:Date.now()};nNew++;}
+      else if(was!==hs&&!(shNews[nid]&&shNews[nid].k==="new")){shNews[nid]={k:"maj",by:d.owner||f.name,at:Date.now()};nMaj++;}}
+    f.sig=sig;LS.set("cm_sh_news",shNews);
+    if(nNew||nMaj)setTimeout(()=>toast(`🆕 ${d.owner||f.name} : `+[nNew?`${nNew} nouvelle${nNew>1?"s":""} recette${nNew>1?"s":""}`:"",nMaj?`${nMaj} modifiée${nMaj>1?"s":""}`:""].filter(Boolean).join(", ")),400);
     const favs=new Set(Object.keys(recipes).filter(k=>recipes[k].shared===f.url&&recipes[k].fav));
     for(const k of Object.keys(recipes))if(recipes[k].shared===f.url)delete recipes[k];
     for(const[id,x]of Object.entries(d.recipes)){if(!x||!x.name)continue;const nid="sh-"+f.key+"-"+id;
@@ -1862,7 +1878,7 @@ async function refreshFollow(f,quiet){
   }catch(e){f.err=quiet?f.err:"Carnet introuvable pour l'instant (il peut mettre quelques minutes à être publié).";}
   LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();if(!$("#shareSheet").hidden)renderShare();
 }
-function refreshFollows(){follows.forEach(f=>{if(Date.now()-(f.at||0)>10*60e3)refreshFollow(f,true);});}
+function refreshFollows(){follows.forEach(f=>{if(Date.now()-(f.at||0)>3*60e3)refreshFollow(f,true);});}
 function followUrl(raw){let u=String(raw).trim();try{const m=u.match(/[?&]carnet=([^&\s]+)/);if(m)u=decodeURIComponent(m[1]);}catch(e){}
   if(!/^https:\/\/[^\s]+\.json$/i.test(u))return"";return u;}
 function addFollow(raw){const url=followUrl(raw);if(!url){toast("Ce lien de carnet n'est pas reconnu");return false;}
@@ -2005,7 +2021,8 @@ document.addEventListener("click",e=>{
   else if(a==="ideaMode"){ideaMode=b.dataset.v;favShown=10;render();}
   else if(a==="ideaFavMore"){favShown+=20;render();}
   else if(a==="reroll"){ideaSeen=[...ideaSeen,...ideaIds].slice(-30);ideaIds=[];render();}
-  else if(a==="open"){openId=openId===id?null:id;confirmDel=null;render();}
+  else if(a==="open"){openId=openId===id?null:id;confirmDel=null;if(openId)seenNews(id);render();}
+  else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
   else if(a==="more"){recLimit+=50;renderRecipes();}
   else if(a==="kind"){filter.kind=b.dataset.v;recLimit=50;renderRecipes();}
@@ -2303,12 +2320,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
+const THEMES=[["nouveau","🆕 Nouveautés"],["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
 // computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
 function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
 function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
-const hasTheme=(r,t)=>(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
+const hasTheme=(r,t)=>(t==="nouveau"&&!!r.shared&&Object.keys(shNews).some(id=>recipes[id]===r))||(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -2344,7 +2361,7 @@ function recMatch(r,q,kind,quick,light,fav,theme){
 function kindChipsHtml(act,cur,quick,light,fav,theme){
   // choosing a dessert: "Desserts aux légumes" replaces "Légumes"; choosing a main dish: no dessert filter
   const anyShared=Object.values(recipes).some(r=>r.shared);
-  const th=THEMES.filter(([v])=>(v!=="partage"||anyShared)&&(act!=="pkind"?true:pickRole==="dessert"?v!=="legumes":v!=="dessert-legumes"));
+  const th=THEMES.filter(([v])=>(v!=="partage"||anyShared)&&(v!=="nouveau"||(act==="kind"&&(newsCount()||theme==="nouveau")))&&(act!=="pkind"?true:pickRole==="dessert"?v!=="legumes":v!=="dessert-legumes"));
   return th.map(([v,l])=>`<button type="button" class="chip" data-act="${act}Theme" data-v="${v}" aria-pressed="${theme===v}">${l}</button>`).join("")+KIND_CHIPS.map(([v,l])=>`<button type="button" class="chip" data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join("")
     +`<button type="button" class="chip" data-act="${act}Quick" aria-pressed="${quick}">30 min et moins</button>`
     +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`
@@ -2467,9 +2484,10 @@ function renderToday(){
   const line=(meal,lab)=>{const k=slotKey(day,meal),s=sl[k],r=s&&recipes[s.id],done=meal==="midi"?hr>=15:hr>=22;
     const sub=s?[s.entree&&recipes[s.entree]?"Entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"Dessert : "+recipes[s.dessert].name:""].filter(Boolean).join(" · "):"";
     if(r)return`<button type="button" class="tl${done?" done":""}" data-act="viewRec" data-id="${esc(s.id)}"><span class="tm">${lab}</span><span class="tn">${esc(r.name)}${sub?`<small>${esc(sub)}</small>`:""}</span><span class="tc" aria-hidden="true">›</span></button>`;
-    return`<button type="button" class="tl empty${done?" done":""}" data-act="todayPick" data-k="${k}"><span class="tm">${lab}</span><span class="tn">${done?"—":"+ Choisir un plat"}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;};
+    return`<button type="button" class="tl tl-empty${done?" done":""}" data-act="todayPick" data-k="${k}"><span class="tm">${lab}</span><span class="tn">${done?"—":"+ Choisir un plat"}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;};
   const left=+($("#b-shop")&&$("#b-shop").textContent)||0;
-  el.innerHTML=`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
+  const nn=newsCount(),who=[...new Set(Object.entries(shNews).filter(([id])=>recipes[id]).map(([,v])=>v.by))].join(", ");
+  el.innerHTML=(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
     <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="propose">Proposer ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
@@ -2490,7 +2508,7 @@ $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#pr
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
 let recSheetId=null;
-function openRecSheet(id){ natAsk=null; if(!recipes[id])return; recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
