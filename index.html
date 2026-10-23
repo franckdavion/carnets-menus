@@ -3117,7 +3117,7 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
     const kb=typing()||Date.now()-blurAt<400||tall-vv.height>150||window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open: tab bar hidden, window uses all the room
     const t=document.querySelector(".tabs");if(t&&!kb)d.style.setProperty("--tabh",t.offsetHeight+"px");};
   vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);window.addEventListener("orientationchange",()=>{tall=0;setTimeout(fit,400);});
-  let blurAt=0;document.addEventListener("focusout",()=>{blurAt=Date.now();});
+  let blurAt=0;document.addEventListener("focusout",e=>{const t=e.target;if(t&&(t.tagName==="TEXTAREA"||(t.tagName==="INPUT"&&!/^(checkbox|radio|button|submit|file|range)$/.test(t.type))))blurAt=Date.now();}); // only leaving a text field
   document.addEventListener("focusin",fit);document.addEventListener("focusout",()=>setTimeout(fit,450)); // late enough for the tap on "Ajouter" or "Enregistrer" to land before the layout moves
   new MutationObserver(fit).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});fit();})();
 /* inside a window, a drag only scrolls the window's own content: no bounce of the whole window */
