@@ -300,6 +300,10 @@ input,select,textarea{font-size:16px!important}
 .daily-ed{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
 .dchip.editing{outline:2px solid var(--accent);border-radius:999px}
 .ph-google{border:1px solid var(--accent);border-radius:12px;padding:12px;background:var(--surface)}
+.rv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.rv{padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;text-align:left;font:inherit;color:var(--ink)}
+.rv img,.rv-none{width:100%;aspect-ratio:1;object-fit:cover;display:flex;align-items:center;justify-content:center;background:var(--soft);font-size:22px}
+.rv-n{font-size:11px;line-height:1.25;padding:5px 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-c.on{border-color:var(--accent)}
@@ -353,7 +357,7 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}.as.ask{border:2px dashed var(--accent)}
 .aask{grid-column:1/-1;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .aask b{font-size:14px}.aask .btn{text-align:left;justify-content:flex-start;min-height:44px}.aask small{display:block;font-weight:400;color:var(--muted);font-size:12px}
-#addSheet .sheet-in,#photoSheet .sheet-in{height:92%}
+#addSheet .sheet-in,#photoSheet .sheet-in,#reviewSheet .sheet-in{height:92%}
 /* "+ Menu" chooser: the confirm button always stays in view at the bottom */
 .add-foot{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));margin:auto -16px 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -10px 14px -10px rgba(0,0,0,.4);z-index:2}
 .add-foot .btn{width:100%;min-height:48px;font-size:17px}
@@ -538,6 +542,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="row">
       <button class="btn" data-act="pasteRecipe">Coller une recette</button>
       <button class="btn" data-act="goFind">Importer du web ↓</button>
+      <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
     </div>
     <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
@@ -758,6 +763,15 @@ code{font-family:var(--f-mono);font-size:.92em}
     <span class="label">Quand ? Touchez un ou plusieurs repas</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
     <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="reviewSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Revoir les photos</h2><button type="button" class="btn primary" data-act="closeReview">Terminé</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Touchez une photo qui ne va pas pour en choisir une autre (internet, Google Images ou la vôtre).</p>
+    <div class="chips" id="reviewChips"></div>
+    <div class="rv-grid" id="reviewGrid"></div>
   </div>
 </div>
 
@@ -1226,6 +1240,7 @@ function render(){
   {const nn=newsCount();$("#b-rec").textContent=nn||"";$("#b-rec").hidden=!nn;if(!nn&&filter.theme==="nouveau")filter.theme="";}
   if($("#now"))renderNow();
   if(!$("#recSheet").hidden)renderRecSheet();
+  if($("#reviewSheet")&&!$("#reviewSheet").hidden)renderReview();
   if($("#storeSheet")&&!$("#storeSheet").hidden)renderStore();
   if(view==="week")renderWeek(); if(slotK&&!$("#slotSheet").hidden)renderSlotSheet();
   renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids); renderTrips(); renderDrives();
@@ -1835,27 +1850,35 @@ function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[
   for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
 const rFetching=new Set();
 /* matching photo for every recipe: free photos from Wikipédia / Wikimedia Commons, found by the recipe's name; "Autre photo" cycles */
-/* v2: the first version asked Wikipédia for sizes that do not exist */ const AUTOPH="cm_autoph2";try{localStorage.removeItem("cm_autoph");}catch(e){}let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
+/* v3: better search (key words, Openverse); older caches are dropped */ const AUTOPH="cm_autoph3";try{localStorage.removeItem("cm_autoph");localStorage.removeItem("cm_autoph2");}catch(e){}let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
 const autoKey=r=>norm(r.name);
 function autoList(id){const r=recipes[id];if(!r)return[];const c=autoCache[autoKey(r)];if(c)return c.list||[];
   if(!autoPend.has(id)){autoPend.add(id);autoQ.push(id);autoPump();}return[];}
 function autoPump(){while(autoBusy<2&&autoQ.length){const id=autoQ.shift();autoBusy++;
   findPhotos(recipes[id]).then(list=>{const r=recipes[id];if(r){autoCache[autoKey(r)]={list,t:Date.now()};try{LS.set(AUTOPH,autoCache);}catch(e){}}})
     .catch(()=>{}).finally(()=>{autoBusy--;autoPend.delete(id);clearTimeout(autoT);autoT=setTimeout(()=>{render();},400);autoPump();});}}
+// "Gratin de chou-fleur léger au fromage frais" → "gratin chou-fleur": the words that name the dish
+const PH_STOP=new Set("de du des d la le les l au aux à a et en avec sans sur pour façon style ma mon mes maison express rapide facile léger légère légers légères allégé allégée crémeux crémeuse crémeuses fondant fondante simple simplifié simplifiée revisité revisitée minute moelleux moelleuse croustillant croustillante gourmand gourmande healthy recette meilleure".split(" "));
+function phKeywords(name){return name.toLowerCase().replace(/[()&,:;!?.«»"]/g," ").replace(/(pommes?|noix|fruits?|haricots?) de (terre|saint-jacques|coco|mer|cajou)/g,"$1_de_$2").split(/\s+/).filter(w=>w&&!PH_STOP.has(w)&&!/^\d/.test(w)&&!/^(d|l|qu)'/.test(w)).slice(0,3).join(" ").replace(/_/g," ");}
 async function findPhotos(r,max){
   const name=String(r.name||"").replace(/\([^)]*\)/g," ").replace(/\s+/g," ").trim(),out=[],seen=new Set();
   const add=x=>{if(x&&x.u&&!seen.has(x.u)){seen.add(x.u);out.push(x);}};
-  const head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),words=name.split(" ");
+  const head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),key=phKeywords(name),key2=key.split(" ").slice(0,2).join(" ");
+  const want=max||8;
+  // 1. Wikipédia: the article of the dish (best match for classic dishes)
   for(const t of [...new Set([name,head])]){if(out.length)break;try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
     if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source){const o=d.originalimage||{};
       add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}}catch(e){}}
-  for(const q of [...new Set([name,head,words.slice(0,2).join(" ")])]){if(out.length>=(max?max/2:3))break;
-    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+(max||8)+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
+  // 2. Openverse: millions of free photos (Flickr…), searched with the key words
+  for(const q of [...new Set([key,key2].filter(Boolean))]){if(out.length>=Math.min(want,6))break;
+    try{const x=await fetch("https://api.openverse.org/v1/images/?page_size="+(max?16:8)+"&mature=false&q="+encodeURIComponent(q));
+      if(x.ok){const d=await x.json();for(const it of d.results||[]){const u=it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail;if(u)add({u,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}}catch(e){}}
+  // 3. Wikimedia Commons
+  for(const q of [...new Set([key,head,key2].filter(Boolean))]){if(out.length>=want)break;
+    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+want+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?)$/i.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
-  if((max&&out.length<max)||!out.length){try{const x=await fetch("https://api.openverse.org/v1/images/?page_size=12&mature=false&q="+encodeURIComponent(name));
-    if(x.ok){const d=await x.json();for(const it of d.results||[])if(it.thumbnail||it.url)add({u:it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}catch(e){}}
-  return out.slice(0,max||8);}
+  return out.slice(0,want);}
 /* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
 let photoId=null;
 async function openPhotoPick(id){const r=recipes[id];if(!r)return;photoId=id;$("#photoQ").value=r.name;$("#photoUrl").value="";
@@ -1870,6 +1893,13 @@ async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"
   $("#photoMsg").textContent=list.length?"Touchez une photo pour la choisir.":"Aucune photo trouvée : essayez un autre mot (ex. le plat principal), ou collez l'adresse d'une image.";
   $("#photoGrid").innerHTML=list.map((x,i)=>`<button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");}
 let photoCands=[];
+let reviewMode="all",reviewLimit=60;
+function renderReview(){const all=Object.entries(recipes).sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
+  const list=reviewMode==="none"?all.filter(([id])=>!rPhotoSrc(id)):reviewMode==="mine"?all.filter(([,r])=>r.photo||r.pick):all;
+  $("#reviewChips").innerHTML=[["all","Toutes"],["none","Sans photo"],["mine","Choisies par moi"]].map(([v,l])=>`<button type="button" class="chip" data-act="reviewMode" data-v="${v}" aria-pressed="${reviewMode===v}">${l}</button>`).join("");
+  $("#reviewGrid").innerHTML=list.slice(0,reviewLimit).map(([id,r])=>{const s=rPhotoSrc(id);return`<button type="button" class="rv" data-act="reviewPick" data-id="${esc(id)}">${s?`<img src="${esc(s)}" alt="" loading="lazy"${!r.photo&&!r.pick?` data-auto="${esc(id)}"`:""}>`:`<span class="rv-none">📷</span>`}<span class="rv-n">${esc(r.name)}</span></button>`;}).join("")
+    +(list.length>reviewLimit?`<button type="button" class="btn" data-act="reviewMore" style="grid-column:1/-1">Afficher plus (${list.length-reviewLimit} restantes)</button>`:"")
+    +(list.length?"":`<p class="muted" style="grid-column:1/-1">Aucune recette ici.</p>`);}
 // an image copied in Safari / Google Images (or its link): read from the clipboard after the phone's "Coller" confirmation
 async function pasteImage(){const id=photoId;if(!id)return;
   try{if(navigator.clipboard&&navigator.clipboard.read){const items=await navigator.clipboard.read();
@@ -2561,6 +2591,11 @@ document.addEventListener("click",e=>{
   else if(a==="rphotoRm"){removeRecipePhoto(id);}
   else if(a==="autoNext"){const r=recipes[id],l=autoList(id);if(r&&l.length>1){saveRecipe(id,Object.assign({},r,{autoIdx:((Number(r.autoIdx)||0)+1)%l.length}));}else toast("Pas d'autre photo trouvée pour ce plat");}
   else if(a==="photoPick"){openPhotoPick(id);}
+  else if(a==="openReview"){reviewMode="all";reviewLimit=60;renderReview();$("#reviewSheet").hidden=false;$("#reviewSheet .sheet-in").scrollTop=0;}
+  else if(a==="closeReview"){$("#reviewSheet").hidden=true;}
+  else if(a==="reviewMode"){reviewMode=b.dataset.v;reviewLimit=60;renderReview();}
+  else if(a==="reviewMore"){reviewLimit+=60;renderReview();}
+  else if(a==="reviewPick"){openPhotoPick(id);}
   else if(a==="closePhoto"){$("#photoSheet").hidden=true;}
   else if(a==="photoChoose"){choosePhoto(photoCands[Number(b.dataset.i)]);}
   else if(a==="photoPaste"){pasteImage();}
