@@ -245,6 +245,12 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
   #printArea h1{font-size:20px;margin:0 0 12px}#printArea table{width:100%;border-collapse:collapse;font-size:12px}
   #printArea th,#printArea td{border:1px solid #999;padding:6px;vertical-align:top;text-align:left}#printArea thead th{background:#eee}
   #printArea small{color:#444}}
+.agrid{display:grid;grid-template-columns:52px minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:stretch}
+.ad{font-size:13px;font-weight:700;padding-top:10px}
+.as{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px;text-align:left;font:inherit;font-size:14px;font-weight:600;color:var(--ink);min-width:0}
+.as small{display:block;font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}
+.as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}
+#addSheet .sheet-in{height:92%}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -593,6 +599,16 @@ code{font-family:var(--f-mono);font-size:.92em}
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="slotTitle">Repas</h2><button type="button" class="btn primary" data-act="closeSlot">Fermer</button></div>
     <div id="slotBody" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+</div>
+
+<div class="sheet" id="addSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2 id="addTitle">Ajouter</h2><button type="button" class="btn ghost" data-act="closeAdd">Fermer</button></div>
+    <span class="label">En tant que</span><div class="chips" id="addRoles" style="flex-wrap:wrap"></div>
+    <span class="label">Quand ? (plusieurs possibles)</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
+    <div class="agrid" id="addGrid"></div>
+    <button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button>
   </div>
 </div>
 
@@ -1632,6 +1648,47 @@ function printWeek(){
 }
 
 $("#slotSheet").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b&&["viewRec","swap","pick","openSide"].includes(b.dataset.act))$("#slotSheet").hidden=true;},true);
+/* ---------- "+ Menu": choose the role and one or several meals ---------- */
+let addId=null, addRole="main", addWeek=null, addSel=new Set(), addInit=new Set();
+const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
+function openAdd(id){
+  const r=recipes[id];if(!r)return;addId=id;
+  addRole=r.cat==="Dessert"?"dessert":(r.cat==="Entrée"&&!canMain(r))?"entree":"main";
+  addWeek=curWeek;addPick();$("#addSheet").hidden=false;$("#addSheet .sheet-in").scrollTop=0;
+}
+function addPick(){ // what is already planned for this recipe in this role
+  addSel=new Set();const f=ROLE_FIELD[addRole];
+  for(const w of weekOptions().map(x=>x[0]))for(const [k,s] of Object.entries((menu.weeks||{})[w]||{}))if(s&&s[f]===addId)addSel.add(w+"#"+k);
+  addInit=new Set(addSel);renderAdd();
+}
+function renderAdd(){
+  const r=recipes[addId];if(!r){$("#addSheet").hidden=true;return;}
+  $("#addTitle").textContent="Ajouter « "+r.name+" »";
+  $("#addRoles").innerHTML=[["main","Plat"],["entree","Entrée"],["dessert","Dessert"]].map(([v,l])=>`<button type="button" class="chip" data-act="addRole" data-v="${v}" aria-pressed="${addRole===v}">${l}</button>`).join("");
+  $("#addWeeks").innerHTML=weekOptions().slice(0,2).map(([v,l])=>`<button type="button" class="chip" data-act="addWeekSel" data-w="${v}" aria-pressed="${addWeek===v}">${l} · ${shortDate(parseYmd(v))}</button>`).join("");
+  const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date()), f=ROLE_FIELD[addRole];
+  const cell=(d,i,m)=>{const k=slotKey(d,m),key=addWeek+"#"+k,s=wk[k],past=ymd(addDays(ws,i))<today,on=addSel.has(key);
+    let note="Libre",dis=past;
+    if(addRole==="main"){if(s&&recipes[s.id]){note=s.id===addId?"déjà prévu":recipes[s.id].name;if(s.lock&&s.id!==addId){dis=true;note+=" 🔒";}}}
+    else{if(!s||!recipes[s.id]){dis=true;note="pas de plat";}else note=s[f]&&recipes[s[f]]?(s[f]===addId?"déjà prévu":recipes[s[f]].name):"à "+recipes[s.id].name;}
+    const repl=!dis&&!on&&note!=="Libre"&&!note.startsWith("à ")&&note!=="déjà prévu";
+    return`<button type="button" class="as${on?" on":""}${dis?" dis":""}" data-act="addCell" data-key="${key}" ${dis?"disabled":""}>${on?"✓ ":""}${m==="midi"?"Midi":"Soir"}<small>${past?"passé":esc(note)}${repl?" · remplacer":""}</small></button>`;};
+  $("#addGrid").innerHTML=DAYS.map((d,i)=>`<span class="ad">${d.slice(0,3)} ${addDays(ws,i).getDate()}</span>${cell(d,i,"midi")}${cell(d,i,"soir")}`).join("");
+  const add=[...addSel].filter(x=>!addInit.has(x)).length, rem=[...addInit].filter(x=>!addSel.has(x)).length;
+  $("#addOk").textContent=add||rem?[add?`Ajouter à ${add} repas`:"",rem?`retirer de ${rem}`:""].filter(Boolean).join(", "):"Touchez un ou plusieurs repas";
+  $("#addOk").disabled=!(add||rem);
+}
+function applyAdd(){
+  const f=ROLE_FIELD[addRole];let n=0;
+  for(const key of addInit)if(!addSel.has(key)){const[w,k]=key.split("#"),s=(menu.weeks[w]||{})[k];if(!s)continue;
+    if(addRole==="main"){if(!s.lock)delete menu.weeks[w][k];}else delete s[f];}
+  for(const key of addSel)if(!addInit.has(key)){const[w,k]=key.split("#");menu.weeks[w]=menu.weeks[w]||{};const s=menu.weeks[w][k];
+    if(addRole==="main")menu.weeks[w][k]=Object.assign({},s||{},{id:addId,n:s&&s.n||viewServ[addId]||menu.people});else if(s)s[f]=addId;n++;}
+  $("#addSheet").hidden=true;if(addId===ideaId)ideaId=null;render();saveMenu();
+  document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
+  toast(n?`« ${recipes[addId].name} » ajouté à ${n} repas`:"Menu mis à jour");
+}
+
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1666,13 +1723,12 @@ document.addEventListener("click",e=>{
   if(a==="check"||a==="checkX")return; // handled on change
   if(a==="tab"){view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
-  else if(a==="toggle"){
-    if(onMenu(id)){slotsOf(id).forEach(k=>delete W()[k]);toast("Retiré du menu");}
-    else{const k=nextEmptySlot();if(!k){toast("La semaine est complète : libérez une case d'abord");return;}
-      W()[k]={id,n:viewServ[id]||menu.people};toast("Ajouté : "+slotLabel(k));}
-    if(id===ideaId)ideaId=null;
-    if(b.closest("#frOut")){const on=onMenu(id);b.classList.toggle("on",on);b.textContent=on?"✓ Au menu":"+ Menu";}
-    render();saveMenu();}
+  else if(a==="toggle"){openAdd(id);}
+  else if(a==="addRole"){addRole=b.dataset.v;addPick();}
+  else if(a==="addWeekSel"){addWeek=b.dataset.w;renderAdd();}
+  else if(a==="addCell"){const key=b.dataset.key;if(addSel.has(key))addSel.delete(key);else addSel.add(key);renderAdd();}
+  else if(a==="addOk")applyAdd();
+  else if(a==="closeAdd"){$("#addSheet").hidden=true;}
   else if(["serv","swap","lock","pick"].includes(a)&&b.dataset.k&&isPast(b.dataset.k)){toast("Ce jour est passé : son menu ne se modifie plus");}
   else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
   else if(a==="applyAll"){for(const k in W())if(!isPast(k))W()[k].n=menu.people;render();saveMenu();}
