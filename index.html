@@ -299,6 +299,7 @@ input,select,textarea{font-size:16px!important}
 .it-del{width:32px;height:32px;border-radius:50%;color:var(--muted)}
 .daily-ed{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
 .dchip.editing{outline:2px solid var(--accent);border-radius:999px}
+.ph-google{border:1px solid var(--accent);border-radius:12px;padding:12px;background:var(--surface)}
 .ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-c.on{border-color:var(--accent)}
@@ -764,13 +765,15 @@ code{font-family:var(--f-mono);font-size:.92em}
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2>Choisir une photo</h2><button type="button" class="btn ghost" data-act="closePhoto">Fermer</button></div>
     <form class="extra-form" id="photoForm"><input id="photoQ" type="search" placeholder="Chercher : tarte tatin, curry…" autocomplete="off"><button class="btn primary" type="submit">Chercher</button></form>
+    <div class="field ph-google"><span class="label">Avec Google Images</span>
+      <span class="muted" style="font-size:13px">1. Ouvrez Google Images · 2. restez appuyé sur la photo qui vous plaît → <b>Copier</b> · 3. revenez ici et touchez « Coller l'image copiée ».</span>
+      <div class="row"><a class="btn primary" id="photoGoogle" target="_blank" rel="noopener">🔎 Chercher sur Google Images ↗</a><button type="button" class="btn" data-act="photoPaste">📋 Coller l'image copiée</button></div></div>
     <p class="muted" id="photoMsg" style="margin:0;font-size:13px"></p>
     <div class="ph-grid" id="photoGrid"></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">Ou</span>
       <div class="row" id="photoMine"></div>
       <label class="field"><span class="muted" style="font-size:13px">Collez l'adresse d'une image trouvée sur internet (sur l'image : rester appuyé → « Copier le lien »)</span>
         <div class="extra-form"><input id="photoUrl" placeholder="https://…" inputmode="url" autocomplete="off" autocapitalize="off"><button type="button" class="btn" data-act="photoUrlOk">Utiliser</button></div></label>
-      <a class="btn" id="photoGoogle" target="_blank" rel="noopener">Voir sur Google Images ↗</a>
     </div>
   </div>
 </div>
@@ -1850,6 +1853,8 @@ async function findPhotos(r,max){
     try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+(max||8)+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?)$/i.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
+  if((max&&out.length<max)||!out.length){try{const x=await fetch("https://api.openverse.org/v1/images/?page_size=12&mature=false&q="+encodeURIComponent(name));
+    if(x.ok){const d=await x.json();for(const it of d.results||[])if(it.thumbnail||it.url)add({u:it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}catch(e){}}
   return out.slice(0,max||8);}
 /* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
 let photoId=null;
@@ -1865,6 +1870,14 @@ async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"
   $("#photoMsg").textContent=list.length?"Touchez une photo pour la choisir.":"Aucune photo trouvée : essayez un autre mot (ex. le plat principal), ou collez l'adresse d'une image.";
   $("#photoGrid").innerHTML=list.map((x,i)=>`<button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");}
 let photoCands=[];
+// an image copied in Safari / Google Images (or its link): read from the clipboard after the phone's "Coller" confirmation
+async function pasteImage(){const id=photoId;if(!id)return;
+  try{if(navigator.clipboard&&navigator.clipboard.read){const items=await navigator.clipboard.read();
+      for(const it of items){const ty=it.types.find(t=>t.startsWith("image/"));if(ty){const blob=await it.getType(ty);$("#photoSheet").hidden=true;await setRecipePhoto(id,new File([blob],"photo",{type:ty}));return;}
+        if(it.types.includes("text/plain")){const t=(await(await it.getType("text/plain")).text()).trim();if(/^https:\/\/\S+$/.test(t)){$("#photoUrl").value=t;document.querySelector('[data-act=photoUrlOk]').click();return;}}}}
+    else if(navigator.clipboard&&navigator.clipboard.readText){const t=(await navigator.clipboard.readText()).trim();if(/^https:\/\/\S+$/.test(t)){$("#photoUrl").value=t;document.querySelector('[data-act=photoUrlOk]').click();return;}}
+    toast("Rien à coller : sur Google Images, restez appuyé sur la photo puis « Copier »");}
+  catch(e){toast("Collage refusé : touchez « Coller » quand l'iPhone le propose");}}
 function choosePhoto(c){const r=recipes[photoId];if(!r||!c)return;const n=Object.assign({},r,{pick:{u:c.u,page:c.page||"",src:c.src||"internet"}});delete n.noAuto;
   saveRecipe(photoId,n);$("#photoSheet").hidden=true;toast("Photo choisie");}
 $("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("#photoQ").value);});
@@ -1898,7 +1911,7 @@ function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared
   if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-auto="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
     ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
-  return pick("📷 Ajouter ma photo")+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
+  return pick("📷 Ajouter ma photo")+(r.shared?"":`<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Chercher une photo</button>`)+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
 const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
 let wineDraft=null;
 function wineFor(k,week){return(menu.wines||[]).filter(w=>w.k===k&&w.w===(week||curWeek));}
@@ -2550,6 +2563,7 @@ document.addEventListener("click",e=>{
   else if(a==="photoPick"){openPhotoPick(id);}
   else if(a==="closePhoto"){$("#photoSheet").hidden=true;}
   else if(a==="photoChoose"){choosePhoto(photoCands[Number(b.dataset.i)]);}
+  else if(a==="photoPaste"){pasteImage();}
   else if(a==="photoUrlOk"){const u=$("#photoUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){toast("Collez une adresse qui commence par https://");return;}
     const t=new Image();t.onload=()=>choosePhoto({u,page:u,src:(()=>{try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return"internet";}})()});t.onerror=()=>toast("Cette adresse n'est pas une image lisible");t.src=u;}
   else if(a==="siteOff"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.image;delete n.noAuto;saveRecipe(id,n);}}
