@@ -306,6 +306,9 @@ input,select,textarea{font-size:16px!important}
 .rv-n{font-size:11px;line-height:1.25;padding:5px 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ph-w{position:relative}.ph-w .ph-c{width:100%}
 .ph-x{position:absolute;top:6px;right:6px;width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:15px;font-weight:700;touch-action:manipulation}
+.paste-zone{min-height:64px;border:2px dashed var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:var(--muted);font-size:14px;background:var(--bg);-webkit-user-select:text;user-select:text;caret-color:transparent}
+.paste-zone:focus{outline:none;border-style:solid;color:var(--ink)}
+.ph-google{display:flex;flex-direction:column;gap:8px}
 .ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-c.on{border-color:var(--accent)}
@@ -830,8 +833,12 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between"><h2>Choisir une photo</h2><button type="button" class="btn ghost" data-act="closePhoto">Fermer</button></div>
     <form class="extra-form" id="photoForm"><input id="photoQ" type="search" placeholder="Chercher : tarte tatin, curry…" autocomplete="off"><button class="btn primary" type="submit">Chercher</button></form>
     <div class="field ph-google"><span class="label">Avec Google Images</span>
-      <span class="muted" style="font-size:13px">1. Ouvrez Google Images · 2. restez appuyé sur la photo qui vous plaît → <b>Copier</b> · 3. revenez ici et touchez « Coller l'image copiée ».</span>
-      <div class="row"><a class="btn primary" id="photoGoogle" target="_blank" rel="noopener">🔎 Chercher sur Google Images ↗</a><button type="button" class="btn" data-act="photoPaste">📋 Coller l'image copiée</button></div></div>
+      <a class="btn primary" id="photoGoogle" target="_blank" rel="noopener">🔎 Chercher sur Google Images ↗</a>
+      <span class="muted" style="font-size:13px"><b>Méthode simple</b> : sur la photo qui vous plaît, restez appuyé → <b>Enregistrer l'image</b> (ou « Télécharger »). Revenez ici et touchez :</span>
+      <label class="btn rp-pick" id="photoFromGallery">🖼️ Choisir dans mes photos<input type="file" accept="image/*" class="rphoto-in" id="photoGalleryIn" hidden></label>
+      <span class="muted" style="font-size:13px"><b>Ou en copiant</b> : restez appuyé sur la photo → <b>Copier</b>, revenez ici, puis restez appuyé dans le cadre ci-dessous → <b>Coller</b>.</span>
+      <div class="paste-zone" id="pasteZone" contenteditable="true" role="textbox" aria-label="Coller l'image ici" inputmode="none">Restez appuyé ici → Coller</div>
+      <button type="button" class="btn ghost" data-act="photoPaste" style="align-self:flex-start">📋 Coller automatiquement</button></div>
     <p class="muted" id="photoMsg" style="margin:0;font-size:13px"></p>
     <div class="ph-grid" id="photoGrid"></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">Ou</span>
@@ -1960,6 +1967,7 @@ async function findPhotos(r,max){
 /* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
 let photoId=null;
 async function openPhotoPick(id){const r=recipes[id];if(!r)return;photoId=id;$("#photoQ").value=r.name;$("#photoUrl").value="";
+  $("#photoGalleryIn").dataset.id=id;$("#pasteZone").textContent="Restez appuyé ici → Coller";
   $("#photoMine").innerHTML=`<label class="btn rp-pick">📷 Ma photo (appareil ou photothèque)<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   $("#recSheet").hidden=true; /* the recipe comes back when this window closes */ $("#photoSheet").hidden=false;$("#photoSheet .sheet-in").scrollTop=0;photoSearch(r.name,true);}
 async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"").trim();if(!q)return;
@@ -1974,6 +1982,15 @@ function renderPhotoGrid(){const id=photoId,cur=rPhotoSrc(id),nope=rejected(reci
   $("#photoGrid").innerHTML=photoCands.map((x,i)=>nope.has(x.u)?"":`<div class="ph-w"><button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.closest('.ph-w').remove()"></button><button type="button" class="ph-x" data-act="photoReject" data-i="${i}" aria-label="Supprimer cette photo">✕</button></div>`).join("");
   if(!$("#photoGrid").children.length)$("#photoMsg").textContent="Plus de photo ici : cherchez avec d'autres mots, ou utilisez Google Images.";}
 let photoCands=[];
+// a pasted image (or image link) in the paste box: works on iPhone and Android with the long-press "Coller"
+$("#pasteZone").addEventListener("paste",async e=>{e.preventDefault();const id=photoId;if(!id)return;const dt=e.clipboardData;
+  const f=[...(dt&&dt.files||[])].find(x=>x.type.startsWith("image/"))||[...(dt&&dt.items||[])].filter(i=>i.kind==="file"&&i.type.startsWith("image/")).map(i=>i.getAsFile())[0];
+  if(f){$("#photoSheet").hidden=true;await setRecipePhoto(id,f);return;}
+  const html=dt&&dt.getData("text/html")||"",m=html.match(/<img[^>]+src="(https:[^"]+)"/i),t=(dt&&dt.getData("text/plain")||"").trim();
+  const u=m?m[1].replace(/&amp;/g,"&"):(/^https:\/\/\S+$/.test(t)?t:"");
+  if(u){$("#photoUrl").value=u;document.querySelector('[data-act=photoUrlOk]').click();return;}
+  $("#pasteZone").textContent="Rien d'utilisable dans ce qui a été collé : sur Google, restez appuyé sur la photo puis « Copier ».";});
+$("#pasteZone").addEventListener("beforeinput",e=>{if(e.inputType!=="insertFromPaste")e.preventDefault();});
 let reviewMode="all",reviewLimit=60;
 function renderReview(){const all=Object.entries(recipes).sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const list=reviewMode==="none"?all.filter(([id])=>!rPhotoSrc(id)):reviewMode==="mine"?all.filter(([,r])=>r.photo||r.pick):all;
@@ -1987,8 +2004,8 @@ async function pasteImage(){const id=photoId;if(!id)return;
       for(const it of items){const ty=it.types.find(t=>t.startsWith("image/"));if(ty){const blob=await it.getType(ty);$("#photoSheet").hidden=true;await setRecipePhoto(id,new File([blob],"photo",{type:ty}));return;}
         if(it.types.includes("text/plain")){const t=(await(await it.getType("text/plain")).text()).trim();if(/^https:\/\/\S+$/.test(t)){$("#photoUrl").value=t;document.querySelector('[data-act=photoUrlOk]').click();return;}}}}
     else if(navigator.clipboard&&navigator.clipboard.readText){const t=(await navigator.clipboard.readText()).trim();if(/^https:\/\/\S+$/.test(t)){$("#photoUrl").value=t;document.querySelector('[data-act=photoUrlOk]').click();return;}}
-    toast("Rien à coller : sur Google Images, restez appuyé sur la photo puis « Copier »");}
-  catch(e){toast("Collage refusé : touchez « Coller » quand l'iPhone le propose");}}
+    toast("Rien à coller automatiquement : restez appuyé dans le cadre puis « Coller »");$("#pasteZone").focus();}
+  catch(e){toast("Ce téléphone refuse le collage automatique : restez appuyé dans le cadre puis « Coller »");$("#pasteZone").focus();}}
 function choosePhoto(c){const r=recipes[photoId];if(!r||!c)return;const n=Object.assign({},r,{pick:{u:c.u,page:c.page||"",src:c.src||"internet"}});delete n.noAuto;
   saveRecipe(photoId,n);$("#photoSheet").hidden=true;toast("Photo choisie");}
 $("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("#photoQ").value);});
