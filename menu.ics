@@ -186,7 +186,7 @@ UID:20261028-soir@carnet-menus
 DTSTAMP:20261028T000000Z
 DTSTART;TZID=Europe/Paris:20261028T193000
 DTEND;TZID=Europe/Paris:20261028T210000
-SUMMARY:Soir : Soupe de tomates et boulettes
+SUMMARY:Soir : Soupe de tomates et boulettes (+ Allumettes au jambon)
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
