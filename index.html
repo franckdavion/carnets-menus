@@ -1311,7 +1311,7 @@ function render(){
     $("#v-"+v).hidden=view!==v;$("#footCopy").hidden=view==="set";
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
-  applyPacks();
+  applyPacks();refreshThumbs();
   {const f=$("#frForm"),to=view==="rec"?$("#frSlotRec"):view==="menu"?$("#v-menu"):null;if(to&&f.parentNode!==to)to.appendChild(f);} // "Qu'est-ce que je fais avec…" lives on Aujourd'hui and Recettes
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
@@ -2059,7 +2059,9 @@ function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,nu
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";$("#photoSheet").hidden=true;}});
 // small photo of a recipe for lists (suggestions, favourites, choosing a dish)
 function thumbHtml(id,cls){const r=recipes[id],s=r?rPhotoSrc(id):"";
-  return s?`<img class="${cls}" src="${esc(s)}" alt="" loading="lazy"${r&&!r.photo&&!r.pick&&s!==r.image?` data-auto="${esc(id)}"`:""}>`:`<span class="${cls} ph-none" aria-hidden="true">🍽️</span>`;}
+  return s?`<img class="${cls}" src="${esc(s)}" alt="" loading="lazy"${r&&!r.photo&&!r.pick&&s!==r.image?` data-auto="${esc(id)}"`:""}>`:`<span class="${cls} ph-none" aria-hidden="true" data-th="${esc(id)}" data-cls="${esc(cls)}">🍽️</span>`;}
+// lists drawn once (e.g. "Qu'est-ce que je fais avec…") get their photo when it arrives
+function refreshThumbs(){document.querySelectorAll(".ph-none[data-th]").forEach(el=>{const id=el.dataset.th;if(recipes[id]&&rPhotoSrc(id))el.outerHTML=thumbHtml(id,el.dataset.cls);});}
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
