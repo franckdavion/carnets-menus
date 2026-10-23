@@ -788,8 +788,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     <p class="muted" style="margin:0;font-size:13px">Touchez un produit pour l'ajouter à la liste de courses, touchez-le encore pour le retirer.</p>
     <div id="dailyList" style="display:flex;flex-direction:column;gap:14px"></div>
     <form class="field" id="dailyForm" style="border-top:1px solid var(--line);padding-top:14px">
-      <span class="label">Ajouter un produit à « Mes produits »</span>
-      <div class="extra-form"><input id="dailyIn" placeholder="Ex. croquettes du chat, piles" autocomplete="off"><button class="btn" type="submit">Ajouter</button></div>
+      <span class="label">Ajouter un produit (il reste dans vos produits)</span>
+      <input id="dailyIn" class="search" placeholder="Ex. croquettes du chat" autocomplete="off">
+      <div class="extra-form"><select id="dailyCat" aria-label="Catégorie"></select><button class="btn primary" type="submit">Ajouter</button></div>
     </form>
   </div>
 </div>
@@ -2159,18 +2160,20 @@ const DAILY=[
 ];
 const nk=s=>norm(String(s));
 const inExtras=t=>(menu.extras||[]).findIndex(x=>nk(x.t)===nk(t));
+const dailyCat=t=>(menu.dailyCat||{})[t]||"Mes produits";
 function renderDaily(){
   const chip=(t,own)=>{const on=inExtras(t)>=0;return`<span class="dchip${on?" on":""}"><button type="button" data-act="dailyToggle" data-t="${esc(t)}" aria-pressed="${on}">${on?"✓ ":""}${esc(t)}</button>${own?`<button type="button" class="rm" data-act="dailyRm" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes produits">✕</button>`:""}</span>`;};
-  const mine=menu.daily||[];
-  $("#dailyList").innerHTML=`<div class="field"><span class="label">Mes produits</span>${mine.length?`<div class="dchips">${mine.map(t=>chip(t,true)).join("")}</div>`:'<span class="muted" style="font-size:13px">Ajoutez vos produits habituels en bas de cette fenêtre.</span>'}</div>`
-    +DAILY.map(([g,its])=>`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}</div></div>`).join("");
+  const mine=menu.daily||[],loose=mine.filter(t=>!DAILY.some(([g])=>g===dailyCat(t)));
+  $("#dailyList").innerHTML=(loose.length?`<div class="field"><span class="label">Mes produits</span><div class="dchips">${loose.map(t=>chip(t,true)).join("")}</div></div>`:"")
+    +DAILY.map(([g,its])=>{const own=mine.filter(t=>dailyCat(t)===g);return`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}${own.map(t=>chip(t,true)).join("")}</div></div>`;}).join("");
+  const sel=$("#dailyCat"),cur=sel.value;sel.innerHTML=["Mes produits",...DAILY.map(x=>x[0])].map(g=>`<option${g===cur?" selected":""}>${esc(g)}</option>`).join("");
 }
 $("#dailyForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#dailyIn").value.trim();if(!v)return;
   const all=[...(menu.daily||[]),...DAILY.flatMap(x=>x[1])];
   if(all.some(t=>nk(t)===nk(v))){toast("Ce produit est déjà dans la liste");$("#dailyIn").value="";return;}
-  menu.daily=[...(menu.daily||[]),v];
+  menu.daily=[...(menu.daily||[]),v];const g=$("#dailyCat").value;if(g&&g!=="Mes produits")menu.dailyCat=Object.assign({},menu.dailyCat,{[v]:g});
   if(inExtras(v)<0)menu.extras=[...(menu.extras||[]),{t:v,done:false}];
-  $("#dailyIn").value="";render();renderDaily();saveMenu();toast(v+" ajouté à vos produits et aux courses");});
+  $("#dailyIn").value="";render();renderDaily();saveMenu();toast(`${v} ajouté dans « ${dailyCat(v)} » et aux courses`);});
 
 /* ---------- actions ---------- */
 let tt=null;
@@ -2381,7 +2384,7 @@ document.addEventListener("click",e=>{
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
     if(i>=0)menu.extras.splice(i,1);else menu.extras=[...(menu.extras||[]),{t,done:false}];
     render();renderDaily();saveMenu();}
-  else if(a==="dailyRm"){const t=b.dataset.t;menu.daily=(menu.daily||[]).filter(x=>x!==t);render();renderDaily();saveMenu();toast(t+" retiré de vos produits");}
+  else if(a==="dailyRm"){const t=b.dataset.t;menu.daily=(menu.daily||[]).filter(x=>x!==t);if(menu.dailyCat)delete menu.dailyCat[t];render();renderDaily();saveMenu();toast(t+" retiré de vos produits");}
   else if(a==="rmX"){e.preventDefault();menu.extras.splice(Number(b.dataset.i),1);render();saveMenu();}
   else if(a==="copy")copyList();
   else if(a==="shareList")shareList();
@@ -3111,10 +3114,11 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
   let tall=vv.height;const typing=()=>{const a=document.activeElement;return!!a&&(a.tagName==="TEXTAREA"||(a.tagName==="INPUT"&&!/^(checkbox|radio|button|submit|file|range)$/.test(a.type)));};
   const fit=()=>{d.style.setProperty("--vvh",vv.height+"px");d.style.setProperty("--vvt",vv.offsetTop+"px");
     tall=Math.max(tall,vv.height);
-    const kb=typing()||tall-vv.height>150||window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open: tab bar hidden, window uses all the room
+    const kb=typing()||Date.now()-blurAt<400||tall-vv.height>150||window.innerHeight-vv.height>150;d.classList.toggle("kb",kb); // keyboard open: tab bar hidden, window uses all the room
     const t=document.querySelector(".tabs");if(t&&!kb)d.style.setProperty("--tabh",t.offsetHeight+"px");};
   vv.addEventListener("resize",fit);vv.addEventListener("scroll",fit);window.addEventListener("orientationchange",()=>{tall=0;setTimeout(fit,400);});
-  document.addEventListener("focusin",fit);document.addEventListener("focusout",()=>setTimeout(fit,120));
+  let blurAt=0;document.addEventListener("focusout",()=>{blurAt=Date.now();});
+  document.addEventListener("focusin",fit);document.addEventListener("focusout",()=>setTimeout(fit,450)); // late enough for the tap on "Ajouter" or "Enregistrer" to land before the layout moves
   new MutationObserver(fit).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});fit();})();
 /* inside a window, a drag only scrolls the window's own content: no bounce of the whole window */
 (()=>{let y0=0,x0=0;
