@@ -733,6 +733,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 <div class="sheet" id="addSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="addTitle">Ajouter</h2><button type="button" class="btn ghost" data-act="closeAdd">Fermer</button></div>
+    <div class="pref-row" id="addPeople"></div>
     <span class="label">Quand ? Touchez un ou plusieurs repas</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
     <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
@@ -1891,7 +1892,7 @@ function printWeek(){
 
 $("#slotSheet").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b&&["viewRec","swap","pick","openSide"].includes(b.dataset.act))$("#slotSheet").hidden=true;},true);
 /* ---------- "+ Menu": pick one or several meals; on a meal already planned, choose what to do ---------- */
-let addId=null, addRole="main", addWeek=null, addSel=new Map(), addInit=new Map(), addAsk=null;
+let addId=null, addRole="main", addWeek=null, addSel=new Map(), addInit=new Map(), addAsk=null, addN=4, addN0=4;
 const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
 const ROLE_AS={main:"en plat",entree:"en entrée",dessert:"en dessert"};
 // a meal can hold a starter or dessert while its main dish is still to choose
@@ -1900,15 +1901,18 @@ const slotUsed=s=>!!s&&(!!recipes[s.id]||hasSide(s));
 function openAdd(id){
   const r=recipes[id];if(!r)return;addId=id;
   addRole=r.cat==="Dessert"?"dessert":(r.cat==="Entrée"&&!canMain(r))?"entree":"main"; // used on free meals
-  addWeek=curWeek;addAsk=null;addSel=new Map();
+  addWeek=curWeek;addAsk=null;addSel=new Map();addN=viewServ[id]||menu.people;
   for(const w of weekOptions().map(x=>x[0]))for(const[k,s]of Object.entries((menu.weeks||{})[w]||{})){if(!s)continue;
     const role=s.id===addId?"main":s.entree===addId?"entree":s.dessert===addId?"dessert":null;if(role)addSel.set(w+"#"+k,role);}
-  addInit=new Map(addSel);renderAdd();$("#addSheet").hidden=false;$("#addSheet .sheet-in").scrollTop=0;
+  addInit=new Map(addSel);
+  {const first=[...addSel].find(([,r])=>r==="main");if(first){const[w,k]=first[0].split("#");addN=((menu.weeks[w]||{})[k]||{}).n||addN;}} // already planned: start from its number of people
+  addN0=addN;renderAdd();$("#addSheet").hidden=false;$("#addSheet .sheet-in").scrollTop=0;
 }
-function addChanges(){let add=0,rem=0;for(const k of new Set([...addInit.keys(),...addSel.keys()])){const a=addInit.get(k),b=addSel.get(k);if(a===b)continue;if(b)add++;else rem++;}return[add,rem];}
+function addChanges(){let add=0,rem=0;if(addN!==addN0)for(const[k,r]of addSel)if(addInit.get(k)===r&&r==="main")add++;for(const k of new Set([...addInit.keys(),...addSel.keys()])){const a=addInit.get(k),b=addSel.get(k);if(a===b)continue;if(b)add++;else rem++;}return[add,rem];}
 function renderAdd(){
   const r=recipes[addId];if(!r){$("#addSheet").hidden=true;return;}
   $("#addTitle").textContent="Ajouter « "+r.name+" »";
+  $("#addPeople").innerHTML=`<div><strong>Pour combien de personnes ?</strong><div class="muted" style="font-size:13px">recette prévue pour ${r.serves||4} · modifiable ensuite</div></div><div class="ctl"><button type="button" class="step sm" data-act="addNum" data-d="-1" ${addN<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${addN}</span><button type="button" class="step sm" data-act="addNum" data-d="1" aria-label="Une personne de plus">+</button></div>`;
   $("#addWeeks").innerHTML=weekOptions().slice(0,2).map(([v,l])=>`<button type="button" class="chip" data-act="addWeekSel" data-w="${v}" aria-pressed="${addWeek===v}">${l} · ${shortDate(parseYmd(v))}</button>`).join("");
   const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date());
   const nm=id=>recipes[id]?recipes[id].name:"";
@@ -1938,13 +1942,14 @@ function addCellTap(key){
 }
 function applyAdd(){
   let n=0;
-  for(const key of new Set([...addInit.keys(),...addSel.keys()])){const was=addInit.get(key),now=addSel.get(key);if(was===now)continue;
+  for(const key of new Set([...addInit.keys(),...addSel.keys()])){const was=addInit.get(key),now=addSel.get(key);
+    if(was===now){if(now==="main"&&addN!==addN0){const[w,k]=key.split("#"),s=(menu.weeks[w]||{})[k];if(s){s.n=addN;n++;}}continue;}
     const[w,k]=key.split("#");menu.weeks[w]=menu.weeks[w]||{};const wk=menu.weeks[w];
     if(was&&wk[k]){const s=wk[k];
       if(was==="main"){if(!s.lock){if(hasSide(s))delete s.id;else delete wk[k];}}
       else{delete s[ROLE_FIELD[was]];if(!slotUsed(s))delete wk[k];}}
     if(now){const s=wk[k]||{};
-      wk[k]=Object.assign({n:s.n||viewServ[addId]||menu.people},s,{[ROLE_FIELD[now]]:addId});if(now==="main")wk[k].n=s.n||viewServ[addId]||menu.people;n++;}
+      wk[k]=Object.assign({n:addN},s,{[ROLE_FIELD[now]]:addId});if(now==="main"||!slotUsed(s))wk[k].n=addN;n++;} // a starter or dessert joins the meal's own number of people
   }
   $("#addSheet").hidden=true;addAsk=null;if(addId===ideaId)ideaId=null;render();saveMenu();
   document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
@@ -2145,6 +2150,7 @@ document.addEventListener("click",e=>{
   else if(a==="toggle"){openAdd(id);}
   else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
   else if(a==="addCell")addCellTap(b.dataset.key);
+  else if(a==="addNum"){addN=Math.max(1,Math.min(50,addN+Number(b.dataset.d)));renderAdd();}
   else if(a==="addAs"){if(addAsk){addSel.set(addAsk,b.dataset.role);addAsk=null;renderAdd();}}
   else if(a==="addAskNo"){addAsk=null;renderAdd();}
   else if(a==="addOk")applyAdd();
