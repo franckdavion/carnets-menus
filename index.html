@@ -309,6 +309,9 @@ input,select,textarea{font-size:16px!important}
 .paste-zone{min-height:64px;border:2px dashed var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:var(--muted);font-size:14px;background:var(--bg);-webkit-user-select:text;user-select:text;caret-color:transparent}
 .paste-zone:focus{outline:none;border-style:solid;color:var(--ink)}
 .ph-google{display:flex;flex-direction:column;gap:8px}
+.prep-box{display:flex;flex-direction:column;gap:4px;margin:8px 0 10px;padding:10px 12px;border-radius:12px;background:var(--accent-soft,rgba(31,122,77,.08));border-left:4px solid var(--accent);font-size:15px;line-height:1.45}
+.prep-box.dark{background:rgba(255,255,255,.08);border-left-color:#9ED9B0;color:#eef3ee;margin-top:0}
+.step-mode{gap:6px;margin-bottom:4px}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -1404,7 +1407,7 @@ function renderRecipes(){
     let det="";
     if(open){
       const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
-      const steps=String(r.steps||"").split("\n").map(s=>s.trim()).filter(Boolean);
+      const steps=stepsFor(id).steps;
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
       const role=r.cat==="Entrée"?"entree":r.cat==="Dessert"?"dessert":undefined,dk=r.linkOnly?null:drinkFor(r,role);
       const drinkRow=dk&&showOn("wine")?`<div class="drink">🍷 Vin : ${esc(dk[0])} ${vivinoLink(pairingQuery(dk[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(dk[1])}</div>`:"";
@@ -1421,7 +1424,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${esc(r.name)}</h3>
-      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -2556,6 +2559,7 @@ document.addEventListener("click",e=>{
   else if(a==="rateTag"){const d=rateDraft[id]=rateDraft[id]||{stars:0,tags:[]};const t=b.dataset.t;d.tags=d.tags.includes(t)?d.tags.filter(x=>x!==t):[...d.tags,t];if(cook&&cook.done&&!$("#cookSheet").hidden)renderCook();else $("#rateBody").innerHTML=rateHtml(id);}
   else if(a==="rateSave"){saveRating(id);if(cook&&cook.done)stopCook();$("#rateSheet").hidden=true;render();}
   else if(a==="rateClose"){$("#rateSheet").hidden=true;}
+  else if(a==="stepMode"){const v=b.dataset.v==="det"?"det":"court",d=detailOf(recipes[recSheetId],recSheetId);stepPick[recSheetId]=v;if(d&&d.same){stepMode=v;LS.set("cm_stepmode",v);}lastRecHtml="";renderRecSheet();}
   else if(a==="recTab"){switchRecTab(b.dataset.v,!b.closest(".rs-tabs"));}
   else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
   else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
@@ -2923,12 +2927,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["nouveau","🆕 Nouveautés"],["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
+const THEMES=[["nouveau","🆕 Nouveautés"],["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"],["detail","📝 Étapes détaillées"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
 // computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
 function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
 function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
-const hasTheme=(r,t)=>(t==="nouveau"&&!!r.shared&&Object.keys(shNews).some(id=>recipes[id]===r))||(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
+const hasTheme=(r,t)=>(t==="detail"&&!!detailOf(r))||(t==="nouveau"&&!!r.shared&&Object.keys(shNews).some(id=>recipes[id]===r))||(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -2971,8 +2975,8 @@ function kindChipsHtml(act,cur,quick,light,fav,theme){
     +`<button type="button" class="chip" data-act="${act}Fav" aria-pressed="${!!fav}">★ Favoris</button>`;
 }
 const KIND_RE=[["poisson",/saint-jacques|huître|homard|langoust|saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
-  ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez/i],
-  ["volaille",/poulet|dinde|canard|volaille|pintade|chapon|magret/i],
+  ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez|gigot|mouton|chevreuil|sanglier|biche/i],
+  ["volaille",/poulet|dinde|canard|volaille|pintade|chapon|magret|lapin|caille|coquelet|oie\b/i],
   ["porc",/porc|lardon|jambon|saucisse|chorizo|bacon|rôti de porc|chipolata/i]];
 // match only at the start of a word ("moule" must not match "semoule")
 KIND_RE.forEach(x=>{x[1]=new RegExp("(?:^|[^a-zà-ÿœ])(?:"+x[1].source+")","i");});
@@ -3094,7 +3098,7 @@ function renderToday(){
   const left=+($("#b-shop")&&$("#b-shop").textContent)||0;
   const nn=newsCount(),who=[...new Set(Object.entries(shNews).filter(([id])=>recipes[id]).map(([,v])=>v.by))].join(", ");
   const tr=mealsToRate();const rateCards=tr.map(x=>`<div class="rate-card"><span>C'était comment, <b>${esc(recipes[x.id].name)}</b> <span class="muted">(${x.dn.toLowerCase()} ${x.m})</span> ?</span><div class="row"><button type="button" class="btn primary" data-act="rateMeal" data-key="${x.w}#${x.k}">★ Noter</button><button type="button" class="btn ghost" data-act="rateSkip" data-key="${x.w}#${x.k}">Passer</button></div></div>`).join("");
-  const next=(()=>{for(const[m]of MEALS){const k=slotKey(day,m),s=sl[k];if(s&&recipes[s.id]&&!(m==="midi"?hr>=15:hr>=22)&&String(recipes[s.id].steps||"").trim())return s;}return null;})();
+  const next=(()=>{for(const[m]of MEALS){const k=slotKey(day,m),s=sl[k];if(s&&recipes[s.id]&&!(m==="midi"?hr>=15:hr>=22)&&stepsFor(s.id).steps.length)return s;}return null;})();
   el.innerHTML=rateCards+(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
     ${next?`<button type="button" class="btn primary today-cook" data-act="cook" data-id="${esc(next.id)}">👨‍🍳 Cuisiner : ${esc(recipes[next.id].name)}</button>`:""}
     <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="tab" data-v="week">📅 Ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
@@ -3120,6 +3124,24 @@ let viewServ={}, recLimit=50;
 let recSheetId=null;
 function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; lastRecHtml=""; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 let recTab="ing";
+/* ---------- detailed steps for beginners: etapes-detaillees.json on the site (id → prep + steps + hash of the short steps they were written from) ---------- */
+let DETAIL=LS.get("cm_detail",{recipes:{}}),DETAIL_NAME={};
+const stepHash=s=>{const t=String(s||"").split("\n").map(x=>x.trim()).filter(Boolean).join("\n");let h=5381;for(let i=0;i<t.length;i++)h=(((h<<5)+h)+t.charCodeAt(i))>>>0;return h.toString(16);};
+function indexDetail(){DETAIL_NAME={};for(const v of Object.values(DETAIL.recipes||{}))if(v&&v.name)DETAIL_NAME[deacc(v.name)]=v;}
+indexDetail();
+fetch(APP_URL+"etapes-detaillees.json",{cache:"no-cache"}).then(x=>x.ok?x.json():null).then(d=>{if(d&&d.recipes&&JSON.stringify(d)!==JSON.stringify(DETAIL)){DETAIL=d;LS.set("cm_detail",d);indexDetail();lastRecHtml="";render();}}).catch(()=>{});
+// the detailed version of a recipe; .same = written from the steps the recipe has now (not changed by you since)
+function detailOf(r,id){if(!r)return null;const R=DETAIL.recipes||{};let d=id&&(R[id]||R[String(id).replace(/^sh-.*?-(r\d*-)/,"$1")]);if(!d)d=DETAIL_NAME[deacc(r.name||"")];
+  if(!d||!Array.isArray(d.steps)||!d.steps.length)return null;return{prep:d.prep||"",steps:d.steps,same:d.src===stepHash(r.steps)};}
+let stepMode=LS.get("cm_stepmode","det"),stepPick={};
+// what to show/cook: the detailed version by default, unless you rewrote the steps yourself (then yours) — the toggle switches
+function stepsFor(id){const r=recipes[id],d=detailOf(r,id),short=String((r&&r.steps)||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const pick=stepPick[id]||(d&&!d.same&&short.length?"court":stepMode),useDet=!!d&&(pick==="det"||!short.length);
+  return{d,short,useDet,steps:useDet?d.steps:short,prep:useDet?d.prep:""};}
+function stepsToggle(id,x){if(!x.d)return"";
+  return`<div class="row step-mode"><button type="button" class="chip" data-act="stepMode" data-v="det" aria-pressed="${x.useDet}">📝 Détaillée</button><button type="button" class="chip" data-act="stepMode" data-v="court" aria-pressed="${!x.useDet}">Courte</button></div>
+    ${!x.d.same&&x.short.length?`<p class="muted" style="font-size:13px;margin:4px 0">${x.useDet?"Cette version détaillée a été écrite pour la recette d'origine : vous avez modifié les étapes depuis.":"Vous avez modifié les étapes : votre version est affichée. La version détaillée (écrite pour la recette d'origine) reste disponible."}</p>`:""}`;}
+const prepHtml=(t,cls)=>t?`<div class="prep-box${cls?" "+cls:""}"><b>Avant de commencer</b><span>${esc(t)}</span></div>`:"";
 /* ---------- "Comment faire ?": the basic techniques found in a step, explained (béchamel, roux, blancs en neige…) ---------- */
 const TECH=[
  [/b[ée]chamel/i,"Béchamel","Pour 50 cl : 40 g de beurre, 40 g de farine, 50 cl de lait.|Faire fondre le beurre à feu doux, ajouter la farine d'un coup et remuer 1 à 2 min sans colorer (c'est le roux).|Hors du feu, verser le lait froid petit à petit en fouettant pour éviter les grumeaux.|Remettre sur feu moyen et fouetter sans arrêt jusqu'à ébullition, puis cuire 2 à 3 min : la sauce épaissit.|Saler, poivrer, râper un peu de muscade."],
@@ -3169,10 +3191,10 @@ let cook=null,cookWake=null,cookTimer=null;
 function stepIngs(r,txt,f){const t=norm(txt);return(r.ing||[]).filter(i=>{const w=norm(i.n).replace(/\([^)]*\)/g," ").split(/[\s,'’-]+/).filter(x=>x.length>3);return w.some(x=>t.includes(x.replace(/s$/,"")));})
   .map(i=>{const[b,u]=toBase(i.q,i.u);const q=fmt(b*f,u);return(q?q+" ":"")+i.n;});}
 function stepDuration(txt){const t=txt.toLowerCase();let m=t.match(/(\d+)\s*h(?:eures?)?\s*(\d+)?/);if(m)return(+m[1])*3600+(m[2]?+m[2]*60:0);
-  m=t.match(/(\d+)\s*(?:à\s*\d+\s*)?min/);if(m)return(+m[1])*60;m=t.match(/(\d+)\s*(?:secondes|sec)\b/);return m?+m[1]:0;}
+  {const all=[...t.matchAll(/(\d+)\s*(?:à\s*\d+\s*)?min/g)].map(x=>+x[1]);if(all.length)return Math.max(...all)*60;}m=t.match(/(\d+)\s*(?:secondes|sec)\b/);return m?+m[1]:0;}
 const dur=s=>s>=3600?`${Math.floor(s/3600)} h ${String(Math.floor(s%3600/60)).padStart(2,"0")}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
-async function startCook(id,n){const r=recipes[id];if(!r)return;const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);if(!steps.length)return;
-  cook={id,i:0,steps,n:n||viewServ[id]||menu.people,done:false};renderCook();$("#cookSheet").hidden=false;
+async function startCook(id,n){const r=recipes[id];if(!r)return;const sx=stepsFor(id),steps=sx.steps;if(!steps.length)return;
+  cook={id,i:0,steps,prep:sx.prep,n:n||viewServ[id]||menu.people,done:false};renderCook();$("#cookSheet").hidden=false;
   try{if(navigator.wakeLock)cookWake=await navigator.wakeLock.request("screen");}catch(e){}}
 function stopCook(){cook=null;try{cookWake&&cookWake.release();}catch(e){}cookWake=null;$("#cookSheet").hidden=true;}
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"&&cook&&!cookWake){try{cookWake=await navigator.wakeLock.request("screen");}catch(e){}}});
@@ -3182,7 +3204,7 @@ function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook()
   const s=cook.steps[cook.i],ing=stepIngs(r,s,f),d=stepDuration(s);
   $("#cookIn").innerHTML=`<div class="row cook-top"><span>Étape ${cook.i+1} sur ${cook.steps.length} · ${esc(r.name)} · ${cook.n} pers.</span><button type="button" class="btn" data-act="cookClose">Fermer</button></div>
     <div class="cook-dots">${cook.steps.map((_,j)=>`<i class="${j<=cook.i?"on":""}"></i>`).join("")}</div>
-    <div class="cook-big">${esc(s)}</div>
+    ${cook.i===0?prepHtml(cook.prep,"dark"):""}<div class="cook-big">${esc(s)}</div>
     ${ing.length?`<div class="cook-ing">${ing.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
     ${techHtml(techsIn(s),"dark")}
     ${d?`<button type="button" class="btn cook-timer" data-act="cookTimer" data-s="${d}">${cookTimer?`⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter`:`⏱ Lancer le minuteur · ${dur(d)}`}</button>`:(cookTimer?`<button type="button" class="btn cook-timer" data-act="cookTimer">⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter</button>`:"")}
@@ -3220,7 +3242,7 @@ function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
-  const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const steps=stepsFor(id).steps;
   const shBox=r.shared?`<div class="note" style="display:flex;flex-direction:column;gap:8px"><span>Recette de <b>${esc(r.sharedBy||"un proche")}</b> (lecture seule).${r.linkOnly?" Elle vient d'un site : ouvrez-la avec « Voir la recette d'origine ».":""}</span>
       <div class="row">${r.linkOnly&&r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine ↗</a>`:`<button type="button" class="btn" data-act="copyShared">Copier dans mon carnet</button>`}</div></div>`:"";
   const ph=rPhotoSrc(id),rt=ratingOf(r),nut=nutri(r);
@@ -3233,7 +3255,7 @@ function renderRecSheet(){
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
-  else if(recTab==="steps")body=steps.length?`<ol class="steps">${steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`;
+  else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+prepHtml(sx.prep)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
   else body=`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
     <div class="nat-box">${natureHtml(r)}</div>${cats}
