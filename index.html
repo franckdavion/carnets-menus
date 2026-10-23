@@ -64,7 +64,9 @@ button{cursor:pointer}
 .tag.news{color:var(--accent);font-weight:700}
 .lk-meals{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:4px}
 .lk-ry h4{margin:6px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
-.lk-it{display:flex;align-items:center;gap:12px;width:100%;padding:9px 0;border:0;border-bottom:1px dashed var(--line);background:none;font:inherit;font-size:15px;color:var(--muted);text-align:left;min-height:48px;touch-action:manipulation}
+.lk-it{display:flex;align-items:center;gap:8px;width:100%;padding:6px 0;border-bottom:1px dashed var(--line);font-size:15px;color:var(--muted);min-height:52px}
+.lk-t{flex:1;min-width:0;display:flex;align-items:center;gap:12px;background:none;border:0;padding:4px 0;font:inherit;color:inherit;text-align:left;touch-action:manipulation}
+.lk-q{display:flex;align-items:center;gap:6px;flex:0 0 auto}.lk-q b{min-width:58px;text-align:center}
 .lk-it.on{color:var(--ink)}
 .lk-box{flex:0 0 24px;height:24px;border-radius:7px;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent-ink)}
 .lk-it.on .lk-box{background:var(--accent);border-color:var(--accent)}
@@ -1292,7 +1294,7 @@ function lockPreview(targets,edit){ // targets: [{w,k}]; edit = a meal already v
   if(edit)targets.forEach(t=>delete sl(t).lock);
   const before=Object.fromEntries(shopping(true).map(i=>[i.key,i.q]));
   targets.forEach(t=>sl(t).lock=true);const after=shopping(true);if(!edit)targets.forEach(t=>delete sl(t).lock);
-  lockItems=after.map(i=>{const d=i.q-(before[i.key]||0),home=isHave(i);return Object.assign({},i,{d,was:before[i.key]||0,home,buy:!home});}).filter(i=>i.d>0.0001);
+  lockItems=after.map(i=>{const d=i.q-(before[i.key]||0),home=isHave(i);return Object.assign({},i,{d,was:before[i.key]||0,home,buy:!home,bq:d});}).filter(i=>i.d>0.0001);
   lockPend=targets;
   lockMeals=targets.map(t=>{const s=sl(t),dn=t.k.split("|")[0],date=addDays(parseYmd(t.w),DAYS.indexOf(dn));
     const parts=[recipes[s.id].name,s.entree&&recipes[s.entree]?"entrée "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert "+recipes[s.dessert].name:""].filter(Boolean).join(" + ");
@@ -1300,6 +1302,8 @@ function lockPreview(targets,edit){ // targets: [{w,k}]; edit = a meal already v
   $("#lockTitle").textContent=edit?"Repas validé":targets.length>1?`Valider ${targets.length} repas`:"Valider ce repas";
   renderLock();$("#lockSheet").hidden=false;$("#lockSheet .sheet-in").scrollTop=0;
 }
+// step of the − / + buttons, by unit
+function qStep(u,q){if(u==="g")return q>=1000?100:q>=200?50:10;if(u==="ml")return q>=500?100:50;if(u==="c. à s."||u==="c. à c.")return .5;return 1;}
 function renderLock(){
   const groups=RAYONS.map(ry=>({ry,its:lockItems.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   const nb=lockItems.filter(i=>i.buy).length;
@@ -1308,14 +1312,16 @@ function renderLock(){
     <div class="row" style="gap:14px;margin-top:-4px"><button type="button" class="link" data-act="lockAll" data-v="1">Tout cocher</button><button type="button" class="link" data-act="lockAll" data-v="0">Tout décocher</button></div>
     ${lockItems.length?"":`<p class="muted" style="margin:0">Ces recettes n'ont pas d'ingrédients notés.</p>`}
     ${lockEdit?`<button type="button" class="btn danger" data-act="lockUndo" style="align-self:flex-start;order:99">🔓 Dévalider ce repas (retire ses ingrédients)</button>`:""}
-    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<button type="button" class="lk-it${i.buy?" on":""}" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${esc(i.n)}<small>${i.buy?(i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:""):"j'ai déjà · pas acheté"}</small></span><b>${i.was?"+ ":""}${esc(fmt(i.d,i.u))||"✓"}</b></button>`).join("")}</div>`).join("")}`;
+    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-it${i.buy?" on":""}"><button type="button" class="lk-t" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${esc(i.n)}<small>${i.buy?[i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:"",Math.abs(i.bq-i.d)>1e-6?`prévu ${esc(fmt(i.d,i.u))} · j'en ai déjà ${esc(fmt(Math.max(0,i.d-i.bq),i.u))||"un peu"}`:""].filter(Boolean).join(" · "):"j'ai déjà · pas acheté"}</small></span></button>
+      ${i.buy?`<span class="lk-q"><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="-1" aria-label="Moins de ${esc(i.n)}">−</button><b>${i.was?"+":""}${esc(fmt(i.bq,i.u))||"?"}</b><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="1" aria-label="Plus de ${esc(i.n)}">+</button></span>`:`<b class="muted">${esc(fmt(i.d,i.u))}</b>`}</div>`).join("")}</div>`).join("")}`;
   $("#lockYesBtn").textContent=lockEdit?`✓ Enregistrer · ${nb} en liste de courses`:nb?`✓ Valider · ${nb} en liste de courses`:"✓ Valider (rien à acheter)";
 }
 function lockConfirm(){const n0=shopping().length,until=haveUntil(),today=ymd(new Date());let n=0;
   for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s&&!s.lock){s.lock=true;n++;}}
   menu.have=Object.assign({},menu.have);menu.bought=Object.assign({},menu.bought);
   for(const i of lockItems){
-    if(i.buy){if(i.home)delete menu.have[i.key];}
+    if(i.buy){if(i.home)delete menu.have[i.key];
+      const less=i.d-i.bq;if(Math.abs(less)>1e-6){const b=menu.bought[i.key];menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+less,until:b&&b.until>until?b.until:until};}} // "j'en ai déjà une partie"
     else if(!i.was)menu.have[i.key]=until; // nothing of it was on the list: "j'ai déjà"
     else{const b=menu.bought[i.key];menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+i.d,until:b&&b.until>until?b.until:until};} // keep only what was already listed
   }
@@ -2239,6 +2245,7 @@ document.addEventListener("click",e=>{
   else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock)t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
   else if(a==="lockYes")lockConfirm();
   else if(a==="lockTog"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){i.buy=!i.buy;renderLock();}}
+  else if(a==="lockQ"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){const st=qStep(i.u,i.bq);i.bq=Math.max(0,Math.round((i.bq+Number(b.dataset.d)*st)/st)*st);if(i.bq<=1e-6){i.bq=i.d;i.buy=false;}renderLock();}}
   else if(a==="lockAll"){lockItems.forEach(i=>i.buy=b.dataset.v==="1");renderLock();}
   else if(a==="lockNo"){lockPend=[];lockEdit=false;$("#lockSheet").hidden=true;}
   else if(a==="lockUndo"){for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)delete s.lock;}lockPend=[];lockItems=[];lockEdit=false;$("#lockSheet").hidden=true;render();saveMenu();toast("Repas dévalidé : ses ingrédients sortent de la liste");}
