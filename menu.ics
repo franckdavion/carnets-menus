@@ -129,8 +129,8 @@ UID:20261025-midi@carnet-menus
 DTSTAMP:20261025T000000Z
 DTSTART;TZID=Europe/Paris:20261025T120000
 DTEND;TZID=Europe/Paris:20261025T133000
-SUMMARY:Midi : Gratin de butternut (+ Salade de mâche aux œufs et lardon
- s)
+SUMMARY:Midi : Poulet rôti & pomme de terre (+ Salade de mâche aux œufs
+  et lardons)
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
