@@ -297,6 +297,8 @@ input,select,textarea{font-size:16px!important}
 #shopList .item>.have~.it-del,#shopList .item>.have.on~.it-del{grid-column:4;grid-row:1 / span 2;align-self:center}
 #shopList .item:has(.it-del){grid-template-columns:12px minmax(0,1fr) auto 32px}
 .it-del{width:32px;height:32px;border-radius:50%;color:var(--muted)}
+.daily-ed{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
+.dchip.editing{outline:2px solid var(--accent);border-radius:999px}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
 .idea .link{display:inline-block;padding:6px 0;font-size:13px}
 /* taps answer at once on iPhone (no double-tap-zoom wait) and show they were pressed */
@@ -790,8 +792,8 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="dailySheet" hidden>
   <div class="sheet-in">
-    <div class="row" style="justify-content:space-between"><h2>Produits du quotidien</h2><button type="button" class="btn primary" data-act="closeDaily">Terminé</button></div>
-    <p class="muted" style="margin:0;font-size:13px">Touchez un produit pour l'ajouter à la liste de courses, touchez-le encore pour le retirer.</p>
+    <div class="row" style="justify-content:space-between"><h2>Produits du quotidien</h2><div class="row" style="gap:8px;flex-wrap:nowrap"><button type="button" class="btn ghost" data-act="dailyCancel">Annuler</button><button type="button" class="btn primary" data-act="closeDaily">Terminé</button></div></div>
+    <div class="row" style="justify-content:space-between;align-items:center"><p class="muted" style="margin:0;font-size:13px;flex:1" id="dailyHelp"></p><button type="button" class="btn" data-act="dailyEditMode" id="dailyModeBtn">✏️ Modifier</button></div>
     <div id="dailyList" style="display:flex;flex-direction:column;gap:14px"></div>
     <form class="field" id="dailyForm" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Ajouter un produit (il reste dans vos produits)</span>
@@ -2235,11 +2237,22 @@ const DAILY=[
 const nk=s=>norm(String(s));
 const inExtras=t=>(menu.extras||[]).findIndex(x=>nk(x.t)===nk(t));
 const dailyCat=t=>(menu.dailyCat||{})[t]||"Mes produits";
+const dailyCatOf=t=>(menu.daily||[]).includes(t)?(DAILY.some(([g])=>g===dailyCat(t))?dailyCat(t):"Mes produits"):((DAILY.find(([,its])=>its.includes(t))||["Mes produits"])[0]);
+// editing: tap a product to rename it, move it to another category or delete it (built-in products too); "Annuler" puts everything back as it was when the window opened
+let dailyEdit=false, dailyOpenSnap=null, dailyEditT=null;
+const dailyHidden=t=>(menu.dailyHidden||[]).includes(t);
 function renderDaily(){
-  const chip=(t,own)=>{const on=inExtras(t)>=0;return`<span class="dchip${on?" on":""}"><button type="button" data-act="dailyToggle" data-t="${esc(t)}" aria-pressed="${on}">${on?"✓ ":""}${esc(t)}</button>${own?`<button type="button" class="rm" data-act="dailyRm" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes produits">✕</button>`:""}</span>`;};
+  $("#dailyHelp").textContent=dailyEdit?"Touchez un produit pour le renommer, changer sa catégorie ou le supprimer.":"Touchez un produit pour l'ajouter à la liste de courses, touchez-le encore pour le retirer.";
+  $("#dailyModeBtn").textContent=dailyEdit?"✓ Fin des modifications":"✏️ Modifier";$("#dailyModeBtn").classList.toggle("primary",dailyEdit);
+  const chip=(t,own)=>{const on=inExtras(t)>=0;return`<span class="dchip${on&&!dailyEdit?" on":""}${dailyEdit&&dailyEditT===t?" editing":""}"><button type="button" data-act="${dailyEdit?"dailyPick":"dailyToggle"}" data-t="${esc(t)}" aria-pressed="${on}">${dailyEdit?"✏️ ":on?"✓ ":""}${esc(t)}</button>${own&&!dailyEdit?`<button type="button" class="rm" data-act="dailyRm" data-t="${esc(t)}" aria-label="Supprimer ${esc(t)} de mes produits">✕</button>`:""}</span>`;};
+  const cats=["Mes produits",...DAILY.map(x=>x[0])];
+  const editor=g=>{if(!dailyEdit||!dailyEditT||dailyCatOf(dailyEditT)!==g)return"";const t=dailyEditT;
+    return`<div class="daily-ed"><input id="dailyEdName" value="${esc(t)}" aria-label="Nom du produit"><select id="dailyEdCat" aria-label="Catégorie">${cats.map(c=>`<option${c===g?" selected":""}>${esc(c)}</option>`).join("")}</select>
+      <div class="row"><button type="button" class="btn primary" data-act="dailyEdSave">Enregistrer</button><button type="button" class="btn danger" data-act="dailyEdDel">Supprimer</button><button type="button" class="btn ghost" data-act="dailyEdClose">Fermer</button></div></div>`;};
   const mine=menu.daily||[],loose=mine.filter(t=>!DAILY.some(([g])=>g===dailyCat(t)));
-  $("#dailyList").innerHTML=(loose.length?`<div class="field"><span class="label">Mes produits</span><div class="dchips">${loose.map(t=>chip(t,true)).join("")}</div></div>`:"")
-    +DAILY.map(([g,its])=>{const own=mine.filter(t=>dailyCat(t)===g);return`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${its.map(t=>chip(t,false)).join("")}${own.map(t=>chip(t,true)).join("")}</div></div>`;}).join("");
+  $("#dailyList").innerHTML=(loose.length?`<div class="field"><span class="label">Mes produits</span><div class="dchips">${loose.map(t=>chip(t,true)).join("")}</div>${editor("Mes produits")}</div>`:"")
+    +DAILY.map(([g,its])=>{const own=mine.filter(t=>dailyCat(t)===g),base=its.filter(t=>!dailyHidden(t));if(!base.length&&!own.length)return"";
+      return`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${base.map(t=>chip(t,false)).join("")}${own.map(t=>chip(t,true)).join("")}</div>${editor(g)}</div>`;}).join("");
   const sel=$("#dailyCat"),cur=sel.value;sel.innerHTML=["Mes produits",...DAILY.map(x=>x[0])].map(g=>`<option${g===cur?" selected":""}>${esc(g)}</option>`).join("");
 }
 $("#dailyForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#dailyIn").value.trim();if(!v)return;
@@ -2453,8 +2466,22 @@ document.addEventListener("click",e=>{
   else if(a==="followRefresh"){const f=follows.find(x=>x.url===b.dataset.u);if(f)refreshFollow(f);}
   else if(a==="followRm"){removeFollow(b.dataset.u);}
   else if(a==="copyShared"){copyShared(recSheetId);}
-  else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
-  else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
+  else if(a==="openDaily"){dailyEdit=false;dailyEditT=null;dailyOpenSnap=JSON.parse(J({extras:menu.extras||[],daily:menu.daily||[],dailyCat:menu.dailyCat||{},dailyHidden:menu.dailyHidden||[]}));renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
+  else if(a==="closeDaily"){$("#dailySheet").hidden=true;dailyOpenSnap=null;}
+  else if(a==="dailyCancel"){if(dailyOpenSnap){Object.assign(menu,dailyOpenSnap);dailyOpenSnap=null;render();saveMenu();toast("Produits remis comme avant");}$("#dailySheet").hidden=true;}
+  else if(a==="dailyEditMode"){dailyEdit=!dailyEdit;dailyEditT=null;renderDaily();}
+  else if(a==="dailyPick"){dailyEditT=dailyEditT===b.dataset.t?null:b.dataset.t;renderDaily();const i=$("#dailyEdName");if(i){i.scrollIntoView({block:"center"});}}
+  else if(a==="dailyEdClose"){dailyEditT=null;renderDaily();}
+  else if(a==="dailyEdDel"){const t=dailyEditT;if(!t)return;
+    if((menu.daily||[]).includes(t)){menu.daily=menu.daily.filter(x=>x!==t);if(menu.dailyCat)delete menu.dailyCat[t];}else menu.dailyHidden=[...new Set([...(menu.dailyHidden||[]),t])];
+    dailyEditT=null;renderDaily();render();saveMenu();toast(t+" supprimé des produits");}
+  else if(a==="dailyEdSave"){const t=dailyEditT;if(!t)return;const nn=$("#dailyEdName").value.trim(),g=$("#dailyEdCat").value;if(!nn){toast("Donnez un nom au produit");return;}
+    const exists=nn!==t&&[...(menu.daily||[]),...DAILY.flatMap(x=>x[1]).filter(x=>!dailyHidden(x))].some(x=>nk(x)===nk(nn));if(exists){toast("Ce produit existe déjà");return;}
+    if((menu.daily||[]).includes(t))menu.daily=menu.daily.map(x=>x===t?nn:x);
+    else{menu.dailyHidden=[...new Set([...(menu.dailyHidden||[]),t])];menu.daily=[...(menu.daily||[]),nn];} // a built-in product becomes my own version
+    menu.dailyCat=Object.assign({},menu.dailyCat);delete menu.dailyCat[t];if(g!=="Mes produits")menu.dailyCat[nn]=g;
+    menu.extras=(menu.extras||[]).map(x=>nk(x.t)===nk(t)?Object.assign({},x,{t:nn}):x); // also in the shopping list
+    dailyEditT=null;renderDaily();render();saveMenu();toast("Produit modifié");}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
     if(i>=0)menu.extras.splice(i,1);else menu.extras=[...(menu.extras||[]),{t,done:false}];
     render();renderDaily();saveMenu();}
