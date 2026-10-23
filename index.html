@@ -285,6 +285,10 @@ input,select,textarea{font-size:16px!important}
 #shopList .item>.nm{grid-row:1 / span 2}
 #shopList .item>.q{grid-column:3;grid-row:1;text-align:right}
 #shopList .item>.have,#shopList .item>.x{grid-column:3;grid-row:2;justify-self:end}
+#shopList .item>.have~.it-del,#shopList .item>.have.on~.it-del{grid-column:4;grid-row:1 / span 2;align-self:center}
+#shopList .item:has(.it-del){grid-template-columns:12px minmax(0,1fr) auto 32px}
+.it-del{width:32px;height:32px;border-radius:50%;color:var(--muted)}
+.shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
 .idea .link{display:inline-block;padding:6px 0;font-size:13px}
 /* taps answer at once on iPhone (no double-tap-zoom wait) and show they were pressed */
 button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -1355,6 +1359,11 @@ function shopPlanHtml(sel){
   return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas à valider`:"· tout est validé ✓"}</span></summary>${days}
     ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🔒 Tout valider (${unl} repas)</button><span class="muted" style="font-size:12px">Seuls les repas validés (verrouillés) mettent leurs ingrédients dans la liste.</span>`:""}</details>`;
 }
+/* clearing the list, all at once or line by line: what is erased counts as already bought until the last shopping day (the menus stay as they are) */
+let shopClearAsk=false;
+function shopSnap(){return{type:"shop",before:JSON.parse(J({bought:menu.bought||{},extras:menu.extras||[],shopExtra:menu.shopExtra||{},checked:menu.checked||{},weeks:menu.weeks||{}}))};}
+function eraseItem(i){const until=haveUntil(),today=ymd(new Date());menu.bought=Object.assign({},menu.bought);const b=menu.bought[i.key];
+  menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+i.q,until:b&&b.until>until?b.until:until};if(menu.checked)delete menu.checked[i.key];}
 function renderShop(items,extras,ids){
   const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
@@ -1376,11 +1385,12 @@ function renderShop(items,extras,ids){
   const missTag=d=>d?`<span class="miss">Pas trouvé le ${esc(shortDate(parseYmd(d)))}</span>`:"";
   let h=groups.map(g=>`<div class="rayon"><div class="rayon-h"><h4>${esc(g.ry)}</h4><button type="button" class="link" data-act="haveRayon" data-r="${esc(g.ry)}">J'ai tout ce rayon</button></div>${g.its.map(i=>
 {const inCart=!!menu.checked[i.key];return`<div class="item${inCart?" done":""}" style="cursor:default"><span class="dot"></span>
-      <span class="nm">${esc(i.n)} ${inCart?"":drive(i.n,"k:"+i.key)}${missTag((menu.missed||{})[i.key])}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span>${inCart?cartBtn("k:"+i.key):`<button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button>`}</div>`;}).join("")}</div>`).join("");
+      <span class="nm">${esc(i.n)} ${inCart?"":drive(i.n,"k:"+i.key)}${missTag((menu.missed||{})[i.key])}${i.from.length?`<span class="from">Pour : ${esc(i.from.join(" · "))}</span>`:""}</span><span class="q">${esc(fmt(i.q,i.u))}</span>${inCart?cartBtn("k:"+i.key):`<button type="button" class="have" data-act="haveIt" data-k="${esc(i.key)}" aria-label="J'ai déjà ${esc(i.n)}">J'ai déjà</button>`}<button type="button" class="x it-del" data-act="shopDel" data-k="${esc(i.key)}" aria-label="Effacer ${esc(i.n)} de la liste">✕</button></div>`;}).join("")}</div>`).join("");
 
   if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<div class="item${x.done?" done":""}" style="cursor:default"><span class="dot"></span>
       <span class="nm">${esc(x.t)} ${x.done?"":drive(x.t,"x:"+ix)}${missTag(x.missed)}</span><span></span>${x.done?cartBtn("x:"+ix):`<button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button>`}</div>`).join("")}</div>`;
-  el.innerHTML=hint+xrHtml+h+hvHtml;
+  const clr=`<div class="shop-clear">${shopClearAsk?`<span>Vider toute la liste ? Les repas restent au menu, à revalider.</span><button type="button" class="btn danger" data-act="shopClearYes">Oui, vider</button><button type="button" class="btn ghost" data-act="shopClearNo">Non</button>`:`<button type="button" class="btn ghost" data-act="shopClear">🗑️ Vider la liste</button>`}</div>`;
+  el.innerHTML=hint+clr+xrHtml+h+hvHtml;
 }
 
 /* ---------- store mode: big checkboxes, ticked items drop into the cart ---------- */
@@ -1968,7 +1978,9 @@ let undoStack=[], undoTimer=null;
 function snapshotSlot(k){const s=W()[k];return{w:curWeek,k,before:s?JSON.parse(JSON.stringify(s)):null};}
 function showUndo(label,snap){undoStack.push(snap);if(undoStack.length>20)undoStack.shift();
   const bar=$("#undoBar");$("#undoText").textContent="Retiré : "+label;bar.hidden=false;clearTimeout(undoTimer);undoTimer=setTimeout(()=>{bar.hidden=true;},7000);}
-function undoRemove(){const u=undoStack.pop();if(!u)return;menu.weeks[u.w]=menu.weeks[u.w]||{};
+function undoRemove(){const u=undoStack.pop();if(!u)return;
+  if(u.type==="shop"){Object.assign(menu,u.before);render();saveMenu();if(!undoStack.length)$("#undoBar").hidden=true;toast("Liste remise comme avant");return;}
+  menu.weeks[u.w]=menu.weeks[u.w]||{};
   if(u.before)menu.weeks[u.w][u.k]=u.before;else delete menu.weeks[u.w][u.k];
   render();saveMenu();if(u.w===curWeek)flashSlot(u.k);
   if(undoStack.length){$("#undoText").textContent="Remis. Encore "+undoStack.length+" retrait"+(undoStack.length>1?"s":"")+" à annuler";clearTimeout(undoTimer);undoTimer=setTimeout(()=>{$("#undoBar").hidden=true;},7000);}
@@ -2218,6 +2230,12 @@ document.addEventListener("click",e=>{
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
   else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
   else if(a==="rmCourse"){removePart(b.dataset.k,b.dataset.role);}
+  else if(a==="shopDel"){const i=shopping(true).find(x=>x.key===b.dataset.k);if(i){const snap=shopSnap();eraseItem(i);render();saveMenu();showUndo(i.n+" (liste de courses)",snap);}}
+  else if(a==="shopClear"){shopClearAsk=true;render();}
+  else if(a==="shopClearNo"){shopClearAsk=false;render();}
+  else if(a==="shopClearYes"){const snap=shopSnap(); // empty list = no validated meal on these days (the menus stay planned, ready to validate again)
+    for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s)delete s.lock;}
+    menu.extras=[];menu.shopExtra={};menu.checked={};shopClearAsk=false;render();saveMenu();showUndo("toute la liste de courses",snap);}
   else if(a==="shopAdd"){const r=recipes[id];if(!r)return;
     const v=validatedUses(id);if(v.length){toast(`Déjà dans la liste avec le menu validé (${v.join(", ")}) : pour changer les quantités, touchez « Validé » dans Courses`);return;}const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
