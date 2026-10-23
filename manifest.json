@@ -2,7 +2,6 @@
  "name": "Carnet de menus",
  "short_name": "Menus",
  "lang": "fr",
- "start_url": "./",
  "scope": "./",
  "display": "standalone",
  "background_color": "#F1F4EE",

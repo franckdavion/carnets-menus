@@ -3174,7 +3174,8 @@ setStatus(sync?"pending":"off");
 if(sync)runSync();
 startImportPolling();
 renderNow(); setInterval(renderNow,20000);
-(()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){addFollow(decodeURIComponent(m[1]));history.replaceState(null,"",location.pathname);}
+// the link stays in the address: an app added to the home screen from it keeps following the book (on iPhone its storage is separate from Safari)
+(()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){const u=followUrl(decodeURIComponent(m[1]));if(u&&!follows.some(f=>f.url===u))addFollow(u);}
   refreshFollows();pollSubs();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){refreshFollows();pollSubs();}});})();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
