@@ -320,6 +320,11 @@ input,select,textarea{font-size:16px!important}
 .fr-rec>summary{cursor:pointer;font-weight:600;color:var(--accent);list-style:none;min-height:28px;display:flex;align-items:center}.fr-rec>summary::-webkit-details-marker{display:none}
 .fr-rec>summary::after{content:"›";margin-left:auto;transition:transform .2s}.fr-rec[open]>summary::after{transform:rotate(90deg)}
 #frSlotRec #frForm{border:none;background:none;padding:8px 0 0;box-shadow:none;margin:0}#frSlotRec #frForm>.label{display:none}
+#cropSheet{z-index:30;inset:0;top:0;height:auto}#cropSheet .sheet-in{gap:12px}
+.crop-stage{position:relative;width:100%;aspect-ratio:3/2;border-radius:14px;overflow:hidden;background:#EEEAE0;touch-action:none;user-select:none;-webkit-user-select:none;outline:2px dashed color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:3px}
+.crop-stage canvas{width:100%;height:100%;display:block}
+.crop-zoom{display:flex;align-items:center;gap:10px}.crop-zoom input{flex:1}
+.crop-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.crop-btns .btn{justify-content:center}.crop-btns .btn[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -843,6 +848,22 @@ code{font-family:var(--f-mono);font-size:.92em}
     <p class="muted" style="margin:0;font-size:13px">Touchez une photo qui ne va pas pour en choisir une autre (internet, Google Images ou la vôtre).</p>
     <div class="chips" id="reviewChips"></div>
     <div class="rv-grid" id="reviewGrid"></div>
+  </div>
+</div>
+
+<div class="sheet crop-sheet" id="cropSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Recadrer la photo</h2><button type="button" class="btn ghost" data-act="cropCancel">Annuler</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Glissez pour placer le plat, pincez (ou la réglette) pour zoomer. Ce qui est dans le cadre est ce qui s'affichera.</p>
+    <div class="crop-stage" id="cropStage"><canvas id="cropCv"></canvas></div>
+    <div class="crop-zoom"><span aria-hidden="true">➖</span><input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom"><span aria-hidden="true">➕</span></div>
+    <div class="crop-btns">
+      <button type="button" class="btn" data-act="cropFit" data-v="cover" id="cropCover">Remplir le cadre</button>
+      <button type="button" class="btn" data-act="cropFit" data-v="contain" id="cropContain">Photo entière</button>
+      <button type="button" class="btn" data-act="cropRot">↻ Pivoter</button>
+      <button type="button" class="btn" data-act="cropReset">Recommencer</button>
+    </div>
+    <button type="button" class="btn primary" data-act="cropOk" style="width:100%;justify-content:center">Valider</button>
   </div>
 </div>
 
@@ -2050,8 +2071,47 @@ function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
     if(r.noAuto)return"";const a=autoPhoto(id);return a?a.u:"";}const m=rPhotos();if(m[id])return m[id];
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
   return"";}
-async function setRecipePhoto(id,file){const r=recipes[id];if(!r||!file)return;
-  try{const data=await shrinkPhoto(file);saveRPhoto(id,data);saveRecipe(id,Object.assign({},r,{photo:Date.now()}));toast("Photo ajoutée à la recette");
+/* ---------- Recadrer: frame 3:2 like the recipe photo; drag, pinch / slider zoom, fill or whole photo, rotate ---------- */
+const CROP_W=780,CROP_H=520,ORIG="cm_rph_orig";
+let crop=null;
+function cropOrig(id,data){try{const m=LS.get(ORIG,{});if(data===undefined)return m[id]||"";m[id]=data;const k=Object.keys(m);while(k.length>25)delete m[k.shift()];
+  try{localStorage.setItem(ORIG,JSON.stringify(m));}catch(e){const k2=Object.keys(m);while(k2.length>3){delete m[k2.shift()];try{localStorage.setItem(ORIG,JSON.stringify(m));break;}catch(x){}}}}catch(e){}return"";}
+function loadImg(src,cors){return new Promise((ok,ko)=>{const i=new Image();if(cors)i.crossOrigin="anonymous";i.onload=()=>ok(i);i.onerror=ko;i.src=src;});}
+async function openCrop(id,src,isNew){let img;
+  if(/^https?:/.test(src)){try{img=await loadImg(src,true);const t=document.createElement("canvas");t.width=t.height=2;t.getContext("2d").drawImage(img,0,0,2,2);t.toDataURL();}
+    catch(e){toast("Ce site ne permet pas de recadrer sa photo : enregistrez-la dans vos photos puis « 📷 Ma photo ».");return;}}
+  else img=await loadImg(src);
+  crop={id,img,src,isNew,z:1,ox:0,oy:0,rot:0,fit:"cover"};
+  $("#cropSheet").hidden=false;$("#cropZoom").value=1;requestAnimationFrame(()=>drawCrop());}
+function cropDims(){const r=crop.rot%2,iw=r?crop.img.height:crop.img.width,ih=r?crop.img.width:crop.img.height;return{iw,ih};}
+function clampCrop(W,H){const{iw,ih}=cropDims(),b=crop.fit==="cover"?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih),s=b*crop.z,lx=Math.abs(iw*s-W)/2/W,ly=Math.abs(ih*s-H)/2/H;
+  crop.ox=Math.max(-lx,Math.min(lx,crop.ox));crop.oy=Math.max(-ly,Math.min(ly,crop.oy));return s;}
+function paintCrop(cv,W,H){const c=cv.getContext("2d"),s=clampCrop(W,H);c.fillStyle="#EEEAE0";c.fillRect(0,0,W,H);
+  c.save();c.translate(W/2+crop.ox*W,H/2+crop.oy*H);c.rotate(crop.rot*Math.PI/2);c.imageSmoothingQuality="high";
+  c.drawImage(crop.img,-crop.img.width*s/2,-crop.img.height*s/2,crop.img.width*s,crop.img.height*s);c.restore();}
+function drawCrop(){if(!crop)return;const cv=$("#cropCv"),st=$("#cropStage"),d=Math.min(2,window.devicePixelRatio||1),W=Math.round(st.clientWidth*d)||600,H=Math.round(W*2/3);
+  cv.width=W;cv.height=H;paintCrop(cv,W,H);$("#cropCover").setAttribute("aria-pressed",crop.fit==="cover");$("#cropContain").setAttribute("aria-pressed",crop.fit==="contain");}
+async function cropSave(){if(!crop)return;const c=crop,cv=document.createElement("canvas");cv.width=CROP_W;cv.height=CROP_H;paintCrop(cv,CROP_W,CROP_H);
+  let data;try{data=cv.toDataURL("image/jpeg",0.78);}catch(e){toast("Cette photo ne peut pas être recadrée");return;}
+  if(c.isNew||!cropOrig(c.id)){try{const o=document.createElement("canvas"),k=Math.min(1,1400/Math.max(c.img.width,c.img.height));o.width=Math.round(c.img.width*k);o.height=Math.round(c.img.height*k);
+    o.getContext("2d").drawImage(c.img,0,0,o.width,o.height);cropOrig(c.id,o.toDataURL("image/jpeg",0.8));}catch(e){}}
+  crop=null;$("#cropSheet").hidden=true;await storeRecipePhoto(c.id,data,!c.isNew);}
+// gestures on the frame: one finger moves, two fingers zoom
+(()=>{const st=$("#cropStage"),pts=new Map();let last=null;
+  const dist=()=>{const p=[...pts.values()];return p.length>1?Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y):0;};
+  st.addEventListener("pointerdown",e=>{if(!crop)return;st.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});last={d:dist(),x:e.clientX,y:e.clientY};});
+  st.addEventListener("pointermove",e=>{if(!crop||!pts.has(e.pointerId))return;const prev=pts.get(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size>1){const d=dist();if(last&&last.d){crop.z=Math.max(1,Math.min(4,crop.z*d/last.d));$("#cropZoom").value=crop.z;}last={d};}
+    else{const W=st.clientWidth,H=st.clientHeight;crop.ox+=(e.clientX-prev.x)/W;crop.oy+=(e.clientY-prev.y)/H;}
+    drawCrop();});
+  const up=e=>{pts.delete(e.pointerId);last={d:dist()};};st.addEventListener("pointerup",up);st.addEventListener("pointercancel",up);
+  $("#cropZoom").addEventListener("input",e=>{if(!crop)return;crop.z=Number(e.target.value)||1;drawCrop();});
+  window.addEventListener("resize",()=>{if(crop&&!$("#cropSheet").hidden)drawCrop();});})();
+// a new photo (pasted, chosen, taken) first goes through "Recadrer"
+async function setRecipePhoto(id,file){if(!recipes[id]||!file)return;
+  const url=URL.createObjectURL(file);try{await openCrop(id,url,true);}catch(e){toast("Cette image n'a pas pu être lue");}finally{setTimeout(()=>URL.revokeObjectURL(url),60000);}}
+async function storeRecipePhoto(id,data,quiet){const r=recipes[id];if(!r||!data)return;
+  try{saveRPhoto(id,data);saveRecipe(id,Object.assign({},r,{photo:Date.now()}));toast(quiet?"Photo recadrée":"Photo ajoutée à la recette");
     if(sync){try{const path="photos/r-"+id+".jpg";let sha;const g=await gh("GET",null,sync.repo,path);if(g.status===200)sha=(await g.json()).sha;
       await gh("PUT",Object.assign({message:"Photo de recette",content:data.split(",")[1]},sha?{sha}:{}),sync.repo,path);}catch(e){}}}
   catch(e){toast("Cette image n'a pas pu être lue");}}
@@ -2066,12 +2126,12 @@ function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
   if(!r.photo&&!from&&r.pick&&src===r.pick.u)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" loading="lazy"><span class="muted rp-credit">Photo choisie${r.pick.page?` · <a href="${esc(r.pick.page)}" target="_blank" rel="noopener">${esc(r.pick.src||"source")}</a>`:""}</span>
-    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
+    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(site)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-site="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo du site d'origine${r.source?` · <a href="${esc(r.source)}" target="_blank" rel="noopener">${esc((()=>{try{return new URL(r.source).hostname.replace(/^www\./,"");}catch(e){return"voir";}})())}</a>`:""}</span>
-    ${r.shared?"":`<div class="row rp-acts">${pick("📷 Ma photo")}<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button></div>`}</div>`;
+    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button>${pick("📷 Ma photo")}<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button></div>`}</div>`;
   if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-auto="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
-    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
-  if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button><button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
+    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
+  if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button><button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
   return pick("📷 Ajouter ma photo")+(r.shared?"":`<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Chercher une photo</button>`)+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
 const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
 let wineDraft=null;
@@ -2530,6 +2590,12 @@ document.addEventListener("click",e=>{
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
   else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
+  else if(a==="cropCancel"){const c=crop;crop=null;$("#cropSheet").hidden=true;if(c&&c.isNew)toast("Photo non ajoutée");}
+  else if(a==="cropOk"){cropSave();}
+  else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
+  else if(a==="cropRot"){if(crop){crop.rot=(crop.rot+1)%4;crop.ox=crop.oy=0;drawCrop();}}
+  else if(a==="cropReset"){if(crop){Object.assign(crop,{z:1,ox:0,oy:0,rot:0,fit:"cover"});$("#cropZoom").value=1;drawCrop();}}
+  else if(a==="cropEdit"){const id2=b.dataset.id,o=cropOrig(id2),src=o||rPhotoSrc(id2);if(src)openCrop(id2,src,false).catch(()=>toast("Cette photo n'a pas pu être chargée"));}
   else if(a==="fCat"){const c=b.dataset.c;if(formCats.includes(c)){if(formCats.length===1){toast("Gardez au moins une catégorie");return;}formCats=formCats.filter(x=>x!==c);}else formCats=[...formCats,c];renderFormCats();}
   else if(a==="recCat"){const id=b.dataset.id||recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
     if(list.includes(c)){if(list.length===1){toast("Une recette garde au moins une catégorie");return;}list=list.filter(x=>x!==c);}else list=[...list,c];
