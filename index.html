@@ -608,6 +608,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div id="f-ings" style="display:flex;flex-direction:column;gap:8px"></div>
       <button type="button" class="btn ghost" data-act="addIng" style="align-self:flex-start">+ Ingrédient</button>
     </div>
+    <div class="field"><span class="label">Photo</span><div class="row"><label class="btn rp-pick" id="f-photoLbl">📷 Ajouter une photo<input type="file" accept="image/*" id="f-photo" hidden></label><span class="muted" id="f-photoMsg" style="font-size:13px">facultatif · sinon une photo d'illustration est trouvée</span></div></div>
     <label class="field"><span class="label">Étapes (une par ligne)</span><textarea id="f-steps" rows="6"></textarea><span class="muted" id="f-stepsNote" style="font-size:12px">Quand vous renommez un ingrédient, son nom est aussi changé dans les étapes. Relisez-les et adaptez la préparation si besoin.</span></label>
     <div class="err" id="f-err"></div>
     <div class="add-foot"><button class="btn primary" type="submit" id="f-save">Enregistrer la recette</button></div>
@@ -1303,7 +1304,7 @@ function renderRecipes(){
           :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}${r.shared?`<span class="muted" style="font-size:12px">Recette de ${esc(r.sharedBy||"un proche")} · lecture seule</span>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
-      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?` data-auto="${esc(id)}"`:""}>`:""}<h3>${esc(r.name)}</h3>
+      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${esc(r.name)}</h3>
       <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
@@ -1830,12 +1831,15 @@ async function findPhotos(r){
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?)$/i.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
   return out.slice(0,8);}
-document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG"||!im.dataset.auto)return;
+document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG")return;
+  if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(render,200);return;}
+  if(!im.dataset.auto)return;
   const r=recipes[im.dataset.auto];if(!r)return;const c=autoCache[autoKey(r)];if(!c||!c.list)return;
   const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(render,200);}},true);
 function autoPhoto(id){const r=recipes[id],l=autoList(id);if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
+    if(r.image&&!LS.get("cm_badimg",{})[id])return r.image; // photo of the site the recipe came from
     if(r.noAuto)return"";const a=autoPhoto(id);return a?a.u:"";}const m=rPhotos();if(m[id])return m[id];
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
   return"";}
@@ -1848,7 +1852,9 @@ function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,nu
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";}});
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
-  const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,auto=!r.photo&&!from&&src?autoPhoto(id):null;
+  const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
+  if(site)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-site="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo du site d'origine${r.source?` · <a href="${esc(r.source)}" target="_blank" rel="noopener">${esc((()=>{try{return new URL(r.source).hostname.replace(/^www\./,"");}catch(e){return"voir";}})())}</a>`:""}</span>
+    ${r.shared?"":`<div class="row rp-acts">${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="siteOff" data-id="${esc(id)}">Autre photo</button></div>`}</div>`;
   if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-auto="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
     ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="autoNext" data-id="${esc(id)}">↻ Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
@@ -2076,7 +2082,7 @@ function shareData(){
   const out={};
   const builtIn=id=>!!SEED[id]||Object.values(PACKS).some(pk=>!!pk[id]); // everyone already has these
   for(const[id,r]of Object.entries(recipes)){if(r.shared||builtIn(id))continue;
-    out[id]=r.source?{name:r.name,cat:r.cat,cats:r.cats,time:r.time,source:r.source,linkOnly:true}
+    out[id]=r.source?{name:r.name,cat:r.cat,cats:r.cats,time:r.time,source:r.source,linkOnly:true,image:r.image}
       :{name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:r.ing,steps:r.steps,tags:r.tags,light:r.light,mainFactor:r.mainFactor};}
   const done=LS.get("cm_share_photos",{}),photos={};
   for(const[id,r]of Object.entries(recipes))if(!r.shared&&r.photo&&done[id]===r.photo)photos[id]=sharePhotoUrl(id,r.photo);
@@ -2475,6 +2481,7 @@ document.addEventListener("click",e=>{
   else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
   else if(a==="rphotoRm"){removeRecipePhoto(id);}
   else if(a==="autoNext"){const r=recipes[id],l=autoList(id);if(r&&l.length>1){saveRecipe(id,Object.assign({},r,{autoIdx:((Number(r.autoIdx)||0)+1)%l.length}));}else toast("Pas d'autre photo trouvée pour ce plat");}
+  else if(a==="siteOff"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.image;delete n.noAuto;saveRecipe(id,n);}}
   else if(a==="autoOn"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.noAuto;saveRecipe(id,n);}}
   else if(a==="autoOff"){const r=recipes[id];if(r){saveRecipe(id,Object.assign({},r,{noAuto:true}));toast("Photo retirée : « Ajouter ma photo » reste possible");}}
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
@@ -2995,11 +3002,12 @@ function fillForm(r){
   if(Array.isArray(r.ing)&&r.ing.length){$("#f-ings").innerHTML="";r.ing.filter(i=>i&&i.n).forEach(i=>addIngRow({q:Number(i.q)||0,u:i.u,n:String(i.n),r:i.r}));}
   if(Array.isArray(r.steps))$("#f-steps").value=r.steps.map(String).join("\n");
 }
-let editId=null, editBack=false;
+let editId=null, editBack=false, formPhoto=null;
+$("#f-photo").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f){formPhoto=f;$("#f-photoMsg").textContent="✓ "+(f.name&&f.name.length<30?f.name:"photo choisie")+" · ajoutée à l'enregistrement";}});
 function openSheet(id){
   $("#recForm").reset();$("#f-ings").innerHTML="";$("#f-err").textContent="";
   $("#pasteBox").open=false;$("#pasteIn").value="";$("#pasteMsg").textContent="";
-  const r=id&&recipes[id];editId=r?id:null;
+  const r=id&&recipes[id];editId=r?id:null;formPhoto=null;$("#f-photo").value="";$("#f-photoMsg").textContent="facultatif · sinon une photo d'illustration est trouvée";
   $("#f-stepsNote").textContent="Quand vous renommez un ingrédient, son nom est aussi changé dans les étapes. Relisez-les et adaptez la préparation si besoin.";$("#f-stepsNote").style.color="";
   $("#f-title").textContent=r?"Modifier la recette":"Nouvelle recette";$("#pasteBox").hidden=!!r;
   $("#f-save").textContent=r?"Enregistrer les modifications":"Enregistrer la recette";
@@ -3026,13 +3034,13 @@ $("#recForm").addEventListener("submit",async e=>{
   if(editId&&recipes[editId]){const old=recipes[editId],cat=$("#f-cat").value;
     const data=Object.assign({},old,{name,cat,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),updatedAt:new Date().toISOString()});
     if(Array.isArray(old.cats)){data.cats=old.cats.filter(c=>c!==cat);if(old.cat!==cat&&old.cat)data.cats.push(old.cat);data.cats=[...new Set(data.cats)].filter(c=>c!==cat);if(!data.cats.length)delete data.cats;}
-    const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);
+    const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
     if(!editBack)openId=id;render();toast("Recette modifiée");return;}
   const slug=norm(name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette";
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
   const data={name,cat:$("#f-cat").value,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
   $("#sheet").hidden=true;
-  await saveRecipe(id,data);
+  await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
   view="rec";openId=id;render();toast("Recette enregistrée");
 });
 
@@ -3134,6 +3142,7 @@ async function pollImports(){
       recipes[rid]={name:String(r.name),cat:CATS.includes(r.cat)?r.cat:"Plat",time:Number(r.time)||0,serves:Number(r.serves)||4,
         ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),
         steps:String(r.steps||""),source:String(r.source||""),createdAt:new Date().toISOString()};
+      if(typeof r.image==="string"&&/^https:\/\//.test(r.image))recipes[rid].image=r.image; // the site's own photo of the dish
       added++; if(!firstId)firstId=rid;
     }
     if(firstId&&job.assign){const{w,k,role}=job.assign;menu.weeks=menu.weeks||{};const wk=menu.weeks[w]=menu.weeks[w]||{};
