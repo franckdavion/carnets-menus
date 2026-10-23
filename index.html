@@ -137,7 +137,7 @@ button{cursor:pointer}
 
 /* tab bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
-.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
 .tab{border:none;background:none;padding:12px 4px 14px;font-weight:600;font-size:14px;color:var(--muted);display:flex;justify-content:center;align-items:center;gap:6px}
 .tab[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--accent)}
 .badge{font-family:var(--f-mono);font-size:11px;background:var(--mark);color:#2A2108;border-radius:999px;padding:1px 6px;font-variant-numeric:tabular-nums}
@@ -228,6 +228,23 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .vivino{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
 .wine-viv{margin:-4px 0 6px 68px}
 .psec{display:block;font-size:14px!important;font-weight:700;letter-spacing:.06em;color:var(--accent)!important;background:var(--soft);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:9px 12px;margin-top:12px!important}
+.wgrid{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(0,1fr);background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.wh{font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line)}
+.wd{font-size:13px;font-weight:700;padding:10px 4px 10px 8px;border-bottom:1px solid var(--line);line-height:1.15}
+.wd small{display:block;font-weight:400;color:var(--muted)}
+.wc{-webkit-appearance:none;appearance:none;border-radius:0;box-shadow:none;width:100%;margin:0;border:none;border-bottom:1px solid var(--line);border-left:1px solid var(--line);background:none;text-align:left;padding:8px;font:inherit;font-size:13px;color:var(--ink);display:flex;flex-direction:column;gap:2px;min-width:0;min-height:56px}
+.wc .wn{font-weight:600;overflow-wrap:anywhere}.wc .ws{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.wc .wl{font-size:10px}
+.wc.empty{color:var(--accent);font-weight:600;justify-content:center}.wc.past.empty{color:var(--muted);font-weight:400}
+.wc.past{opacity:.7}.wgrid .today{background:var(--soft)}
+.wc.flash{outline:2px solid var(--accent);outline-offset:-2px}
+.slot-dish{border:none;background:none;text-align:left;padding:4px 0;display:flex;flex-direction:column;gap:2px;color:var(--ink);font-size:17px}
+.slot-dish.sub{font-size:14px;color:var(--ink)}
+.slot-acts2{display:flex;flex-wrap:wrap;gap:8px}
+#printArea{display:none}
+@media print{html,body{background:#fff!important}body>*:not(#printArea){display:none!important}#printArea{display:block!important;font-family:var(--f-body);color:#000}
+  #printArea h1{font-size:20px;margin:0 0 12px}#printArea table{width:100%;border-collapse:collapse;font-size:12px}
+  #printArea th,#printArea td{border:1px solid #999;padding:6px;vertical-align:top;text-align:left}#printArea thead th{background:#eee}
+  #printArea small{color:#444}}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -353,6 +370,15 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div id="menuList"></div>
   </section>
 
+  <!-- SEMAINE -->
+  <section class="view" id="v-week" hidden>
+    <div class="row" style="justify-content:space-between;align-items:baseline"><h2 id="weekTitle">Semaine</h2></div>
+    <div class="chips" id="weekChips"></div>
+    <div class="wgrid" id="weekGrid"></div>
+    <p class="muted" style="font-size:13px;margin:0">Touchez un repas pour le voir ou le modifier.</p>
+    <div class="row"><button class="btn primary" data-act="shareWeek">Partager</button><button class="btn" data-act="printWeek">Imprimer / PDF</button></div>
+  </section>
+
   <!-- RECETTES -->
   <section class="view" id="v-rec" hidden>
     <div class="row" style="justify-content:space-between">
@@ -409,6 +435,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="tabs"><nav role="tablist">
   <button class="tab" role="tab" data-act="tab" data-v="menu" id="t-menu">Menu <span class="badge" id="b-menu"></span></button>
+  <button class="tab" role="tab" data-act="tab" data-v="week" id="t-week">Semaine</button>
   <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec">Recettes</button>
   <button class="tab" role="tab" data-act="tab" data-v="shop" id="t-shop">Courses <span class="badge" id="b-shop"></span></button>
 </nav></div>
@@ -562,6 +589,13 @@ code{font-family:var(--f-mono);font-size:.92em}
   </div>
 </div>
 
+<div class="sheet" id="slotSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2 id="slotTitle">Repas</h2><button type="button" class="btn primary" data-act="closeSlot">Fermer</button></div>
+    <div id="slotBody" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+</div>
+
 <div class="sheet" id="dailySheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2>Produits du quotidien</h2><button type="button" class="btn primary" data-act="closeDaily">Terminé</button></div>
@@ -609,6 +643,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<div id="printArea"></div>
 
 <script>
 const RAYONS=["Fruits & légumes","Boucherie & poisson","Crémerie","Épicerie","Boulangerie","Surgelés","Divers"];
@@ -951,7 +986,7 @@ $("#syncForm").addEventListener("submit",e=>{
 function render(){
   $("#pplN").textContent=menu.people;
   document.querySelector('[data-d="-1"]').disabled=menu.people<=1;
-  for(const v of["menu","rec","shop"]){
+  for(const v of["menu","week","rec","shop"]){
     $("#v-"+v).hidden=view!==v;
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
@@ -964,6 +999,7 @@ function render(){
   if($("#now"))renderNow();
   if(!$("#recSheet").hidden)renderRecSheet();
   if($("#storeSheet")&&!$("#storeSheet").hidden)renderStore();
+  if(view==="week")renderWeek(); if(slotK&&!$("#slotSheet").hidden)renderSlotSheet();
   renderIdea(); renderMenu(); renderRecipes(); renderShop(items,extras,ids); renderTrips(); renderDrives();
 }
 
@@ -1544,6 +1580,58 @@ function renderWines(){
 }
 
 $("#winesQ").addEventListener("input",e=>{wineQ=e.target.value;renderWines();});
+/* ---------- "Semaine" tab: the whole week at a glance, editable, shareable, printable ---------- */
+let slotK=null;
+function weekOptions(){const cur=ymd(mondayOf(new Date()));return[[cur,"Cette semaine"],[ymd(addDays(parseYmd(cur),7)),"Prochaine"],[ymd(addDays(parseYmd(cur),14)),"Dans 2 sem."]];}
+function renderWeek(){
+  const el=$("#weekGrid");if(!el)return;
+  const ws=weekStartDate(), today=ymd(new Date());
+  $("#weekTitle").textContent="Semaine du "+shortDate(ws);
+  $("#weekChips").innerHTML=weekOptions().map(([v,l])=>`<button class="chip" data-act="week" data-w="${v}" aria-pressed="${v===curWeek}">${l}</button>`).join("");
+  const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
+    const sub=s?[s.entree&&recipes[s.entree]?"Entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"Dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"+ "+s.extra.join(", "):""].filter(Boolean):[];
+    return`<button type="button" class="wc${isT?" today":""}${past?" past":""}${r?"":" empty"}" data-act="wcell" data-k="${k}" data-wslot="${k}">${r?`<span class="wn">${esc(r.name)}${s.lock?' <span class="wl" aria-label="verrouillé">🔒</span>':""}</span>${sub.map(x=>`<span class="ws">${esc(x)}</span>`).join("")}${s.n!==menu.people?`<span class="ws">${s.n} pers.</span>`:""}`:(past?"—":"+ Choisir")}</button>`;};
+  el.innerHTML=`<span class="wh"></span><span class="wh">MIDI</span><span class="wh">SOIR</span>`+DAYS.map((d,i)=>{const date=addDays(ws,i),isT=ymd(date)===today;
+    return`<span class="wd${isT?" today":""}">${d.slice(0,3)}<small>${date.getDate()}</small></span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;}).join("");
+}
+function renderSlotSheet(){
+  const k=slotK,s=W()[k],r=s&&recipes[s.id];if(!k){$("#slotSheet").hidden=true;return;}
+  const past=isPast(k);
+  $("#slotTitle").textContent=slotLabel(k)+" · "+shortDate(addDays(weekStartDate(),DAYS.indexOf(k.split("|")[0])));
+  const btn=(act,label,extra="",cls="btn")=>`<button type="button" class="${cls}" data-act="${act}" data-k="${k}" ${extra}>${label}</button>`;
+  let h="";
+  if(r){
+    h+=`<button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>`;
+    ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>`;});
+    if(s.extra&&s.extra.length)h+=`<span class="muted" style="font-size:13px">En plus : ${esc(s.extra.join(", "))}</span>`;
+    if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
+    h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
+      (s.lock?"":btn("swap","↻ Changer"))+btn("lock",s.lock?"Déverrouiller":"Verrouiller")
+      +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
+      +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
+  }else h+=past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:`<div class="slot-acts2">${btn("pick","+ Choisir un plat")}</div>`;
+  $("#slotBody").innerHTML=h;
+}
+function weekText(){
+  const ws=weekStartDate(),lines=["Menus de la semaine du "+shortDate(ws),""];
+  DAYS.forEach((d,i)=>{const part=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return"";
+      const x=[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:""].filter(Boolean);
+      return(m==="midi"?"midi ":"soir ")+r.name+(x.length?" ("+x.join(", ")+")":"");};
+    const p=[part("midi"),part("soir")].filter(Boolean);if(p.length)lines.push(d+" "+addDays(ws,i).getDate()+" : "+p.join(" · "));});
+  return lines.join("\n");
+}
+async function shareWeek(){const t=weekText();
+  if(navigator.share){try{await navigator.share({title:"Menus de la semaine",text:t});return;}catch(e){if(e&&e.name==="AbortError")return;}}
+  try{await navigator.clipboard.writeText(t);toast("Menus copiés : collez-les où vous voulez");}catch(e){toast("Partage impossible ici");}}
+function printWeek(){
+  const ws=weekStartDate();
+  $("#printArea").innerHTML=`<h1>Menus · semaine du ${esc(shortDate(ws))}</h1><table><thead><tr><th></th><th>Midi</th><th>Soir</th></tr></thead><tbody>${DAYS.map((d,i)=>{const c=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return"<td></td>";
+      return`<td><b>${esc(r.name)}</b>${s.entree&&recipes[s.entree]?`<br><small>Entrée : ${esc(recipes[s.entree].name)}</small>`:""}${s.dessert&&recipes[s.dessert]?`<br><small>Dessert : ${esc(recipes[s.dessert].name)}</small>`:""}</td>`;};
+    return`<tr><th>${d}<br><small>${addDays(ws,i).getDate()}</small></th>${c("midi")}${c("soir")}</tr>`;}).join("")}</tbody></table>`;
+  setTimeout(()=>window.print(),60);
+}
+
+$("#slotSheet").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b&&["viewRec","swap","pick","openSide"].includes(b.dataset.act))$("#slotSheet").hidden=true;},true);
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1726,6 +1814,11 @@ document.addEventListener("click",e=>{
     wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();renderWines();if(!$("#sideSheet").hidden)renderSide();toast("Vin supprimé");}
   else if(a==="openWines"){wineQ="";$("#winesQ").value="";$("#winesSheet").hidden=false;renderWines();}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
+  else if(a==="wcell"){const k=b.dataset.k;slotK=k;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
+  else if(a==="closeSlot"){$("#slotSheet").hidden=true;slotK=null;}
+  else if(a==="slotClear"){const k=b.dataset.k;if(W()[k]&&!W()[k].lock){delete W()[k];$("#slotSheet").hidden=true;slotK=null;render();saveMenu();flashSlot(k);toast("Case vidée");}}
+  else if(a==="shareWeek")shareWeek();
+  else if(a==="printWeek")printWeek();
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
@@ -2149,7 +2242,7 @@ function pickPool(){
   const cats=ROLE_CATS[pickRole];
   return Object.keys(recipes).filter(x=>cats?inCats(recipes[x],cats):canMain(recipes[x])&&!onMenu(x));
 }
-function flashSlot(k){setTimeout(()=>{const el=document.querySelector(`[data-slot="${k}"]`);if(!el||view!=="menu")return;
+function flashSlot(k){setTimeout(()=>{const el=document.querySelector(view==="week"?`[data-wslot="${k}"]`:`[data-slot="${k}"]`);if(!el||(view!=="menu"&&view!=="week"))return;
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1600);},90);}
 function setPicked(id){
   const k=pickKey, old=W()[k];
