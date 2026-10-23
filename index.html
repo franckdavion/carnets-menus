@@ -309,6 +309,9 @@ input,select,textarea{font-size:16px!important}
 .paste-zone{min-height:64px;border:2px dashed var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;color:var(--muted);font-size:14px;background:var(--bg);-webkit-user-select:text;user-select:text;caret-color:transparent}
 .paste-zone:focus{outline:none;border-style:solid;color:var(--ink)}
 .ph-google{display:flex;flex-direction:column;gap:8px}
+.tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
+.tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
 .ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
 .ph-c.on{border-color:var(--accent)}
@@ -3116,6 +3119,50 @@ let viewServ={}, recLimit=50;
 let recSheetId=null;
 function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 let recTab="ing";
+/* ---------- "Comment faire ?": the basic techniques found in a step, explained (béchamel, roux, blancs en neige…) ---------- */
+const TECH=[
+ [/b[ée]chamel/i,"Béchamel","Pour 50 cl : 40 g de beurre, 40 g de farine, 50 cl de lait.|Faire fondre le beurre à feu doux, ajouter la farine d'un coup et remuer 1 à 2 min sans colorer (c'est le roux).|Hors du feu, verser le lait froid petit à petit en fouettant pour éviter les grumeaux.|Remettre sur feu moyen et fouetter sans arrêt jusqu'à ébullition, puis cuire 2 à 3 min : la sauce épaissit.|Saler, poivrer, râper un peu de muscade."],
+ [/\broux\b/i,"Roux","Même poids de beurre et de farine.|Faire fondre le beurre, ajouter la farine et remuer 2 min pour un roux blanc (sauces claires), plus longtemps pour un roux blond ou brun.|Ajouter ensuite le liquide froid en fouettant."],
+ [/p[âa]te bris[ée]e/i,"Pâte brisée maison","250 g de farine, 125 g de beurre froid en dés, 1 pincée de sel, 5 à 6 cl d'eau froide.|Frotter farine et beurre du bout des doigts jusqu'à obtenir une texture de sable.|Ajouter l'eau peu à peu et former une boule sans trop travailler la pâte.|Filmer et laisser reposer 30 min au frais avant d'étaler."],
+ [/(blancs?|œufs?|oeufs?) en neige|monter les blancs/i,"Blancs en neige","Blancs à température ambiante, dans un bol propre et sec, avec une pincée de sel.|Fouetter doucement puis de plus en plus vite.|Ils sont prêts quand ils sont fermes et que la pointe tient au bout du fouet.|Les incorporer délicatement à la maryse, en soulevant la préparation, pour ne pas les casser."],
+ [/caramel(?!is)/i,"Caramel","Mettre le sucre dans une casserole avec un peu d'eau (2 c. à s. pour 100 g).|Chauffer à feu moyen sans remuer ; incliner la casserole si besoin.|Arrêter dès que la couleur est ambrée : il continue de foncer hors du feu.|Attention aux brûlures, le caramel est très chaud."],
+ [/caram[ée]lis/i,"Caraméliser","Cuire à feu moyen avec un peu de beurre ou de sucre, en remuant de temps en temps, jusqu'à ce que les morceaux soient bien dorés et brillants.|Pour des oignons : feu doux 20 à 30 min, ils deviennent fondants et sucrés."],
+ [/d[ée]glac/i,"Déglacer","Après avoir fait dorer la viande ou les légumes, verser un liquide (vin, bouillon, eau, vinaigre) dans la poêle encore chaude.|Gratter le fond avec une spatule pour décoller les sucs : c'est là qu'est le goût.|Laisser réduire quelques minutes."],
+ [/\br[ée]dui(re|t|sez)\b|faire r[ée]duire/i,"Réduire","Laisser bouillonner à découvert pour évaporer une partie du liquide.|La sauce devient plus épaisse et plus goûteuse ; goûter avant de saler."],
+ [/[ée]minc/i,"Émincer","Couper en tranches fines et régulières, avec un couteau bien aiguisé, les doigts repliés pour se protéger."],
+ [/cisel/i,"Ciseler","Oignon ou échalote : couper en deux, faire des entailles horizontales puis verticales sans couper la base, puis trancher : on obtient de petits dés.|Herbes : les rouler en petit fagot et les couper très finement."],
+ [/julienne/i,"Julienne","Couper en tranches fines puis en bâtonnets très fins (2 mm environ)."],
+ [/brunoise/i,"Brunoise","Couper en tout petits dés réguliers (2 à 3 mm) : d'abord en tranches, puis en bâtonnets, puis en dés."],
+ [/blanchi(r|s|ssez)? (les |des )?(jaunes|œufs|oeufs)|jaunes.*blanchi/i,"Blanchir des jaunes","Fouetter les jaunes avec le sucre jusqu'à ce que le mélange devienne pâle, mousseux et double de volume (2 à 3 min)."],
+ [/blanchi/i,"Blanchir (légumes)","Plonger les légumes 1 à 3 min dans une grande casserole d'eau bouillante salée.|Les égoutter et les plonger aussitôt dans de l'eau glacée : ils restent verts et croquants."],
+ [/bain[- ]marie/i,"Bain-marie","Poser un bol sur une casserole d'eau qui frémit, sans que le fond du bol touche l'eau.|Idéal pour faire fondre le chocolat ou cuire doucement une crème."],
+ [/faire suer|faites suer/i,"Faire suer","Cuire à feu doux dans un peu de matière grasse, sans colorer, jusqu'à ce que les légumes soient translucides et rendent leur eau."],
+ [/faire revenir|faites revenir|\brevenir\b/i,"Faire revenir","Cuire à feu moyen-vif dans un peu de matière grasse en remuant, jusqu'à ce que ce soit légèrement doré."],
+ [/saisi(r|ssez)|faire saisir/i,"Saisir","Bien chauffer la poêle avec un peu de matière grasse avant d'y mettre la viande ou le poisson.|Ne pas les bouger pendant 1 à 2 min pour qu'une croûte dorée se forme, puis retourner."],
+ [/mijot/i,"Mijoter","Cuire longtemps à feu doux, à petits frémissements (de petites bulles, pas de gros bouillons), souvent à couvert.|Remuer de temps en temps pour que ça n'attache pas."],
+ [/nacr/i,"Nacrer le riz","Faire revenir le riz cru 1 à 2 min dans le beurre ou l'huile chaude en remuant, jusqu'à ce que les grains deviennent translucides.|Ajouter ensuite le liquide (vin, bouillon) petit à petit."],
+ [/mayonnaise/i,"Mayonnaise","1 jaune d'œuf, 1 c. à c. de moutarde, sel, poivre, 20 à 25 cl d'huile, le tout à température ambiante.|Mélanger jaune et moutarde, puis verser l'huile en mince filet en fouettant sans arrêt.|Finir avec un trait de vinaigre ou de citron."],
+ [/vinaigrette/i,"Vinaigrette","1 c. à s. de vinaigre, sel, poivre (et 1 c. à c. de moutarde si on aime).|Mélanger pour dissoudre le sel, puis ajouter 3 c. à s. d'huile et fouetter."],
+ [/cr[èe]me p[âa]tissi[èe]re/i,"Crème pâtissière","50 cl de lait, 4 jaunes, 100 g de sucre, 40 g de maïzena (ou farine), 1 gousse de vanille.|Chauffer le lait avec la vanille.|Fouetter jaunes et sucre jusqu'à blanchiment, ajouter la maïzena.|Verser le lait chaud dessus en fouettant, remettre en casserole et cuire en fouettant jusqu'à ce que ça épaississe, puis 1 min de plus.|Filmer au contact et laisser refroidir."],
+ [/ganache/i,"Ganache","Hacher le chocolat.|Porter la crème à ébullition et la verser sur le chocolat.|Attendre 1 min puis mélanger doucement du centre vers l'extérieur jusqu'à ce que ce soit lisse et brillant."],
+ [/chantilly|cr[èe]me fouett[ée]e/i,"Crème chantilly","Crème liquide entière (30 % minimum) très froide, dans un bol froid.|Fouetter ; quand elle commence à épaissir, ajouter le sucre glace.|S'arrêter dès qu'elle est ferme, sinon elle tourne en beurre."],
+ [/beurre noisette/i,"Beurre noisette","Chauffer le beurre dans une casserole claire : il fond, mousse, puis prend une couleur dorée et une odeur de noisette.|Retirer aussitôt du feu."],
+ [/flamb/i,"Flamber","Verser l'alcool dans la poêle chaude, hors de la hotte et loin de tout objet inflammable.|L'enflammer avec une longue allumette, en se tenant à distance, et laisser brûler jusqu'à extinction."],
+ [/maïzena|maizena|lier la sauce|\blier\b/i,"Lier une sauce","Délayer 1 c. à s. de maïzena dans un peu d'eau froide.|Verser dans la sauce bouillante en remuant : elle épaissit en 1 min."],
+ [/\\bpoch(er|ez|é|ée|és|ées|ant)\\b/i,"Pocher","Cuire dans un liquide (eau, bouillon, lait) qui frémit à peine, sans jamais bouillir fort."],
+ [/dor(er|ez) (à|au) (l'œuf|l'oeuf|jaune)/i,"Dorer à l'œuf","Battre un œuf (ou un jaune) avec un peu de lait.|En badigeonner la pâte au pinceau juste avant d'enfourner."],
+ [/abaiss|[ée]tal(er|ez) la p[âa]te/i,"Étaler la pâte","Fariner le plan de travail et le rouleau.|Étaler du centre vers l'extérieur en tournant la pâte d'un quart de tour régulièrement, jusqu'à l'épaisseur voulue (3 mm environ)."],
+ [/fonc(er|ez)|garni(r|ssez) (le|un) moule/i,"Foncer un moule","Poser la pâte dans le moule, bien la plaquer contre les bords, couper le surplus.|Piquer le fond à la fourchette."],
+ [/à blanc/i,"Cuire à blanc","Recouvrir le fond de tarte de papier cuisson et de légumes secs (haricots, riz).|Cuire 15 min à 180 °C, retirer papier et légumes secs, puis 5 min de plus."],
+ [/al dente/i,"Al dente","Les pâtes sont cuites mais restent fermes sous la dent : goûter 1 à 2 min avant le temps indiqué sur le paquet."],
+ [/pan(er|ez)\b|chapelure/i,"Paner","Passer chaque morceau dans la farine, puis dans l'œuf battu, puis dans la chapelure, dans cet ordre.|Bien tapoter entre chaque étape pour une panure régulière."],
+ [/zest/i,"Zester","Râper uniquement la partie colorée de l'écorce (agrume non traité), sans le blanc qui est amer."],
+ [/mond(er|ez)|peler les tomates/i,"Monder les tomates","Inciser la peau en croix, plonger 30 s dans l'eau bouillante puis dans l'eau froide : la peau s'enlève toute seule."],
+ [/infus/i,"Infuser","Laisser tremper un aromate (vanille, herbes, épices) dans un liquide chaud, à couvert, quelques minutes, puis filtrer."],
+];
+function techsIn(txt){const out=[],seen=new Set();for(const[re,name,how]of TECH){if(re.test(txt)&&!seen.has(name)){seen.add(name);out.push([name,how]);}}
+  return out.filter(([n])=>!(n==="Roux"&&seen.has("Béchamel"))&&!(n==="Blanchir (légumes)"&&seen.has("Blanchir des jaunes"))&&!(n==="Caraméliser"&&seen.has("Caramel"))&&!(n==="Faire revenir"&&seen.has("Faire suer")));}
+const techHtml=(list,cls)=>list.map(([n,how])=>`<details class="tech ${cls||""}"><summary>💡 Comment faire : ${esc(n)}</summary><ol>${how.split("|").map(x=>`<li>${esc(x)}</li>`).join("")}</ol></details>`).join("");
 /* ---------- cooking mode: one step per screen, screen kept on, timers ---------- */
 let cook=null,cookWake=null,cookTimer=null;
 function stepIngs(r,txt,f){const t=norm(txt);return(r.ing||[]).filter(i=>{const w=norm(i.n).replace(/\([^)]*\)/g," ").split(/[\s,'’-]+/).filter(x=>x.length>3);return w.some(x=>t.includes(x.replace(/s$/,"")));})
@@ -3136,6 +3183,7 @@ function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook()
     <div class="cook-dots">${cook.steps.map((_,j)=>`<i class="${j<=cook.i?"on":""}"></i>`).join("")}</div>
     <div class="cook-big">${esc(s)}</div>
     ${ing.length?`<div class="cook-ing">${ing.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
+    ${techHtml(techsIn(s),"dark")}
     ${d?`<button type="button" class="btn cook-timer" data-act="cookTimer" data-s="${d}">${cookTimer?`⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter`:`⏱ Lancer le minuteur · ${dur(d)}`}</button>`:(cookTimer?`<button type="button" class="btn cook-timer" data-act="cookTimer">⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter</button>`:"")}
     <details class="cook-all"><summary>Tous les ingrédients</summary>${(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<div>${esc(fmt(b*f,u))} ${esc(i.n)}</div>`;}).join("")}</details>
     <div class="row cook-nav"><button type="button" class="btn" data-act="cookPrev" ${cook.i?"":"disabled"}>← Précédente</button><button type="button" class="btn primary" data-act="cookNext">${cook.i<cook.steps.length-1?"Suivante →":"Terminé ✓"}</button></div>`;}
@@ -3184,7 +3232,7 @@ function renderRecSheet(){
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
-  else if(recTab==="steps")body=steps.length?`<ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`;
+  else if(recTab==="steps")body=steps.length?`<ol class="steps">${steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`;
   else body=`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
     <div class="nat-box">${natureHtml(r)}</div>${cats}
