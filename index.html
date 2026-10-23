@@ -940,6 +940,12 @@ function portionFactor(r,role){if(!r)return 1;
   if(role==="main"&&r.cat==="Entrée")return Number(r.mainFactor)||2;
   if(role==="entree"&&!["Entrée","Soupe"].includes(r.cat))return 0.5;
   return 1;}
+// a recipe already in a validated meal of the chosen shopping days is already in the list: never count it twice
+function validatedUses(id){const out=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];
+  if(s&&s.lock&&recipes[s.id]&&(s.id===id||s.entree===id||s.dessert===id))out.push(`${dayShort(x)} ${m}`);}return out;}
+function shopBtn(id,p){const v=validatedUses(id);
+  if(v.length)return`<button type="button" class="btn" data-act="shopAdd" data-id="${esc(id)}">✓ Déjà dans la liste (menu validé · ${esc(v.join(", "))})</button>`;
+  return`<button type="button" class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.) · mettre à ${p} p.`:`Ajouter aux courses pour ${p} pers.`}</button>`;}
 function shopping(all){
   const acc={};
   const add=(rid,n,when,role)=>{n=n*portionFactor(recipes[rid],role);
@@ -962,7 +968,7 @@ function shopping(all){
     const when=x.dn+" "+x.d.getDate()+" "+m;
     add(sl.id,sl.n,when,"main"); if(sl.entree)add(sl.entree,sl.n,when,"entree"); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert");
   }
-  for(const[rid,n]of Object.entries(menu.shopExtra||{}))add(rid,n,"hors menu");
+  for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
   const today=ymd(new Date()), bt=menu.bought||{};
   const list=Object.values(acc).map(i=>{const b=bt[i.key];if(b&&b.until>=today)i.q=Math.max(0,i.q-b.q);return i;})
     .filter(i=>!(bt[i.key]&&bt[i.key].until>=today&&i.q<=0.0001));
@@ -1274,7 +1280,7 @@ function renderRecipes(){
       det=`<div class="detail">${catRow}<div class="row">${photoBtn(r)}<button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ ${r.shared?"Personnaliser":"Modifier"}</button></div>${drinkRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
           <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
           <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
-        <div class="row"><button class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.) · mettre à ${p} p.`:`Ajouter aux courses pour ${p} pers.`}</button></div>
+        <div class="row">${shopBtn(id,p)}</div>
         ${on?`<div class="muted" style="font-size:12px">Au menu : ${sl.map(k=>slotLabel(k)+" ("+W()[k].n+" p.)").join(", ")}${sl.some(k=>W()[k].n!==p)?` · <button class="link" data-act="vservApply" data-id="${esc(id)}">Mettre ${p} pers. au menu</button>`:""}</div>`:""}
         <ul class="ings">${ings}</ul>
         ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`:""}
@@ -1359,7 +1365,7 @@ function renderShop(items,extras,ids){
   $("#shopSum").textContent=`${range} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
-  const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="xr-item"><button type="button" class="nm" data-act="viewRec" data-id="${esc(id)}">${esc(recipes[id].name)}</button><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
+  const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="xr-item"><button type="button" class="nm" data-act="viewRec" data-id="${esc(id)}">${esc(recipes[id].name)}${validatedUses(id).length?`<small class="muted" style="display:block;font-size:12px">déjà au menu validé : pas compté deux fois</small>`:""}</button><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
   const hint=false&&unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
   const hv=shopping(true).filter(isHave).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
   const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
@@ -2212,7 +2218,8 @@ document.addEventListener("click",e=>{
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
   else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
   else if(a==="rmCourse"){removePart(b.dataset.k,b.dataset.role);}
-  else if(a==="shopAdd"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
+  else if(a==="shopAdd"){const r=recipes[id];if(!r)return;
+    const v=validatedUses(id);if(v.length){toast(`Déjà dans la liste avec le menu validé (${v.join(", ")}) : pour changer les quantités, touchez « Validé » dans Courses`);return;}const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
   else if(a==="shopRm"){if(menu.shopExtra){delete menu.shopExtra[b.dataset.id];render();saveMenu();}}
   else if(a==="closePick")$("#pickSheet").hidden=true;
@@ -2757,7 +2764,7 @@ function renderRecSheet(){
     <ul class="ings">${ings}</ul>
     <div class="nat-box">${natureHtml(r)}</div>
     ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}
-    <div class="row"><button type="button" class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.)`:`Ajouter aux courses pour ${p} pers.`}</button>
+    <div class="row">${shopBtn(id,p)}
       ${r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Recette d'origine</a>`:""}</div>
     <div class="row" style="justify-content:space-between"><button type="button" class="link" data-act="recInList">Modifier ou supprimer dans Recettes</button><button type="button" class="btn primary" data-act="closeRec">Revenir</button></div>`;
 }
