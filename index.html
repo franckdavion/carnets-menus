@@ -269,6 +269,7 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .undo-bar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:40;max-width:560px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 10px 10px 14px;display:flex;align-items:center;gap:10px;font-size:14px}
 .undo-bar[hidden]{display:none!important}.undo-bar span{flex:1;min-width:0}
 .undo-bar button{border:none;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px}
+.share-link{display:block;font-family:var(--f-mono);font-size:12px;background:var(--soft);border-radius:8px;padding:8px;word-break:break-all;margin:4px 0 8px}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -420,6 +421,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="set-list">
       <button class="set-row" data-act="openSync"><span class="si">🔄</span><span class="st"><b>Partage entre téléphones</b><small><span class="sync-chip" id="syncChip" data-state="off">Synchro désactivée</span></small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="backup"><span class="si">💾</span><span class="st"><b>Sauvegarder</b><small>créer un fichier de secours de tout le carnet</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openShare"><span class="si">👨‍👩‍👧</span><span class="st"><b>Carnet partagé</b><small>partager mes recettes avec la famille</small></span><span class="chev">›</span></button>
       <label class="set-row" for="restoreIn"><span class="si">📂</span><span class="st"><b>Restaurer</b><small>depuis un fichier de secours</small></span><span class="chev">›</span></label>
     </div>
     <input id="restoreIn" type="file" accept=".json,application/json" hidden>
@@ -651,6 +653,19 @@ code{font-family:var(--f-mono);font-size:.92em}
     <span class="label">Quand ? (plusieurs possibles)</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
     <button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button>
+  </div>
+</div>
+
+<div class="sheet" id="shareSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Carnet partagé</h2><button type="button" class="btn primary" data-act="closeShare">Fermer</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Vos proches voient vos recettes, sans pouvoir les modifier. Chacun garde ses propres menus, courses, favoris et vins.</p>
+    <div id="shareMine" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Carnets que je suis</span>
+      <div id="shareFollow"></div>
+      <form class="extra-form" id="followForm" style="margin-top:8px"><input id="followIn" placeholder="Collez le lien reçu" autocomplete="off" inputmode="url"><button class="btn" type="submit">Ajouter</button></form>
+    </div>
   </div>
 </div>
 
@@ -925,7 +940,7 @@ async function runSync(){
       LS.set("cm_base",merged);
       setState(merge3(L0,getState(),merged)); // keep edits made while the request was running
       lastOk=new Date(); setStatus("ok"); done=true;
-      publishIcs(merged.calendar); publishAgenda(merged.calendar);
+      publishIcs(merged.calendar); publishAgenda(merged.calendar); publishShare();
     }
     if(!done)throw{status:409};
   }catch(e){setStatus("err",e);}
@@ -1149,11 +1164,11 @@ function renderRecipes(){
         ${steps.length?`<span class="label">Étapes</span><ol class="steps">${steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>`:""}
         <div class="row">${confirmDel===id
           ?`<span>Supprimer cette recette ?</span><button class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button class="btn ghost" data-act="delNo">Annuler</button>`
-          :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}</div></div>`;
+          :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}${r.shared?`<span class="muted" style="font-size:12px">Recette de ${esc(r.sharedBy||"un proche")} · lecture seule</span>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}"><h3>${esc(r.name)}</h3>
-      <div class="meta"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta">${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -1378,6 +1393,7 @@ function ingGrams(i,row){
 const nutCache=new WeakMap();
 function nutri(r){ // per person: {k: kcal, g: carbs, part: some ingredient unknown}
   if(!r)return null; if(nutCache.has(r))return nutCache.get(r);
+  if(!(r.ing||[]).length){const z={k:0,g:0,part:true,none:true};nutCache.set(r,z);return z;}
   let k=0,g=0,part=false;
   for(const i of r.ing||[]){const n=norm(i.n);if(!n)continue;const row=NUT.find(x=>x[0].test(n));
     if(!row){part=true;continue;} const gr=ingGrams(i,row)/100; k+=gr*row[1]; g+=gr*row[2];}
@@ -1391,7 +1407,7 @@ function slotNut(s){ // a whole meal for one person: dish + starter + dessert + 
   return any?{k,g,part}:null;
 }
 function sumNut(list){const ns=list.filter(Boolean);return ns.length?{k:ns.reduce((a,n)=>a+n.k,0),g:ns.reduce((a,n)=>a+n.g,0),part:ns.some(n=>n.part)}:null;}
-function fmtNut(n,short){if(!n)return"";const k=Math.round(n.k/10)*10,g=Math.round(n.g);
+function fmtNut(n,short){if(!n||n.none)return"";const k=Math.round(n.k/10)*10,g=Math.round(n.g);
   return`${n.part?"≥ ":"≈ "}${k.toLocaleString("fr-FR")} kcal · ${g} g ${short?"gluc.":"glucides"}`;}
 
 /* ---------- drink suggestions: simple pairing rules from the dish ---------- */
@@ -1761,6 +1777,66 @@ function removePart(k,part,i){
   render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
 }
 
+/* ---------- shared recipe book (read only): publish mine, follow someone else's ---------- */
+// Publisher: a JSON file on the app's own site. Own recipes go in full; recipes imported from a website only as name + link.
+const APP_URL=location.origin+location.pathname.replace(/index\.html$/,"");
+function shareFileUrl(id){const s=siteRepo();if(!s)return"";const[o,r]=s.split("/");return`https://${o.toLowerCase()}.github.io/${r}/partage-${id}.json`;}
+function shareLink(){const sh=menu.share;return sh&&sh.id?APP_URL+"?carnet="+encodeURIComponent(shareFileUrl(sh.id)):"";}
+function shareData(){
+  const out={};
+  const builtIn=id=>!!SEED[id]||Object.values(PACKS).some(pk=>!!pk[id]); // everyone already has these
+  for(const[id,r]of Object.entries(recipes)){if(r.shared||builtIn(id))continue;
+    out[id]=r.source?{name:r.name,cat:r.cat,cats:r.cats,time:r.time,source:r.source,linkOnly:true}
+      :{name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:r.ing,steps:r.steps,tags:r.tags,light:r.light,mainFactor:r.mainFactor};}
+  return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",updated:new Date().toISOString(),recipes:out};
+}
+let shareBusy=false;
+async function publishShare(force){
+  const sh=menu.share;if(!sh||!sh.on||!sh.id||!sync||!siteRepo()||shareBusy)return;
+  const d=shareData(),body=J(Object.assign({},d,{updated:""}));if(!force&&LS.get("cm_share_last","")===body)return;
+  shareBusy=true;
+  try{const path="partage-"+sh.id+".json";let sha;const g=await gh("GET",null,siteRepo(),path);if(g.status===200)sha=(await g.json()).sha;
+    const p=await gh("PUT",Object.assign({message:"Carnet partagé",content:b64e(J(d))},sha?{sha}:{}),siteRepo(),path);
+    if(p.ok){LS.set("cm_share_last",body);LS.set("cm_share_at",Date.now());}
+  }catch(e){}finally{shareBusy=false;if(!$("#shareSheet").hidden)renderShare();}
+}
+// Follower: books I follow, refreshed when the app opens; their recipes are read only in my notebook
+let follows=LS.get("cm_follows",[]);
+async function refreshFollow(f,quiet){
+  try{const r=await fetch(f.url+(f.url.includes("?")?"&":"?")+"t="+Date.now(),{cache:"no-store"});if(!r.ok)throw r.status;
+    const d=await r.json();if(!d||typeof d.recipes!=="object")throw"format";
+    const favs=new Set(Object.keys(recipes).filter(k=>recipes[k].shared===f.url&&recipes[k].fav));
+    for(const k of Object.keys(recipes))if(recipes[k].shared===f.url)delete recipes[k];
+    for(const[id,x]of Object.entries(d.recipes)){if(!x||!x.name)continue;const nid="sh-"+f.key+"-"+id;
+      recipes[nid]=Object.assign({ing:[],steps:""},x,{shared:f.url,sharedBy:d.owner||f.name},favs.has(nid)?{fav:true}:{});}
+    f.name=d.owner||f.name;f.n=Object.keys(d.recipes).length;f.at=Date.now();f.err="";
+  }catch(e){f.err=quiet?f.err:"Carnet introuvable pour l'instant (il peut mettre quelques minutes à être publié).";}
+  LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();if(!$("#shareSheet").hidden)renderShare();
+}
+function refreshFollows(){follows.forEach(f=>{if(Date.now()-(f.at||0)>10*60e3)refreshFollow(f,true);});}
+function followUrl(raw){let u=String(raw).trim();try{const m=u.match(/[?&]carnet=([^&\s]+)/);if(m)u=decodeURIComponent(m[1]);}catch(e){}
+  if(!/^https:\/\/[^\s]+\.json$/i.test(u))return"";return u;}
+function addFollow(raw){const url=followUrl(raw);if(!url){toast("Ce lien de carnet n'est pas reconnu");return false;}
+  if(follows.some(f=>f.url===url)){toast("Ce carnet est déjà suivi");return false;}
+  const f={url,key:Math.random().toString(36).slice(2,7),name:"Carnet partagé"};follows.push(f);LS.set("cm_follows",follows);refreshFollow(f);toast("Carnet ajouté : ses recettes arrivent");return true;}
+function removeFollow(url){for(const k of Object.keys(recipes))if(recipes[k].shared===url)delete recipes[k];follows=follows.filter(f=>f.url!==url);LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();renderShare();toast("Carnet retiré");}
+function copyShared(id){const r=recipes[id];if(!r)return;const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
+  const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
+  saveRecipe(nid,n);toast("Copiée dans votre carnet : vous pouvez la modifier");openRecSheet(nid);}
+function renderShare(){
+  const sh=menu.share||{},can=!!(sync&&siteRepo());
+  const at=LS.get("cm_share_at",0);
+  $("#shareMine").innerHTML=!can?`<p class="muted" style="margin:0">Pour partager vos recettes, activez d'abord « Partage entre téléphones » (dans Réglages).</p>`
+    :`<div class="pref-row"><div><strong>Partager mes recettes</strong><div class="muted" style="font-size:13px">sans vos menus, courses ni vins</div></div><div class="chips"><button type="button" class="chip" data-act="shareOn" data-v="1" aria-pressed="${!!sh.on}">Oui</button><button type="button" class="chip" data-act="shareOn" data-v="0" aria-pressed="${!sh.on}">Non</button></div></div>
+      ${sh.on?`<label class="field"><span class="label">Nom affiché chez les autres</span><input id="shareName" value="${esc(sh.name||"")}" placeholder="Ex. Franck" autocomplete="off"></label>
+      <div class="field"><span class="label">Lien à envoyer</span><code class="share-link">${esc(shareLink())}</code>
+        <div class="row"><button type="button" class="btn primary" data-act="shareSend">Envoyer le lien</button><button type="button" class="btn" data-act="shareCopy">Copier</button></div>
+        <span class="muted" style="font-size:12px">${at?"Mis à jour le "+new Date(at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+". ":""}Les nouvelles recettes sont ajoutées automatiquement. Comptez quelques minutes avant que le lien marche la première fois.</span></div>`:""}`;
+  $("#shareFollow").innerHTML=(follows.length?follows.map(f=>`<div class="pref-row"><div><strong>${esc(f.name)}</strong><div class="muted" style="font-size:13px">${f.err?esc(f.err):(f.n||0)+" recettes"+(f.at?" · mis à jour "+new Date(f.at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"")}</div></div>
+      <div class="row" style="gap:6px"><button type="button" class="btn" data-act="followRefresh" data-u="${esc(f.url)}">↻</button><button type="button" class="btn danger" data-act="followRm" data-u="${esc(f.url)}">Retirer</button></div></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">Aucun carnet suivi.</p>`);
+}
+
+$("#followForm").addEventListener("submit",e=>{e.preventDefault();if(addFollow($("#followIn").value))$("#followIn").value="";});
 /* ---------- everyday products ---------- */
 const DAILY=[
  ["Hygiène",["Papier toilette","Mouchoirs","Dentifrice","Brosses à dents","Gel douche","Shampoing","Savon","Déodorant","Coton-tiges","Cotons démaquillants","Rasoirs","Protections hygiéniques","Crème hydratante"]],
@@ -1951,6 +2027,15 @@ document.addEventListener("click",e=>{
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
   else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to;setTimeout(()=>{const el=to&&document.getElementById(to);const sc=$("#prefSheet .sheet-in");if(el){sc.scrollTop=0;el.scrollIntoView({block:"start",behavior:"smooth"});}else sc.scrollTop=0;},80);}
+  else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;}
+  else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}$("#shareSheet").hidden=true;}
+  else if(a==="shareOn"){const on=b.dataset.v==="1";menu.share=Object.assign({id:Math.random().toString(36).slice(2,12),name:""},menu.share,{on});saveMenu();renderShare();if(on)publishShare(true);}
+  else if(a==="shareSend"){const l=shareLink(),t="Voici mon carnet de recettes : ouvre ce lien sur ton iPhone, puis ajoute l'app à ton écran d'accueil.\n"+l;
+    if(navigator.share)navigator.share({title:"Mon carnet de recettes",text:t}).catch(()=>{});else navigator.clipboard.writeText(l).then(()=>toast("Lien copié"),()=>{});}
+  else if(a==="shareCopy"){navigator.clipboard.writeText(shareLink()).then(()=>toast("Lien copié"),()=>toast("Copie impossible : sélectionnez le lien à la main"));}
+  else if(a==="followRefresh"){const f=follows.find(x=>x.url===b.dataset.u);if(f)refreshFollow(f);}
+  else if(a==="followRm"){removeFollow(b.dataset.u);}
+  else if(a==="copyShared"){copyShared(recSheetId);}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
@@ -2150,12 +2235,12 @@ function parseRecipeText(text){
 /* ---------- week planner ---------- */
 let proposeAsk=0, undoWeek=null, prefDraft=null, rerollAvoid=[];
 const KIND_LABEL={poisson:"poisson",rouge:"viande rouge",volaille:"volaille",porc:"porc",vege:"végé"};
-const THEMES=[["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
+const THEMES=[["partage","Partagées"],["fete","Fêtes"],["dissocie","Dissocié"],["lowkcal","Peu calorique"],["lowcarb","Peu de glucides"],["legumes","Légumes"],["reequilibrage","Rééquilibrage"],["dessert-legumes","Desserts aux légumes"]];
 const THEME_LABEL=Object.fromEntries(THEMES);
 // computed from the calorie estimate: main dishes ≤ 350 kcal (desserts ≤ 200), ≤ 20 g of carbs per person
 function isLowKcal(r){const n=nutri(r);return !!n&&!n.part&&n.k<=(r.cat==="Dessert"?200:350);}
 function isLowCarb(r){const n=nutri(r);return !!n&&!n.part&&n.g<=20;}
-const hasTheme=(r,t)=>(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
+const hasTheme=(r,t)=>(t==="partage"&&!!r.shared)||(t==="dissocie"&&recipeDissoc(r).ok)||(r.tags||[]).includes(t)||(t==="lowcarb"&&isLowCarb(r))||(t==="lowkcal"&&isLowKcal(r));
 const KIND_CHIPS=[["","Tout"],["poisson","Poisson"],["volaille","Volaille"],["rouge","Viande rouge"],["porc","Porc"],["vege","Végé"]];
 const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/œ/g,"oe");
 /* search words that mean a family of recipes */
@@ -2190,7 +2275,8 @@ function recMatch(r,q,kind,quick,light,fav,theme){
 }
 function kindChipsHtml(act,cur,quick,light,fav,theme){
   // choosing a dessert: "Desserts aux légumes" replaces "Légumes"; choosing a main dish: no dessert filter
-  const th=THEMES.filter(([v])=>act!=="pkind"?true:pickRole==="dessert"?v!=="legumes":v!=="dessert-legumes");
+  const anyShared=Object.values(recipes).some(r=>r.shared);
+  const th=THEMES.filter(([v])=>(v!=="partage"||anyShared)&&(act!=="pkind"?true:pickRole==="dessert"?v!=="legumes":v!=="dessert-legumes"));
   return th.map(([v,l])=>`<button type="button" class="chip" data-act="${act}Theme" data-v="${v}" aria-pressed="${theme===v}">${l}</button>`).join("")+KIND_CHIPS.map(([v,l])=>`<button type="button" class="chip" data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join("")
     +`<button type="button" class="chip" data-act="${act}Quick" aria-pressed="${quick}">30 min et moins</button>`
     +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`
@@ -2216,6 +2302,7 @@ function avoidList(){return menu.prefs.avoid.split(",").map(norm).filter(Boolean
 function eligible(){
   const av=avoidList();
   return Object.keys(recipes).filter(id=>{const r=recipes[id];if(!canMain(r))return false;
+    if(r.linkOnly)return false;
     if(menu.prefs.dissoc&&!recipeDissoc(r).ok)return false;
     return !av.some(a=>norm(r.name).includes(a)||(r.ing||[]).some(i=>norm(i.n).includes(a)));});
 }
@@ -2333,6 +2420,8 @@ function renderRecSheet(){
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
   const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=String(r.steps||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const shBox=r.shared?`<div class="note" style="display:flex;flex-direction:column;gap:8px"><span>Recette de <b>${esc(r.sharedBy||"un proche")}</b> (lecture seule).${r.linkOnly?" Elle vient d'un site : ouvrez-la avec « Voir la recette d'origine ».":""}</span>
+      <div class="row">${r.linkOnly&&r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine ↗</a>`:`<button type="button" class="btn" data-act="copyShared">Copier dans mon carnet</button>`}</div></div>`:"";
   $("#recSheetIn").innerHTML=`<div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:nowrap">
       <div style="min-width:0"><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}</div><div style="margin-top:6px">${dissocBadge(recipeDissoc(r))}</div><div class="nut">${esc(fmtNut(nutri(r)))} par personne</div><div class="drink" style="margin-top:4px">${(()=>{const d=drinkFor(r);return`Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>Sans alcool : ${esc(d[1])}`;})()}</div></div>
       <button type="button" class="btn" data-act="closeRec">Fermer</button></div>
@@ -2340,7 +2429,7 @@ function renderRecSheet(){
     <div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
-    <div class="field"><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
+    ${shBox}<div class="field"${r.shared?' hidden':""}><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
       ${r.cat==="Entrée"&&canMain(r)?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en plat, les quantités sont multipliées (« pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["2","×2"],["1.5","×1,5"]].map(([v,l])=>`<span class="dchip${String(r.mainFactor||2)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}">${l}</button></span>`).join("")}</div>`
        :MAIN_CATS.includes(r.cat)&&inCat(r,"Entrée")?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en entrée, elle compte pour une demi-portion.</span>`:""}</div>
     <ul class="ings">${ings}</ul>
@@ -2598,13 +2687,15 @@ function applyPacks(){
   if(menu.packs&&menu.packs.length!==done.length){LS.set("cm_recipes",recipes);LS.set("cm_menu",menu);scheduleSync();
     if(added)setTimeout(()=>toast(added+" nouvelles recettes ajoutées au carnet"),400);}
 }
-recipes=LS.get("cm_recipes",null)||SEED;
+recipes=LS.get("cm_recipes",null)||JSON.parse(JSON.stringify(SEED)); // a copy: the built-in list itself must never change
 menu=normMenu(LS.get("cm_menu",{}));
 render();
 setStatus(sync?"pending":"off");
 if(sync)runSync();
 startImportPolling();
 renderNow(); setInterval(renderNow,20000);
+(()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){addFollow(decodeURIComponent(m[1]));history.replaceState(null,"",location.pathname);}
+  refreshFollows();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshFollows();});})();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 /* keep open windows inside the visible area (keyboard on iPhone) */
