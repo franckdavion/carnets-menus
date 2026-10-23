@@ -1809,7 +1809,8 @@ function rPhotos(){return LS.get(RPH,{});}
 function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[id];let keys=Object.keys(m);
   for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
 const rFetching=new Set();
-function rPhotoSrc(id){const r=recipes[id];if(!r||!r.photo)return"";const m=rPhotos();if(m[id])return m[id];
+function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
+  if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];return sp?sp.u:"";} // a photo from a book I followconst m=rPhotos();if(m[id])return m[id];
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
   return"";}
 async function setRecipePhoto(id,file){const r=recipes[id];if(!r||!file)return;
@@ -1821,7 +1822,8 @@ function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,nu
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";}});
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
-  if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}">${r.shared?"":`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`}</div>`;
+  const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by;
+  if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
   return pick("📷 Ajouter ma photo");}
 const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
 let wineDraft=null;
@@ -2048,11 +2050,21 @@ function shareData(){
   for(const[id,r]of Object.entries(recipes)){if(r.shared||builtIn(id))continue;
     out[id]=r.source?{name:r.name,cat:r.cat,cats:r.cats,time:r.time,source:r.source,linkOnly:true}
       :{name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:r.ing,steps:r.steps,tags:r.tags,light:r.light,mainFactor:r.mainFactor};}
-  return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",inbox:shareInbox(),updated:new Date().toISOString(),recipes:out};
+  const done=LS.get("cm_share_photos",{}),photos={};
+  for(const[id,r]of Object.entries(recipes))if(!r.shared&&r.photo&&done[id]===r.photo)photos[id]=sharePhotoUrl(id,r.photo);
+  return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",inbox:shareInbox(),photos,updated:new Date().toISOString(),recipes:out};
 }
 let shareBusy=false;
+// recipe photos go to the public site next to the book file: partage-photos/<book>/<recipe>-<version>.jpg
+function sharePhotoUrl(rid,ts){const s=siteRepo();if(!s||!menu.share)return"";const[o,r]=s.split("/");return`https://${o.toLowerCase()}.github.io/${r}/partage-photos/${menu.share.id}/${encodeURIComponent(rid)}-${ts}.jpg`;}
+async function uploadSharePhotos(){const done=LS.get("cm_share_photos",{}),cache=rPhotos();let changed=false;
+  for(const[id,r]of Object.entries(recipes)){if(r.shared||!r.photo||done[id]===r.photo||!cache[id])continue;
+    try{const p=await gh("PUT",{message:"Photo de recette partagée",content:cache[id].split(",")[1]},siteRepo(),`partage-photos/${menu.share.id}/${id}-${r.photo}.jpg`);
+      if(p.ok||p.status===422){done[id]=r.photo;changed=true;}}catch(e){}}
+  if(changed)LS.set("cm_share_photos",done);return done;}
 async function publishShare(force){
   const sh=menu.share;if(!sh||!sh.on||!sh.id||!sync||!siteRepo()||shareBusy)return;
+  shareBusy=true;try{await uploadSharePhotos();}catch(e){}shareBusy=false;
   const d=shareData(),body=J(Object.assign({},d,{updated:""}));if(!force&&LS.get("cm_share_last","")===body)return;
   shareBusy=true;
   try{const path="partage-"+sh.id+".json";let sha;const g=await gh("GET",null,siteRepo(),path);if(g.status===200)sha=(await g.json()).sha;
@@ -2112,6 +2124,10 @@ async function refreshFollow(f,quiet){
       if(!was){shNews[nid]={k:"new",by:d.owner||f.name,at:Date.now()};nNew++;}
       else if(was!==hs&&!(shNews[nid]&&shNews[nid].k==="new")){shNews[nid]={k:"maj",by:d.owner||f.name,at:Date.now()};nMaj++;}}
     f.sig=sig;LS.set("cm_sh_news",shNews);
+    {const ph=LS.get("cm_sh_photos",{});for(const k of Object.keys(ph))if(ph[k].from===f.url)delete ph[k];
+     for(const[id,u]of Object.entries(d.photos&&typeof d.photos==="object"?d.photos:{})){if(typeof u!=="string"||!/^https:\/\/[\w.-]+\.github\.io\//.test(u))continue;
+       const target=recipes["sh-"+f.key+"-"+id]||d.recipes[id]?"sh-"+f.key+"-"+id:id;ph[target]={u,from:f.url,by:d.owner||f.name};}
+     LS.set("cm_sh_photos",ph);}
     if(nNew||nMaj)setTimeout(()=>toast(`🆕 ${d.owner||f.name} : `+[nNew?`${nNew} nouvelle${nNew>1?"s":""} recette${nNew>1?"s":""}`:"",nMaj?`${nMaj} modifiée${nMaj>1?"s":""}`:""].filter(Boolean).join(", ")),400);
     const favs=new Set(Object.keys(recipes).filter(k=>recipes[k].shared===f.url&&recipes[k].fav));
     for(const k of Object.keys(recipes))if(recipes[k].shared===f.url)delete recipes[k];
