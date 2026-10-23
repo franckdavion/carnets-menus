@@ -299,6 +299,9 @@ input,select,textarea{font-size:16px!important}
 .it-del{width:32px;height:32px;border-radius:50%;color:var(--muted)}
 .daily-ed{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
 .dchip.editing{outline:2px solid var(--accent);border-radius:999px}
+.ph-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ph-c{padding:0;border:2px solid transparent;border-radius:12px;overflow:hidden;background:var(--soft);aspect-ratio:4/3}.ph-c img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-c.on{border-color:var(--accent)}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
 .idea .link{display:inline-block;padding:6px 0;font-size:13px}
 /* taps answer at once on iPhone (no double-tap-zoom wait) and show they were pressed */
@@ -349,7 +352,7 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}.as.ask{border:2px dashed var(--accent)}
 .aask{grid-column:1/-1;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .aask b{font-size:14px}.aask .btn{text-align:left;justify-content:flex-start;min-height:44px}.aask small{display:block;font-weight:400;color:var(--muted);font-size:12px}
-#addSheet .sheet-in{height:92%}
+#addSheet .sheet-in,#photoSheet .sheet-in{height:92%}
 /* "+ Menu" chooser: the confirm button always stays in view at the bottom */
 .add-foot{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));margin:auto -16px 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));background:var(--bg);box-shadow:0 -10px 14px -10px rgba(0,0,0,.4);z-index:2}
 .add-foot .btn{width:100%;min-height:48px;font-size:17px}
@@ -754,6 +757,21 @@ code{font-family:var(--f-mono);font-size:.92em}
     <span class="label">Quand ? Touchez un ou plusieurs repas</span><div class="chips" id="addWeeks" style="flex-wrap:wrap"></div>
     <div class="agrid" id="addGrid"></div>
     <div class="add-foot"><button type="button" class="btn primary" id="addOk" data-act="addOk">Ajouter</button></div>
+  </div>
+</div>
+
+<div class="sheet" id="photoSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Choisir une photo</h2><button type="button" class="btn ghost" data-act="closePhoto">Fermer</button></div>
+    <form class="extra-form" id="photoForm"><input id="photoQ" type="search" placeholder="Chercher : tarte tatin, curry…" autocomplete="off"><button class="btn primary" type="submit">Chercher</button></form>
+    <p class="muted" id="photoMsg" style="margin:0;font-size:13px"></p>
+    <div class="ph-grid" id="photoGrid"></div>
+    <div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">Ou</span>
+      <div class="row" id="photoMine"></div>
+      <label class="field"><span class="muted" style="font-size:13px">Collez l'adresse d'une image trouvée sur internet (sur l'image : rester appuyé → « Copier le lien »)</span>
+        <div class="extra-form"><input id="photoUrl" placeholder="https://…" inputmode="url" autocomplete="off" autocapitalize="off"><button type="button" class="btn" data-act="photoUrlOk">Utiliser</button></div></label>
+      <a class="btn" id="photoGoogle" target="_blank" rel="noopener">Voir sur Google Images ↗</a>
+    </div>
   </div>
 </div>
 
@@ -1821,18 +1839,35 @@ function autoList(id){const r=recipes[id];if(!r)return[];const c=autoCache[autoK
 function autoPump(){while(autoBusy<2&&autoQ.length){const id=autoQ.shift();autoBusy++;
   findPhotos(recipes[id]).then(list=>{const r=recipes[id];if(r){autoCache[autoKey(r)]={list,t:Date.now()};try{LS.set(AUTOPH,autoCache);}catch(e){}}})
     .catch(()=>{}).finally(()=>{autoBusy--;autoPend.delete(id);clearTimeout(autoT);autoT=setTimeout(()=>{render();},400);autoPump();});}}
-async function findPhotos(r){
+async function findPhotos(r,max){
   const name=String(r.name||"").replace(/\([^)]*\)/g," ").replace(/\s+/g," ").trim(),out=[],seen=new Set();
   const add=x=>{if(x&&x.u&&!seen.has(x.u)){seen.add(x.u);out.push(x);}};
   const head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),words=name.split(" ");
   for(const t of [...new Set([name,head])]){if(out.length)break;try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
     if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source){const o=d.originalimage||{};
       add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}}catch(e){}}
-  for(const q of [...new Set([name,head,words.slice(0,2).join(" ")])]){if(out.length>=3)break;
-    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
+  for(const q of [...new Set([name,head,words.slice(0,2).join(" ")])]){if(out.length>=(max?max/2:3))break;
+    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+(max||8)+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?)$/i.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
-  return out.slice(0,8);}
+  return out.slice(0,max||8);}
+/* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
+let photoId=null;
+async function openPhotoPick(id){const r=recipes[id];if(!r)return;photoId=id;$("#photoQ").value=r.name;$("#photoUrl").value="";
+  $("#photoMine").innerHTML=`<label class="btn rp-pick">📷 Ma photo (appareil ou photothèque)<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
+  $("#recSheet").hidden=true; /* the recipe comes back when this window closes */ $("#photoSheet").hidden=false;$("#photoSheet .sheet-in").scrollTop=0;photoSearch(r.name,true);}
+async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"").trim();if(!q)return;
+  $("#photoGoogle").href="https://www.google.com/search?tbm=isch&q="+encodeURIComponent(q+" recette");
+  $("#photoMsg").textContent="Recherche de photos…";$("#photoGrid").innerHTML="";
+  let list=first?autoList(id):[];if(list.length<6){try{list=[...list,...(await findPhotos({name:q},16))];}catch(e){}}
+  const seen=new Set();list=list.filter(x=>x&&x.u&&!seen.has(x.u)&&seen.add(x.u));if(photoId!==id)return;
+  photoCands=list;const cur=rPhotoSrc(id);
+  $("#photoMsg").textContent=list.length?"Touchez une photo pour la choisir.":"Aucune photo trouvée : essayez un autre mot (ex. le plat principal), ou collez l'adresse d'une image.";
+  $("#photoGrid").innerHTML=list.map((x,i)=>`<button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></button>`).join("");}
+let photoCands=[];
+function choosePhoto(c){const r=recipes[photoId];if(!r||!c)return;const n=Object.assign({},r,{pick:{u:c.u,page:c.page||"",src:c.src||"internet"}});delete n.noAuto;
+  saveRecipe(photoId,n);$("#photoSheet").hidden=true;toast("Photo choisie");}
+$("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("#photoQ").value);});
 document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG")return;
   if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(render,200);return;}
   if(!im.dataset.auto)return;
@@ -1841,6 +1876,7 @@ document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IM
 function autoPhoto(id){const r=recipes[id],l=autoList(id);if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
+    if(r.pick&&r.pick.u)return r.pick.u; // chosen in "Choisir une photo"
     if(r.image&&!LS.get("cm_badimg",{})[id])return r.image; // photo of the site the recipe came from
     if(r.noAuto)return"";const a=autoPhoto(id);return a?a.u:"";}const m=rPhotos();if(m[id])return m[id];
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
@@ -1851,14 +1887,16 @@ async function setRecipePhoto(id,file){const r=recipes[id];if(!r||!file)return;
       await gh("PUT",Object.assign({message:"Photo de recette",content:data.split(",")[1]},sha?{sha}:{}),sync.repo,path);}catch(e){}}}
   catch(e){toast("Cette image n'a pas pu être lue");}}
 function removeRecipePhoto(id){const r=recipes[id];if(!r)return;saveRPhoto(id,null);const n=Object.assign({},r);delete n.photo;saveRecipe(id,n);toast("Photo retirée");}
-document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";}});
+document.addEventListener("change",e=>{const t=e.target;if(t&&t.classList&&t.classList.contains("rphoto-in")&&t.files&&t.files[0]){setRecipePhoto(t.dataset.id,t.files[0]);t.value="";$("#photoSheet").hidden=true;}});
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
   const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
+  if(!r.photo&&!from&&r.pick&&src===r.pick.u)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" loading="lazy"><span class="muted rp-credit">Photo choisie${r.pick.page?` · <a href="${esc(r.pick.page)}" target="_blank" rel="noopener">${esc(r.pick.src||"source")}</a>`:""}</span>
+    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(site)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-site="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo du site d'origine${r.source?` · <a href="${esc(r.source)}" target="_blank" rel="noopener">${esc((()=>{try{return new URL(r.source).hostname.replace(/^www\./,"");}catch(e){return"voir";}})())}</a>`:""}</span>
-    ${r.shared?"":`<div class="row rp-acts">${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="siteOff" data-id="${esc(id)}">Autre photo</button></div>`}</div>`;
+    ${r.shared?"":`<div class="row rp-acts">${pick("📷 Ma photo")}<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button></div>`}</div>`;
   if(auto)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-auto="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo d'illustration · <a href="${esc(auto.page||"#")}" target="_blank" rel="noopener">${esc(auto.src)}</a></span>
-    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="autoNext" data-id="${esc(id)}">↻ Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
+    ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts">${pick("📷 Changer la photo")}<button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
   return pick("📷 Ajouter ma photo")+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
 const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
@@ -2088,6 +2126,7 @@ function shareData(){
       :{name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:r.ing,steps:r.steps,tags:r.tags,light:r.light,mainFactor:r.mainFactor};}
   const done=LS.get("cm_share_photos",{}),photos={};
   for(const[id,r]of Object.entries(recipes))if(!r.shared&&r.photo&&done[id]===r.photo)photos[id]=sharePhotoUrl(id,r.photo);
+  for(const[id,r]of Object.entries(recipes))if(!r.shared&&!photos[id]&&r.pick&&r.pick.u)photos[id]=r.pick.u; // a photo chosen on the internet
   return{app:"carnet-menus",owner:(menu.share&&menu.share.name)||"Carnet partagé",inbox:shareInbox(),photos,updated:new Date().toISOString(),recipes:out};
 }
 let shareBusy=false;
@@ -2161,7 +2200,7 @@ async function refreshFollow(f,quiet){
       else if(was!==hs&&!(shNews[nid]&&shNews[nid].k==="new")){shNews[nid]={k:"maj",by:d.owner||f.name,at:Date.now()};nMaj++;}}
     f.sig=sig;LS.set("cm_sh_news",shNews);
     {const ph=LS.get("cm_sh_photos",{});for(const k of Object.keys(ph))if(ph[k].from===f.url)delete ph[k];
-     for(const[id,u]of Object.entries(d.photos&&typeof d.photos==="object"?d.photos:{})){if(typeof u!=="string"||!/^https:\/\/[\w.-]+\.github\.io\//.test(u))continue;
+     for(const[id,u]of Object.entries(d.photos&&typeof d.photos==="object"?d.photos:{})){if(typeof u!=="string"||!/^https:\/\/\S+$/.test(u))continue;
        const target=recipes["sh-"+f.key+"-"+id]||d.recipes[id]?"sh-"+f.key+"-"+id:id;ph[target]={u,from:f.url,by:d.owner||f.name};}
      LS.set("cm_sh_photos",ph);}
     if(nNew||nMaj)setTimeout(()=>toast(`🆕 ${d.owner||f.name} : `+[nNew?`${nNew} nouvelle${nNew>1?"s":""} recette${nNew>1?"s":""}`:"",nMaj?`${nMaj} modifiée${nMaj>1?"s":""}`:""].filter(Boolean).join(", ")),400);
@@ -2508,9 +2547,14 @@ document.addEventListener("click",e=>{
   else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
   else if(a==="rphotoRm"){removeRecipePhoto(id);}
   else if(a==="autoNext"){const r=recipes[id],l=autoList(id);if(r&&l.length>1){saveRecipe(id,Object.assign({},r,{autoIdx:((Number(r.autoIdx)||0)+1)%l.length}));}else toast("Pas d'autre photo trouvée pour ce plat");}
+  else if(a==="photoPick"){openPhotoPick(id);}
+  else if(a==="closePhoto"){$("#photoSheet").hidden=true;}
+  else if(a==="photoChoose"){choosePhoto(photoCands[Number(b.dataset.i)]);}
+  else if(a==="photoUrlOk"){const u=$("#photoUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){toast("Collez une adresse qui commence par https://");return;}
+    const t=new Image();t.onload=()=>choosePhoto({u,page:u,src:(()=>{try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return"internet";}})()});t.onerror=()=>toast("Cette adresse n'est pas une image lisible");t.src=u;}
   else if(a==="siteOff"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.image;delete n.noAuto;saveRecipe(id,n);}}
   else if(a==="autoOn"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.noAuto;saveRecipe(id,n);}}
-  else if(a==="autoOff"){const r=recipes[id];if(r){saveRecipe(id,Object.assign({},r,{noAuto:true}));toast("Photo retirée : « Ajouter ma photo » reste possible");}}
+  else if(a==="autoOff"){const r=recipes[id];if(r){const n=Object.assign({},r,{noAuto:true});delete n.pick;delete n.image;saveRecipe(id,n);toast("Photo retirée : « Ajouter ma photo » reste possible");}}
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
