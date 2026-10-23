@@ -324,6 +324,7 @@ input,select,textarea{font-size:16px!important}
 .pill.p1{background:var(--soft);color:var(--muted)}.pill.p2{background:color-mix(in srgb,var(--accent) 18%,var(--surface));color:var(--accent)}.pill.p3{background:color-mix(in srgb,#2A5CAA 16%,var(--surface));color:#2A5CAA}
 :root[data-pal="ardoise"] .pill.p3{color:#9DBCF0}@media (prefers-color-scheme: dark){:root[data-dark="auto"] .pill.p3{color:#9DBCF0}}
 .tl-ph{width:48px;height:48px;border-radius:10px;object-fit:cover;flex:0 0 48px}
+.set-head{justify-content:space-between;align-items:center;flex-wrap:nowrap;position:sticky;top:0;z-index:3;background:var(--bg);padding:10px 0;margin-top:-10px}
 .day-past{font-size:13px;color:var(--muted);padding:6px 4px}
 .week-cta{width:100%;min-height:48px;margin-top:10px}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
@@ -525,7 +526,7 @@ code{font-family:var(--f-mono);font-size:.92em}
 
   <!-- RÉGLAGES -->
   <section class="view" id="v-set" hidden>
-    <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap"><h2>Réglages</h2><button type="button" class="btn primary" data-act="closeSet">Fermer</button></div>
+    <div class="row set-head"><h2>Réglages</h2><button type="button" class="btn primary" data-act="closeSet">Fermer</button></div>
     <div class="set-sec">Menus</div>
     <div class="set-list">
       <div class="set-row"><span class="si">👥</span><span class="st"><b>Nombre de personnes</b><small>par défaut pour chaque repas</small></span>
@@ -552,6 +553,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <label class="set-row" for="restoreIn"><span class="si">📂</span><span class="st"><b>Restaurer</b><small>depuis un fichier de secours</small></span><span class="chev">›</span></label>
     </div>
     <input id="restoreIn" type="file" accept=".json,application/json" hidden>
+    <button type="button" class="btn primary" data-act="closeSet" style="width:100%;min-height:48px">Fermer les réglages</button>
     <p class="copyright"><b>Carnet de menus</b><br>© 2026 Franck Davion · Tous droits réservés</p>
   </section>
 
