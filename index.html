@@ -137,8 +137,9 @@ button{cursor:pointer}
 
 /* tab bar */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}
-.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
-.tab{border:none;background:none;padding:12px 4px 14px;font-weight:600;font-size:14px;color:var(--muted);display:flex;justify-content:center;align-items:center;gap:6px}
+.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tab{border:none;background:none;padding:8px 2px 10px;font-weight:600;font-size:11px;color:var(--muted);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;position:relative;min-width:0}
+.tab .ti{font-size:20px;line-height:1}.tab .badge{position:absolute;top:4px;left:calc(50% + 8px);font-size:10px;padding:0 5px}
 .tab[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--accent)}
 .badge{font-family:var(--f-mono);font-size:11px;background:var(--mark);color:#2A2108;border-radius:999px;padding:1px 6px;font-variant-numeric:tabular-nums}
 
@@ -251,6 +252,15 @@ button,a,label,summary,[data-act]{touch-action:manipulation;-webkit-tap-highligh
 .as small{display:block;font-size:11px;font-weight:400;color:var(--muted);overflow-wrap:anywhere}
 .as.on{border:2px solid var(--accent);background:var(--soft);color:var(--accent)}.as.dis{opacity:.4}
 #addSheet .sheet-in{height:92%}
+.set-sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:6px 0 -6px}
+.set-list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.set-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:none;border-bottom:1px solid var(--line);background:none;text-align:left;font:inherit;color:var(--ink);cursor:pointer}
+.set-list>.set-row:last-child{border-bottom:none}
+.set-row .si{font-size:20px;width:26px;text-align:center;flex:none}
+.set-row .st{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.set-row .st b{font-weight:600}.set-row .st small{font-size:12px;color:var(--muted)}
+.set-row .chev{color:var(--muted);font-size:20px}.set-row .ctl{display:flex;align-items:center;gap:6px}.set-row .n{font-family:var(--f-mono);min-width:2ch;text-align:center}
+.set-row .sync-chip{border:none;background:none;margin:0;padding:0 0 0 14px;font-size:12px;color:var(--muted)}.set-row .sync-chip::before{left:2px}
+.copyright{text-align:center;font-size:12px;color:var(--muted);margin:18px 0 8px;line-height:1.6}
 body.frozen{position:fixed;left:0;right:0;overflow:hidden}
 .sheet-in{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;border-radius:18px 18px 0 0;padding-block:20px calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -343,13 +353,6 @@ code{font-family:var(--f-mono);font-size:.92em}
       <h1>Carnet de menus</h1>
       <p id="now" class="now"></p>
       <p id="sub">Choisissez les repas, la liste se fait toute seule.</p>
-      <button class="sync-chip" data-act="openSync" id="syncChip" data-state="off">Synchro désactivée</button>
-    </div>
-    <div class="people" aria-label="Nombre de personnes">
-      <span class="label">Pers.</span>
-      <button class="step" data-act="ppl" data-d="-1" aria-label="Une personne de moins">−</button>
-      <span class="n" id="pplN">4</span>
-      <button class="step" data-act="ppl" data-d="1" aria-label="Une personne de plus">+</button>
     </div>
   </header>
 
@@ -370,7 +373,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div class="chips" id="weekSel" style="flex-wrap:wrap;overflow:visible">
     </div>
-    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openPrefs">Préférences</button><button class="btn" data-act="openHist">Historique</button><button class="btn" data-act="openWines">Mes vins</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
+    <div class="row"><button class="btn primary" data-act="propose">Proposer ma semaine</button><button class="btn" data-act="openDays">Choisir les jours</button><button class="btn" data-act="openHist">Historique</button><button class="btn" data-act="openWines">Mes vins</button><button class="btn ghost" data-act="clearMenu" id="clearBtn">Vider</button></div>
     <div id="proposeAsk"></div>
     <p class="muted" id="weekSum" style="margin:0;font-size:13px"></p>
     <div id="menuList"></div>
@@ -385,11 +388,41 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row"><button class="btn primary" data-act="shareWeek">Partager</button><button class="btn" data-act="printWeek">Imprimer / PDF</button></div>
   </section>
 
+  <!-- RÉGLAGES -->
+  <section class="view" id="v-set" hidden>
+    <h2>Réglages</h2>
+    <div class="set-sec">Menus</div>
+    <div class="set-list">
+      <div class="set-row"><span class="si">👥</span><span class="st"><b>Nombre de personnes</b><small>par défaut pour chaque repas</small></span>
+        <span class="ctl"><button class="step sm" data-act="ppl" data-d="-1" id="pplMinus" aria-label="Une personne de moins">−</button><span class="n" id="pplN">4</span><button class="step sm" data-act="ppl" data-d="1" aria-label="Une personne de plus">+</button></span></div>
+      <button class="set-row" data-act="openPrefsAt" data-to=""><span class="si">⚙️</span><span class="st"><b>Préférences des menus</b><small>végé, poisson, soirs légers, dissociation</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="p-days"><span class="si">📅</span><span class="st"><b>Style de chaque jour</b><small>rééquilibrage, poisson, fête…</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="p-avoid"><span class="si">🚫</span><span class="st"><b>Ingrédients à éviter</b><small>et midis sans repas à la maison</small></span><span class="chev">›</span></button>
+    </div>
+    <div class="set-sec">Courses</div>
+    <div class="set-list">
+      <button class="set-row" data-act="openDrives"><span class="si">🛒</span><span class="st"><b>Mes drives</b><small id="setDrives">Intermarché, Leclerc, Match</small></span><span class="chev">›</span></button>
+    </div>
+    <div class="set-sec">Affichage</div>
+    <div class="set-list">
+      <button class="set-row" data-act="openPrefsAt" data-to="showWine"><span class="si">👁️</span><span class="st"><b>Afficher dans le menu</b><small>vins et boissons, calories</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="lookPal"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, mode sombre</small></span><span class="chev">›</span></button>
+    </div>
+    <div class="set-sec">Données</div>
+    <div class="set-list">
+      <button class="set-row" data-act="openSync"><span class="si">🔄</span><span class="st"><b>Partage entre téléphones</b><small><span class="sync-chip" id="syncChip" data-state="off">Synchro désactivée</span></small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="backup"><span class="si">💾</span><span class="st"><b>Sauvegarder</b><small>créer un fichier de secours de tout le carnet</small></span><span class="chev">›</span></button>
+      <label class="set-row" for="restoreIn"><span class="si">📂</span><span class="st"><b>Restaurer</b><small>depuis un fichier de secours</small></span><span class="chev">›</span></label>
+    </div>
+    <input id="restoreIn" type="file" accept=".json,application/json" hidden>
+    <p class="copyright"><b>Carnet de menus</b><br>© 2026 Franck Davion · Tous droits réservés</p>
+  </section>
+
   <!-- RECETTES -->
   <section class="view" id="v-rec" hidden>
     <div class="row" style="justify-content:space-between">
       <h2>Recettes</h2>
-      <div class="row"><button class="btn" data-act="backup">Sauvegarder</button><label class="btn" for="restoreIn">Restaurer</label><input id="restoreIn" type="file" accept=".json,application/json" hidden>
+      <div class="row">
       <button class="btn" data-act="pasteRecipe">Coller une recette</button>
       <button class="btn" data-act="goFind">Importer du web ↓</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
@@ -440,10 +473,11 @@ code{font-family:var(--f-mono);font-size:.92em}
 </div>
 
 <div class="tabs"><nav role="tablist">
-  <button class="tab" role="tab" data-act="tab" data-v="menu" id="t-menu">Menu <span class="badge" id="b-menu"></span></button>
-  <button class="tab" role="tab" data-act="tab" data-v="week" id="t-week">Semaine</button>
-  <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec">Recettes</button>
-  <button class="tab" role="tab" data-act="tab" data-v="shop" id="t-shop">Courses <span class="badge" id="b-shop"></span></button>
+  <button class="tab" role="tab" data-act="tab" data-v="menu" id="t-menu"><span class="ti" aria-hidden="true">🍽️</span>Menu <span class="badge" id="b-menu"></span></button>
+  <button class="tab" role="tab" data-act="tab" data-v="week" id="t-week"><span class="ti" aria-hidden="true">📅</span>Semaine</button>
+  <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec"><span class="ti" aria-hidden="true">📖</span>Recettes</button>
+  <button class="tab" role="tab" data-act="tab" data-v="shop" id="t-shop"><span class="ti" aria-hidden="true">🛒</span>Courses <span class="badge" id="b-shop"></span></button>
+  <button class="tab" role="tab" data-act="tab" data-v="set" id="t-set"><span class="ti" aria-hidden="true">⚙️</span>Réglages</button>
 </nav></div>
 
 <div class="sheet" id="sheet" hidden>
@@ -1001,8 +1035,8 @@ $("#syncForm").addEventListener("submit",e=>{
 /* ---------- render ---------- */
 function render(){
   $("#pplN").textContent=menu.people;
-  document.querySelector('[data-d="-1"]').disabled=menu.people<=1;
-  for(const v of["menu","week","rec","shop"]){
+  $("#pplMinus").disabled=menu.people<=1;
+  for(const v of["menu","week","rec","shop","set"]){
     $("#v-"+v).hidden=view!==v;
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
@@ -1875,6 +1909,7 @@ document.addEventListener("click",e=>{
   else if(a==="slotClear"){const k=b.dataset.k;if(W()[k]&&!W()[k].lock){delete W()[k];$("#slotSheet").hidden=true;slotK=null;render();saveMenu();flashSlot(k);toast("Case vidée");}}
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
+  else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to;setTimeout(()=>{const el=to&&document.getElementById(to);const sc=$("#prefSheet .sheet-in");if(el){sc.scrollTop=0;el.scrollIntoView({block:"start",behavior:"smooth"});}else sc.scrollTop=0;},80);}
   else if(a==="openDaily"){renderDaily();$("#dailySheet").hidden=false;$("#dailySheet .sheet-in").scrollTop=0;}
   else if(a==="closeDaily"){$("#dailySheet").hidden=true;}
   else if(a==="dailyToggle"){const t=b.dataset.t,i=inExtras(t);
