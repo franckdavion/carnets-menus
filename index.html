@@ -252,6 +252,17 @@ input,select,textarea{font-size:16px!important}
 /* windows follow the visible area when the keyboard is open */
 .sheet{inset:auto 0 auto 0;top:var(--vvt,0px);height:calc(var(--vvh,100%) - var(--tabh,0px))}
 :root.kb .sheet{height:var(--vvh,100%)}
+.xr-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.xr-item .nm{flex:1;min-width:0;background:none;border:0;padding:0;font:inherit;color:var(--ink);text-align:left}.xr-item .q{white-space:nowrap}
+.sp{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.sp[open]{display:flex}.sp summary{cursor:pointer;list-style:none;padding:4px 0}.sp summary::-webkit-details-marker{display:none}
+.sp-day{display:flex;flex-direction:column;gap:2px}.sp-day>b{font-size:13px;margin-top:4px}
+.sp-meal{display:flex;align-items:center;gap:10px;padding:6px 0}
+.sp-m{flex:0 0 34px;font-size:12px;color:var(--muted)}
+.sp-n{flex:1;min-width:0;background:none;border:0;padding:0;font:inherit;font-size:14px;font-weight:600;color:var(--ink);text-align:left}
+.sp-n small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.sp-lock{flex:0 0 auto;border:1px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;min-height:36px;touch-action:manipulation}
+.sp-lock.on{background:var(--soft);border-color:var(--line);color:var(--ink)}
 #shopList .item{grid-template-columns:12px minmax(0,1fr) auto;row-gap:4px;align-items:start}
 #shopList .item>.dot{grid-row:1 / span 2;margin-top:8px}
 #shopList .item>.nm{grid-row:1 / span 2}
@@ -1241,18 +1252,31 @@ function renderRecipes(){
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
 }
 
+// what is planned on the chosen shopping days, with the lock of each meal (only locked meals go into the list)
+function shopPlanHtml(sel){
+  if(!sel.length)return"";
+  const nm=id=>recipes[id]?recipes[id].name:"";let unl=0;
+  const days=sel.map(x=>{const w=ymd(mondayOf(x.d));
+    const lines=MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];if(!s||!recipes[s.id])return"";if(!s.lock)unl++;
+      const sub=[s.entree&&recipes[s.entree]?"Entrée : "+nm(s.entree):"",s.dessert&&recipes[s.dessert]?"Dessert : "+nm(s.dessert):""].filter(Boolean).join(" · ");
+      return`<div class="sp-meal${s.lock?" ok":""}"><span class="sp-m">${lab}</span><button type="button" class="sp-n" data-act="viewRec" data-id="${esc(s.id)}">${esc(nm(s.id))}${sub?`<small>${esc(sub)}</small>`:""}<small>${s.n} pers.</small></button>
+        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"🔒 Validé":"🔓 Valider"}</button></div>`;}).join("");
+    return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
+  return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas à valider`:"· tout est validé ✓"}</span></summary>${days}
+    ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🔒 Tout valider (${unl} repas)</button><span class="muted" style="font-size:12px">Seuls les repas validés (verrouillés) mettent leurs ingrédients dans la liste.</span>`:""}</details>`;
+}
 function renderShop(items,extras,ids){
   const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
-  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key);return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}</button></span>`;}).join("")}</div>
-    <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>`
+  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🔒":on?" ⚠️":"";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
+    <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>${shopPlanHtml(sel)}`
     :`<span class="muted" style="font-size:13px">Aucun repas prévu dans les 3 prochaines semaines.</span>`;
   const range=sel.length?(sel.length===1?dayShort(sel[0]):`Du ${dayShort(sel[0])} au ${dayShort(sel[sel.length-1])}`):"Aucun jour choisi";
   $("#shopSum").textContent=`${range} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
-  const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="item" style="cursor:default"><span></span><span class="nm">${esc(recipes[id].name)}</span><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
-  const hint=unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
+  const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="xr-item"><button type="button" class="nm" data-act="viewRec" data-id="${esc(id)}">${esc(recipes[id].name)}</button><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
+  const hint=false&&unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
   const hv=shopping(true).filter(isHave).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
   const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
   if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
@@ -2104,6 +2128,8 @@ document.addEventListener("click",e=>{
   else if(a==="rmSide"){removePart(b.dataset.k,"extra",b.dataset.i);}
   else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
+  else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock){delete s.lock;toast("Repas dévalidé : ses ingrédients sortent de la liste");}else{s.lock=true;toast("Repas validé : ses ingrédients sont dans la liste");}render();saveMenu();}}
+  else if(a==="shopLockAll"){let n=0;for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock){s.lock=true;n++;}}render();saveMenu();toast(n+" repas validé"+(n>1?"s":"")+" : la liste est à jour");}
   else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
   else if(a==="haveRayon"){const ry=b.dataset.r,u=haveUntil();menu.have=Object.assign({},menu.have);
