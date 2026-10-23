@@ -1850,7 +1850,7 @@ function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[
   for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
 const rFetching=new Set();
 /* matching photo for every recipe: free photos from Wikipédia / Wikimedia Commons, found by the recipe's name; "Autre photo" cycles */
-/* v4: better search (key words, Openverse), no maps / coats of arms; older caches are dropped */ const AUTOPH="cm_autoph4";try{["cm_autoph","cm_autoph2","cm_autoph3"].forEach(k=>localStorage.removeItem(k));}catch(e){}
+/* v4: better search (key words, Openverse), no maps / coats of arms; older caches are dropped */ const AUTOPH="cm_autoph5";try{["cm_autoph","cm_autoph2","cm_autoph3","cm_autoph4"].forEach(k=>localStorage.removeItem(k));}catch(e){}
 // not a picture of food: maps, flags, coats of arms, logos, places, people…
 const PH_BAD=/\b(map|carte|plan|locator|location|localisation|situation|blason|armoiries|coat[ _]of[ _]arms|flag|drapeau|logo|icon|ic[oô]ne|diagram|sch[ée]ma|chart|graph|signature|portrait|panneau|sign|stamp|timbre|carton|poster|affiche|book|livre|page|scan|osm|relief|commune|village|church|[ée]glise|ch[aâ]teau|street|rue|gare|station|vache|cow|bull|cattle|ox|taureau|b[œo]euf[ _]?(de|du)?[ _]?(race|breed))\b/i;
 const PH_PLACE=/commune|ville|village|hameau|rivi[eè]re|fleuve|d[ée]partement|r[ée]gion|pays|personnalit|footballeur|joueur|homme politique|femme politique|chanteu|acteur|actrice|r[ée]alisat|film|album|chanson|groupe|entreprise|soci[ée]t[ée]|famille|genre|esp[eè]ce|race|navire|[ée]mission|s[ée]rie|roman|personnage/i;let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
@@ -1872,15 +1872,18 @@ async function findPhotos(r,max){
   for(const t of [...new Set([name,head])]){if(out.length)break;try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
     if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source&&!PH_PLACE.test(d.description||"")&&!PH_BAD.test(d.thumbnail.source)){const o=d.originalimage||{};
       add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}}catch(e){}}
-  // 2. Openverse: millions of free photos (Flickr…), searched with the key words
-  for(const q of [...new Set([key,key2].filter(Boolean))]){if(out.length>=Math.min(want,6))break;
-    try{const x=await fetch("https://api.openverse.org/v1/images/?page_size="+(max?16:8)+"&mature=false&q="+encodeURIComponent(q));
-      if(x.ok){const d=await x.json();for(const it of d.results||[]){if(PH_BAD.test((it.title||"")+" "+(it.tags||[]).map(t=>t.name||"").join(" ")))continue;const u=it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail;if(u)add({u,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}}catch(e){}}
+  // 2. Wikipédia search: the dish articles that match the key words (their main picture)
+  for(const q of [...new Set([key,key2].filter(Boolean))]){if(out.length>=3)break;
+    try{const x=await fetch("https://fr.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=5&prop=pageimages|description&piprop=thumbnail&pithumbsize=640&gsrsearch="+encodeURIComponent(q));
+      if(x.ok){const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
+        for(const pg of pages){if(pg.thumbnail&&pg.thumbnail.source&&!PH_PLACE.test(pg.description||"")&&!PH_BAD.test(pg.thumbnail.source))add({u:pg.thumbnail.source,page:"https://fr.wikipedia.org/wiki/"+encodeURIComponent((pg.title||"").replace(/ /g,"_")),src:"Wikipédia"});}}}catch(e){}}
   // 3. Wikimedia Commons
   for(const q of [...new Set([key,head,key2].filter(Boolean))]){if(out.length>=want)break;
     try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+want+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
       for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?|pdf|djvu)$/i.test(pg.title||"")&&!PH_BAD.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
+  if(max&&out.length<max){try{const x=await fetch("https://api.openverse.org/v1/images/?page_size=16&mature=false&q="+encodeURIComponent(key||name));
+    if(x.ok){const d=await x.json();for(const it of d.results||[]){if(PH_BAD.test((it.title||"")+" "+(it.tags||[]).map(t=>t.name||"").join(" ")))continue;const u=it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail;if(u)add({u,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}}catch(e){}}
   return out.slice(0,want);}
 /* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
 let photoId=null;
