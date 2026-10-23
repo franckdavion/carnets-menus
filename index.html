@@ -312,6 +312,7 @@ input,select,textarea{font-size:16px!important}
 @keyframes swl{from{opacity:.3;transform:translateX(40px)}to{opacity:1;transform:none}}@keyframes swr{from{opacity:.3;transform:translateX(-40px)}to{opacity:1;transform:none}}
 .view.swipe-l{animation:swl .22s ease-out}.view.swipe-r{animation:swr .22s ease-out}
 @media (prefers-reduced-motion:reduce){.view.swipe-l,.view.swipe-r{animation:none}}
+.start-row{align-items:flex-start}.start-row .st{display:flex;flex-direction:column}
 .shop-clear{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0 0}
 .idea .link{display:inline-block;padding:6px 0;font-size:13px}
 /* taps answer at once on iPhone (no double-tap-zoom wait) and show they were pressed */
@@ -528,6 +529,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="set-list">
       <button class="set-row" data-act="openPrefsAt" data-to="show"><span class="si">👁️</span><span class="st"><b>Afficher dans le menu</b><small>vins et boissons, calories</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="look"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, relief, mode sombre</small></span><span class="chev">›</span></button>
+      <div class="set-row start-row"><span class="si">🚀</span><span class="st"><b>Page au démarrage</b><small>celle qui s'affiche quand vous ouvrez l'appli</small><span class="chips" id="startChips" style="flex-wrap:wrap;margin-top:8px"></span></span></div>
     </div>
     <div class="set-sec">Données</div>
     <div class="set-list">
@@ -956,7 +958,11 @@ const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}
 let recipes={};
 let menu={people:4,weeks:{},checked:{},extras:[]};
 let mode="loading", db=null, menuRef=null;
-let view=LS.get("cm_view","menu");
+// page shown when the app opens: chosen in Réglages, or the last one used
+const START_VIEWS=[["last","Dernière utilisée"],["menu","Menu"],["week","Semaine"],["rec","Recettes"],["shop","Courses"]];
+let view=(()=>{const s=LS.get("cm_start","last");return s!=="last"&&START_VIEWS.some(x=>x[0]===s)?s:LS.get("cm_view","menu");})();
+function renderStart(){const el=$("#startChips");if(!el)return;const s=LS.get("cm_start","last");
+  el.innerHTML=START_VIEWS.map(([v,l])=>`<button type="button" class="chip" data-act="startView" data-v="${v}" aria-pressed="${s===v}">${l}</button>`).join("");}
 let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false,theme:""};
 let openId=null, confirmDel=null, ideaId=null, ideaIds=[], ideaSeen=[];
 const IDEAS_N=5;
@@ -1244,6 +1250,7 @@ function render(){
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
   {const nn=newsCount();$("#b-rec").textContent=nn||"";$("#b-rec").hidden=!nn;if(!nn&&filter.theme==="nouveau")filter.theme="";}
   if($("#now"))renderNow();
+  if(view==="set")renderStart();
   if(!$("#recSheet").hidden)renderRecSheet();
   if($("#reviewSheet")&&!$("#reviewSheet").hidden)renderReview();
   if($("#storeSheet")&&!$("#storeSheet").hidden)renderStore();
@@ -2368,6 +2375,7 @@ document.addEventListener("click",e=>{
   const a=b.dataset.act, id=b.dataset.id;
   if(a==="check"||a==="checkX")return; // handled on change
   if(a==="tab"){clearSheetBack();document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
+  else if(a==="startView"){LS.set("cm_start",b.dataset.v);renderStart();toast(b.dataset.v==="last"?"L'appli rouvrira la dernière page utilisée":"L'appli s'ouvrira sur « "+b.textContent+" »");}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
   else if(a==="toggle"){openAdd(id);}
   else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
