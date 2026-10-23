@@ -2145,7 +2145,7 @@ document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b)return;
   const a=b.dataset.act, id=b.dataset.id;
   if(a==="check"||a==="checkX")return; // handled on change
-  if(a==="tab"){document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
+  if(a==="tab"){clearSheetBack();document.querySelectorAll(".sheet:not([hidden])").forEach(s=>s.hidden=true);slotK=null;view=b.dataset.v;LS.set("cm_view",view);render();window.scrollTo(0,0);}
   else if(a==="ppl"){menu.people=Math.max(1,Math.min(30,menu.people+Number(b.dataset.d)));render();saveMenu(500);}
   else if(a==="toggle"){openAdd(id);}
   else if(a==="addWeekSel"){addWeek=b.dataset.w;addAsk=null;renderAdd();}
@@ -2358,7 +2358,7 @@ document.addEventListener("click",e=>{
   else if(a==="syncOff"){sync=null;["cm_sync","cm_base"].forEach(k=>{try{localStorage.removeItem(k);}catch(x){}});clearTimeout(syncTimer);setStatus("off");$("#syncSheet").hidden=true;toast("Ce téléphone n'est plus synchronisé. Vos données restent ici.");}
   else if(a==="newRecipe")openSheet();
   else if(a==="goFind"){$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
-  else if(a==="closeSheet"){$("#sheet").hidden=true;const back=editId&&editBack;editId=null;if(back)openRecSheet(recSheetId);}
+  else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
@@ -2880,7 +2880,7 @@ $("#recForm").addEventListener("submit",async e=>{
     const data=Object.assign({},old,{name,cat,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),updatedAt:new Date().toISOString()});
     if(Array.isArray(old.cats)){data.cats=old.cats.filter(c=>c!==cat);if(old.cat!==cat&&old.cat)data.cats.push(old.cat);data.cats=[...new Set(data.cats)].filter(c=>c!==cat);if(!data.cats.length)delete data.cats;}
     const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);
-    if(editBack&&recipes[id]){openRecSheet(id);}else{openId=id;render();}toast("Recette modifiée");return;}
+    if(!editBack)openId=id;render();toast("Recette modifiée");return;}
   const slug=norm(name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette";
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
   const data={name,cat:$("#f-cat").value,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
@@ -3054,6 +3054,20 @@ setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSyn
     if(!sc||sc.scrollHeight<=sc.clientHeight+1){e.preventDefault();return;}
     if((dy>0&&sc.scrollTop<=0)||(dy<0&&sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1))e.preventDefault();
   },{passive:false});})();
+/* going back: when a window opened from another one is closed, the first one comes back */
+let sheetBack=[], sheetPrev=new Set();
+function clearSheetBack(){sheetBack=[];}
+(()=>{const openSet=()=>new Set([...document.querySelectorAll(".sheet")].filter(s=>!s.hidden).map(s=>s.id));
+  let t=null;
+  const check=()=>{t=null;const now=openSet(),opened=[...now].filter(x=>!sheetPrev.has(x)),closed=[...sheetPrev].filter(x=>!now.has(x));
+    if(opened.length&&closed.length)closed.forEach(c=>sheetBack.push({id:c,by:opened[0]}));
+    else if(closed.length&&!now.size){const top=sheetBack[sheetBack.length-1];
+      if(top&&closed.includes(top.by)){sheetBack.pop();const el=document.getElementById(top.id);
+        if(el){if(top.id==="slotSheet"&&slotK)renderSlotSheet();if(top.id==="recSheet")renderRecSheet();el.hidden=false;sheetPrev=openSet();return;}}
+      else sheetBack=[];}
+    sheetPrev=now;};
+  const mo=new MutationObserver(()=>{if(!t)t=setTimeout(check,0);});
+  document.querySelectorAll(".sheet").forEach(s=>mo.observe(s,{attributes:true,attributeFilter:["hidden"]}));sheetPrev=openSet();})();
 /* freeze the page behind any open sheet (iPhone keeps scrolling the background otherwise) */
 (()=>{let y=0,frozen=false;
   const sync=()=>{const open=[...document.querySelectorAll(".sheet")].some(s=>!s.hidden);
