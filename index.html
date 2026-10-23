@@ -1155,7 +1155,8 @@ function renderRecipes(){
     if(open){
       const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*f,u))}</li><li>${esc(i.n)}</li>`;}).join("");
       const steps=String(r.steps||"").split("\n").map(s=>s.trim()).filter(Boolean);
-      det=`<div class="detail"><div class="serv-row"><span class="label">Ingrédients pour</span>
+      const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
+      det=`<div class="detail">${catRow}<div class="serv-row"><span class="label">Ingrédients pour</span>
           <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
           <span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}</span></div>
         <div class="row"><button class="btn" data-act="shopAdd" data-id="${esc(id)}">${(menu.shopExtra||{})[id]?`Dans les courses (${menu.shopExtra[id]} p.) · mettre à ${p} p.`:`Ajouter aux courses pour ${p} pers.`}</button></div>
@@ -1910,10 +1911,10 @@ document.addEventListener("click",e=>{
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
   else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
-  else if(a==="recCat"){const id=recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
+  else if(a==="recCat"){const id=b.dataset.id||recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
     if(list.includes(c)){if(list.length===1){toast("Une recette garde au moins une catégorie");return;}list=list.filter(x=>x!==c);}else list=[...list,c];
     const n=Object.assign({},r,{cat:list[0]});delete n.alsoMain;delete n.alsoEntree;if(list.length>1)n.cats=list.slice(1);else delete n.cats;
-    saveRecipe(id,n);renderRecSheet();toast(list.join(" · "));}
+    saveRecipe(id,n);if(!$("#sheet").hidden)renderRecSheet();renderRecipes();toast(list.join(" · "));}
   else if(a==="recSearch"){filter.q=b.dataset.q;$("#q").value=b.dataset.q;recLimit=50;renderRecipes();}
   else if(a==="natAsk"){natAsk=natAsk===b.dataset.n?null:b.dataset.n;renderRecSheet();}
   else if(a==="natSet"){if(natAsk){menu.natures=Object.assign({},menu.natures,{[norm(natAsk)]:b.dataset.f});natAsk=null;render();renderRecSheet();saveMenu();toast("Classement retenu pour toutes les recettes");}}
