@@ -316,6 +316,10 @@ input,select,textarea{font-size:16px!important}
 .batch-note{margin:6px 0;padding:8px 10px;border-radius:10px;background:rgba(186,117,23,.12);font-size:14px}
 #cookSheet .batch-note{background:rgba(250,199,117,.15);color:#FAC775}
 .cook-modes{display:flex;flex-direction:column;gap:10px}#cookSheet .cook-modes .btn:not(.primary){background:rgba(255,255,255,.1);color:#eef3ee;border-color:rgba(255,255,255,.2)}.cook-modes .btn{font-size:18px;padding:14px;justify-content:flex-start}
+.fr-rec{border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:10px 14px}
+.fr-rec>summary{cursor:pointer;font-weight:600;color:var(--accent);list-style:none;min-height:28px;display:flex;align-items:center}.fr-rec>summary::-webkit-details-marker{display:none}
+.fr-rec>summary::after{content:"›";margin-left:auto;transition:transform .2s}.fr-rec[open]>summary::after{transform:rotate(90deg)}
+#frSlotRec #frForm{border:none;background:none;padding:8px 0 0;box-shadow:none;margin:0}#frSlotRec #frForm>.label{display:none}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -603,6 +607,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
     </div>
+    <details class="fr-rec" id="frRecBox"><summary>🧺 Qu'est-ce que je fais avec…</summary><div id="frSlotRec"></div></details>
     <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
     <div class="chips" id="chips"></div>
     <div class="chips" id="kindChips"></div>
@@ -1307,6 +1312,7 @@ function render(){
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
   applyPacks();
+  {const f=$("#frForm"),to=view==="rec"?$("#frSlotRec"):view==="menu"?$("#v-menu"):null;if(to&&f.parentNode!==to)to.appendChild(f);} // "Qu'est-ce que je fais avec…" lives on Aujourd'hui and Recettes
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
   const items=shopping(), extras=menu.extras||[];
