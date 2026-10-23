@@ -14,7 +14,7 @@
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Carnet de menus</title>
 <script>(function(){try{var d=document.documentElement,g=function(k,v){var x=localStorage.getItem(k);return x?JSON.parse(x):v};
-d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));}catch(e){}})();</script>
+d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));d.setAttribute("data-depth",g("cm_depth","plat"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Caveat:wght@600;700&family=Abril+Fatface&display=swap">
 <style>
@@ -62,6 +62,35 @@ button{cursor:pointer}
 .news-bar{display:flex;align-items:center;gap:10px;width:100%;min-height:48px;padding:10px 14px;border-radius:14px;border:1px solid var(--accent);background:var(--soft);color:var(--ink);font:inherit;font-size:15px;text-align:left;touch-action:manipulation}
 .news-bar span:nth-child(2){flex:1}.news-bar b{color:var(--accent)}
 .tag.news{color:var(--accent);font-weight:700}
+/* ---------- Relief (Réglages → Apparence): three looks with depth, on top of any colour palette ---------- */
+:root{--hi:rgba(255,255,255,.9);--lo:color-mix(in srgb,var(--ink) 18%,transparent)}
+:root[data-pal="ardoise"]{--hi:rgba(255,255,255,.06);--lo:rgba(0,0,0,.6)}
+@media (prefers-color-scheme: dark){:root[data-dark="auto"]{--hi:rgba(255,255,255,.06);--lo:rgba(0,0,0,.6)}}
+/* A · Pâte à modeler: puffy shapes moulded from the page, soft light and shadow */
+:root[data-depth="pate"] :is(.card,.day-card,.today-card,.idea,.set-list,.ticket,.news-bar){background:var(--bg);border:0;border-radius:22px;box-shadow:7px 7px 16px var(--lo),-6px -6px 14px var(--hi)}
+:root[data-depth="pate"] .idea{border:0}
+:root[data-depth="pate"] :is(.btn,.chip,.today-acts .pill,.add,.step,.look,.as){border:0;background:var(--bg);box-shadow:4px 4px 9px var(--lo),-4px -4px 9px var(--hi)}
+:root[data-depth="pate"] :is(.btn.primary,.chip[aria-pressed="true"],.look[aria-pressed="true"],.add.on,.as.on){background:var(--accent);color:var(--accent-ink);box-shadow:4px 4px 10px var(--lo),inset 2px 2px 5px color-mix(in srgb,white 35%,transparent)}
+:root[data-depth="pate"] :is(.btn,.chip,.pill,.add,.step,.look):active{box-shadow:inset 3px 3px 7px var(--lo),inset -3px -3px 7px var(--hi)}
+:root[data-depth="pate"] :is(.search,input,select,textarea){border:0;background:var(--bg);box-shadow:inset 3px 3px 7px var(--lo),inset -3px -3px 7px var(--hi)}
+:root[data-depth="pate"] .tabs{border:0;background:var(--bg);box-shadow:0 -6px 18px var(--lo)}
+:root[data-depth="pate"] .sheet-in{border-radius:26px 26px 0 0}
+:root[data-depth="pate"] .tabs .ti{display:inline-block;transform:scale(1.15);filter:drop-shadow(0 3px 2px var(--lo))}
+/* B · Cartes en relief: cards lifted off the page, today's card on a little pile, buttons you press down */
+:root[data-depth="relief"] :is(.card,.day-card,.idea,.set-list,.ticket,.news-bar){border-color:transparent;box-shadow:0 1px 0 var(--line),0 10px 22px -6px var(--lo)}
+:root[data-depth="relief"] .today-card{border-color:transparent;box-shadow:0 14px 26px -8px var(--lo),0 7px 0 -3px color-mix(in srgb,var(--accent) 35%,var(--surface)),0 14px 0 -7px color-mix(in srgb,var(--accent) 18%,var(--surface));margin-bottom:12px;transform:perspective(700px) rotateX(3deg)}
+:root[data-depth="relief"] :is(.btn,.chip,.today-acts .pill,.add,.look){box-shadow:0 3px 0 color-mix(in srgb,var(--ink) 22%,transparent);transition:transform .08s,box-shadow .08s}
+:root[data-depth="relief"] :is(.btn.primary,.chip[aria-pressed="true"],.look[aria-pressed="true"]){box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 55%,black)}
+:root[data-depth="relief"] :is(.btn,.chip,.pill,.add,.look):active{transform:translateY(3px);box-shadow:0 0 0 transparent}
+:root[data-depth="relief"] .tabs{box-shadow:0 -8px 20px -10px var(--lo)}
+:root[data-depth="relief"] .sheet-in{box-shadow:0 -12px 30px var(--lo)}
+/* C · Verre dépoli: coloured backdrop, translucent panels floating over it */
+:root[data-depth="verre"] body{background:linear-gradient(165deg,color-mix(in srgb,var(--accent) 38%,var(--bg)) 0%,var(--bg) 45%,color-mix(in srgb,var(--mark) 30%,var(--bg)) 100%) fixed}
+:root[data-depth="verre"] :is(.card,.day-card,.today-card,.idea,.set-list,.ticket,.news-bar,.btn,.chip,.today-acts .pill,.add,.look,.search){background:color-mix(in srgb,var(--surface) 62%,transparent);border-color:color-mix(in srgb,white 55%,transparent);box-shadow:0 8px 24px -10px var(--lo)}
+:root[data-depth="verre"] :is(.today-card,.tabs,.news-bar){-webkit-backdrop-filter:blur(16px) saturate(1.5);backdrop-filter:blur(16px) saturate(1.5)}
+:root[data-depth="verre"] .tabs{background:color-mix(in srgb,var(--surface) 55%,transparent);border-top-color:color-mix(in srgb,white 50%,transparent)}
+:root[data-depth="verre"] :is(.btn.primary,.chip[aria-pressed="true"],.look[aria-pressed="true"],.add.on){background:var(--accent);color:var(--accent-ink)}
+:root[data-depth="verre"] .sheet-in{background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
 .fr-web{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:12px;margin-top:4px}
 .today-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px 14px}
 .tl{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:8px 0;background:none;border:0;font:inherit;color:var(--ink);text-align:left;cursor:pointer;touch-action:manipulation}
@@ -733,6 +762,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <span class="label">Apparence de ce téléphone (s'applique tout de suite)</span>
       <span class="muted" style="font-size:13px">Couleurs</span><div class="look-grid" id="lookPal"></div>
       <span class="muted" style="font-size:13px;margin-top:6px">Style des titres</span><div class="look-grid" id="lookFont"></div>
+      <span class="muted" style="font-size:13px;margin-top:6px">Relief</span><div class="look-grid" id="lookDepth"></div>
       <span class="muted" style="font-size:13px;margin-top:6px">Mode sombre</span><div class="look-grid" id="lookDark"></div>
     </div>
   </form>
@@ -1926,7 +1956,7 @@ function renderShare(){
     :`<div class="pref-row"><div><strong>Partager mes recettes</strong><div class="muted" style="font-size:13px">sans vos menus, courses ni vins</div></div><div class="chips"><button type="button" class="chip" data-act="shareOn" data-v="1" aria-pressed="${!!sh.on}">Oui</button><button type="button" class="chip" data-act="shareOn" data-v="0" aria-pressed="${!sh.on}">Non</button></div></div>
       ${sh.on?`<label class="field"><span class="label">Nom affiché chez les autres</span><input id="shareName" value="${esc(sh.name||"")}" placeholder="Ex. Franck" autocomplete="off"></label>
       <div class="field"><span class="label">Lien à envoyer</span><code class="share-link">${esc(shareLink())}</code>
-        <div class="row"><button type="button" class="btn primary" data-act="shareSend">Envoyer le lien</button><button type="button" class="btn" data-act="shareCopy">Copier</button></div>
+        <div class="row"><button type="button" class="btn primary" data-act="shareMail">✉️ Par mail</button><button type="button" class="btn" data-act="shareSend">💬 SMS, WhatsApp…</button><button type="button" class="btn" data-act="shareCopy">Copier le lien</button></div>
         <details class="share-msg"><summary class="muted" style="font-size:13px">Le lien part avec une petite procédure (iPhone et Android) · voir le message</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;margin:8px 0 0">${esc(shareInvite())}</pre></details>
         <span class="muted" style="font-size:12px">${at?"Mis à jour le "+new Date(at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+". ":""}Les nouvelles recettes sont ajoutées automatiquement. Comptez quelques minutes avant que le lien marche la première fois.</span></div>`:""}`;
   $("#shareFollow").innerHTML=(follows.length?follows.map(f=>`<div class="pref-row"><div><strong>${esc(f.name)}</strong><div class="muted" style="font-size:13px">${f.err?esc(f.err):(f.n||0)+" recettes"+(f.at?" · mis à jour "+new Date(f.at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"")}</div></div>
@@ -2132,6 +2162,8 @@ document.addEventListener("click",e=>{
   else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;}
   else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}$("#shareSheet").hidden=true;}
   else if(a==="shareOn"){const on=b.dataset.v==="1";menu.share=Object.assign({id:Math.random().toString(36).slice(2,12),name:""},menu.share,{on});saveMenu();renderShare();if(on)publishShare(true);}
+  else if(a==="shareMail"){ // a real mail keeps its line breaks and paragraphs
+    location.href="mailto:?subject="+encodeURIComponent("Mon carnet de recettes 🍽️")+"&body="+encodeURIComponent(shareInvite().replace(/\n/g,"\r\n"));}
   else if(a==="shareSend"){const t=shareInvite();
     if(navigator.share)navigator.share({title:"Mon carnet de recettes",text:t}).catch(()=>{});else navigator.clipboard.writeText(t).then(()=>toast("Message copié : collez-le dans un SMS ou un mail"),()=>{});}
   else if(a==="shareCopy"){navigator.clipboard.writeText(shareLink()).then(()=>toast("Lien copié"),()=>toast("Copie impossible : sélectionnez le lien à la main"));}
@@ -2476,7 +2508,8 @@ function planWeek(replaceAll,days,meals){
 /* ---------- look (per phone) and clock ---------- */
 const PALS=[["sauge","Sauge","#2E6A45","#F1F4EE"],["faience","Faïence","#2A5CAA","#F4F7FB"],["bistrot","Bistrot","#B23A2B","#FBF7F2"],["provence","Provence","#6B7A1F","#F6F3E6"],["agrumes","Agrumes","#D9631F","#FFF8EC"],["ardoise","Ardoise","#7DC395","#141917"]];
 const FONTS=[["carnet","Carnet",'"Young Serif",Georgia,serif'],["moderne","Moderne",'"Instrument Sans",system-ui,sans-serif'],["manuscrit","Manuscrit",'"Caveat",cursive'],["retro","Rétro",'"Abril Fatface",Georgia,serif']];
-function look(){const d=document.documentElement;return{pal:d.dataset.pal||"sauge",font:d.dataset.font||"carnet",dark:d.dataset.dark||"auto"};}
+const DEPTHS=[["plat","Plat"],["pate","Pâte à modeler"],["relief","Cartes en relief"],["verre","Verre dépoli"]];
+function look(){const d=document.documentElement;return{pal:d.dataset.pal||"sauge",font:d.dataset.font||"carnet",dark:d.dataset.dark||"auto",depth:d.dataset.depth||"plat"};}
 function setLook(k,v){document.documentElement.dataset[k]=v;LS.set("cm_"+k,v);renderLook();
   const bg=getComputedStyle(document.body).backgroundColor;document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content",bg));}
 function showOn(k){return LS.get("cm_show"+k,"1")!=="0";}
@@ -2488,6 +2521,7 @@ function renderLook(){
   const L=look();
   $("#lookPal").innerHTML=PALS.map(([v,n,a,b])=>`<button type="button" class="look" data-act="look" data-k="pal" data-v="${v}" aria-pressed="${L.pal===v}"><span class="sw" style="background:linear-gradient(135deg,${b} 50%,${a} 50%)"></span>${n}</button>`).join("");
   $("#lookFont").innerHTML=FONTS.map(([v,n,f])=>`<button type="button" class="look" data-act="look" data-k="font" data-v="${v}" aria-pressed="${L.font===v}" style="font-family:${f.replace(/"/g,"&quot;")};font-size:${v==="manuscrit"?20:16}px">${n}</button>`).join("");
+  $("#lookDepth").innerHTML=DEPTHS.map(([v,n])=>`<button type="button" class="look depth-${v}" data-act="look" data-k="depth" data-v="${v}" aria-pressed="${L.depth===v}">${n}</button>`).join("");
   $("#lookDark").innerHTML=[["auto","Comme l'iPhone"],["off","Jamais"]].map(([v,n])=>`<button type="button" class="look" data-act="look" data-k="dark" data-v="${v}" aria-pressed="${L.dark===v}">${n}</button>`).join("");
 }
 function renderNow(){
