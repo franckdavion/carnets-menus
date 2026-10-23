@@ -1872,6 +1872,20 @@ function removeFollow(url){for(const k of Object.keys(recipes))if(recipes[k].sha
 function copyShared(id){const r=recipes[id];if(!r)return;const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
   const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
   saveRecipe(nid,n);toast("Copiée dans votre carnet : vous pouvez la modifier");openRecSheet(nid);}
+// the message sent with the link: a short how-to for iPhone and Android
+function shareInvite(){const who=(menu.share&&menu.share.name)||"moi";
+  return`Voici le carnet de recettes de ${who} 🍽️
+${shareLink()}
+
+1. Ouvre ce lien
+   • iPhone : dans Safari
+   • Android : dans Chrome
+2. Installe l'appli sur ton écran d'accueil
+   • iPhone : bouton Partager (carré avec flèche) → « Sur l'écran d'accueil »
+   • Android : menu ⋮ → « Installer l'application »
+3. Ouvre l'appli depuis sa nouvelle icône : mes recettes y sont, marquées « de ${who} » (filtre « Partagées »).
+
+Tu gardes tes propres menus et ta liste de courses. Mes nouvelles recettes arrivent toutes seules. Pour en modifier une, fais « Copier dans mon carnet ».`;}
 function renderShare(){
   const sh=menu.share||{},can=!!(sync&&siteRepo());
   const at=LS.get("cm_share_at",0);
@@ -1880,6 +1894,7 @@ function renderShare(){
       ${sh.on?`<label class="field"><span class="label">Nom affiché chez les autres</span><input id="shareName" value="${esc(sh.name||"")}" placeholder="Ex. Franck" autocomplete="off"></label>
       <div class="field"><span class="label">Lien à envoyer</span><code class="share-link">${esc(shareLink())}</code>
         <div class="row"><button type="button" class="btn primary" data-act="shareSend">Envoyer le lien</button><button type="button" class="btn" data-act="shareCopy">Copier</button></div>
+        <details class="share-msg"><summary class="muted" style="font-size:13px">Le lien part avec une petite procédure (iPhone et Android) · voir le message</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;margin:8px 0 0">${esc(shareInvite())}</pre></details>
         <span class="muted" style="font-size:12px">${at?"Mis à jour le "+new Date(at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+". ":""}Les nouvelles recettes sont ajoutées automatiquement. Comptez quelques minutes avant que le lien marche la première fois.</span></div>`:""}`;
   $("#shareFollow").innerHTML=(follows.length?follows.map(f=>`<div class="pref-row"><div><strong>${esc(f.name)}</strong><div class="muted" style="font-size:13px">${f.err?esc(f.err):(f.n||0)+" recettes"+(f.at?" · mis à jour "+new Date(f.at).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"")}</div></div>
       <div class="row" style="gap:6px"><button type="button" class="btn" data-act="followRefresh" data-u="${esc(f.url)}">↻</button><button type="button" class="btn danger" data-act="followRm" data-u="${esc(f.url)}">Retirer</button></div></div>`).join(""):`<p class="muted" style="margin:0;font-size:13px">Aucun carnet suivi.</p>`);
@@ -2083,8 +2098,8 @@ document.addEventListener("click",e=>{
   else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;}
   else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}$("#shareSheet").hidden=true;}
   else if(a==="shareOn"){const on=b.dataset.v==="1";menu.share=Object.assign({id:Math.random().toString(36).slice(2,12),name:""},menu.share,{on});saveMenu();renderShare();if(on)publishShare(true);}
-  else if(a==="shareSend"){const l=shareLink(),t="Voici mon carnet de recettes : ouvre ce lien sur ton iPhone, puis ajoute l'app à ton écran d'accueil.\n"+l;
-    if(navigator.share)navigator.share({title:"Mon carnet de recettes",text:t}).catch(()=>{});else navigator.clipboard.writeText(l).then(()=>toast("Lien copié"),()=>{});}
+  else if(a==="shareSend"){const t=shareInvite();
+    if(navigator.share)navigator.share({title:"Mon carnet de recettes",text:t}).catch(()=>{});else navigator.clipboard.writeText(t).then(()=>toast("Message copié : collez-le dans un SMS ou un mail"),()=>{});}
   else if(a==="shareCopy"){navigator.clipboard.writeText(shareLink()).then(()=>toast("Lien copié"),()=>toast("Copie impossible : sélectionnez le lien à la main"));}
   else if(a==="followRefresh"){const f=follows.find(x=>x.url===b.dataset.u);if(f)refreshFollow(f);}
   else if(a==="followRm"){removeFollow(b.dataset.u);}
