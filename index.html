@@ -2145,7 +2145,7 @@ function subsHtml(){const sh=menu.share||{};if(!sh.on)return"";const list=Object
     ${list.length?list.map(([u,s])=>`<div class="sub-row"><span class="av">${esc((s.name||"?").charAt(0).toUpperCase())}</span><span style="flex:1;min-width:0"><b>${esc(s.name)}</b><small>a rejoint le ${new Date(s.joined).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})} · vu ${ago(s.seen)}</small></span><button type="button" class="x" data-act="subHide" data-u="${esc(u)}" aria-label="Retirer ${esc(s.name)} de la liste">✕</button></div>`).join("")
       :`<p class="muted" style="margin:0;font-size:13px">Personne pour l'instant. Quand un proche ouvre votre lien et donne son prénom, il apparaît ici.</p>`}
     <span class="muted" style="font-size:12px">Astuce : installez l'appli gratuite « ntfy » et abonnez-vous à <code style="user-select:all">${esc(sh.inbox||"")}</code> pour être prévenu même appli fermée.</span></div>`;}
-function openWelcome(owner){if(myName())return;$("#welcomeTxt").textContent=`${owner||"Un proche"} te partage son carnet de recettes 🍽️`;$("#welcomeNote").textContent=`${owner||"Il"} saura que tu as rejoint son carnet.`;$("#welcomeSheet").hidden=false;}
+function openWelcome(owner){if(myName()||!$("#welcomeSheet").hidden)return;LS.set("cm_welcome_at",Date.now());$("#welcomeTxt").textContent=`${owner||"Un proche"} te partage son carnet de recettes 🍽️`;$("#welcomeNote").textContent=`${owner||"Il"} saura que tu as rejoint son carnet.`;$("#welcomeSheet").hidden=false;}
 // what changed in a followed book since last time: shown as "Nouveautés" until the recipe is opened
 let shNews=LS.get("cm_sh_news",{}); // {recipeId:{k:"new"|"maj",by,at}}
 const strHash=s=>{let x=5381;for(let i=0;i<s.length;i++)x=(x*33^s.charCodeAt(i))>>>0;return x.toString(36);};
@@ -2170,7 +2170,7 @@ async function refreshFollow(f,quiet){
     for(const[id,x]of Object.entries(d.recipes)){if(!x||!x.name)continue;const nid="sh-"+f.key+"-"+id;
       recipes[nid]=Object.assign({ing:[],steps:""},x,{shared:f.url,sharedBy:d.owner||f.name},favs.has(nid)?{fav:true}:{});}
     f.name=d.owner||f.name;f.n=Object.keys(d.recipes).length;f.at=Date.now();f.err="";f.inbox=typeof d.inbox==="string"&&/^[\w-]{1,64}$/.test(d.inbox)?d.inbox:"";
-    if(f.inbox){if(!myName()&&f.fresh)openWelcome(f.name);else pingFollows();}delete f.fresh;
+    if(f.inbox){if(!myName()&&(f.fresh||Date.now()-LS.get("cm_welcome_at",0)>20*3600e3))openWelcome(f.name);else pingFollows();}delete f.fresh; // no first name yet: asked again once a day
   }catch(e){f.err=quiet?f.err:"Carnet introuvable pour l'instant (il peut mettre quelques minutes à être publié).";}
   LS.set("cm_follows",follows);LS.set("cm_recipes",recipes);render();if(!$("#shareSheet").hidden)renderShare();
 }
