@@ -516,9 +516,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="set-list">
       <div class="set-row"><span class="si">👥</span><span class="st"><b>Nombre de personnes</b><small>par défaut pour chaque repas</small></span>
         <span class="ctl"><button class="step sm" data-act="ppl" data-d="-1" id="pplMinus" aria-label="Une personne de moins">−</button><span class="n" id="pplN">4</span><button class="step sm" data-act="ppl" data-d="1" aria-label="Une personne de plus">+</button></span></div>
-      <button class="set-row" data-act="openPrefsAt" data-to=""><span class="si">⚙️</span><span class="st"><b>Préférences des menus</b><small>végé, poisson, soirs légers, dissociation</small></span><span class="chev">›</span></button>
-      <button class="set-row" data-act="openPrefsAt" data-to="p-days"><span class="si">📅</span><span class="st"><b>Style de chaque jour</b><small>rééquilibrage, poisson, fête…</small></span><span class="chev">›</span></button>
-      <button class="set-row" data-act="openPrefsAt" data-to="p-avoid"><span class="si">🚫</span><span class="st"><b>Ingrédients à éviter</b><small>et midis sans repas à la maison</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="menus"><span class="si">⚙️</span><span class="st"><b>Préférences des menus</b><small>végé, poisson, soirs légers, dissociation</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="days"><span class="si">📅</span><span class="st"><b>Style de chaque jour</b><small>rééquilibrage, poisson, fête…</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="avoid"><span class="si">🚫</span><span class="st"><b>Ingrédients à éviter</b><small>et midis sans repas à la maison</small></span><span class="chev">›</span></button>
     </div>
     <div class="set-sec">Courses</div>
     <div class="set-list">
@@ -526,8 +526,8 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div class="set-sec">Affichage</div>
     <div class="set-list">
-      <button class="set-row" data-act="openPrefsAt" data-to="showWine"><span class="si">👁️</span><span class="st"><b>Afficher dans le menu</b><small>vins et boissons, calories</small></span><span class="chev">›</span></button>
-      <button class="set-row" data-act="openPrefsAt" data-to="lookPal"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, mode sombre</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="show"><span class="si">👁️</span><span class="st"><b>Afficher dans le menu</b><small>vins et boissons, calories</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openPrefsAt" data-to="look"><span class="si">🎨</span><span class="st"><b>Apparence</b><small>couleurs, titres, mode sombre</small></span><span class="chev">›</span></button>
     </div>
     <div class="set-sec">Données</div>
     <div class="set-list">
@@ -845,26 +845,26 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="prefSheet" hidden>
   <form class="sheet-in" id="prefForm" novalidate>
-    <div class="row" style="justify-content:space-between"><h2>Préférences de la semaine</h2><button type="button" class="btn ghost" data-act="closePrefs">Fermer</button></div>
-    <div class="pref-row"><div><strong>Repas végétariens</strong><div class="muted" style="font-size:13px">par semaine, au moins</div></div>
+    <div class="row" style="justify-content:space-between"><h2 id="prefTitle">Préférences de la semaine</h2><button type="button" class="btn ghost" data-act="closePrefs">Fermer</button></div>
+    <div class="pref-row" data-sec="menus"><div><strong>Repas végétariens</strong><div class="muted" style="font-size:13px">par semaine, au moins</div></div>
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="veg" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-veg">3</span><button type="button" class="step sm" data-act="prefStep" data-f="veg" data-d="1" aria-label="Plus">+</button></div></div>
-    <div class="pref-row"><div><strong>Repas de poisson</strong><div class="muted" style="font-size:13px">par semaine, environ</div></div>
+    <div class="pref-row" data-sec="menus"><div><strong>Repas de poisson</strong><div class="muted" style="font-size:13px">par semaine, environ</div></div>
       <div class="ctl"><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="-1" aria-label="Moins">−</button><span class="n" id="p-fish">2</span><button type="button" class="step sm" data-act="prefStep" data-f="fish" data-d="1" aria-label="Plus">+</button></div></div>
-    <div class="pref-row"><div><strong>Soirs légers</strong><div class="muted" style="font-size:13px">soupes et plats légers en priorité le soir</div></div>
+    <div class="pref-row" data-sec="menus"><div><strong>Soirs légers</strong><div class="muted" style="font-size:13px">soupes et plats légers en priorité le soir</div></div>
       <div class="chips"><button type="button" class="chip" data-act="prefLight" data-v="1" id="pl-on">Oui</button><button type="button" class="chip" data-act="prefLight" data-v="0" id="pl-off">Non</button></div></div>
-    <div class="pref-row"><div><strong>Dissociation stricte</strong><div class="muted" style="font-size:13px">jamais de protéine (viande, poisson, œuf, fromage, laitage) avec un féculent ou une légumineuse, ni de légumineuse avec un féculent</div></div>
+    <div class="pref-row" data-sec="menus"><div><strong>Dissociation stricte</strong><div class="muted" style="font-size:13px">jamais de protéine (viande, poisson, œuf, fromage, laitage) avec un féculent ou une légumineuse, ni de légumineuse avec un féculent</div></div>
       <div class="chips"><button type="button" class="chip" data-act="prefDissoc" data-v="1" id="pd-on">Oui</button><button type="button" class="chip" data-act="prefDissoc" data-v="0" id="pd-off">Non</button></div></div>
-    <div class="field"><span class="label">Style de chaque jour</span><span class="muted" style="font-size:13px">« Proposer ma semaine » choisit en priorité des plats de ce style, midi et soir.</span><div id="p-days" class="day-styles"></div></div>
-    <div class="field"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
-    <label class="field"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
-    <button class="btn primary" type="submit">Enregistrer</button>
-    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+    <div class="field" data-sec="days"><span class="label">Style de chaque jour</span><span class="muted" style="font-size:13px">« Proposer ma semaine » choisit en priorité des plats de ce style, midi et soir.</span><div id="p-days" class="day-styles"></div></div>
+    <label class="field" data-sec="avoid"><span class="label">Ingrédients à éviter (séparés par des virgules)</span><input id="p-avoid" placeholder="Ex. champignons, porc" autocomplete="off"></label>
+    <div class="field" data-sec="avoid"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
+    <button class="btn primary" type="submit" data-sec="menus days avoid">Enregistrer</button>
+    <div class="field" data-sec="show" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Afficher dans le menu (ce téléphone)</span>
       <div class="pref-row"><div><strong>Vins et boissons</strong></div><div class="chips" id="showWine"></div></div>
       <div class="pref-row"><div><strong>Calories et glucides</strong></div><div class="chips" id="showNut"></div></div>
       <span class="muted" style="font-size:13px">Toujours visibles dans la fiche de chaque recette.</span>
     </div>
-    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+    <div class="field" data-sec="look" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Apparence de ce téléphone (s'applique tout de suite)</span>
       <span class="muted" style="font-size:13px">Couleurs</span><div class="look-grid" id="lookPal"></div>
       <span class="muted" style="font-size:13px;margin-top:6px">Style des titres</span><div class="look-grid" id="lookFont"></div>
@@ -2547,7 +2547,10 @@ document.addEventListener("click",e=>{
   else if(a==="undoRemove")undoRemove();
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
-  else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to;setTimeout(()=>{const el=to&&document.getElementById(to);const sc=$("#prefSheet .sheet-in");if(el){sc.scrollTop=0;el.scrollIntoView({block:"start",behavior:"smooth"});}else sc.scrollTop=0;},80);}
+  else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to||"menus"; // each Réglages row shows only its own part
+    const T={menus:"Préférences des menus",days:"Style de chaque jour",avoid:"Ingrédients à éviter",show:"Afficher dans le menu",look:"Apparence"};
+    $("#prefTitle").textContent=T[to]||"Préférences";document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=!el.dataset.sec.split(" ").includes(to);});
+    $("#prefSheet .sheet-in").scrollTop=0;}
   else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;pollSubs();}
   else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}
     const mn=$("#myNameIn").value.trim().slice(0,40);if(mn&&mn!==myName()){LS.set("cm_myname",mn);pingFollows();}$("#shareSheet").hidden=true;}
@@ -2979,6 +2982,7 @@ function renderToday(){
     <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="propose">Proposer ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
+  document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=false;});$("#prefTitle").textContent="Préférences de la semaine";
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
   $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pd-on").setAttribute("aria-pressed",!!prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
