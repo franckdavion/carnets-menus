@@ -353,7 +353,9 @@ input,select,textarea{font-size:16px!important}
 .lbl-ph b{font-size:22px;line-height:1}.lbl-ph i{font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
 .lbl-big{height:160px;width:120px;margin:0 auto}.lbl-big b{font-size:40px}.lbl-big i{font-size:13px}
 .wine-ph-btns{justify-content:center}
-#scanSheet{z-index:30}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+#scanSheet{z-index:30}.imp-step{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface)}
+.imp-ph{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.imp-ph img{width:90px;max-height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.imp-ai{display:flex;flex-direction:column;gap:8px}.imp-ai .btn{justify-content:center;white-space:normal}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .sc-b{display:grid;grid-template-columns:repeat(2,32px);gap:3px}.sc-b button{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;padding:0}
@@ -643,9 +645,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between">
       <h2>Recettes</h2>
       <div class="row">
-      <button class="btn" data-act="pasteRecipe">Coller une recette</button>
+      <button class="btn" data-act="impPaste">✨ Coller une recette</button>
       <button class="btn" data-act="goFind">Importer du web ↓</button>
-      <label class="btn">📸 Scanner un livre<input type="file" accept="image/*" id="scanBook" hidden></label>
+      <button class="btn" data-act="impOpen">📸 Importer via une photo (IA)</button>
       <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
     </div>
@@ -712,7 +714,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <summary>Coller une recette</summary>
       <p class="muted" style="font-size:13px;margin:6px 0">Photo d'un livre ou d'une fiche : ouvrez-la dans Photos, restez appuyé sur le texte, « Tout sélectionner » puis Copier. Collez ici, ou collez le texte d'un site ou d'un message.</p>
       <textarea id="pasteIn" rows="6" placeholder="Collez la recette ici…"></textarea>
-      <div class="row" style="margin-top:8px"><button type="button" class="btn primary" data-act="parsePaste">Remplir le formulaire</button><label class="btn">📷 Scanner une page<input type="file" accept="image/*" capture="environment" id="ocrIn" hidden></label><span class="muted" id="pasteMsg" style="font-size:13px"></span></div>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn primary" data-act="parsePaste">✨ Ranger dans le formulaire</button><button type="button" class="btn" data-act="impOpenForm">📸 Importer via une photo (IA)</button><span class="muted" id="pasteMsg" style="font-size:13px"></span></div>
     </details>
     <details class="paste" id="webBox" hidden>
       <summary>🌐 Remplacer par une recette du web</summary>
@@ -935,11 +937,24 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="scanSheet" hidden>
   <div class="sheet-in">
-    <div class="row" style="justify-content:space-between"><h2>Vérifier la page lue</h2><button type="button" class="btn ghost" data-act="scanClose">Annuler</button></div>
-    <div id="scanMsg" class="muted" style="font-size:13px"></div>
-    <div class="scan-src"><img id="scanImg" alt="Page photographiée"><details><summary>Texte lu (modifiable)</summary><textarea id="scanRaw" rows="8" class="search"></textarea><button type="button" class="btn" data-act="scanReparse" style="margin-top:6px">↻ Redécouper ce texte</button></details></div>
+    <div class="row" style="justify-content:space-between"><h2 id="impTitle">Importer une recette</h2><button type="button" class="btn ghost" data-act="scanClose">Annuler</button></div>
+    <div class="imp-step" id="impPhoto">
+      <span class="label">1 · La photo de la page</span>
+      <div class="imp-ph"><img id="scanImg" alt="" hidden><div class="row" style="gap:8px"><label class="btn">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" class="imp-file" hidden></label><label class="btn">🖼️ Galerie<input type="file" accept="image/*" class="imp-file" hidden></label></div></div>
+      <div id="impAi" class="imp-ai" hidden>
+        <button type="button" class="btn primary" data-act="impShare">🤖 Envoyer la photo à une IA (ChatGPT, Claude, Gemini…)</button>
+        <button type="button" class="btn" data-act="impPrompt">📋 Copier la consigne pour l'IA</button>
+        <small class="muted">L'IA vous répond avec la recette recopiée : copiez sa réponse, revenez ici et collez-la ci-dessous. Sur iPhone, vous pouvez aussi ouvrir la photo, appuyer longuement sur le texte → « Tout sélectionner » → Copier.</small>
+      </div>
+    </div>
+    <div class="imp-step">
+      <span class="label" id="impStep2">2 · Le texte de la recette</span>
+      <textarea id="scanRaw" rows="7" class="search" placeholder="Collez ici le texte : réponse de l'IA, texte d'un site, d'un message, d'une photo…"></textarea>
+      <div class="row" style="gap:8px"><button type="button" class="btn" data-act="impClip">📋 Coller</button><button type="button" class="btn primary" data-act="scanReparse">✨ Structurer automatiquement</button></div>
+      <div id="scanMsg" class="muted" style="font-size:13px"></div>
+    </div>
     <div id="scanForm" style="display:flex;flex-direction:column;gap:12px"></div>
-    <div class="add-foot row" style="gap:8px"><button type="button" class="btn" data-act="scanForm">Ouvrir le formulaire complet</button><button type="button" class="btn primary" data-act="scanSave">✓ Enregistrer la recette</button></div>
+    <div class="add-foot row" style="gap:8px" id="impFoot" hidden><button type="button" class="btn" data-act="scanForm">Ouvrir le formulaire complet</button><button type="button" class="btn primary" data-act="scanSave">✓ Enregistrer la recette</button></div>
   </div>
 </div>
 
@@ -2775,7 +2790,13 @@ document.addEventListener("click",e=>{
   else if(a==="propNo"){propAnswer(b.dataset.p,false);}
   else if(a==="propView"){propOpen=propOpen===b.dataset.p?null:b.dataset.p;renderProps();}
   else if(a==="scanClose"){$("#scanSheet").hidden=true;scan=null;}
-  else if(a==="scanReparse"){scan=ocrSplit($("#scanRaw").value);renderScan();}
+  else if(a==="scanReparse"){impStructure();}
+  else if(a==="impOpen"){impOpen(true);}
+  else if(a==="impPaste"){impOpen(false);}
+  else if(a==="impOpenForm"){$("#sheet").hidden=true;impOpen(true,true);}
+  else if(a==="impShare"){impShare();}
+  else if(a==="impPrompt"){navigator.clipboard.writeText(AI_PROMPT).then(()=>toast("Consigne copiée : collez-la dans votre IA avec la photo"),()=>toast("Copie impossible"));}
+  else if(a==="impClip"){navigator.clipboard.readText().then(t=>{if(t&&t.trim()){$("#scanRaw").value=t;impStructure();}else toast("Le presse-papiers est vide");},()=>{$("#scanRaw").focus();toast("Restez appuyé dans le cadre → Coller");});}
   else if(a==="scMv"||a==="scSw"||a==="scRm"||a==="scAdd"){scanCollect();const k=b.dataset.k,i=+b.dataset.i,l=scan[k];
     if(a==="scAdd")l.push("");else if(a==="scRm")l.splice(i,1);else if(a==="scSw"){const[x]=l.splice(i,1);scan[k==="ing"?"steps":"ing"].push(x);}else{const j=i+Number(b.dataset.d);if(j>=0&&j<l.length)[l[i],l[j]]=[l[j],l[i]];}renderScan();}
   else if(a==="scanForm"){const r=scanRecipe();$("#scanSheet").hidden=true;openSheet();fillForm(r);toast("Vérifiez puis « Enregistrer la recette »");}
@@ -3011,7 +3032,7 @@ document.addEventListener("click",e=>{
   else if(a==="backup")backup();
   else if(a==="pasteRecipe"){openSheet();$("#f-title").textContent="Coller une recette";$("#pasteBox").open=true;setTimeout(()=>$("#pasteIn").focus(),80);}
   else if(a==="parsePaste"){
-    const r=parseRecipeText($("#pasteIn").value), msg=$("#pasteMsg");
+    const r0=ocrSplit(ocrClean($("#pasteIn").value)),r={name:r0.name,time:r0.time,serves:r0.serves,ing:r0.ing.map(l=>parseIng(l)).filter(Boolean),steps:r0.steps}, msg=$("#pasteMsg");
     if(!r.ing.length&&!r.steps.length){msg.textContent="Je n'ai pas reconnu de recette dans ce texte.";return;}
     fillForm(r);
     toast(`${r.ing.length} ingrédients, ${r.steps.length} étapes : vérifiez puis enregistrez`);
@@ -3799,11 +3820,24 @@ $("#recForm").addEventListener("submit",async e=>{
 });
 
 
-/* ---------- scan a cookbook page: text recognition (Tesseract, loaded only when used) then the usual "Remplir le formulaire" ---------- */
-let tessP=null;
-function loadTess(){return tessP||(tessP=new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";sc.onload=()=>ok(window.Tesseract);sc.onerror=()=>{tessP=null;ko();};document.head.appendChild(sc);}));}
-$("#scanBook").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f)scanBook(f);});
-$("#ocrIn").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f){$("#sheet").hidden=true;scanBook(f);}});
+/* ---------- import a recipe: photo sent to an AI app (or Live Text), then any text is cleaned and sorted into the fields ---------- */
+const AI_PROMPT="Recopie fidèlement la recette de cette photo, en français, sous cette forme :\nTitre\nPour X personnes\nTemps : X min\nIngrédients :\n- quantité unité ingrédient (un par ligne)\nPréparation :\n1. étape\n2. étape\nN'ajoute rien d'autre.";
+let impFile=null,impFromForm=false;
+function impOpen(withPhoto,fromForm){impFromForm=!!fromForm;impFile=null;scan=null;$("#scanImg").hidden=true;$("#impAi").hidden=true;$("#scanRaw").value="";$("#scanForm").innerHTML="";$("#impFoot").hidden=true;$("#scanMsg").textContent="";
+  $("#impPhoto").hidden=!withPhoto;$("#impStep2").textContent=withPhoto?"2 · Le texte de la recette":"Le texte de la recette";$("#impTitle").textContent=withPhoto?"Importer via une photo (IA)":"✨ Coller une recette";
+  $("#scanSheet").hidden=false;$("#scanSheet .sheet-in").scrollTop=0;if(!withPhoto)setTimeout(()=>$("#scanRaw").focus(),80);}
+document.addEventListener("change",async e=>{const t=e.target;if(!t.classList||!t.classList.contains("imp-file"))return;const f=t.files&&t.files[0];t.value="";if(!f)return;
+  impFile=f;const u=URL.createObjectURL(f);$("#scanImg").src=u;$("#scanImg").hidden=false;$("#impAi").hidden=false;});
+async function impShare(){if(!impFile){toast("Prenez d'abord la photo");return;}
+  try{await navigator.clipboard.writeText(AI_PROMPT);}catch(e){}
+  const f=new File([impFile],"recette.jpg",{type:impFile.type||"image/jpeg"});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],text:AI_PROMPT});toast("Consigne copiée aussi : collez-la dans l'IA si elle n'apparaît pas");}catch(e){}}
+  else toast("Partage impossible ici : enregistrez la photo et ouvrez-la dans votre app d'IA (consigne copiée)");}
+function impStructure(){const raw=ocrClean($("#scanRaw").value);if(!raw.trim()){$("#scanMsg").textContent="Collez d'abord le texte de la recette.";return;}
+  scan=ocrSplit(raw);renderScan();$("#impFoot").hidden=false;
+  $("#scanMsg").textContent=`✓ ${scan.ing.length} ingrédient${scan.ing.length>1?"s":""} et ${scan.steps.length} étape${scan.steps.length>1?"s":""} trouvés. Vérifiez : ⇄ change une ligne de liste, ↑↓ la déplace, ✕ la supprime.`;
+  setTimeout(()=>$("#scanForm").scrollIntoView({behavior:"smooth",block:"start"}),60);}
+
 // 1. image clean-up: right size, greyscale, contrast stretched (dark text on white)
 async function ocrPrep(file){const url=URL.createObjectURL(file);try{const img=await loadImg(url);
   const L=Math.max(img.width,img.height),k=L>2400?2400/L:L<1400?1400/L:1,c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
@@ -3823,25 +3857,18 @@ function ocrOrder(data,W){const lines=(data.lines||[]).filter(l=>l.text&&l.text.
 // 3. text clean-up
 function ocrClean(t){return String(t||"").replace(/\r/g,"")
   .replace(/([a-zàâçéèêëîïôûù])-\n(les|la|le|lui|leur|vous|nous|en|y|moi|toi)\b/g,"$1-$2").replace(/([a-zàâçéèêëîïôûù])-\n([a-zàâçéèêëîïôûù])/g,"$1$2")
-  .split("\n").map(l=>l.replace(/[|¦_~•·►▪■□©®™<>{}\[\]\\^`"“”]+/g," ").replace(/^[\s\-–—*+°.,;:]+(?=\D)/,"")
+  .split("\n").map(l=>l.replace(/^#+\s*/,"").replace(/[|¦_~•·►▪■□©®™<>{}\[\]\\^`"“”*]+/g," ").replace(/^[\s\-–—*+°.,;:]+(?=\D)/,"")
     .replace(/\bc\.?\s?[àa@]\.?\s?s(?:oupe)?\b\.?/gi,"c. à s.").replace(/\bc\.?\s?[àa@]\.?\s?c(?:af[ée])?\b\.?/gi,"c. à c.")
     .replace(/\b(\d+)\s?([gG])r?\b\.?/g,"$1 g").replace(/\b(\d+)\s?(cl|ml|kg|dl|l)\b/gi,(m,a,b)=>a+" "+b.toLowerCase()).replace(/\b0e\b/g,"oe").replace(/oeuf/gi,m=>m[0]==="O"?"Œuf":"œuf")
     .replace(/\s{2,}/g," ").trim())
   .filter(l=>(l.match(/[a-zàâçéèêëîïôûù0-9]/gi)||[]).length>=2&&!/^\d{1,3}$/.test(l))
   .reduce((a,l)=>{const p=a[a.length-1];if(p&&p.length>25&&!/[.!?:]$/.test(p)&&(/^[a-zàâçéèêëîïôûù]/.test(l)||/^\d+\s*(min|minutes|h\b|heures?|°|degr)/i.test(l)))a[a.length-1]=p+" "+l;else a.push(l);return a;},[]).join("\n");}
 // 4. blocks: title / ingredients / steps (numbered steps start a new step, lowercase lines continue the previous one)
-function ocrSplit(t){const r=parseRecipeText(t);const ing=[],st=[];
+function ocrSplit(t){t=String(t).split("\n").flatMap(l=>l.length<70&&/^\d/.test(l)&&/[a-zàâçéèêëîïôûùœ]\s+\d/.test(l)&&!/[.!]$/.test(l)?l.split(/(?<=[a-zàâçéèêëîïôûùœ'])\s+(?=\d)/):[l]).join("\n");const r=parseRecipeText(t);const ing=[],st=[];
   for(const i of r.ing){const line=[i.q?String(i.q).replace(".",","):"",i.u&&i.u!=="pièce"?i.u:"",i.n].filter(Boolean).join(" ");if(i.n.length>70&&/\b(faites|ajoutez|mettez|versez|laissez|coupez|mélangez|cuire|cuisez)\b/i.test(i.n))st.push(i.n);else ing.push(line);}
   for(const x of r.steps){if(x.length<45&&looksLikeIng(x)&&!/[.!]$/.test(x))ing.push(x);else st.push(x);}
   return{name:r.name,time:r.time||"",serves:r.serves||"",ing,steps:st};}
 let scan=null;
-async function scanBook(f){scan={name:"",time:"",serves:"",ing:[],steps:[]};$("#scanSheet").hidden=false;$("#scanForm").innerHTML="";$("#scanRaw").value="";const m=$("#scanMsg");
-  try{m.textContent="⏳ Préparation de la photo…";const{canvas,preview}=await ocrPrep(f);$("#scanImg").src=preview;
-    m.textContent="⏳ Chargement de la lecture (la première fois ~15 s)…";const T=await loadTess();
-    const res=await T.recognize(canvas,"fra",{logger:x=>{if(x.status==="recognizing text")m.textContent=`⏳ Lecture de la page… ${Math.round((x.progress||0)*100)} %`;}});
-    const raw=ocrClean(ocrOrder(res.data||{},canvas.width));if(!raw.trim()){m.textContent="Aucun texte lu : reprenez la photo bien à plat, avec de la lumière.";return;}
-    $("#scanRaw").value=raw;scan=ocrSplit(raw);renderScan();m.textContent="Vérifiez chaque champ. ⇄ envoie une ligne dans l'autre liste, ↑↓ la déplace, ✕ la supprime.";}
-  catch(x){m.textContent="La lecture n'a pas marché (réseau ?). Réessayez.";}}
 function scanCollect(){if(!scan)return;const v=id=>{const e=$(id);return e?e.value.trim():"";};scan.name=v("#sc-name");scan.time=v("#sc-time");scan.serves=v("#sc-serves");
   for(const k of["ing","steps"])scan[k]=[...document.querySelectorAll(`#scanForm [data-l="${k}"]`)].map(e=>e.value.trim());}
 function renderScan(){const s=scan;const row=(k,x,i)=>`<div class="sc-row"><${k==="steps"?"textarea rows=\"2\"":"input"} data-l="${k}" value="${esc(x)}">${k==="steps"?esc(x)+"</textarea>":""}<span class="sc-b"><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="-1" aria-label="Monter">↑</button><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="1" aria-label="Descendre">↓</button><button type="button" data-act="scSw" data-k="${k}" data-i="${i}" aria-label="${k==="ing"?"Vers les étapes":"Vers les ingrédients"}">⇄</button><button type="button" data-act="scRm" data-k="${k}" data-i="${i}" aria-label="Supprimer">✕</button></span></div>`;
