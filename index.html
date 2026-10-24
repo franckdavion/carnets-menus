@@ -1177,7 +1177,8 @@ const START_VIEWS=[["last","Dernière utilisée"],["menu","Aujourd'hui"],["week"
 let view=(()=>{const s=LS.get("cm_start","last");return s!=="last"&&START_VIEWS.some(x=>x[0]===s)?s:LS.get("cm_view","menu");})();
 function renderStart(){const el=$("#startChips");if(!el)return;const s=LS.get("cm_start","last");
   el.innerHTML=START_VIEWS.map(([v,l])=>`<button type="button" class="chip" data-act="startView" data-v="${v}" aria-pressed="${s===v}">${l}</button>`).join("");}
-let filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false,theme:""};
+// the chosen filters stay until you change them (kept on the phone, even if the app reloads)
+let filter=Object.assign({q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false,theme:"",cats:[],kinds:[]},LS.get("cm_filter",{}));
 let openId=null, confirmDel=null, ideaId=null, ideaIds=[], ideaSeen=[];
 const IDEAS_N=5;
 let ideaMode="sugg", favShown=10;
@@ -1485,7 +1486,7 @@ function render(){
   const items=shopping(), extras=menu.extras||[];
   const left=items.length+extras.length;
   $("#b-shop").textContent=left||""; $("#b-shop").hidden=!left;
-  {const nn=newsCount();$("#b-rec").textContent=nn||"";$("#b-rec").hidden=!nn;if(!nn&&filter.theme==="nouveau")filter.theme="";}
+  {const nn=newsCount();$("#b-rec").textContent=nn||"";$("#b-rec").hidden=!nn;}
   if($("#now"))renderNow();
   if(view==="set")renderStart();
   if(!$("#recSheet").hidden)renderRecSheet();
@@ -1571,7 +1572,7 @@ function addedAt(id){const r=recipes[id];if(!r)return 0;const t=Date.parse(r.cre
 function renderRecipes(){
   const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>inCat(r,c)))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
-  filter.cats=filter.cats||[];filter.kinds=filter.kinds||[];
+  filter.cats=filter.cats||[];filter.kinds=filter.kinds||[];LS.set("cm_filter",filter);
   const nF=filter.cats.length+filter.kinds.length+(filter.quick?1:0)+(filter.light?1:0)+(filter.theme?1:0);
   $("#favQuick").setAttribute("aria-pressed",!!filter.fav);
   $("#filtBtn").textContent=`🎛️ Filtres (${nF}) ▾`;$("#filtBtn").classList.toggle("on",nF>0);
@@ -3111,6 +3112,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.act==="check"){if(t.checked)menu.checked[t.dataset.k]=true;else delete menu.checked[t.dataset.k];render();saveMenu(300);}
   if(t.dataset.act==="checkX"){menu.extras[Number(t.dataset.i)].done=t.checked;render();saveMenu(300);}
 });
+$("#q").value=filter.q||"";
 $("#q").addEventListener("input",e=>{filter.q=e.target.value;recLimit=50;renderRecipes();});
 $("#extraForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#extraIn").value.trim();if(!v)return;
   menu.extras=[...(menu.extras||[]),{t:v,done:false}];$("#extraIn").value="";render();saveMenu();});
@@ -3700,7 +3702,7 @@ $("#recSheet").addEventListener("click",e=>{if(e.target.id==="recSheet")$("#recS
 function openRecipe(id){
   if(!recipes[id])return;
   $("#pickSheet").hidden=true;
-  filter={q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false}; $("#q").value="";
+  if(!recMatch(recipes[id],filter.q,"",filter.quick,filter.light,filter.fav,filter.theme==="nouveau"?"":filter.theme)||(filter.cats||[]).length&&!filter.cats.some(c=>inCat(recipes[id],c))||(filter.kinds||[]).length&&!filter.kinds.includes(kindOf(recipes[id]))){filter=Object.assign(filter,{q:"",cat:"Toutes",kind:"",quick:false,light:false,fav:false,theme:"",cats:[],kinds:[]});$("#q").value="";toast("Filtres retirés pour montrer cette recette");}
   view="rec"; LS.set("cm_view",view); openId=id; confirmDel=null; render();
   setTimeout(()=>{const el=document.getElementById("card-"+id);if(el)el.scrollIntoView({block:"start",behavior:"smooth"});},60);
 }
