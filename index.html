@@ -361,6 +361,8 @@ input,select,textarea{font-size:16px!important}
 .mic{flex:0 0 44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:20px}.mic.on{background:#D84A3A;border-color:#D84A3A;animation:micP 1s infinite}
 @keyframes micP{50%{box-shadow:0 0 0 8px rgba(216,74,58,.2)}}
 .page-ph{display:flex;flex-direction:column;gap:4px}.page-ph img{width:84px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}.page-ph img.big{width:100%;height:auto;cursor:zoom-out}
+.imp-ai2{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}.imp-ai2 .btn{flex:1;justify-content:center}
+.imp-prompt{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;user-select:text;-webkit-user-select:text}
 .imp-ai{display:flex;flex-direction:column;gap:8px}.imp-ai .btn{justify-content:center;white-space:normal}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
@@ -947,15 +949,30 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="imp-step" id="impPhoto">
       <span class="label">1 · La photo de la page</span>
       <div class="imp-ph"><img id="scanImg" alt="Page photographiée (touchez pour agrandir)" hidden data-act="impZoom"><div class="row" style="gap:8px"><label class="btn">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" class="imp-file" hidden></label><label class="btn">🖼️ Galerie<input type="file" accept="image/*" class="imp-file" hidden></label></div></div>
-      <div id="impAi" class="imp-ai" hidden><small class="muted">Touchez la photo pour l'agrandir. Elle est gardée sur ce téléphone, en miniature sur la fiche (« 📄 Page du livre »).</small></div>
+      <div id="impAi" class="imp-ai" hidden><small class="muted">Touchez la photo pour l'agrandir. Elle sera gardée sur ce téléphone comme illustration de la fiche (« 📄 Page du livre »).</small></div>
+      <div class="imp-ai2">
+        <span class="label">Faire lire la photo par une IA gratuite</span>
+        <div class="row" style="gap:8px"><a class="btn primary" href="https://chatgpt.com/" target="_blank" rel="noopener">🤖 ChatGPT ↗</a><a class="btn primary" href="https://claude.ai/new" target="_blank" rel="noopener">🤖 Claude ↗</a></div>
+        <small class="muted">Dans l'IA : joignez la photo (trombone / +), collez la consigne ci-dessous, envoyez. Copiez sa réponse, revenez ici et collez-la dans le champ « Texte ».</small>
+        <div class="imp-prompt" id="impPromptTxt">Transcris cette photo sous forme de recette, en français, exactement ainsi :
+Titre
+Pour X personnes
+Temps : X min
+Ingrédients :
+- quantité unité ingrédient (un par ligne)
+Préparation :
+1. étape
+2. étape</div>
+        <button type="button" class="btn" data-act="impCopy" style="align-self:flex-start">📋 Copier la consigne</button>
+      </div>
     </div>
     <div class="imp-step" id="impQuick">
       <span class="label" id="impStep2">2 · La recette</span>
       <label class="field"><span class="label">Titre</span><input id="qi-name" placeholder="Ex. Tarte aux poireaux"></label>
-      <label class="field"><span class="label">Texte ou notes</span><textarea id="qi-text" rows="10" class="search" placeholder="Écrivez ou collez ici le texte de la recette, vos notes…"></textarea></label>
+      <label class="field"><span class="label">Texte (réponse de l'IA ou vos notes)</span><textarea id="qi-text" rows="10" class="search" placeholder="Collez ici la réponse de l'IA, ou écrivez la recette…"></textarea></label>
     </div>
     <button type="button" class="btn ghost" data-act="scanClose" style="align-self:center">Annuler</button>
-    <div class="add-foot row" style="gap:8px" id="impFoot"><button type="button" class="btn primary" data-act="scanSave" style="flex:1;justify-content:center">✓ Enregistrer la recette</button></div>
+    <div class="add-foot row" style="gap:8px" id="impFoot"><button type="button" class="btn" data-act="scanSave">Enregistrer tel quel</button><button type="button" class="btn primary" data-act="impCreate" style="flex:1;justify-content:center">✨ Créer la recette</button></div>
   </div>
 </div>
 
@@ -2796,6 +2813,12 @@ document.addEventListener("click",e=>{
   else if(a==="impPaste"){impOpen(false);}
   else if(a==="impOpenForm"){$("#sheet").hidden=true;impOpen(true,true);}
   else if(a==="pageZoom"){b.classList.toggle("big");}
+  else if(a==="impCopy"){const t=$("#impPromptTxt").textContent;navigator.clipboard.writeText(t).then(()=>toast("Consigne copiée ✓"),()=>{const r=document.createRange();r.selectNodeContents($("#impPromptTxt"));const sl=getSelection();sl.removeAllRanges();sl.addRange(r);toast("Sélectionnée : touchez Copier");});}
+  else if(a==="impCreate"){const text=$("#qi-text").value;if(!text.trim()){toast("Collez d'abord le texte de la recette");return;}
+    const r0=ocrSplit(ocrClean(text)),nm=$("#qi-name").value.trim(),pf=impFile;
+    $("#scanSheet").hidden=true;impFile=null;openSheet();setTimeout(clearSheetBack,60);
+    fillForm({name:nm||r0.name,time:r0.time,serves:r0.serves,ing:r0.ing.map(l=>parseIng(l)).filter(Boolean),steps:r0.steps});formPage=pf||null;
+    toast(`${r0.ing.length} ingrédients, ${r0.steps.length} étapes : vérifiez puis « Enregistrer la recette »`);}
   else if(a==="scanSave"){const name=$("#qi-name").value.trim()||"Recette du livre",text=$("#qi-text").value.replace(/\r/g,"").trim();
     const id=(norm(name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
     saveRecipe(id,{name,cat:"Plat",time:0,serves:4,ing:[],steps:text,createdAt:new Date().toISOString()});const pf=impFile;if(pf)savePagePhoto(id,pf);
@@ -3101,7 +3124,7 @@ function copyList(){
 
 /* ---------- new recipe sheet ---------- */
 $("#f-cat").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
-let formCats=["Plat"];
+let formCats=["Plat"],formPage=null;
 function renderFormCats(){if(!formCats.length)formCats=["Plat"];$("#f-cat").value=formCats[0];
   $("#f-cats").innerHTML=CATS.map(c=>{const on=formCats.includes(c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="fCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${on&&formCats[0]===c&&formCats.length>1?" (principale)":""}</button></span>`;}).join("");}
 let ingSeq=0;
@@ -3812,7 +3835,7 @@ $("#recForm").addEventListener("submit",async e=>{
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
   const data={name,cat:fc[0],...(fc.length>1?{cats:fc.slice(1)}:{}),time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
   $("#sheet").hidden=true;
-  await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
+  await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}if(formPage){savePagePhoto(id,formPage);formPage=null;}
   view="rec";openId=id;render();toast("Recette enregistrée");
 });
 
