@@ -379,7 +379,11 @@ input,select,textarea{font-size:16px!important}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .sc-b{display:grid;grid-template-columns:repeat(2,32px);gap:3px}.sc-b button{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;padding:0}
 /* photos always shown whole (no cropping): fitted inside their frame on a soft background */
-.rp-th,.dish-ph,.mc-ph,.tl-ph,.pi-ph,.ph-c img,.wine-thumb img,.imp-ph img,.page-ph img,.scan-src img,.rv img,#scanImg{object-fit:contain!important;background:var(--soft)}
+.imp-ph img,.page-ph img,.scan-src img,#scanImg{object-fit:contain!important;background:var(--soft)}
+/* thumbnails in lists: fixed squares, filled evenly (cover, centred), never stretched */
+img.rp-th,img.dish-ph,img.mc-ph,img.tl-ph,img.pi-ph{object-fit:cover!important;object-position:50% 50%;aspect-ratio:1/1;flex-shrink:0;display:block;background:var(--soft);overflow:hidden}
+img.rp-th,img.dish-ph{width:56px!important;height:56px!important}img.mc-ph{width:52px!important;height:52px!important}img.tl-ph{width:48px!important;height:48px!important}img.pi-ph{width:40px!important;height:40px!important}
+.ph-c img,.wine-thumb img,.rv img{object-fit:cover!important;object-position:50% 50%}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
