@@ -361,9 +361,6 @@ input,select,textarea{font-size:16px!important}
 .mic{flex:0 0 44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:20px}.mic.on{background:#D84A3A;border-color:#D84A3A;animation:micP 1s infinite}
 @keyframes micP{50%{box-shadow:0 0 0 8px rgba(216,74,58,.2)}}
 .page-ph{display:flex;flex-direction:column;gap:4px}.page-ph img{width:84px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}.page-ph img.big{width:100%;height:auto;cursor:zoom-out}
-.ai-status{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,var(--surface));font-size:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.spin{width:18px;height:18px;border:3px solid color-mix(in srgb,var(--accent) 25%,transparent);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:0 0 18px}@keyframes spin{to{transform:rotate(360deg)}}
-#impQuick.busy{opacity:.45;pointer-events:none}
 .imp-ai{display:flex;flex-direction:column;gap:8px}.imp-ai .btn{justify-content:center;white-space:normal}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
@@ -624,7 +621,6 @@ code{font-family:var(--f-mono);font-size:.92em}
         <span class="ctl"><button class="step sm" data-act="ppl" data-d="-1" id="pplMinus" aria-label="Une personne de moins">−</button><span class="n" id="pplN">4</span><button class="step sm" data-act="ppl" data-d="1" aria-label="Une personne de plus">+</button></span></div>
       <button class="set-row" data-act="openPrefsAt" data-to="menus"><span class="si">⚙️</span><span class="st"><b>Préférences des menus</b><small>végé, poisson, soirs légers, dissociation</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="days"><span class="si">📅</span><span class="st"><b>Style de chaque jour</b><small>rééquilibrage, poisson, fête…</small></span><span class="chev">›</span></button>
-      <button class="set-row" data-act="openPrefsAt" data-to="ai"><span class="si">🤖</span><span class="st"><b>Lecture des photos par IA</b><small id="setAi">pour importer une recette en photo</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="equip"><span class="si">🍳</span><span class="st"><b>Mon équipement</b><small id="setEquip">plaque, four, air fryer, cocotte-minute</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openPrefsAt" data-to="avoid"><span class="si">🚫</span><span class="st"><b>Ingrédients à éviter</b><small>et midis sans repas à la maison</small></span><span class="chev">›</span></button>
     </div>
@@ -951,7 +947,6 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="imp-step" id="impPhoto">
       <span class="label">1 · La photo de la page</span>
       <div class="imp-ph"><img id="scanImg" alt="Page photographiée (touchez pour agrandir)" hidden data-act="impZoom"><div class="row" style="gap:8px"><label class="btn">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" class="imp-file" hidden></label><label class="btn">🖼️ Galerie<input type="file" accept="image/*" class="imp-file" hidden></label></div></div>
-      <div id="aiStatus" class="ai-status" hidden></div>
       <div id="impAi" class="imp-ai" hidden><small class="muted">Touchez la photo pour l'agrandir. Elle sera gardée en miniature sur la fiche (« 📄 Page du livre ») pour la regarder quand vous cuisinez.</small></div>
     </div>
     <div class="imp-step" id="impQuick" hidden>
@@ -1057,13 +1052,6 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="field" data-sec="avoid"><span class="label">Midis sans repas à la maison</span><div class="chips" id="p-skip" style="flex-wrap:wrap"></div></div>
     <button class="btn primary" type="submit" data-sec="menus days avoid">Enregistrer</button>
     <div class="field" data-sec="equip" id="equipBox"></div>
-    <div class="field" data-sec="ai">
-      <span class="muted" style="font-size:13px">Pour lire automatiquement une photo de recette, l'appli l'envoie à l'IA Claude d'Anthropic. Il faut une clé personnelle : créez-la sur console.anthropic.com (compte payant à l'usage, quelques centimes par photo), puis collez-la ici. Elle reste sur ce téléphone.</span>
-      <a class="btn" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="align-self:flex-start">Créer ma clé ↗</a>
-      <input id="aiKey" type="password" placeholder="sk-ant-…" autocomplete="off" class="search">
-      <div class="row"><button type="button" class="btn primary" data-act="aiSave">Enregistrer</button><button type="button" class="btn" data-act="aiTest">Tester</button><button type="button" class="btn ghost" data-act="aiDel">Effacer</button></div>
-      <span class="muted" id="aiMsg" style="font-size:13px"></span>
-    </div>
     <div class="field" data-sec="show" style="border-top:1px solid var(--line);padding-top:14px">
       <span class="label">Afficher dans le menu (ce téléphone)</span>
       <div class="pref-row"><div><strong>Vins et boissons</strong></div><div class="chips" id="showWine"></div></div>
@@ -2821,10 +2809,6 @@ document.addEventListener("click",e=>{
   else if(a==="impClip"){navigator.clipboard.readText().then(t=>{if(t&&t.trim()){$("#scanRaw").value=t;impStructure();}else toast("Le presse-papiers est vide");},()=>{$("#scanRaw").focus();toast("Restez appuyé dans le cadre → Coller");});}
   else if(a==="scMv"||a==="scSw"||a==="scRm"||a==="scAdd"){scanCollect();const k=b.dataset.k,i=+b.dataset.i,l=scan[k];
     if(a==="scAdd")l.push("");else if(a==="scRm")l.splice(i,1);else if(a==="scSw"){const[x]=l.splice(i,1);scan[k==="ing"?"steps":"ing"].push(x);}else{const j=i+Number(b.dataset.d);if(j>=0&&j<l.length)[l[i],l[j]]=[l[j],l[i]];}renderScan();}
-  else if(a==="aiSave"){LS.set("cm_aikey",$("#aiKey").value.trim());$("#aiMsg").textContent=$("#aiKey").value.trim()?"✓ Clé enregistrée sur ce téléphone.":"Clé effacée.";}
-  else if(a==="aiDel"){LS.set("cm_aikey","");$("#aiKey").value="";$("#aiMsg").textContent="Clé effacée.";}
-  else if(a==="aiTest"){LS.set("cm_aikey",$("#aiKey").value.trim());$("#aiMsg").textContent="⏳ Test…";aiCall([{type:"text",text:"Réponds juste OK"}],10).then(()=>$("#aiMsg").textContent="✓ La clé fonctionne.",e=>$("#aiMsg").textContent=e&&e.nokey?"Collez d'abord la clé.":e&&e.status===401?"✗ Clé refusée.":"✗ Échec ("+(e&&e.status||"réseau")+")");}
-  else if(a==="aiSetup"){$("#scanSheet").hidden=true;const bb=document.createElement("button");bb.dataset.act="openPrefsAt";bb.dataset.to="ai";bb.hidden=true;document.body.appendChild(bb);bb.click();bb.remove();}
   else if(a==="dict"){startDict(b.dataset.t,b);}
   else if(a==="pageZoom"){b.classList.toggle("big");}
   else if(a==="scanForm"){const r=scanRecipe();$("#scanSheet").hidden=true;openSheet();fillForm(r);toast("Vérifiez puis « Enregistrer la recette »");}
@@ -3015,9 +2999,9 @@ document.addEventListener("click",e=>{
   else if(a==="shareWeek")shareWeek();
   else if(a==="printWeek")printWeek();
   else if(a==="openPrefsAt"){openPrefs();const to=b.dataset.to||"menus"; // each Réglages row shows only its own part
-    const T={ai:"Lecture des photos par IA",equip:"Mon équipement",menus:"Préférences des menus",days:"Style de chaque jour",avoid:"Ingrédients à éviter",show:"Afficher dans le menu",look:"Apparence"};
+    const T={equip:"Mon équipement",menus:"Préférences des menus",days:"Style de chaque jour",avoid:"Ingrédients à éviter",show:"Afficher dans le menu",look:"Apparence"};
     $("#prefTitle").textContent=T[to]||"Préférences";document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=!el.dataset.sec.split(" ").includes(to);});
-    if(to==="equip")renderEquip();if(to==="ai"){$("#aiKey").value=LS.get("cm_aikey","");$("#aiMsg").textContent=LS.get("cm_aikey","")?"✓ Clé enregistrée sur ce téléphone.":"";}$("#prefSheet .sheet-in").scrollTop=0;}
+    if(to==="equip")renderEquip();$("#prefSheet .sheet-in").scrollTop=0;}
   else if(a==="equipSet"){const e=Object.assign({},menu.equip||{}),k=b.dataset.k,v=b.dataset.v;e[k]=k==="crans"||k==="af"?+v:k==="pc"?v==="1":v;menu.equip=e;saveMenu();lastRecHtml="";renderEquip();render();}
   else if(a==="openShare"){renderShare();$("#shareSheet").hidden=false;pollSubs();}
   else if(a==="closeShare"){const n=$("#shareName");if(n&&menu.share&&n.value.trim()!==(menu.share.name||"")){menu.share=Object.assign({},menu.share,{name:n.value.trim()});saveMenu();publishShare(true);}
@@ -3871,29 +3855,10 @@ async function savePagePhoto(id,file){const url=URL.createObjectURL(file);try{co
   lastRecHtml="";if(!$("#recSheet").hidden)renderRecSheet();}catch(e){}finally{URL.revokeObjectURL(url);}}
 function pageHtml(id){const p=LS.get(PAGES,{})[id];return p?`<div class="page-ph"><span class="label">📄 Page du livre</span><img src="${p}" alt="Page du livre" data-act="pageZoom"></div>`:"";}
 function impOpen(withPhoto,fromForm){impFromForm=!!fromForm;impFile=null;scan=null;$("#scanImg").hidden=true;$("#impAi").hidden=true;$("#scanRaw").value="";$("#scanForm").innerHTML="";$("#impFoot").hidden=true;$("#scanMsg").textContent="";
-  aiBusy++;$("#aiStatus").hidden=true;$("#impQuick").classList.remove("busy");$("#impPhoto").hidden=!withPhoto;$("#impQuick").hidden=!withPhoto;$("#impText").hidden=!!withPhoto;$("#impFoot").hidden=!withPhoto;["qi-name","qi-time","qi-ing","qi-steps"].forEach(k=>$("#"+k).value="");$("#qi-serves").value=4;stopDict();$("#impStep2").textContent=withPhoto?"2 · Le texte de la recette":"Le texte de la recette";$("#impTitle").textContent=withPhoto?"📸 Importer une photo":"✨ Coller une recette";
+  $("#impPhoto").hidden=!withPhoto;$("#impQuick").hidden=!withPhoto;$("#impText").hidden=!!withPhoto;$("#impFoot").hidden=!withPhoto;["qi-name","qi-time","qi-ing","qi-steps"].forEach(k=>$("#"+k).value="");$("#qi-serves").value=4;stopDict();$("#impStep2").textContent=withPhoto?"2 · Le texte de la recette":"Le texte de la recette";$("#impTitle").textContent=withPhoto?"📸 Importer une photo":"✨ Coller une recette";
   $("#scanSheet").hidden=false;$("#scanSheet .sheet-in").scrollTop=0;if(!withPhoto)setTimeout(()=>$("#scanRaw").focus(),80);}
 document.addEventListener("change",async e=>{const t=e.target;if(!t.classList||!t.classList.contains("imp-file"))return;const f=t.files&&t.files[0];t.value="";if(!f)return;
-  impFile=f;const u=URL.createObjectURL(f);$("#scanImg").src=u;$("#scanImg").hidden=false;$("#impAi").hidden=false;aiRead(f);});
-/* ---------- automatic reading of a recipe photo by Claude (key stored on this phone) ---------- */
-const AI_MODEL="claude-sonnet-5-5";
-async function imgB64(file,max){const url=URL.createObjectURL(file);try{const img=await loadImg(url),k=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c.toDataURL("image/jpeg",0.85).split(",")[1];}finally{URL.revokeObjectURL(url);}}
-async function aiCall(content,maxTok){const key=LS.get("cm_aikey","");if(!key)throw{nokey:true};
-  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:J({model:AI_MODEL,max_tokens:maxTok||2000,messages:[{role:"user",content}]})});
-  const d=await r.json().catch(()=>({}));if(!r.ok)throw{status:r.status,msg:(d.error&&d.error.message)||""};return(d.content||[]).map(x=>x.text||"").join("");}
-let aiBusy=0;
-async function aiRead(file){const m=$("#aiStatus");const job=++aiBusy;
-  if(!LS.get("cm_aikey","")){m.innerHTML=`Pour que la recette se remplisse toute seule, ajoutez votre clé IA dans <button type="button" class="link" data-act="aiSetup">Réglages › Lecture des photos par IA</button>. En attendant, saisissez ou dictez ci-dessous.`;m.hidden=false;return;}
-  m.innerHTML=`<span class="spin"></span> Analyse de la recette en cours…`;m.hidden=false;$("#impQuick").classList.add("busy");
-  try{const b64=await imgB64(file,1600);
-    const txt=await aiCall([{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:"Lis la recette sur cette photo (page de livre de cuisine). Réponds UNIQUEMENT avec un JSON : {\"titre\":\"\",\"personnes\":4,\"temps_minutes\":0,\"ingredients\":[\"200 g de farine\"],\"etapes\":[\"phrase complète\"]}. Recopie fidèlement en français, une entrée par ingrédient avec sa quantité, une entrée par étape. Si une info manque, mets null."}],2500);
-    if(job!==aiBusy)return;const j=JSON.parse(txt.slice(txt.indexOf("{"),txt.lastIndexOf("}")+1));
-    $("#qi-name").value=j.titre||"";if(j.temps_minutes)$("#qi-time").value=j.temps_minutes;if(j.personnes)$("#qi-serves").value=j.personnes;
-    $("#qi-ing").value=(j.ingredients||[]).join("\n");$("#qi-steps").value=(j.etapes||[]).join("\n");
-    m.innerHTML=`✓ Recette lue : ${(j.ingredients||[]).length} ingrédients, ${(j.etapes||[]).length} étapes. Vérifiez puis « Enregistrer ».`;}
-  catch(e){if(job!==aiBusy)return;m.textContent=e&&e.status===401?"Clé IA refusée : vérifiez-la dans Réglages.":e&&e.status?`L'IA n'a pas pu lire la photo (${e.status}${e.msg?" : "+e.msg:""}). Saisissez ou dictez ci-dessous.`:"Lecture impossible (pas de réseau, ou réponse illisible). Saisissez ou dictez ci-dessous.";}
-  finally{if(job===aiBusy)$("#impQuick").classList.remove("busy");}}
+  impFile=f;const u=URL.createObjectURL(f);$("#scanImg").src=u;$("#scanImg").hidden=false;$("#impAi").hidden=false;});
 function impStructure(){const raw=ocrClean($("#scanRaw").value);if(!raw.trim()){$("#scanMsg").textContent="Collez d'abord le texte de la recette.";return;}
   scan=ocrSplit(raw);renderScan();$("#impFoot").hidden=false;
   $("#scanMsg").textContent=`✓ ${scan.ing.length} ingrédient${scan.ing.length>1?"s":""} et ${scan.steps.length} étape${scan.steps.length>1?"s":""} trouvés. Vérifiez : ⇄ change une ligne de liste, ↑↓ la déplace, ✕ la supprime.`;
