@@ -325,6 +325,9 @@ input,select,textarea{font-size:16px!important}
 .crop-stage canvas{width:100%;height:100%;display:block}
 .crop-zoom{display:flex;align-items:center;gap:10px}.crop-zoom input{flex:1}
 .crop-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.crop-btns .btn{justify-content:center}.crop-btns .btn[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.prop-row{display:flex;flex-direction:column;gap:6px;font-size:13px}.prop-row .btn{align-self:flex-start}
+.prop-box{border:2px solid var(--accent);border-radius:14px;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.prop-it{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}.prop-h{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;align-items:center}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -612,6 +615,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
     </div>
+    <div id="propBox"></div>
     <details class="fr-rec" id="frRecBox"><summary>🧺 Qu'est-ce que je fais avec…</summary><div id="frSlotRec"></div></details>
     <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
     <div class="chips" id="chips"></div>
@@ -1332,7 +1336,7 @@ function render(){
     $("#v-"+v).hidden=view!==v;$("#footCopy").hidden=view==="set";
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
-  applyPacks();refreshThumbs();
+  applyPacks();refreshThumbs();if(view==="rec")renderProps();
   {const f=$("#frForm"),to=view==="rec"?$("#frSlotRec"):view==="menu"?$("#v-menu"):null;if(to&&f.parentNode!==to)to.appendChild(f);} // "Qu'est-ce que je fais avec…" lives on Aujourd'hui and Recettes
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
@@ -2405,14 +2409,78 @@ async function pollSubs(){
   const sh=menu.share;if(!sh||!sh.on||!sh.inbox||subsBusy)return;subsBusy=true;
   try{const r=await fetch(`${NTFY}/${sh.inbox}/json?poll=1&since=${sh.subsSince||"all"}`,{cache:"no-store"});if(!r.ok)throw 0;
     const lines=(await r.text()).split("\n").filter(Boolean);let fresh=[],changed=false;sh.subs=sh.subs||{};
+    let nProps=0;
     for(const l of lines){let m;try{m=JSON.parse(l);}catch(e){continue;}if(m.event!=="message")continue;sh.subsSince=m.id;
+      {const pr=await readProposal(m,sh);if(pr){if(pr==="new")nProps++;changed=true;continue;}}
       const uid=((m.tags||[]).find(t=>/^uid-/.test(t))||"").slice(4),nm=String(m.message||"").match(/^(.+?) a (?:rejoint|ouvert) ton carnet/);
       if(!uid||!nm)continue;const name=nm[1].slice(0,40),at=(m.time||0)*1000,s=sh.subs[uid];
       if(!s){sh.subs[uid]={name,joined:at,seen:at};fresh.push(name);}else{s.name=name;s.seen=Math.max(s.seen||0,at);}changed=true;}
     if(changed||lines.length){saveMenu();if(!$("#shareSheet").hidden)renderShare();}
     if(fresh.length)toast(`🆕 ${fresh.join(", ")} ${fresh.length>1?"ont":"a"} rejoint ton carnet`);
+    if(nProps){renderProps();setTimeout(()=>toast(`📥 ${nProps} recette${nProps>1?"s":""} proposée${nProps>1?"s":""} : voyez l'onglet Recettes`),nProps&&fresh.length?2500:0);}
   }catch(e){}finally{subsBusy=false;}
 }
+/* ---------- recipes proposed by the people who follow my book (they send them to my mailbox; I add or refuse) ---------- */
+const PROP_MAX=3800;
+async function packRecipe(o){const j=J(o);if(j.length<=PROP_MAX)return"j:"+j;
+  try{const cs=new Blob([j]).stream().pipeThrough(new CompressionStream("gzip"));const buf=new Uint8Array(await new Response(cs).arrayBuffer());let bin="";buf.forEach(x=>bin+=String.fromCharCode(x));const z="z:"+btoa(bin);if(z.length<=PROP_MAX)return z;}catch(e){}
+  return null;}
+async function unpackRecipe(t){t=String(t||"");if(t.startsWith("j:"))return JSON.parse(t.slice(2));
+  if(t.startsWith("z:")){const bin=atob(t.slice(2)),u=Uint8Array.from(bin,c=>c.charCodeAt(0));const ds=new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"));return JSON.parse(await new Response(ds).text());}
+  return null;}
+// follower side: what I proposed, and the answers
+let myProps=LS.get("cm_props",{});
+function propsFor(rid){return Object.entries(myProps).filter(([,p])=>p.rid===rid);}
+async function proposeRecipe(rid,f){const r=recipes[rid];if(!r||!f||!f.inbox)return;
+  if(!myName()){toast("Indiquez d'abord votre prénom (Réglages › Partage)");return;}
+  const pid=Object.entries(myProps).find(([,p])=>p.rid===rid&&p.to===f.url&&p.st!=="no")?.[0]||Math.random().toString(36).slice(2,10);
+  const o={name:r.name,cat:r.cat,cats:r.cats,time:r.time,serves:r.serves,ing:(r.ing||[]).map(i=>({q:i.q,u:i.u,n:i.n,r:i.r})),steps:String(r.steps||"")};
+  const ph=rPhotoSrc(rid);if(ph&&/^https:/.test(ph))o.image=ph;
+  const body=await packRecipe(o);if(!body){toast("Recette trop longue pour être envoyée : raccourcissez les étapes");return;}
+  try{const res=await fetch(NTFY+"/",{method:"POST",body:J({topic:f.inbox,title:"Recette proposée",message:body,tags:["recipe","uid-"+myUid(),"pid-"+pid,"by-"+encodeURIComponent(myName()).slice(0,60)],priority:3})});if(!res.ok)throw 0;
+    myProps[pid]={rid,to:f.url,toName:f.name||"",at:Date.now(),sent:Date.now(),n:(myProps[pid]?.n||0)+1,st:"sent"};LS.set("cm_props",myProps);
+    toast(`📤 Proposée à ${f.name||"votre proche"}`);lastRecHtml="";renderRecSheet();}
+  catch(e){toast("Envoi impossible pour l'instant (pas de réseau ?)");}}
+// answers come on <inbox>-ack ; unanswered proposals are sent again (the mailbox keeps messages about 12 h)
+async function pollPropAcks(){const pend=Object.entries(myProps).filter(([,p])=>p.st==="sent");if(!pend.length)return;
+  for(const f of follows){if(!f.inbox||!pend.some(([,p])=>p.to===f.url))continue;
+    try{const r=await fetch(`${NTFY}/${f.inbox}-ack/json?poll=1&since=all`,{cache:"no-store"});if(!r.ok)continue;
+      for(const l of (await r.text()).split("\n").filter(Boolean)){let m;try{m=JSON.parse(l);}catch(e){continue;}if(m.event!=="message")continue;
+        const tg=m.tags||[],pid=(tg.find(t=>/^pid-/.test(t))||"").slice(4);if(!tg.includes("uid-"+myUid())||!myProps[pid])continue;
+        const st=tg.includes("ok")?"ok":tg.includes("no")?"no":"got";if(myProps[pid].st!==st&&!(myProps[pid].st!=="sent"&&st==="got")){myProps[pid].st=st;myProps[pid].ans=(m.time||0)*1000;
+          if(st!=="got")toast(st==="ok"?`✅ ${myProps[pid].toName||"Votre proche"} a ajouté « ${(recipes[myProps[pid].rid]||{}).name||"votre recette"} »`:`${myProps[pid].toName||"Votre proche"} n'a pas retenu « ${(recipes[myProps[pid].rid]||{}).name||"votre recette"} »`);}}
+      LS.set("cm_props",myProps);}catch(e){}}
+  for(const[pid,p]of Object.entries(myProps))if(p.st==="sent"&&Date.now()-p.sent>10*3600e3&&(p.n||0)<8){const f=follows.find(x=>x.url===p.to);if(f&&recipes[p.rid]){const keep=p.n;await proposeRecipe(p.rid,f);if(myProps[pid])myProps[pid].n=keep+1;}}
+  if(!$("#recSheet").hidden){lastRecHtml="";renderRecSheet();}}
+function proposeHtml(id){const r=recipes[id];if(!r||r.shared)return"";const fl=follows.filter(f=>f.inbox);if(!fl.length)return"";
+  const ps=propsFor(id);
+  return`<div class="prop-row">${fl.map(f=>{const p=ps.find(([,x])=>x.to===f.url),st=p&&p[1].st;
+    return st==="ok"?`<span class="muted">✅ Ajoutée par ${esc(f.name||"votre proche")} dans son carnet</span>`
+      :st==="sent"||st==="got"?`<span class="muted">📤 Proposée à ${esc(f.name||"votre proche")} · ${st==="got"?"reçue, ":""}en attente de sa réponse</span> <button type="button" class="link" data-act="propSend" data-id="${esc(id)}" data-f="${esc(f.url)}">Renvoyer</button>`
+      :`<button type="button" class="btn" data-act="propSend" data-id="${esc(id)}" data-f="${esc(f.url)}">📤 Proposer à ${esc(f.name||"mon proche")}${st==="no"?" (à nouveau)":""}</button>`;}).join("")}</div>`;}
+// owner side: the proposals waiting, shown on Recettes
+async function readProposal(m,sh){const tg=m.tags||[];if(!tg.includes("recipe"))return false;
+  const uid=(tg.find(t=>/^uid-/.test(t))||"").slice(4),pid=(tg.find(t=>/^pid-/.test(t))||"").slice(4);if(!uid||!pid)return true;
+  sh.props=sh.props||{};const old=sh.props[pid];if(old&&old.st!=="new"){ackProp(pid,uid,old.st);return true;}
+  let r=null;try{r=await unpackRecipe(m.message);}catch(e){}if(!r||!r.name)return true;
+  let by=decodeURIComponent((tg.find(t=>/^by-/.test(t))||"").slice(3))||(sh.subs&&sh.subs[uid]&&sh.subs[uid].name)||"Un proche";
+  sh.props[pid]={uid,by:by.slice(0,40),at:(m.time||0)*1000,st:"new",r};ackProp(pid,uid,"got");return"new";}
+function ackProp(pid,uid,st){const sh=menu.share;if(!sh||!sh.inbox)return;fetch(NTFY+"/",{method:"POST",body:J({topic:sh.inbox+"-ack",message:st,tags:["uid-"+uid,"pid-"+pid,st],priority:1})}).catch(()=>{});}
+let propOpen=null;
+function renderProps(){const el=$("#propBox");if(!el)return;const sh=menu.share||{},l=Object.entries(sh.props||{}).filter(([,p])=>p.st==="new").sort((a,b)=>b[1].at-a[1].at);
+  if(!l.length){el.innerHTML="";return;}
+  el.innerHTML=`<div class="prop-box"><span class="label">📥 Recettes proposées · ${l.length}</span>${l.map(([pid,p])=>{const r=p.r,op=propOpen===pid;
+    return`<div class="prop-it"><div class="prop-h">${r.image?`<img src="${esc(r.image)}" alt="" class="dish-ph">`:`<span class="dish-ph ph-none">🍽️</span>`}<div><b>${esc(r.name)}</b><div class="muted" style="font-size:12px">de ${esc(p.by)} · ${ago(p.at)}${r.time?" · "+esc(r.time)+" min":""}</div></div></div>
+      ${op?`<ul class="ings">${(r.ing||[]).map(i=>`<li class="q">${esc(fmt(...toBase(i.q,i.u)))}</li><li>${esc(i.n)}</li>`).join("")}</ul>${r.steps?`<ol class="steps">${String(r.steps).split("\n").filter(x=>x.trim()).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}`:""}
+      <div class="row"><button type="button" class="btn primary" data-act="propAdd" data-p="${pid}">Ajouter à mon carnet</button><button type="button" class="btn" data-act="propView" data-p="${pid}">${op?"Masquer":"Voir"}</button><button type="button" class="btn ghost" data-act="propNo" data-p="${pid}">Refuser</button></div></div>`;}).join("")}</div>`;}
+function propAnswer(pid,ok){const sh=menu.share,p=sh&&sh.props&&sh.props[pid];if(!p)return;
+  if(ok){const r=p.r,slug=norm(r.name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette",nid=slug+"-"+Math.random().toString(36).slice(2,6);
+    const n={name:String(r.name).slice(0,120),cat:CATS.includes(r.cat)?r.cat:"Plat",time:Number(r.time)||0,serves:Math.max(1,Number(r.serves)||4),ing:(Array.isArray(r.ing)?r.ing:[]).filter(i=>i&&i.n).map(i=>({q:Number(i.q)||0,u:String(i.u||""),n:String(i.n).slice(0,80),r:String(i.r||"")})),steps:String(r.steps||"").slice(0,6000),createdAt:new Date().toISOString(),proposedBy:p.by};
+    const cs=(Array.isArray(r.cats)?r.cats:[]).filter(c=>CATS.includes(c)&&c!==n.cat);if(cs.length)n.cats=cs;
+    if(r.image&&/^https:\/\/\S+$/.test(r.image))n.pick={u:r.image,src:"photo de "+p.by};
+    saveRecipe(nid,n);toast(`« ${n.name} » ajoutée à votre carnet`);}
+  else toast("Proposition refusée");
+  p.st=ok?"ok":"no";p.done=Date.now();ackProp(pid,p.uid,p.st);saveMenu();renderProps();if(ok)render();}
 const ago=t=>{const d=Math.floor((Date.now()-t)/864e5);return d<=0?"aujourd'hui":d===1?"hier":d<14?`il y a ${d} jours`:`il y a ${Math.round(d/7)} sem.`;};
 function subsHtml(){const sh=menu.share||{};if(!sh.on)return"";const list=Object.entries(sh.subs||{}).filter(([,s])=>!s.hidden).sort((a,b)=>b[1].seen-a[1].seen);
   return`<div class="field" style="border-top:1px solid var(--line);padding-top:14px"><span class="label">Qui suit mon carnet${list.length?" · "+list.length:""}</span>
@@ -2590,6 +2658,10 @@ document.addEventListener("click",e=>{
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
   else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
+  else if(a==="propSend"){const f=follows.find(x=>x.url===b.dataset.f);proposeRecipe(b.dataset.id,f);}
+  else if(a==="propAdd"){propAnswer(b.dataset.p,true);}
+  else if(a==="propNo"){propAnswer(b.dataset.p,false);}
+  else if(a==="propView"){propOpen=propOpen===b.dataset.p?null:b.dataset.p;renderProps();}
   else if(a==="cropCancel"){const c=crop;crop=null;$("#cropSheet").hidden=true;if(c&&c.isNew)toast("Photo non ajoutée");}
   else if(a==="cropOk"){cropSave();}
   else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
@@ -3406,6 +3478,7 @@ function renderRecSheet(){
       <button type="button" data-act="toggle" data-id="${esc(id)}"><span>📅</span>+ Menu</button>
       <button type="button" data-act="recTab" data-v="ing"><span>🛒</span>Courses</button>
       <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button></div>
+    ${proposeHtml(id)}
     ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
     <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
     <div class="rs-body">${body}</div>`;
@@ -3725,7 +3798,7 @@ renderNow(); setInterval(renderNow,20000);
 setTimeout(resumeIfNeeded,120); // back from a website after the phone closed the app: reopen the same place
 // the link stays in the address: an app added to the home screen from it keeps following the book (on iPhone its storage is separate from Safari)
 (()=>{const m=location.search.match(/[?&]carnet=([^&]+)/);if(m){const u=followUrl(decodeURIComponent(m[1]));if(u&&!follows.some(f=>f.url===u))addFollow(u);}
-  refreshFollows();pollSubs();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){refreshFollows();pollSubs();}});})();
+  refreshFollows();pollSubs();pollPropAcks();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){refreshFollows();pollSubs();pollPropAcks();}});})();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&sync)runSync();});
 setInterval(()=>{if(sync&&document.visibilityState==="visible"&&!syncBusy)runSync();},30000);
 /* keep open windows inside the visible area (keyboard on iPhone) */
