@@ -651,7 +651,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between">
       <h2>Recettes</h2>
       <div class="row">
-      <button class="btn" data-act="impPaste">✨ Coller une recette</button>
+      <button class="btn" data-act="impPaste">📝 Texte libre</button>
       <button class="btn" data-act="goFind">Importer du web ↓</button>
       <button class="btn" data-act="impOpen">📸 Importer une photo</button>
       <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
@@ -947,25 +947,15 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="imp-step" id="impPhoto">
       <span class="label">1 · La photo de la page</span>
       <div class="imp-ph"><img id="scanImg" alt="Page photographiée (touchez pour agrandir)" hidden data-act="impZoom"><div class="row" style="gap:8px"><label class="btn">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" class="imp-file" hidden></label><label class="btn">🖼️ Galerie<input type="file" accept="image/*" class="imp-file" hidden></label></div></div>
-      <div id="impAi" class="imp-ai" hidden><small class="muted">Touchez la photo pour l'agrandir. Elle sera gardée en miniature sur la fiche (« 📄 Page du livre ») pour la regarder quand vous cuisinez.</small></div>
+      <div id="impAi" class="imp-ai" hidden><small class="muted">Touchez la photo pour l'agrandir. Elle est gardée sur ce téléphone, en miniature sur la fiche (« 📄 Page du livre »).</small></div>
     </div>
-    <div class="imp-step" id="impQuick" hidden>
-      <span class="label">2 · Saisie rapide (🎤 pour dicter)</span>
-      <label class="field"><span class="label">Titre</span><div class="dict"><input id="qi-name" placeholder="Ex. Tarte aux poireaux"><button type="button" class="mic" data-act="dict" data-t="qi-name" aria-label="Dicter le titre">🎤</button></div></label>
-      <div class="grid2"><label class="field"><span class="label">Temps (min)</span><input id="qi-time" inputmode="numeric"></label><label class="field"><span class="label">Pour (pers.)</span><input id="qi-serves" inputmode="numeric" value="4"></label></div>
-      <label class="field"><span class="label">Ingrédients · un par ligne</span><div class="dict"><textarea id="qi-ing" rows="6" placeholder="200 g de farine&#10;3 œufs&#10;20 cl de crème"></textarea><button type="button" class="mic" data-act="dict" data-t="qi-ing" aria-label="Dicter les ingrédients">🎤</button></div></label>
-      <label class="field"><span class="label">Étapes · une par ligne</span><div class="dict"><textarea id="qi-steps" rows="6" placeholder="Préchauffez le four à 180 °C.&#10;Mélangez la farine et les œufs."></textarea><button type="button" class="mic" data-act="dict" data-t="qi-steps" aria-label="Dicter les étapes">🎤</button></div></label>
-      <small class="muted" id="dictMsg">En dictant, faites une petite pause entre deux ingrédients ou deux étapes : chaque phrase va à la ligne.</small>
+    <div class="imp-step" id="impQuick">
+      <span class="label" id="impStep2">2 · La recette</span>
+      <label class="field"><span class="label">Titre</span><input id="qi-name" placeholder="Ex. Tarte aux poireaux"></label>
+      <label class="field"><span class="label">Texte ou notes</span><textarea id="qi-text" rows="10" class="search" placeholder="Écrivez ou collez ici le texte de la recette, vos notes…"></textarea></label>
     </div>
-    <div class="imp-step" id="impText">
-      <span class="label" id="impStep2">2 · Le texte de la recette</span>
-      <textarea id="scanRaw" rows="7" class="search" placeholder="Collez ici le texte de la recette (copié depuis la photo, un site, un message…)"></textarea>
-      <div class="row" style="gap:8px"><button type="button" class="btn" data-act="impClip">📋 Coller</button><button type="button" class="btn primary" data-act="scanReparse">✨ Structurer automatiquement</button></div>
-      <div id="scanMsg" class="muted" style="font-size:13px"></div>
-    </div>
-    <div id="scanForm" style="display:flex;flex-direction:column;gap:12px"></div>
     <button type="button" class="btn ghost" data-act="scanClose" style="align-self:center">Annuler</button>
-    <div class="add-foot row" style="gap:8px" id="impFoot" hidden><button type="button" class="btn" data-act="scanForm">Ouvrir le formulaire complet</button><button type="button" class="btn primary" data-act="scanSave">✓ Enregistrer la recette</button></div>
+    <div class="add-foot row" style="gap:8px" id="impFoot"><button type="button" class="btn primary" data-act="scanSave" style="flex:1;justify-content:center">✓ Enregistrer la recette</button></div>
   </div>
 </div>
 
@@ -2800,21 +2790,16 @@ document.addEventListener("click",e=>{
   else if(a==="propAdd"){propAnswer(b.dataset.p,true);}
   else if(a==="propNo"){propAnswer(b.dataset.p,false);}
   else if(a==="propView"){propOpen=propOpen===b.dataset.p?null:b.dataset.p;renderProps();}
-  else if(a==="scanClose"){stopDict();$("#scanSheet").hidden=true;scan=null;impFile=null;$("#scanImg").classList.remove("big");if(!impFromForm){view="rec";render();}}
+  else if(a==="scanClose"){$("#scanSheet").hidden=true;impFile=null;$("#scanImg").classList.remove("big");if(!impFromForm){view="rec";render();}}
   else if(a==="impZoom"){$("#scanImg").classList.toggle("big");}
-  else if(a==="scanReparse"){impStructure();}
   else if(a==="impOpen"){impOpen(true);}
   else if(a==="impPaste"){impOpen(false);}
   else if(a==="impOpenForm"){$("#sheet").hidden=true;impOpen(true,true);}
-  else if(a==="impClip"){navigator.clipboard.readText().then(t=>{if(t&&t.trim()){$("#scanRaw").value=t;impStructure();}else toast("Le presse-papiers est vide");},()=>{$("#scanRaw").focus();toast("Restez appuyé dans le cadre → Coller");});}
-  else if(a==="scMv"||a==="scSw"||a==="scRm"||a==="scAdd"){scanCollect();const k=b.dataset.k,i=+b.dataset.i,l=scan[k];
-    if(a==="scAdd")l.push("");else if(a==="scRm")l.splice(i,1);else if(a==="scSw"){const[x]=l.splice(i,1);scan[k==="ing"?"steps":"ing"].push(x);}else{const j=i+Number(b.dataset.d);if(j>=0&&j<l.length)[l[i],l[j]]=[l[j],l[i]];}renderScan();}
-  else if(a==="dict"){startDict(b.dataset.t,b);}
   else if(a==="pageZoom"){b.classList.toggle("big");}
-  else if(a==="scanForm"){const r=scanRecipe();$("#scanSheet").hidden=true;openSheet();fillForm(r);toast("Vérifiez puis « Enregistrer la recette »");}
-  else if(a==="scanSave"){const r=scanRecipe();if(!r.ing.length){toast("Ajoutez au moins un ingrédient");return;}
-    const id=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
-    saveRecipe(id,Object.assign({cat:"Plat"},r,{steps:r.steps.join("\n"),createdAt:new Date().toISOString()}));const ph=null,pf=impFile;stopDict();if(pf)savePagePhoto(id,pf);$("#scanSheet").hidden=true;scan=null;impFile=null;view="rec";render();openRecSheet(id);toast("Recette ajoutée au carnet");if(ph)setRecipePhoto(id,ph);}
+  else if(a==="scanSave"){const name=$("#qi-name").value.trim()||"Recette du livre",text=$("#qi-text").value.replace(/\r/g,"").trim();
+    const id=(norm(name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
+    saveRecipe(id,{name,cat:"Plat",time:0,serves:4,ing:[],steps:text,createdAt:new Date().toISOString()});const pf=impFile;if(pf)savePagePhoto(id,pf);
+    $("#scanSheet").hidden=true;impFile=null;view="rec";render();openRecSheet(id);setTimeout(clearSheetBack,60);toast("Recette ajoutée · ✏️ Modifier pour ajouter les ingrédients aux courses");}
   else if(a==="cropCancel"){const c=crop;crop=null;$("#cropSheet").hidden=true;if(c&&c.isNew)toast("Photo non ajoutée");}
   else if(a==="cropOk"){cropSave();}
   else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
@@ -3834,35 +3819,17 @@ $("#recForm").addEventListener("submit",async e=>{
 
 /* ---------- import a recipe: photo sent to an AI app (or Live Text), then any text is cleaned and sorted into the fields ---------- */
 let impFile=null,impFromForm=false;
-/* dictation in the quick entry: the phone's speech recognition when the browser offers it, else the keyboard microphone */
-let dictRec=null,dictT=null;
-function stopDict(){try{dictRec&&dictRec.stop();}catch(e){}dictRec=null;document.querySelectorAll(".mic.on").forEach(b=>b.classList.remove("on"));}
-function startDict(id,btn){const SR=window.SpeechRecognition||window.webkitSpeechRecognition,el=$("#"+id);
-  if(dictRec&&dictT===id){stopDict();return;}stopDict();
-  if(!SR){el.focus();toast("Touchez le 🎤 du clavier pour dicter");return;}
-  const r=new SR();r.lang="fr-FR";r.continuous=true;r.interimResults=false;dictRec=r;dictT=id;btn.classList.add("on");
-  r.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal){let t=e.results[i][0].transcript.trim();if(!t)continue;
-      if(el.tagName==="INPUT"){el.value=(el.value?el.value+" ":"")+t;continue;}
-      t=t.replace(/(?:^|\s)(?:à la ligne|ligne suivante|point|virgule)(?=\s|$)/gi,"\n").split("\n").map(x=>x.trim()).filter(Boolean).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join("\n");
-      el.value=(el.value.trim()?el.value.replace(/\s+$/,"")+"\n":"")+t;}};
-  r.onerror=e=>{toast(e.error==="not-allowed"?"Micro refusé : autorisez-le, ou utilisez le 🎤 du clavier":"Dictée interrompue");stopDict();};
-  r.onend=()=>{if(dictRec===r)stopDict();};
-  try{r.start();toast("🎤 Je vous écoute… touchez à nouveau pour arrêter");}catch(e){stopDict();el.focus();}}
 const PAGES="cm_pages";
 async function savePagePhoto(id,file){const url=URL.createObjectURL(file);try{const img=await loadImg(url),k=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
   c.getContext("2d").drawImage(img,0,0,c.width,c.height);const m=LS.get(PAGES,{});m[id]=c.toDataURL("image/jpeg",0.7);const ks=Object.keys(m);
   for(;;){try{localStorage.setItem(PAGES,JSON.stringify(m));break;}catch(e){const k2=Object.keys(m).filter(x=>x!==id);if(!k2.length)break;delete m[k2[0]];}}
   lastRecHtml="";if(!$("#recSheet").hidden)renderRecSheet();}catch(e){}finally{URL.revokeObjectURL(url);}}
 function pageHtml(id){const p=LS.get(PAGES,{})[id];return p?`<div class="page-ph"><span class="label">📄 Page du livre</span><img src="${p}" alt="Page du livre" data-act="pageZoom"></div>`:"";}
-function impOpen(withPhoto,fromForm){impFromForm=!!fromForm;impFile=null;scan=null;$("#scanImg").hidden=true;$("#impAi").hidden=true;$("#scanRaw").value="";$("#scanForm").innerHTML="";$("#impFoot").hidden=true;$("#scanMsg").textContent="";
-  $("#impPhoto").hidden=!withPhoto;$("#impQuick").hidden=!withPhoto;$("#impText").hidden=!!withPhoto;$("#impFoot").hidden=!withPhoto;["qi-name","qi-time","qi-ing","qi-steps"].forEach(k=>$("#"+k).value="");$("#qi-serves").value=4;stopDict();$("#impStep2").textContent=withPhoto?"2 · Le texte de la recette":"Le texte de la recette";$("#impTitle").textContent=withPhoto?"📸 Importer une photo":"✨ Coller une recette";
-  $("#scanSheet").hidden=false;$("#scanSheet .sheet-in").scrollTop=0;if(!withPhoto)setTimeout(()=>$("#scanRaw").focus(),80);}
+function impOpen(withPhoto,fromForm){impFromForm=!!fromForm;impFile=null;$("#scanImg").hidden=true;$("#scanImg").classList.remove("big");$("#impAi").hidden=true;$("#qi-name").value="";$("#qi-text").value="";
+  $("#impPhoto").hidden=!withPhoto;$("#impStep2").textContent=withPhoto?"2 · La recette":"La recette";$("#impTitle").textContent=withPhoto?"📸 Importer une photo":"📝 Nouvelle recette (texte libre)";
+  $("#scanSheet").hidden=false;$("#scanSheet .sheet-in").scrollTop=0;if(!withPhoto)setTimeout(()=>$("#qi-name").focus(),80);}
 document.addEventListener("change",async e=>{const t=e.target;if(!t.classList||!t.classList.contains("imp-file"))return;const f=t.files&&t.files[0];t.value="";if(!f)return;
   impFile=f;const u=URL.createObjectURL(f);$("#scanImg").src=u;$("#scanImg").hidden=false;$("#impAi").hidden=false;});
-function impStructure(){const raw=ocrClean($("#scanRaw").value);if(!raw.trim()){$("#scanMsg").textContent="Collez d'abord le texte de la recette.";return;}
-  scan=ocrSplit(raw);renderScan();$("#impFoot").hidden=false;
-  $("#scanMsg").textContent=`✓ ${scan.ing.length} ingrédient${scan.ing.length>1?"s":""} et ${scan.steps.length} étape${scan.steps.length>1?"s":""} trouvés. Vérifiez : ⇄ change une ligne de liste, ↑↓ la déplace, ✕ la supprime.`;
-  setTimeout(()=>$("#scanForm").scrollIntoView({behavior:"smooth",block:"start"}),60);}
 
 // 1. image clean-up: right size, greyscale, contrast stretched (dark text on white)
 async function ocrPrep(file){const url=URL.createObjectURL(file);try{const img=await loadImg(url);
@@ -3894,17 +3861,6 @@ function ocrSplit(t){t=String(t).split("\n").flatMap(l=>l.length<70&&/^\d/.test(
   for(const i of r.ing){const line=[i.q?String(i.q).replace(".",","):"",i.u&&i.u!=="pièce"?i.u:"",i.n].filter(Boolean).join(" ");if(i.n.length>70&&/\b(faites|ajoutez|mettez|versez|laissez|coupez|mélangez|cuire|cuisez)\b/i.test(i.n))st.push(i.n);else ing.push(line);}
   for(const x of r.steps){if(x.length<45&&looksLikeIng(x)&&!/[.!]$/.test(x))ing.push(x);else st.push(x);}
   return{name:r.name,time:r.time||"",serves:r.serves||"",ing,steps:st};}
-let scan=null;
-function scanCollect(){if(!scan)return;const v=id=>{const e=$(id);return e?e.value.trim():"";};scan.name=v("#sc-name");scan.time=v("#sc-time");scan.serves=v("#sc-serves");
-  for(const k of["ing","steps"])scan[k]=[...document.querySelectorAll(`#scanForm [data-l="${k}"]`)].map(e=>e.value.trim());}
-function renderScan(){const s=scan;const row=(k,x,i)=>`<div class="sc-row"><${k==="steps"?"textarea rows=\"2\"":"input"} data-l="${k}" value="${esc(x)}">${k==="steps"?esc(x)+"</textarea>":""}<span class="sc-b"><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="-1" aria-label="Monter">↑</button><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="1" aria-label="Descendre">↓</button><button type="button" data-act="scSw" data-k="${k}" data-i="${i}" aria-label="${k==="ing"?"Vers les étapes":"Vers les ingrédients"}">⇄</button><button type="button" data-act="scRm" data-k="${k}" data-i="${i}" aria-label="Supprimer">✕</button></span></div>`;
-  $("#scanForm").innerHTML=`<label class="field"><span class="label">Titre</span><input id="sc-name" value="${esc(s.name)}" placeholder="Nom de la recette"></label>
-   <div class="grid2"><label class="field"><span class="label">Temps (min)</span><input id="sc-time" inputmode="numeric" value="${esc(s.time)}"></label><label class="field"><span class="label">Pour (pers.)</span><input id="sc-serves" inputmode="numeric" value="${esc(s.serves||4)}"></label></div>
-   <div class="field"><span class="label">Ingrédients · ${s.ing.length}</span>${s.ing.map((x,i)=>row("ing",x,i)).join("")}<button type="button" class="link" data-act="scAdd" data-k="ing">+ ingrédient</button></div>
-   <div class="field"><span class="label">Étapes · ${s.steps.length}</span>${s.steps.map((x,i)=>row("steps",x,i)).join("")}<button type="button" class="link" data-act="scAdd" data-k="steps">+ étape</button></div>`;}
-function scanRecipe(){if(!$("#impQuick").hidden){const v=k=>$("#"+k).value.trim(),lines=k=>v(k).split("\n").map(x=>x.replace(/^[\s•\-–*]+/,"").trim()).filter(Boolean);
-    return{name:v("qi-name")||"Recette du livre",time:Number(v("qi-time"))||0,serves:Number(v("qi-serves"))||4,ing:lines("qi-ing").map(l=>parseIng(l)||{q:0,u:"pièce",n:l,r:"Divers"}).filter(i=>i&&i.n),steps:lines("qi-steps").map(stepText)};}
-  scanCollect();const s=scan;return{name:s.name||"Recette scannée",time:Number(s.time)||0,serves:Number(s.serves)||4,ing:s.ing.filter(Boolean).map(l=>parseIng(l)||{q:0,u:"pièce",n:l,r:"Divers"}).filter(i=>i&&i.n),steps:s.steps.filter(Boolean)};}
 
 /* ---------- what can I make with… ---------- */
 function parseHave(){return $("#frIn").value.split(/[,;\n]| et /).map(norm).filter(x=>x.length>1);}
