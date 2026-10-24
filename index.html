@@ -3843,7 +3843,7 @@ $("#recForm").addEventListener("submit",async e=>{
   const data={name,cat:fc[0],...(fc.length>1?{cats:fc.slice(1)}:{}),time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
   $("#sheet").hidden=true;
   await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}if(formPage){savePagePhoto(id,formPage);formPage=null;}
-  view="rec";openId=id;render();toast("Recette enregistrée");
+  view="rec";render();openRecSheet(id);setTimeout(clearSheetBack,60);toast("Recette enregistrée");
 });
 
 
