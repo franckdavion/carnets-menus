@@ -214,7 +214,7 @@ button{cursor:pointer}
 /* the tab bar stays at the bottom on every page, even over an open window; it hides only while typing */
 .tabs{z-index:25}
 :root.kb .tabs{display:none}
-.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.tabs nav{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
 .tab{border:none;background:none;padding:8px 2px 10px;font-weight:600;font-size:11px;color:var(--muted);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;position:relative;min-width:0}
 .tab .ti{font-size:20px;line-height:1}.tab .badge{position:absolute;top:4px;left:calc(50% + 8px);font-size:10px;padding:0 5px}
 .tab[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 3px 0 var(--accent)}
@@ -562,6 +562,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     </form>
   </section>
 
+  <!-- VINS : la cave -->
+  <section class="view" id="v-wine" hidden></section>
+
   <!-- SEMAINE : menus de la semaine, en liste ou en tableau -->
   <section class="view" id="v-week" hidden>
     <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap"><h2 id="weekTitle">Semaine</h2>
@@ -677,6 +680,7 @@ code{font-family:var(--f-mono);font-size:.92em}
   <button class="tab" role="tab" data-act="tab" data-v="week" id="t-week"><span class="ti" aria-hidden="true">📅</span>Semaine <span class="badge" id="b-menu"></span></button>
   <button class="tab" role="tab" data-act="tab" data-v="rec" id="t-rec"><span class="ti" aria-hidden="true">📖</span>Recettes <span class="badge" id="b-rec" hidden></span></button>
   <button class="tab" role="tab" data-act="tab" data-v="shop" id="t-shop"><span class="ti" aria-hidden="true">🛒</span>Courses <span class="badge" id="b-shop"></span></button>
+  <button class="tab" role="tab" data-act="tab" data-v="wine" id="t-wine"><span class="ti" aria-hidden="true">🍷</span>Vins <span class="badge" id="b-wine" hidden></span></button>
 </nav></div>
 
 <div class="sheet" id="sheet" hidden>
@@ -830,8 +834,8 @@ code{font-family:var(--f-mono);font-size:.92em}
 </div>
 
 <div class="sheet" id="winesSheet" hidden>
-  <div class="sheet-in">
-    <div class="row" style="justify-content:space-between"><h2>Mes vins · ma cave</h2><button type="button" class="btn primary" data-act="closeWines">Fermer</button></div>
+  <div class="sheet-in" id="winesIn">
+    <div class="row" style="justify-content:space-between"><h2>Ma cave à vins</h2><button type="button" class="btn primary" data-act="closeWines">Fermer</button></div>
     <input class="search" id="winesQ" type="search" placeholder="Chercher : Bordeaux, Pinot noir, 2018…" autocomplete="off">
     <div class="row"><button type="button" class="btn" data-act="wineNewFree">+ Ajouter un vin</button><span class="chips" id="winesMode"></span></div>
     <div id="winesList" style="display:flex;flex-direction:column"></div>
@@ -1082,7 +1086,7 @@ let recipes={};
 let menu={people:4,weeks:{},checked:{},extras:[]};
 let mode="loading", db=null, menuRef=null;
 // page shown when the app opens: chosen in Réglages, or the last one used
-const START_VIEWS=[["last","Dernière utilisée"],["menu","Aujourd'hui"],["week","Semaine"],["rec","Recettes"],["shop","Courses"]];
+const START_VIEWS=[["last","Dernière utilisée"],["menu","Aujourd'hui"],["week","Semaine"],["rec","Recettes"],["shop","Courses"],["wine","Vins"]];
 let view=(()=>{const s=LS.get("cm_start","last");return s!=="last"&&START_VIEWS.some(x=>x[0]===s)?s:LS.get("cm_view","menu");})();
 function renderStart(){const el=$("#startChips");if(!el)return;const s=LS.get("cm_start","last");
   el.innerHTML=START_VIEWS.map(([v,l])=>`<button type="button" class="chip" data-act="startView" data-v="${v}" aria-pressed="${s===v}">${l}</button>`).join("");}
@@ -1383,11 +1387,11 @@ $("#syncForm").addEventListener("submit",e=>{
 function render(){
   $("#pplN").textContent=menu.people;
   $("#pplMinus").disabled=menu.people<=1;
-  for(const v of["menu","week","rec","shop","set"]){
+  for(const v of["menu","week","rec","shop","wine","set"]){
     $("#v-"+v).hidden=view!==v;$("#footCopy").hidden=view==="set";
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
-  applyPacks();refreshThumbs();{const uf=$("#useFirst");if(uf)uf.innerHTML=useFirstHtml();}if(view==="rec")renderProps();
+  applyPacks();refreshThumbs();if(view==="wine")renderWines();{const uf=$("#useFirst");if(uf)uf.innerHTML=useFirstHtml();}if(view==="rec")renderProps();
   {const f=$("#frForm"),to=view==="rec"?$("#frSlotRec"):view==="menu"?$("#v-menu"):null;if(to&&f.parentNode!==to)to.appendChild(f);} // "Qu'est-ce que je fais avec…" lives on Aujourd'hui and Recettes
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
@@ -2188,7 +2192,7 @@ function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared
     ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(src)return`<div class="rp${big?" big":""}"><img src="${src}" alt="Photo de ${esc(r.name)}" loading="lazy">${from?`<span class="muted" style="font-size:12px">Photo de ${esc(from)}</span>`:""}${r.shared?"":r.photo?`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button><button type="button" class="btn ghost" data-act="rphotoRm" data-id="${esc(id)}">Retirer</button></div>`:`<div class="row rp-acts">${pick("📷 Mettre ma photo")}</div>`}</div>`;
   return pick("📷 Ajouter ma photo")+(r.shared?"":`<button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Chercher une photo</button>`)+(r.noAuto&&!r.shared?`<button type="button" class="btn ghost" data-act="autoOn" data-id="${esc(id)}">Photo d'illustration</button>`:"");}
-const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Bulles"],["bière","Bière"],["autre","Autre"]];
+const WCOLORS=[["rouge","Rouge"],["blanc","Blanc"],["rosé","Rosé"],["effervescent","Pétillant"],["bière","Bière"],["autre","Autre"]];
 let wineDraft=null;
 function wineFor(k,week){return(menu.wines||[]).filter(w=>w.k===k&&w.w===(week||curWeek));}
 function openWine(opts){
@@ -2218,7 +2222,7 @@ function renderWineForm(){
     <datalist id="w-recs">${Object.values(recipes).filter(r=>!r.shared||true).map(r=>`<option value="${esc(r.name)}">`).slice(0,900).join("")}</datalist>
     <label class="field"><span class="label">À servir avec un repas prévu</span><select id="w-meal"><option value="">—</option>${upcomingMeals().map(m=>`<option value="${m.w}#${m.k}"${d.w===m.w&&d.k===m.k?" selected":""}>${esc(m.label)}</option>`).join("")}</select></label>
     <div class="field"><span class="label">Ma note</span><div class="stars">${[1,2,3,4,5].map(i=>`<button type="button" data-act="wineNote" data-v="${i}" aria-label="${i} sur 5" class="${d.note>=i?"on":""}">★</button>`).join("")}</div></div>
-    <label class="field"><span class="label">Commentaire</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
+    <label class="field"><span class="label">Notes de dégustation</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
     ${d.color!=="bière"&&(d.name||d.app)?`<div>${vivinoLink([d.name,d.app].filter(Boolean).join(" "),"Voir ce vin sur Vivino")}</div>`:""}
     <div class="row"><button type="button" class="btn primary" data-act="wineSave">Enregistrer</button>${d._new?"":`<button type="button" class="btn danger" data-act="wineDel">Supprimer</button>`}</div>`;
   $("#wineFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
@@ -2248,14 +2252,14 @@ function wineSave(){
   if(d.k){const s=(menu.weeks[d.w]||{})[d.k];if(s){const tag=d.color==="bière"?"Bière":"Vin";if(!(s.extra||[]).includes(tag))s.extra=[...(s.extra||[]),tag];}}
   wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();if(!$("#sideSheet").hidden)renderSide();renderWines();toast("Enregistré dans Mes vins");
 }
-let wineQ="",winesMode="all";
+let wineQ="",winesMode=(LS.get("cm_menu",{}).wines||[]).some(w=>w.stock>0)?"cave":"all";
 function renderWines(){
-  if(!$("#winesSheet")||$("#winesSheet").hidden)return;
+  if(view!=="wine")return;
   $("#winesMode").innerHTML=[["all","Tous"],["cave","🍾 En cave"]].map(([v,l])=>`<button type="button" class="chip" data-act="winesMode" data-v="${v}" aria-pressed="${winesMode===v}">${l}</button>`).join("");
   const q=norm(wineQ), list=(menu.wines||[]).filter(w=>(winesMode!=="cave"||(w.stock||0)>0)&&(!q||norm([w.name,w.app,w.year,w.grapes,w.color,w.comment,w.rec&&recipes[w.rec]?recipes[w.rec].name:""].join(" ")).includes(q)));
   $("#winesList").innerHTML=list.length?list.map(w=>{const src=wPhotoSrc(w);return`<button type="button" class="wine-row" data-act="wineOpen" data-id="${w.id}">
       <span class="wine-thumb">${src?`<img src="${src}" alt="">`:(w.color==="bière"?"🍺":"🍷")}</span>
-      <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,w.color].filter(Boolean).join(" · "))}</span>
+      <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,(WCOLORS.find(c=>c[0]===w.color)||[0,w.color])[1]].filter(Boolean).join(" · "))}</span>
       ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span>${w.rec&&recipes[w.rec]?`<span class="sub">🍽️ avec ${esc(recipes[w.rec].name)}</span>`:""}</span></button>
       <div class="wine-stock"><span>🍾 En cave : <b>${w.stock||0}</b></span><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="-1" aria-label="Une bouteille de moins">−</button><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="1" aria-label="Une bouteille de plus">+</button></div>${w.color!=="bière"&&(w.name||w.app)?`<div class="wine-viv">${vivinoLink([w.name,w.app].filter(Boolean).join(" "))}</div>`:""}`;}).join("")
     :`<p class="muted">${(menu.wines||[]).length?"Aucun vin ne correspond.":"Aucun vin noté pour l'instant. Dans « En plus » d'un repas, touchez Vin ou Bière puis « Noter ce que j'ai bu »."}</p>`;
@@ -2883,7 +2887,7 @@ document.addEventListener("click",e=>{
   else if(a==="wineSave")wineSave();
   else if(a==="wineDel"){const id=wineDraft&&wineDraft.id;menu.wines=(menu.wines||[]).filter(w=>w.id!==id);const m=wPhotos();delete m[id];try{localStorage.setItem(WPH,JSON.stringify(m));}catch(x){}
     wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();renderWines();if(!$("#sideSheet").hidden)renderSide();toast("Vin supprimé");}
-  else if(a==="openWines"){wineQ="";$("#winesQ").value="";$("#winesSheet").hidden=false;renderWines();}
+  else if(a==="openWines"){wineQ="";$("#winesQ").value="";document.querySelectorAll(".sheet").forEach(x=>x.hidden=true);view="wine";LS.set("cm_view",view);render();}
   else if(a==="winesMode"){winesMode=b.dataset.v;renderWines();}
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
@@ -3864,6 +3868,8 @@ async function pollImports(){
 }
 
 /* ---------- boot ---------- */
+{const v=$("#v-wine"),inn=$("#winesIn");while(inn.firstChild)v.appendChild(inn.firstChild);const h=v.querySelector(".row");if(h){h.querySelector("[data-act=closeWines]")?.remove();}
+  const b=document.createElement("p");b.className="muted";b.style.cssText="margin:0;font-size:13px";b.textContent="Vos bouteilles : ajoutez-les avec leur appellation, type, millésime et quantité ; touchez − / + quand vous en ouvrez ou en achetez. Liez un vin à une recette ou à un repas prévu dans sa fiche.";h&&h.after(b);}
 (()=>{const w=$("#welcome");if(!w)return;const h=new Date().getHours(),nm=myName&&myName();
   $("#welcomeSub").textContent=(h<11?"Bonjour":h<18?"Bon après-midi":"Bonsoir")+(nm?" "+nm:"")+" · "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
   w.hidden=false;const close=()=>{if(w.hidden)return;w.classList.add("out");setTimeout(()=>{w.hidden=true;w.classList.remove("out");},400);};w.addEventListener("click",close);setTimeout(close,3500);})();
@@ -3931,7 +3937,7 @@ function resumeIfNeeded(){const r=LS.get("cm_resume",null);if(!r)return;LS.set("
 // the app is still alive when we come back: nothing to restore
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")LS.set("cm_resume",null);});
 /* swipe left / right on a page to go to the next / previous tab */
-(()=>{const ORDER=["menu","week","rec","shop"];let x0=0,y0=0,t0=0,ok=false;
+(()=>{const ORDER=["menu","week","rec","shop","wine"];let x0=0,y0=0,t0=0,ok=false;
   document.addEventListener("touchstart",e=>{const t=e.touches[0];ok=e.touches.length===1;x0=t.clientX;y0=t.clientY;t0=Date.now();
     const el=e.target;if([...document.querySelectorAll(".sheet")].some(s=>!s.hidden)||el.closest(".sheet,.tabs,input,textarea,select,.undo-bar")){ok=false;return;}
     for(let n=el;n&&n!==document.body;n=n.parentElement){const cs=getComputedStyle(n);if(/(auto|scroll)/.test(cs.overflowX)&&n.scrollWidth>n.clientWidth+2){ok=false;return;}} // a row that scrolls sideways keeps the gesture
