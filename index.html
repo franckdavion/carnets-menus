@@ -333,6 +333,9 @@ input,select,textarea{font-size:16px!important}
 .welcome-ic{font-size:42px}.welcome-in b{font-family:var(--font-title,inherit);font-size:21px}.welcome-in small{color:var(--muted);font-size:14px}
 @keyframes wIn{from{opacity:0}to{opacity:1}}
 .plats{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.wine-stock{display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:13px;padding:0 4px 10px;border-bottom:1px solid var(--line)}
+.bump-b{flex-direction:column;align-items:flex-start;text-align:left;gap:3px;padding:12px 14px;white-space:normal}.bump-b small{color:var(--muted);font-weight:400;font-size:12.5px}
+.use-first{border:1px solid var(--line);border-left:4px solid #2A5CAA;border-radius:0 14px 14px 0;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -547,6 +550,7 @@ code{font-family:var(--f-mono);font-size:.92em}
   <!-- AUJOURD'HUI -->
   <section class="view" id="v-menu">
     <div class="today" id="today"></div>
+    <div id="useFirst"></div>
     <div class="idea" id="idea"></div>
     <form class="idea" id="frForm">
       <span class="label">Qu'est-ce que je fais avec…</span>
@@ -827,9 +831,9 @@ code{font-family:var(--f-mono);font-size:.92em}
 
 <div class="sheet" id="winesSheet" hidden>
   <div class="sheet-in">
-    <div class="row" style="justify-content:space-between"><h2>Mes vins</h2><button type="button" class="btn primary" data-act="closeWines">Fermer</button></div>
+    <div class="row" style="justify-content:space-between"><h2>Mes vins · ma cave</h2><button type="button" class="btn primary" data-act="closeWines">Fermer</button></div>
     <input class="search" id="winesQ" type="search" placeholder="Chercher : Bordeaux, Pinot noir, 2018…" autocomplete="off">
-    <button type="button" class="btn" data-act="wineNewFree" style="align-self:flex-start">+ Noter un vin</button>
+    <div class="row"><button type="button" class="btn" data-act="wineNewFree">+ Ajouter un vin</button><span class="chips" id="winesMode"></span></div>
     <div id="winesList" style="display:flex;flex-direction:column"></div>
   </div>
 </div>
@@ -881,6 +885,17 @@ code{font-family:var(--f-mono);font-size:.92em}
       <button type="button" class="btn" data-act="cropReset">Recommencer</button>
     </div>
     <button type="button" class="btn primary" data-act="cropOk" style="width:100%;justify-content:center">Valider</button>
+  </div>
+</div>
+
+<div class="sheet" id="bumpSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Les courses sont déjà faites</h2><button type="button" class="btn ghost" data-act="bumpClose">Annuler</button></div>
+    <p class="muted" style="margin:0" id="bumpTxt"></p>
+    <button type="button" class="btn bump-b" data-act="bumpGo" data-v="later">📅 Reporter ce plat à la semaine prochaine<small>même jour si c'est libre, puis vous choisissez le remplaçant</small></button>
+    <button type="button" class="btn bump-b" data-act="bumpGo" data-v="first">🧊 Garder les ingrédients à consommer en priorité (ou à congeler)<small>ils s'affichent sur Aujourd'hui, puis vous choisissez le remplaçant</small></button>
+    <button type="button" class="btn bump-b" data-act="bumpGo" data-v="fridge">🧺 Trouver une recette avec ce que j'ai acheté<small>« Qu'est-ce que je fais avec… » rempli avec ces ingrédients</small></button>
+    <button type="button" class="btn ghost" data-act="bumpGo" data-v="just">Changer quand même</button>
   </div>
 </div>
 
@@ -1126,6 +1141,19 @@ function platsFor(r,p){const S=r.serves||4;return p<=Math.ceil(S*1.5)?1:Math.cei
 function ingMult(r,i,p){const S=r.serves||4;if(!dishOf(r))return p/S;const k=platsFor(r,p);if(k>1)return k;return FIXED_RE.test(i.n||"")?1:p/S;}
 function platsLine(r,p,id){const d=dishOf(r);if(!d)return"";const k=platsFor(r,p);
   return`<span class="plats"><span>— ${k} ${k>1?d.many:d.one}</span><span class="ctl"><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="-1" ${k<=1?"disabled":""} aria-label="Un plat de moins">−</button><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="1" aria-label="Un plat de plus">+</button></span></span>`;}
+/* ---------- a meal changed after its shopping was done: postpone it, keep its ingredients to use first, or cook something with them ---------- */
+let bumpCtx=null;
+function mealBought(w,k){const s=((menu.weeks||{})[w]||{})[k];if(!s||!recipes[s.id]||!s.lock)return false;const dt=ymd(addDays(parseYmd(w),DAYS.indexOf(k.split("|")[0])));
+  const st=mealState(k,s,dt);return!!st&&st[0]==="p3";}
+function bumpDo(c,v){const s=menu.weeks[c.w][c.k],r=recipes[s.id];
+  if(v==="later"){const nw=ymd(addDays(parseYmd(c.w),7));menu.weeks[nw]=menu.weeks[nw]||{};const wk=menu.weeks[nw];
+    const order=[c.k,...SLOT_ORDER.filter(x=>x!==c.k)],dest=order.find(x=>!wk[x]||!recipes[wk[x].id]);
+    if(dest){wk[dest]={id:s.id,n:s.n};toast(`« ${r.name} » reporté à ${slotLabel(dest)} (semaine prochaine)`);}else toast("La semaine prochaine est complète : plat non reporté");}
+  if(v==="first"){menu.useFirst=[...(menu.useFirst||[]),{id:"u"+Date.now().toString(36),name:r.name,ing:(r.ing||[]).filter(i=>!/sel|poivre|huile|eau\b/i.test(i.n)).map(i=>i.n).slice(0,12),at:ymd(new Date())}];toast("Ingrédients notés sur Aujourd'hui : à consommer vite ou à congeler");}
+  if(v==="fridge"){$("#frIn").value=(r.ing||[]).filter(i=>!PANTRY.test(i.n)).map(i=>i.n).slice(0,6).join(", ");view="rec";render();$("#frRecBox").open=true;runFridge();setTimeout(()=>$("#frRecBox").scrollIntoView({behavior:"smooth",block:"start"}),100);saveMenu();return;}
+  saveMenu();const btn=document.createElement("button");btn.dataset.act="shopSwap";btn.dataset.w=c.w;btn.dataset.k=c.k;btn.dataset.go="1";btn.hidden=true;document.body.appendChild(btn);btn.click();btn.remove();}
+function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
+  return`<div class="use-first"><span class="label">🧊 À consommer en priorité (ou à congeler)</span>${l.map(x=>`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span style="font-size:14px"><b>${esc(x.ing.join(", "))}</b><br><small class="muted">achetés pour ${esc(x.name)}</small></span><button type="button" class="btn ghost" data-act="useFirstDone" data-id="${x.id}">✓ Fait</button></div>`).join("")}</div>`;}
 function shopping(all){
   const acc={};
   const add=(rid,n,when,role)=>{n=n*portionFactor(recipes[rid],role);
@@ -1359,7 +1387,7 @@ function render(){
     $("#v-"+v).hidden=view!==v;$("#footCopy").hidden=view==="set";
     $("#t-"+v).setAttribute("aria-selected",view===v);
   }
-  applyPacks();refreshThumbs();if(view==="rec")renderProps();
+  applyPacks();refreshThumbs();{const uf=$("#useFirst");if(uf)uf.innerHTML=useFirstHtml();}if(view==="rec")renderProps();
   {const f=$("#frForm"),to=view==="rec"?$("#frSlotRec"):view==="menu"?$("#v-menu"):null;if(to&&f.parentNode!==to)to.appendChild(f);} // "Qu'est-ce que je fais avec…" lives on Aujourd'hui and Recettes
   const ids=filledSlots();
   $("#b-menu").textContent=ids.length||""; $("#b-menu").hidden=!ids.length;
@@ -2185,6 +2213,10 @@ function renderWineForm(){
       <datalist id="w-apps">${APPELLATIONS.map(a=>`<option value="${esc(a[0])}">`).join("")}</datalist>
       <label class="field"><span class="label">Cépages</span><input id="w-grapes" value="${esc(d.grapes)}" placeholder="Remplis selon l'appellation" autocomplete="off"></label>
       <span class="muted" id="w-gnote" style="font-size:12px">${d.grapesAuto?"Cépages typiques de l'appellation : ils peuvent varier selon le domaine.":""}</span>`}
+    <div class="pref-row"><div><strong>En cave</strong><div class="muted" style="font-size:13px">bouteilles qu'il vous reste</div></div><div class="ctl"><button type="button" class="step sm" data-act="wStock" data-d="-1" aria-label="Une bouteille de moins">−</button><span class="n">${d.stock||0}</span><button type="button" class="step sm" data-act="wStock" data-d="1" aria-label="Une bouteille de plus">+</button></div></div>
+    <label class="field"><span class="label">Va bien avec la recette</span><input id="w-rec" value="${esc(d.rec&&recipes[d.rec]?recipes[d.rec].name:"")}" list="w-recs" placeholder="Ex. Bœuf bourguignon" autocomplete="off"></label>
+    <datalist id="w-recs">${Object.values(recipes).filter(r=>!r.shared||true).map(r=>`<option value="${esc(r.name)}">`).slice(0,900).join("")}</datalist>
+    <label class="field"><span class="label">À servir avec un repas prévu</span><select id="w-meal"><option value="">—</option>${upcomingMeals().map(m=>`<option value="${m.w}#${m.k}"${d.w===m.w&&d.k===m.k?" selected":""}>${esc(m.label)}</option>`).join("")}</select></label>
     <div class="field"><span class="label">Ma note</span><div class="stars">${[1,2,3,4,5].map(i=>`<button type="button" data-act="wineNote" data-v="${i}" aria-label="${i} sur 5" class="${d.note>=i?"on":""}">★</button>`).join("")}</div></div>
     <label class="field"><span class="label">Commentaire</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
     ${d.color!=="bière"&&(d.name||d.app)?`<div>${vivinoLink([d.name,d.app].filter(Boolean).join(" "),"Voir ce vin sur Vivino")}</div>`:""}
@@ -2193,8 +2225,12 @@ function renderWineForm(){
     try{wineCollect();wineDraft._photo=await shrinkPhoto(f);renderWineForm();}catch(x){toast("Photo illisible, réessayez");}});
   const app=$("#w-app");if(app)app.addEventListener("change",()=>{const a=findAppellation(app.value),g=$("#w-grapes");if(a&&g&&!g.value.trim()){g.value=grapesForColor(a[3],wineDraft.color);$("#w-gnote").textContent="Cépages typiques de l'appellation : ils peuvent varier selon le domaine.";wineDraft.grapesAuto=true;}});
 }
+// the meals of the next 3 weeks that have a dish, to serve a wine with
+function upcomingMeals(){const out=[],today=ymd(new Date());for(let wi=0;wi<3;wi++){const w=ymd(addDays(mondayOf(new Date()),7*wi)),wk=(menu.weeks||{})[w]||{};
+  DAYS.forEach((dn,i)=>{const dt=addDays(parseYmd(w),i);if(ymd(dt)<today)return;MEALS.forEach(([m,lab])=>{const k=slotKey(dn,m),s=wk[k];if(s&&recipes[s.id])out.push({w,k,label:`${dn} ${dt.getDate()} ${lab.toLowerCase()} · ${recipes[s.id].name}`});});});}return out;}
 function wineCollect(){const d=wineDraft,v=id=>{const e=$(id);return e?e.value.trim():undefined;};
-  d.name=v("#w-name")??d.name;if($("#w-app")){d.app=v("#w-app");d.year=v("#w-year");d.grapes=v("#w-grapes");}d.comment=v("#w-comment")??d.comment;}
+  d.name=v("#w-name")??d.name;{const rn=v("#w-rec");if(rn!==undefined){const id=Object.keys(recipes).find(k=>recipes[k].name===rn);if(id)d.rec=id;else if(!rn)delete d.rec;}
+    const ml=$("#w-meal");if(ml&&ml.value){const[w,k]=ml.value.split("#");d.w=w;d.k=k;delete d.date;}}if($("#w-app")){d.app=v("#w-app");d.year=v("#w-year");d.grapes=v("#w-grapes");}d.comment=v("#w-comment")??d.comment;}
 /* Vivino: open the search for a wine (its name, else its appellation) */
 function vivinoUrl(q){return"https://www.vivino.com/search/wines?q="+encodeURIComponent(String(q).trim());}
 function vivinoLink(q,label){return q?`<a class="vivino" href="${vivinoUrl(q)}" target="_blank" rel="noopener">${label||"Voir sur Vivino"} ↗</a>`:"";}
@@ -2212,14 +2248,16 @@ function wineSave(){
   if(d.k){const s=(menu.weeks[d.w]||{})[d.k];if(s){const tag=d.color==="bière"?"Bière":"Vin";if(!(s.extra||[]).includes(tag))s.extra=[...(s.extra||[]),tag];}}
   wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();if(!$("#sideSheet").hidden)renderSide();renderWines();toast("Enregistré dans Mes vins");
 }
-let wineQ="";
+let wineQ="",winesMode="all";
 function renderWines(){
   if(!$("#winesSheet")||$("#winesSheet").hidden)return;
-  const q=norm(wineQ), list=(menu.wines||[]).filter(w=>!q||norm([w.name,w.app,w.year,w.grapes,w.color,w.comment].join(" ")).includes(q));
+  $("#winesMode").innerHTML=[["all","Tous"],["cave","🍾 En cave"]].map(([v,l])=>`<button type="button" class="chip" data-act="winesMode" data-v="${v}" aria-pressed="${winesMode===v}">${l}</button>`).join("");
+  const q=norm(wineQ), list=(menu.wines||[]).filter(w=>(winesMode!=="cave"||(w.stock||0)>0)&&(!q||norm([w.name,w.app,w.year,w.grapes,w.color,w.comment,w.rec&&recipes[w.rec]?recipes[w.rec].name:""].join(" ")).includes(q)));
   $("#winesList").innerHTML=list.length?list.map(w=>{const src=wPhotoSrc(w);return`<button type="button" class="wine-row" data-act="wineOpen" data-id="${w.id}">
       <span class="wine-thumb">${src?`<img src="${src}" alt="">`:(w.color==="bière"?"🍺":"🍷")}</span>
       <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,w.color].filter(Boolean).join(" · "))}</span>
-      ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span></span></button>${w.color!=="bière"&&(w.name||w.app)?`<div class="wine-viv">${vivinoLink([w.name,w.app].filter(Boolean).join(" "))}</div>`:""}`;}).join("")
+      ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span>${w.rec&&recipes[w.rec]?`<span class="sub">🍽️ avec ${esc(recipes[w.rec].name)}</span>`:""}</span></button>
+      <div class="wine-stock"><span>🍾 En cave : <b>${w.stock||0}</b></span><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="-1" aria-label="Une bouteille de moins">−</button><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="1" aria-label="Une bouteille de plus">+</button></div>${w.color!=="bière"&&(w.name||w.app)?`<div class="wine-viv">${vivinoLink([w.name,w.app].filter(Boolean).join(" "))}</div>`:""}`;}).join("")
     :`<p class="muted">${(menu.wines||[]).length?"Aucun vin ne correspond.":"Aucun vin noté pour l'instant. Dans « En plus » d'un repas, touchez Vin ou Bière puis « Noter ce que j'ai bu »."}</p>`;
 }
 
@@ -2786,6 +2824,11 @@ document.addEventListener("click",e=>{
   else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
     const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
   else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
+  else if(a==="shopSwap"&&!b.dataset.go&&mealBought(b.dataset.w,b.dataset.k)){bumpCtx={w:b.dataset.w,k:b.dataset.k};const s=menu.weeks[bumpCtx.w][bumpCtx.k];
+    $("#bumpTxt").textContent=`« ${recipes[s.id].name} » (${slotLabel(bumpCtx.k)}) : ses ingrédients ont déjà été achetés. Que voulez-vous en faire ?`;$("#bumpSheet").hidden=false;}
+  else if(a==="bumpClose"){$("#bumpSheet").hidden=true;bumpCtx=null;}
+  else if(a==="bumpGo"){const c=bumpCtx;if(!c)return;$("#bumpSheet").hidden=true;bumpCtx=null;bumpDo(c,b.dataset.v);}
+  else if(a==="useFirstDone"){menu.useFirst=(menu.useFirst||[]).filter(x=>x.id!==b.dataset.id);saveMenu();render();}
   else if(a==="shopSwap"){const w=b.dataset.w,k=b.dataset.k;shopSwapCtx={w,k};if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}openPick(k,"main");}
   else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock)t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
   else if(a==="lockYes")lockConfirm();
@@ -2828,6 +2871,7 @@ document.addEventListener("click",e=>{
   else if(a==="histDay"){histSel=b.dataset.d;renderHist();}
   else if(a==="wineNew"){openWine({k:sideKey,beer:b.dataset.beer==="1"});}
   else if(a==="wineNewFree"){openWine({});}
+  else if(a==="wineOpen"&&b.closest("#recSheet")&&($("#recSheet").hidden=true,false)){}
   else if(a==="wineOpen"){openWine({id:b.dataset.id});}
   else if(a==="closeWine"){wineDraft=null;$("#wineSheet").hidden=true;}
   else if(a==="winePhotoAgain"){$("#wineFile").click();}
@@ -2840,6 +2884,9 @@ document.addEventListener("click",e=>{
   else if(a==="wineDel"){const id=wineDraft&&wineDraft.id;menu.wines=(menu.wines||[]).filter(w=>w.id!==id);const m=wPhotos();delete m[id];try{localStorage.setItem(WPH,JSON.stringify(m));}catch(x){}
     wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();renderWines();if(!$("#sideSheet").hidden)renderSide();toast("Vin supprimé");}
   else if(a==="openWines"){wineQ="";$("#winesQ").value="";$("#winesSheet").hidden=false;renderWines();}
+  else if(a==="winesMode"){winesMode=b.dataset.v;renderWines();}
+  else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
+  else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
   else if(a==="wcell"){const k=b.dataset.k;slotK=k;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
   else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
@@ -3294,7 +3341,7 @@ function renderToday(){
   const next=(()=>{for(const[m]of MEALS){const k=slotKey(day,m),s=sl[k];if(s&&recipes[s.id]&&!(m==="midi"?hr>=15:hr>=22)&&stepsFor(s.id).steps.length)return s;}return null;})();
   el.innerHTML=rateCards+(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
     ${next?`<button type="button" class="btn primary today-cook" data-act="cook" data-id="${esc(next.id)}">👨‍🍳 Cuisiner : ${esc(recipes[next.id].name)}</button>`:""}
-    <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="tab" data-v="week">📅 Ma semaine</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
+    <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="tab" data-v="week">📅 Ma semaine</button><button type="button" class="pill" data-act="openWines">🍷 Ma cave</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
   document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=false;});$("#prefTitle").textContent="Préférences de la semaine";
@@ -3489,7 +3536,7 @@ function renderRecSheet(){
       ${platsLine(r,p,id)}<span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}${dishOf(r)?` (1 ${dishOf(r).one})`:""}</span></div>
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
   else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+modeChips(id,sx)+prepHtml(sx.prep)+batchNote(sx,p)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
-  else body=(r.shared?"":`<div class="row" style="justify-content:flex-end">${confirmDel===id?`<span>Supprimer cette recette${slotsOf(id).length?" (elle sera retirée du menu et des courses)":""} ?</span><button type="button" class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button type="button" class="btn ghost" data-act="delNo">Annuler</button>`:`<button type="button" class="btn ghost" data-act="del" data-id="${esc(id)}">🗑️ Supprimer la recette</button>`}</div>`)+`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
+  else body=(()=>{const ws=(menu.wines||[]).filter(w=>w.rec===id);return ws.length?`<div class="note">🍾 Dans votre cave pour ce plat : ${ws.map(w=>`<button type="button" class="link" data-act="wineOpen" data-id="${w.id}">${esc(wineLabel(w))}${w.stock?` (${w.stock})`:" (plus en stock)"}</button>`).join(", ")}</div>`:"";})()+(r.shared?"":`<div class="row" style="justify-content:flex-end">${confirmDel===id?`<span>Supprimer cette recette${slotsOf(id).length?" (elle sera retirée du menu et des courses)":""} ?</span><button type="button" class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button type="button" class="btn ghost" data-act="delNo">Annuler</button>`:`<button type="button" class="btn ghost" data-act="del" data-id="${esc(id)}">🗑️ Supprimer la recette</button>`}</div>`)+`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
     <div class="nat-box">${natureHtml(r)}</div>${cats}
     ${rt?`<div class="field"><span class="label">Vos notes</span>${(r.ratings||[]).slice(-5).reverse().map(x=>`<span style="font-size:13px">${starTxt(x.stars)} · ${new Date(x.at).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}${x.tags&&x.tags.length?" · "+esc(x.tags.join(", ")):""}</span>`).join("")}</div>`:""}
