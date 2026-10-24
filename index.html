@@ -641,6 +641,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <div class="row">
       <button class="btn" data-act="pasteRecipe">Coller une recette</button>
       <button class="btn" data-act="goFind">Importer du web ↓</button>
+      <label class="btn">📸 Scanner un livre<input type="file" accept="image/*" id="scanBook" hidden></label>
       <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
       <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
     </div>
@@ -3779,12 +3780,16 @@ $("#recForm").addEventListener("submit",async e=>{
 /* ---------- scan a cookbook page: text recognition (Tesseract, loaded only when used) then the usual "Remplir le formulaire" ---------- */
 let tessP=null;
 function loadTess(){return tessP||(tessP=new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";sc.onload=()=>ok(window.Tesseract);sc.onerror=()=>{tessP=null;ko();};document.head.appendChild(sc);}));}
-$("#ocrIn").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;const m=$("#pasteMsg");
+$("#scanBook").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;openSheet();$("#pasteBox").open=true;ocrFile(f,true);});
+$("#ocrIn").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f)ocrFile(f,false);});
+async function ocrFile(f,auto){const m=$("#pasteMsg");
   try{m.textContent="⏳ Préparation de la lecture (la première fois, ~15 s)…";const T=await loadTess();
     const res=await T.recognize(f,"fra",{logger:x=>{if(x.status==="recognizing text")m.textContent=`⏳ Lecture de la page… ${Math.round((x.progress||0)*100)} %`;}});
     const t=(res&&res.data&&res.data.text||"").trim();if(!t){m.textContent="Aucun texte lu : reprenez la photo bien à plat, avec de la lumière.";return;}
-    $("#pasteIn").value=t;m.textContent="Texte lu ✓ : vérifiez-le, puis « Remplir le formulaire ».";$("#pasteBox").open=true;}
-  catch(x){m.textContent="La lecture n'a pas marché (réseau ?). Réessayez, ou copiez le texte depuis Photos.";}});
+    $("#pasteIn").value=t;$("#pasteBox").open=true;
+    if(auto){document.querySelector('[data-act=parsePaste]').click();m.textContent="✓ Page lue et formulaire rempli : vérifiez le nom, les ingrédients et les étapes avant d'enregistrer.";}
+    else m.textContent="Texte lu ✓ : vérifiez-le, puis « Remplir le formulaire ».";}
+  catch(x){m.textContent="La lecture n'a pas marché (réseau ?). Réessayez, ou copiez le texte depuis Photos.";}}
 
 /* ---------- what can I make with… ---------- */
 function parseHave(){return $("#frIn").value.split(/[,;\n]| et /).map(norm).filter(x=>x.length>1);}
