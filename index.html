@@ -162,6 +162,13 @@ button{cursor:pointer}
 /* recipes */
 .search{width:100%;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
 .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.rec-search{display:flex;gap:8px;align-items:stretch}.rec-search .search{flex:1;min-width:0}
+.fav-quick{flex:0 0 auto;border:2px solid #E0A526;background:var(--surface);color:#8A5A00;border-radius:12px;padding:0 14px;font:inherit;font-weight:700;font-size:15px;min-height:44px}
+.fav-quick[aria-pressed="true"]{background:#F2C14E;color:#3A2600;border-color:#F2C14E}
+.rec-rail{flex-wrap:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding:2px 0 4px;mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+.rec-rail::-webkit-scrollbar{display:none}.rec-rail .chip{scroll-snap-align:start;min-height:36px;flex:0 0 auto}
+#v-rec .chip[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+#v-rec .chip.chip-fav{border-color:#E0A526;color:#8A5A00}#v-rec .chip.chip-fav[aria-pressed="true"]{background:#F2C14E;color:#3A2600;border-color:#F2C14E}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .cards{display:flex;flex-direction:column;gap:10px}
@@ -629,9 +636,9 @@ code{font-family:var(--f-mono);font-size:.92em}
     </div>
     <div id="propBox"></div>
     <details class="fr-rec" id="frRecBox"><summary>🧺 Qu'est-ce que je fais avec…</summary><div id="frSlotRec"></div></details>
-    <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
-    <div class="chips" id="chips"></div>
-    <div class="chips" id="kindChips"></div>
+    <div class="rec-search"><input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient"><button type="button" class="fav-quick" id="favQuick" data-act="kindFav" aria-pressed="false">★ Favoris</button></div>
+    <div class="chips rec-rail" id="chips"></div>
+    <div class="chips rec-rail" id="kindChips"></div>
     <div class="cards" id="recList"></div>
     <form class="idea" id="findForm" novalidate style="margin-top:8px">
       <span class="label">Trouver de nouvelles recettes</span>
@@ -1482,7 +1489,10 @@ function renderMenu(){
 function renderRecipes(){
   const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>inCat(r,c)))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
-  $("#chips").innerHTML=cats.map(c=>`<button class="chip" data-act="cat" data-c="${esc(c)}" aria-pressed="${filter.cat===c}">${esc(c)}</button>`).join("");
+  const none=filter.cat==="Toutes"&&!filter.fav&&!filter.kind&&!filter.quick&&!filter.light&&!filter.theme;
+  $("#favQuick").setAttribute("aria-pressed",!!filter.fav);$("#favQuick").textContent=(filter.fav?"★":"☆")+" Favoris";
+  $("#chips").innerHTML=`<button class="chip chip-fav" data-act="kindFav" aria-pressed="${!!filter.fav}">★ Favoris</button><button class="chip" data-act="catAll" aria-pressed="${none}">Toutes</button>`
+    +cats.filter(c=>c!=="Toutes").map(c=>`<button class="chip" data-act="cat" data-c="${esc(c)}" aria-pressed="${filter.cat===c}">${esc(c)}</button>`).join("");
   $("#kindChips").innerHTML=kindChipsHtml("kind",filter.kind,filter.quick,filter.light,filter.fav,filter.theme);
   const list=Object.entries(recipes)
     .filter(([,r])=>filter.cat==="Toutes"||inCat(r,filter.cat))
@@ -2791,7 +2801,8 @@ document.addEventListener("click",e=>{
   else if(a==="stepMode"){const v=b.dataset.v==="det"?"det":"court",d=detailOf(recipes[recSheetId],recSheetId);stepPick[recSheetId]=v;if(d&&d.same){stepMode=v;LS.set("cm_stepmode",v);}lastRecHtml="";renderRecSheet();}
   else if(a==="recTab"){switchRecTab(b.dataset.v,!b.closest(".rs-tabs"));}
   else if(a==="seeNews"){view="rec";LS.set("cm_view",view);filter.theme="nouveau";filter.q="";if($("#q"))$("#q").value="";recLimit=50;render();window.scrollTo(0,0);}
-  else if(a==="cat"){filter.cat=b.dataset.c;recLimit=50;render();}
+  else if(a==="cat"){filter.cat=filter.cat===b.dataset.c?"Toutes":b.dataset.c;recLimit=50;render();}
+  else if(a==="catAll"){Object.assign(filter,{cat:"Toutes",fav:false,kind:"",quick:false,light:false,theme:""});recLimit=50;render();}
   else if(a==="more"){recLimit+=50;renderRecipes();}
   else if(a==="kind"){filter.kind=b.dataset.v;recLimit=50;renderRecipes();}
   else if(a==="kindQuick"){filter.quick=!filter.quick;recLimit=50;renderRecipes();}
@@ -3216,7 +3227,7 @@ function kindChipsHtml(act,cur,quick,light,fav,theme){
   return th.map(([v,l])=>`<button type="button" class="chip" data-act="${act}Theme" data-v="${v}" aria-pressed="${theme===v}">${l}</button>`).join("")+KIND_CHIPS.map(([v,l])=>`<button type="button" class="chip" data-act="${act}" data-v="${v}" aria-pressed="${cur===v}">${l}</button>`).join("")
     +`<button type="button" class="chip" data-act="${act}Quick" aria-pressed="${quick}">30 min et moins</button>`
     +`<button type="button" class="chip" data-act="${act}Light" aria-pressed="${!!light}">Léger</button>`
-    +`<button type="button" class="chip" data-act="${act}Fav" aria-pressed="${!!fav}">★ Favoris</button>`;
+    +(act==="kind"?"":`<button type="button" class="chip" data-act="${act}Fav" aria-pressed="${!!fav}">★ Favoris</button>`);
 }
 const KIND_RE=[["poisson",/saint-jacques|huître|homard|langoust|saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|lieu|dorade|bar\b/i],
   ["rouge",/b(?:œ|oe)uf|veau|agneau|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez|gigot|mouton|chevreuil|sanglier|biche/i],
