@@ -353,6 +353,10 @@ input,select,textarea{font-size:16px!important}
 .lbl-ph b{font-size:22px;line-height:1}.lbl-ph i{font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
 .lbl-big{height:160px;width:120px;margin:0 auto}.lbl-big b{font-size:40px}.lbl-big i{font-size:13px}
 .wine-ph-btns{justify-content:center}
+#scanSheet{z-index:30}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
+.sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.sc-b{display:grid;grid-template-columns:repeat(2,32px);gap:3px}.sc-b button{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;padding:0}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -926,6 +930,16 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="row" style="justify-content:space-between"><h2>Filtres</h2><button type="button" class="btn primary" data-act="closeFilt" id="filtOk">Voir les recettes</button></div>
     <div id="filtBody" style="display:flex;flex-direction:column;gap:14px"></div>
     <button type="button" class="btn ghost" data-act="filtReset" style="align-self:flex-start">Tout effacer</button>
+  </div>
+</div>
+
+<div class="sheet" id="scanSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2>Vérifier la page lue</h2><button type="button" class="btn ghost" data-act="scanClose">Annuler</button></div>
+    <div id="scanMsg" class="muted" style="font-size:13px"></div>
+    <div class="scan-src"><img id="scanImg" alt="Page photographiée"><details><summary>Texte lu (modifiable)</summary><textarea id="scanRaw" rows="8" class="search"></textarea><button type="button" class="btn" data-act="scanReparse" style="margin-top:6px">↻ Redécouper ce texte</button></details></div>
+    <div id="scanForm" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div class="add-foot row" style="gap:8px"><button type="button" class="btn" data-act="scanForm">Ouvrir le formulaire complet</button><button type="button" class="btn primary" data-act="scanSave">✓ Enregistrer la recette</button></div>
   </div>
 </div>
 
@@ -2760,6 +2774,14 @@ document.addEventListener("click",e=>{
   else if(a==="propAdd"){propAnswer(b.dataset.p,true);}
   else if(a==="propNo"){propAnswer(b.dataset.p,false);}
   else if(a==="propView"){propOpen=propOpen===b.dataset.p?null:b.dataset.p;renderProps();}
+  else if(a==="scanClose"){$("#scanSheet").hidden=true;scan=null;}
+  else if(a==="scanReparse"){scan=ocrSplit($("#scanRaw").value);renderScan();}
+  else if(a==="scMv"||a==="scSw"||a==="scRm"||a==="scAdd"){scanCollect();const k=b.dataset.k,i=+b.dataset.i,l=scan[k];
+    if(a==="scAdd")l.push("");else if(a==="scRm")l.splice(i,1);else if(a==="scSw"){const[x]=l.splice(i,1);scan[k==="ing"?"steps":"ing"].push(x);}else{const j=i+Number(b.dataset.d);if(j>=0&&j<l.length)[l[i],l[j]]=[l[j],l[i]];}renderScan();}
+  else if(a==="scanForm"){const r=scanRecipe();$("#scanSheet").hidden=true;openSheet();fillForm(r);toast("Vérifiez puis « Enregistrer la recette »");}
+  else if(a==="scanSave"){const r=scanRecipe();if(!r.ing.length){toast("Ajoutez au moins un ingrédient");return;}
+    const id=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
+    saveRecipe(id,Object.assign({cat:"Plat"},r,{steps:r.steps.join("\n"),createdAt:new Date().toISOString()}));$("#scanSheet").hidden=true;scan=null;view="rec";render();openRecSheet(id);toast("Recette ajoutée au carnet");}
   else if(a==="cropCancel"){const c=crop;crop=null;$("#cropSheet").hidden=true;if(c&&c.isNew)toast("Photo non ajoutée");}
   else if(a==="cropOk"){cropSave();}
   else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
@@ -3780,16 +3802,54 @@ $("#recForm").addEventListener("submit",async e=>{
 /* ---------- scan a cookbook page: text recognition (Tesseract, loaded only when used) then the usual "Remplir le formulaire" ---------- */
 let tessP=null;
 function loadTess(){return tessP||(tessP=new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";sc.onload=()=>ok(window.Tesseract);sc.onerror=()=>{tessP=null;ko();};document.head.appendChild(sc);}));}
-$("#scanBook").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;openSheet();$("#pasteBox").open=true;ocrFile(f,true);});
-$("#ocrIn").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f)ocrFile(f,false);});
-async function ocrFile(f,auto){const m=$("#pasteMsg");
-  try{m.textContent="⏳ Préparation de la lecture (la première fois, ~15 s)…";const T=await loadTess();
-    const res=await T.recognize(f,"fra",{logger:x=>{if(x.status==="recognizing text")m.textContent=`⏳ Lecture de la page… ${Math.round((x.progress||0)*100)} %`;}});
-    const t=(res&&res.data&&res.data.text||"").trim();if(!t){m.textContent="Aucun texte lu : reprenez la photo bien à plat, avec de la lumière.";return;}
-    $("#pasteIn").value=t;$("#pasteBox").open=true;
-    if(auto){document.querySelector('[data-act=parsePaste]').click();m.textContent="✓ Page lue et formulaire rempli : vérifiez le nom, les ingrédients et les étapes avant d'enregistrer.";}
-    else m.textContent="Texte lu ✓ : vérifiez-le, puis « Remplir le formulaire ».";}
-  catch(x){m.textContent="La lecture n'a pas marché (réseau ?). Réessayez, ou copiez le texte depuis Photos.";}}
+$("#scanBook").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f)scanBook(f);});
+$("#ocrIn").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(f){$("#sheet").hidden=true;scanBook(f);}});
+// 1. image clean-up: right size, greyscale, contrast stretched (dark text on white)
+async function ocrPrep(file){const url=URL.createObjectURL(file);try{const img=await loadImg(url);
+  const L=Math.max(img.width,img.height),k=L>2400?2400/L:L<1400?1400/L:1,c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height),p=d.data,h=new Uint32Array(256);
+  for(let i=0;i<p.length;i+=4){const g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;p[i]=g;h[g]++;}
+  const n=p.length/4;let lo=0,hi=255,acc=0;for(;lo<255;lo++){acc+=h[lo];if(acc>n*0.02)break;}acc=0;for(;hi>0;hi--){acc+=h[hi];if(acc>n*0.10)break;}
+  const sc=255/Math.max(30,hi-lo);for(let i=0;i<p.length;i+=4){let v=(p[i]-lo)*sc;v=v<0?0:v>255?255:v;v=255*Math.pow(v/255,1.4);p[i]=p[i+1]=p[i+2]=v;}
+  x.putImageData(d,0,0);return{canvas:c,preview:c.toDataURL("image/jpeg",0.6)};}finally{URL.revokeObjectURL(url);}}
+// 2. reading order: one or two columns, from the position of each line
+function ocrOrder(data,W){const lines=(data.lines||[]).filter(l=>l.text&&l.text.trim()&&l.bbox);if(!lines.length)return data.text||"";
+  const left=lines.filter(l=>l.bbox.x1<W*0.56),right=lines.filter(l=>l.bbox.x0>W*0.44),wide=lines.filter(l=>!left.includes(l)&&!right.includes(l));
+  const by=a=>a.sort((p,q)=>p.bbox.y0-q.bbox.y0);
+  if(left.length>=3&&right.length>=3&&wide.length<=Math.max(2,lines.length*0.2)){const top=Math.min(...left.concat(right).map(l=>l.bbox.y0));
+    const head=by(wide.filter(l=>l.bbox.y0<=top+5)),rest=by(wide.filter(l=>l.bbox.y0>top+5));
+    return[...head,...by(left),...by(right),...rest].map(l=>l.text.trim()).join("\n");}
+  return by(lines).map(l=>l.text.trim()).join("\n");}
+// 3. text clean-up
+function ocrClean(t){return String(t||"").replace(/\r/g,"")
+  .replace(/([a-zàâçéèêëîïôûù])-\n(les|la|le|lui|leur|vous|nous|en|y|moi|toi)\b/g,"$1-$2").replace(/([a-zàâçéèêëîïôûù])-\n([a-zàâçéèêëîïôûù])/g,"$1$2")
+  .split("\n").map(l=>l.replace(/[|¦_~•·►▪■□©®™<>{}\[\]\\^`"“”]+/g," ").replace(/^[\s\-–—*+°.,;:]+(?=\D)/,"")
+    .replace(/\bc\.?\s?[àa@]\.?\s?s(?:oupe)?\b\.?/gi,"c. à s.").replace(/\bc\.?\s?[àa@]\.?\s?c(?:af[ée])?\b\.?/gi,"c. à c.")
+    .replace(/\b(\d+)\s?([gG])r?\b\.?/g,"$1 g").replace(/\b(\d+)\s?(cl|ml|kg|dl|l)\b/gi,(m,a,b)=>a+" "+b.toLowerCase()).replace(/\b0e\b/g,"oe").replace(/oeuf/gi,m=>m[0]==="O"?"Œuf":"œuf")
+    .replace(/\s{2,}/g," ").trim())
+  .filter(l=>(l.match(/[a-zàâçéèêëîïôûù0-9]/gi)||[]).length>=2&&!/^\d{1,3}$/.test(l))
+  .reduce((a,l)=>{const p=a[a.length-1];if(p&&p.length>25&&!/[.!?:]$/.test(p)&&(/^[a-zàâçéèêëîïôûù]/.test(l)||/^\d+\s*(min|minutes|h\b|heures?|°|degr)/i.test(l)))a[a.length-1]=p+" "+l;else a.push(l);return a;},[]).join("\n");}
+// 4. blocks: title / ingredients / steps (numbered steps start a new step, lowercase lines continue the previous one)
+function ocrSplit(t){const r=parseRecipeText(t);const ing=[],st=[];
+  for(const i of r.ing){const line=[i.q?String(i.q).replace(".",","):"",i.u&&i.u!=="pièce"?i.u:"",i.n].filter(Boolean).join(" ");if(i.n.length>70&&/\b(faites|ajoutez|mettez|versez|laissez|coupez|mélangez|cuire|cuisez)\b/i.test(i.n))st.push(i.n);else ing.push(line);}
+  for(const x of r.steps){if(x.length<45&&looksLikeIng(x)&&!/[.!]$/.test(x))ing.push(x);else st.push(x);}
+  return{name:r.name,time:r.time||"",serves:r.serves||"",ing,steps:st};}
+let scan=null;
+async function scanBook(f){scan={name:"",time:"",serves:"",ing:[],steps:[]};$("#scanSheet").hidden=false;$("#scanForm").innerHTML="";$("#scanRaw").value="";const m=$("#scanMsg");
+  try{m.textContent="⏳ Préparation de la photo…";const{canvas,preview}=await ocrPrep(f);$("#scanImg").src=preview;
+    m.textContent="⏳ Chargement de la lecture (la première fois ~15 s)…";const T=await loadTess();
+    const res=await T.recognize(canvas,"fra",{logger:x=>{if(x.status==="recognizing text")m.textContent=`⏳ Lecture de la page… ${Math.round((x.progress||0)*100)} %`;}});
+    const raw=ocrClean(ocrOrder(res.data||{},canvas.width));if(!raw.trim()){m.textContent="Aucun texte lu : reprenez la photo bien à plat, avec de la lumière.";return;}
+    $("#scanRaw").value=raw;scan=ocrSplit(raw);renderScan();m.textContent="Vérifiez chaque champ. ⇄ envoie une ligne dans l'autre liste, ↑↓ la déplace, ✕ la supprime.";}
+  catch(x){m.textContent="La lecture n'a pas marché (réseau ?). Réessayez.";}}
+function scanCollect(){if(!scan)return;const v=id=>{const e=$(id);return e?e.value.trim():"";};scan.name=v("#sc-name");scan.time=v("#sc-time");scan.serves=v("#sc-serves");
+  for(const k of["ing","steps"])scan[k]=[...document.querySelectorAll(`#scanForm [data-l="${k}"]`)].map(e=>e.value.trim());}
+function renderScan(){const s=scan;const row=(k,x,i)=>`<div class="sc-row"><${k==="steps"?"textarea rows=\"2\"":"input"} data-l="${k}" value="${esc(x)}">${k==="steps"?esc(x)+"</textarea>":""}<span class="sc-b"><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="-1" aria-label="Monter">↑</button><button type="button" data-act="scMv" data-k="${k}" data-i="${i}" data-d="1" aria-label="Descendre">↓</button><button type="button" data-act="scSw" data-k="${k}" data-i="${i}" aria-label="${k==="ing"?"Vers les étapes":"Vers les ingrédients"}">⇄</button><button type="button" data-act="scRm" data-k="${k}" data-i="${i}" aria-label="Supprimer">✕</button></span></div>`;
+  $("#scanForm").innerHTML=`<label class="field"><span class="label">Titre</span><input id="sc-name" value="${esc(s.name)}" placeholder="Nom de la recette"></label>
+   <div class="grid2"><label class="field"><span class="label">Temps (min)</span><input id="sc-time" inputmode="numeric" value="${esc(s.time)}"></label><label class="field"><span class="label">Pour (pers.)</span><input id="sc-serves" inputmode="numeric" value="${esc(s.serves||4)}"></label></div>
+   <div class="field"><span class="label">Ingrédients · ${s.ing.length}</span>${s.ing.map((x,i)=>row("ing",x,i)).join("")}<button type="button" class="link" data-act="scAdd" data-k="ing">+ ingrédient</button></div>
+   <div class="field"><span class="label">Étapes · ${s.steps.length}</span>${s.steps.map((x,i)=>row("steps",x,i)).join("")}<button type="button" class="link" data-act="scAdd" data-k="steps">+ étape</button></div>`;}
+function scanRecipe(){scanCollect();const s=scan;return{name:s.name||"Recette scannée",time:Number(s.time)||0,serves:Number(s.serves)||4,ing:s.ing.filter(Boolean).map(l=>parseIng(l)||{q:0,u:"pièce",n:l,r:"Divers"}).filter(i=>i&&i.n),steps:s.steps.filter(Boolean)};}
 
 /* ---------- what can I make with… ---------- */
 function parseHave(){return $("#frIn").value.split(/[,;\n]| et /).map(norm).filter(x=>x.length>1);}
