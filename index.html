@@ -184,7 +184,7 @@ button{cursor:pointer}
 .card-h .open{border:none;background:none;text-align:left;padding:0;min-width:0}
 .card-h .open.has-ph{display:grid;grid-template-columns:56px minmax(0,1fr);column-gap:12px;align-items:center}.card-h .open.has-ph>*:not(.rp-th){grid-column:2}
 .rp-th{grid-row:1 / span 3;width:56px;height:56px;border-radius:12px;object-fit:cover}
-.rp img{width:100%;max-height:240px;object-fit:cover;border-radius:14px;display:block}.rp-acts{margin-top:8px}
+.rp img{width:100%;height:auto;max-height:340px;object-fit:contain;background:var(--soft);border-radius:14px;display:block}.rp-acts{margin-top:8px}
 .rp-pick{cursor:pointer}
 .rp-credit{display:block;font-size:11px;margin-top:4px}.rp-credit a{color:inherit}
 .card-h .meta{font-size:13px;color:var(--muted);margin-top:2px}
@@ -378,6 +378,8 @@ input,select,textarea{font-size:16px!important}
 .scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
 .sc-b{display:grid;grid-template-columns:repeat(2,32px);gap:3px}.sc-b button{width:32px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:13px;padding:0}
+/* photos always shown whole (no cropping): fitted inside their frame on a soft background */
+.rp-th,.dish-ph,.mc-ph,.tl-ph,.pi-ph,.ph-c img,.wine-thumb img,.imp-ph img,.page-ph img,.scan-src img,.rv img,#scanImg{object-fit:contain!important;background:var(--soft)}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -2236,7 +2238,7 @@ async function openCrop(id,src,isNew){let img;
   if(/^https?:/.test(src)){try{img=await loadImg(src,true);const t=document.createElement("canvas");t.width=t.height=2;t.getContext("2d").drawImage(img,0,0,2,2);t.toDataURL();}
     catch(e){toast("Ce site ne permet pas de recadrer sa photo : enregistrez-la dans vos photos puis « 📷 Ma photo ».");return;}}
   else img=await loadImg(src);
-  crop={id,img,src,isNew,z:1,ox:0,oy:0,rot:0,fit:"cover"};
+  crop={id,img,src,isNew,z:1,ox:0,oy:0,rot:0,fit:"contain"};
   $("#cropSheet").hidden=false;$("#cropZoom").value=1;requestAnimationFrame(()=>drawCrop());}
 function cropDims(){const r=crop.rot%2,iw=r?crop.img.height:crop.img.width,ih=r?crop.img.width:crop.img.height;return{iw,ih};}
 function clampCrop(W,H){const{iw,ih}=cropDims(),b=crop.fit==="cover"?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih),s=b*crop.z,lx=Math.abs(iw*s-W)/2/W,ly=Math.abs(ih*s-H)/2/H;
@@ -2846,7 +2848,7 @@ document.addEventListener("click",e=>{
   else if(a==="cropOk"){cropSave();}
   else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
   else if(a==="cropRot"){if(crop){crop.rot=(crop.rot+1)%4;crop.ox=crop.oy=0;drawCrop();}}
-  else if(a==="cropReset"){if(crop){Object.assign(crop,{z:1,ox:0,oy:0,rot:0,fit:"cover"});$("#cropZoom").value=1;drawCrop();}}
+  else if(a==="cropReset"){if(crop){Object.assign(crop,{z:1,ox:0,oy:0,rot:0,fit:"contain"});$("#cropZoom").value=1;drawCrop();}}
   else if(a==="cropEdit"){const id2=b.dataset.id,o=cropOrig(id2),src=o||rPhotoSrc(id2);if(src)openCrop(id2,src,false).catch(()=>toast("Cette photo n'a pas pu être chargée"));}
   else if(a==="fCat"){const c=b.dataset.c;if(formCats.includes(c)){if(formCats.length===1){toast("Gardez au moins une catégorie");return;}formCats=formCats.filter(x=>x!==c);}else formCats=[...formCats,c];renderFormCats();}
   else if(a==="recCat"){const id=b.dataset.id||recSheetId,r=recipes[id],c=b.dataset.c;if(!r)return;let list=catsOf(r);
