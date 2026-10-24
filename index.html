@@ -363,6 +363,13 @@ input,select,textarea{font-size:16px!important}
 .page-ph{display:flex;flex-direction:column;gap:4px}.page-ph img{width:84px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}.page-ph img.big{width:100%;height:auto;cursor:zoom-out}
 .imp-ai2{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}.imp-ai2 .btn{flex:1;justify-content:center}
 .imp-prompt{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:10px;padding:10px 12px;user-select:text;-webkit-user-select:text}
+#scanSheet .sheet-in{display:flex;flex-direction:column;gap:12px;overflow-y:auto;overscroll-behavior:contain;max-height:100%}
+#scanSheet .sheet-in>.row:first-child{flex:0 0 auto}
+:root.kb #scanSheet .sheet-in{border-radius:0;max-height:100%;height:100%;padding-top:8px}
+:root.kb #scanSheet #impPhoto{display:none}
+:root.kb #scanSheet #qi-text{height:calc(var(--vvh,60vh) * .38);min-height:110px}
+:root.kb #scanSheet .add-foot{bottom:0;padding-bottom:8px}
+:root.kb #scanSheet .sheet-in>.btn.ghost{display:none}
 .imp-ai{display:flex;flex-direction:column;gap:8px}.imp-ai .btn{justify-content:center;white-space:normal}.scan-src{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}.scan-src img{width:96px;max-height:140px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .scan-src details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
 .sc-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}.sc-row input,.sc-row textarea{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
@@ -4011,6 +4018,8 @@ async function pollImports(){
   if(!imports.length){clearInterval(importTimer);importTimer=null;}
 }
 
+// import window: the text area stays in view above the keyboard (the photo block folds away while typing)
+["qi-text","qi-name"].forEach(id=>$("#"+id).addEventListener("focus",e=>{const t=e.target;[120,350,650].forEach(ms=>setTimeout(()=>{if(document.activeElement===t)t.scrollIntoView({block:"center",behavior:"auto"});},ms));}));
 /* ---------- boot ---------- */
 {const v=$("#v-wine"),inn=$("#winesIn");while(inn.firstChild)v.appendChild(inn.firstChild);const h=v.querySelector(".row");if(h){h.querySelector("[data-act=closeWines]")?.remove();}
   const b=document.createElement("p");b.className="muted";b.style.cssText="margin:0;font-size:13px";b.textContent="Vos bouteilles : ajoutez-les avec leur appellation, type, millésime et quantité ; touchez − / + quand vous en ouvrez ou en achetez. Liez un vin à une recette ou à un repas prévu dans sa fiche.";h&&h.after(b);}
