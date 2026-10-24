@@ -349,6 +349,10 @@ input,select,textarea{font-size:16px!important}
 .wine-stock{display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:13px;padding:0 4px 10px;border-bottom:1px solid var(--line)}
 .bump-b{flex-direction:column;align-items:flex-start;text-align:left;gap:3px;padding:12px 14px;white-space:normal}.bump-b small{color:var(--muted);font-weight:400;font-size:12.5px}
 .use-first{border:1px solid var(--line);border-left:4px solid #2A5CAA;border-radius:0 14px 14px 0;background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.lbl-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;height:100%;border-radius:8px;background:linear-gradient(160deg,#F7F1E3,#E9DEC4);border:1px solid #D8C9A3;box-shadow:inset 0 0 0 3px #FBF7EC;color:#7A5C2E}
+.lbl-ph b{font-size:22px;line-height:1}.lbl-ph i{font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
+.lbl-big{height:160px;width:120px;margin:0 auto}.lbl-big b{font-size:40px}.lbl-big i{font-size:13px}
+.wine-ph-btns{justify-content:center}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -2231,8 +2235,8 @@ function renderWineForm(){
   const d=wineDraft;if(!d)return;const src=d._photo||wPhotoSrc(d);const beer=d.color==="bière";
   $("#wineTitle").textContent=(d._new?"Noter ":"")+(beer?"une bière":"un vin")+(d.k?" · "+slotLabel(d.k):"");
   $("#wineBody").innerHTML=`
-    <label class="wine-photo">${src?`<img src="${src}" alt="Étiquette">`:`<span>📷 Prendre l'étiquette en photo</span>`}<input type="file" accept="image/*" capture="environment" id="wineFile" hidden></label>
-    ${src?`<button type="button" class="link" data-act="winePhotoAgain">Reprendre la photo</button>`:""}
+    <div class="wine-photo">${src?`<img src="${src}" alt="Étiquette">`:`<span class="lbl-ph lbl-big"><b>${beer?"🍺":"🍷"}</b><i>Étiquette</i></span>`}</div>
+    <div class="row wine-ph-btns"><label class="btn">📷 Prendre en photo<input type="file" accept="image/*" capture="environment" class="wine-file" hidden></label><label class="btn">🖼️ Choisir dans la galerie<input type="file" accept="image/*" class="wine-file" hidden></label>${src?`<button type="button" class="btn ghost" data-act="winePhotoRm">Retirer</button>`:""}</div>
     <details class="field" ${d._new&&!d.name?"open":""}><summary class="label" style="cursor:pointer">Remplir depuis l'étiquette (texte en direct)</summary>
       <span class="muted" style="font-size:13px">Dans Photos, appuyez longuement sur le texte de l'étiquette → Copier, puis collez ici.</span>
       <textarea id="wineText" class="search" rows="3" placeholder="Collez le texte de l'étiquette"></textarea>
@@ -2252,8 +2256,8 @@ function renderWineForm(){
     <label class="field"><span class="label">Notes de dégustation</span><textarea id="w-comment" class="search" rows="2" placeholder="Ex. parfait avec le bœuf, à racheter">${esc(d.comment||"")}</textarea></label>
     ${d.color!=="bière"&&(d.name||d.app)?`<div>${vivinoLink([d.name,d.app].filter(Boolean).join(" "),"Voir ce vin sur Vivino")}</div>`:""}
     <div class="row"><button type="button" class="btn primary" data-act="wineSave">Enregistrer</button>${d._new?"":`<button type="button" class="btn danger" data-act="wineDel">Supprimer</button>`}</div>`;
-  $("#wineFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
-    try{wineCollect();wineDraft._photo=await shrinkPhoto(f);renderWineForm();}catch(x){toast("Photo illisible, réessayez");}});
+  document.querySelectorAll("#wineBody .wine-file").forEach(inp=>inp.addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+    try{wineCollect();wineDraft._photo=await shrinkPhoto(f);delete wineDraft._rm;renderWineForm();}catch(x){toast("Photo illisible, réessayez");}}));
   const app=$("#w-app");if(app)app.addEventListener("change",()=>{const a=findAppellation(app.value),g=$("#w-grapes");if(a&&g&&!g.value.trim()){g.value=grapesForColor(a[3],wineDraft.color);$("#w-gnote").textContent="Cépages typiques de l'appellation : ils peuvent varier selon le domaine.";wineDraft.grapesAuto=true;}});
 }
 // the meals of the next 3 weeks that have a dish, to serve a wine with
@@ -2272,7 +2276,7 @@ function pairingQuery(s){const first=String(s).split(" ou ")[0].trim();if(/^(pas
 function wineLabel(w){return[w.name||(w.color==="bière"?"Bière":"Vin"),w.app,w.year].filter(Boolean).join(" · ");}
 function wineSave(){
   wineCollect();const d=wineDraft;if(!d.name&&!d.app&&!d._photo&&!d.photo){toast("Ajoutez au moins une photo ou un nom");return;}
-  if(d._photo){saveWPhoto(d.id,d._photo);uploadWPhoto(d.id,d._photo);d.photo=true;}
+  if(d._photo){saveWPhoto(d.id,d._photo);uploadWPhoto(d.id,d._photo);d.photo=true;}else if(d._rm){const m=wPhotos();delete m[d.id];try{localStorage.setItem(WPH,JSON.stringify(m));}catch(e){}d.photo=false;}
   if(!d.date){const wk=parseYmd(d.w),i=d.k?DAYS.indexOf(d.k.split("|")[0]):-1;d.date=i>=0?ymd(addDays(wk,i)):ymd(new Date());}
   const clean=Object.fromEntries(Object.entries(d).filter(([k])=>!k.startsWith("_")));
   menu.wines=[...(menu.wines||[]).filter(w=>w.id!==d.id),clean].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
@@ -2285,7 +2289,7 @@ function renderWines(){
   $("#winesMode").innerHTML=[["all","Tous"],["cave","🍾 En cave"]].map(([v,l])=>`<button type="button" class="chip" data-act="winesMode" data-v="${v}" aria-pressed="${winesMode===v}">${l}</button>`).join("");
   const q=norm(wineQ), list=(menu.wines||[]).filter(w=>(winesMode!=="cave"||(w.stock||0)>0)&&(!q||norm([w.name,w.app,w.year,w.grapes,w.color,w.comment,w.rec&&recipes[w.rec]?recipes[w.rec].name:""].join(" ")).includes(q)));
   $("#winesList").innerHTML=list.length?list.map(w=>{const src=wPhotoSrc(w);return`<button type="button" class="wine-row" data-act="wineOpen" data-id="${w.id}">
-      <span class="wine-thumb">${src?`<img src="${src}" alt="">`:(w.color==="bière"?"🍺":"🍷")}</span>
+      <span class="wine-thumb">${src?`<img src="${src}" alt="">`:`<span class="lbl-ph"><b>${w.color==="bière"?"🍺":"🍷"}</b><i>${esc(w.year||"")}</i></span>`}</span>
       <span class="nm"><strong>${esc(w.name||(w.color==="bière"?"Bière":"Vin"))}</strong><span class="sub">${esc([w.app,w.year,(WCOLORS.find(c=>c[0]===w.color)||[0,w.color])[1]].filter(Boolean).join(" · "))}</span>
       ${w.grapes?`<span class="sub">Cépages : ${esc(w.grapes)}</span>`:""}<span class="sub">${esc(parseYmd(w.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}))}${w.k?" · "+esc(w.k.split("|")[1]):""}${w.note?" · "+"★".repeat(w.note):""}</span>${w.rec&&recipes[w.rec]?`<span class="sub">🍽️ avec ${esc(recipes[w.rec].name)}</span>`:""}</span></button>
       <div class="wine-stock"><span>🍾 En cave : <b>${w.stock||0}</b></span><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="-1" aria-label="Une bouteille de moins">−</button><button type="button" class="step sm" data-act="wStockL" data-id="${w.id}" data-d="1" aria-label="Une bouteille de plus">+</button></div>${w.color!=="bière"&&(w.name||w.app)?`<div class="wine-viv">${vivinoLink([w.name,w.app].filter(Boolean).join(" "))}</div>`:""}`;}).join("")
@@ -2920,6 +2924,7 @@ document.addEventListener("click",e=>{
   else if(a==="wineDel"){const id=wineDraft&&wineDraft.id;menu.wines=(menu.wines||[]).filter(w=>w.id!==id);const m=wPhotos();delete m[id];try{localStorage.setItem(WPH,JSON.stringify(m));}catch(x){}
     wineDraft=null;$("#wineSheet").hidden=true;render();saveMenu();renderWines();if(!$("#sideSheet").hidden)renderSide();toast("Vin supprimé");}
   else if(a==="openWines"){wineQ="";$("#winesQ").value="";document.querySelectorAll(".sheet").forEach(x=>x.hidden=true);view="wine";LS.set("cm_view",view);render();}
+  else if(a==="winePhotoRm"){if(wineDraft){wineCollect();wineDraft._photo="";wineDraft._rm=true;wineDraft.photo=false;renderWineForm();}}
   else if(a==="winesMode"){winesMode=b.dataset.v;renderWines();}
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
