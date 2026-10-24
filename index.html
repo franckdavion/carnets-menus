@@ -1566,6 +1566,8 @@ function renderMenu(){
     +(diff?`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="applyAll">Mettre tous les repas à ${menu.people} pers.</button></div>`:"");
 }
 
+// when a recipe arrived in my book: created, imported, copied, or new in a book I follow
+function addedAt(id){const r=recipes[id];if(!r)return 0;const t=Date.parse(r.createdAt||"")||0,n=shNews[id]&&shNews[id].at||0;return Math.max(t,n);}
 function renderRecipes(){
   const cats=["Toutes",...CATS.filter(c=>Object.values(recipes).some(r=>inCat(r,c)))];
   if(!cats.includes(filter.cat))filter.cat="Toutes";
@@ -1579,8 +1581,8 @@ function renderRecipes(){
   const list=Object.entries(recipes)
     .filter(([,r])=>!filter.cats.length||filter.cats.some(c=>inCat(r,c)))
     .filter(([,r])=>!filter.kinds.length||filter.kinds.includes(kindOf(r)))
-    .filter(([,r])=>recMatch(r,filter.q,"",filter.quick,filter.light,filter.fav,filter.theme))
-    .sort((a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
+    .filter(([,r])=>recMatch(r,filter.q,"",filter.quick,filter.light,filter.fav,filter.theme==="nouveau"?"":filter.theme))
+    .sort(filter.theme==="nouveau"?(a,b)=>addedAt(b[0])-addedAt(a[0])||a[1].name.localeCompare(b[1].name,"fr"):(a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
@@ -1610,7 +1612,7 @@ function renderRecipes(){
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
       <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${esc(r.name)}</h3>
-      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&t!=="airfryer"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
+      <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${filter.theme==="nouveau"&&addedAt(id)?`<span style="color:var(--accent);font-weight:600">🆕 ajoutée ${esc(ago(addedAt(id)))} · </span>`:""}${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&t!=="airfryer"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
     </div>${det}</article>`;}).join("")+(list.length>shown.length?`<button class="btn" data-act="more" style="align-self:center">Afficher ${Math.min(50,list.length-shown.length)} de plus (${list.length-shown.length} restantes)</button>`:"");
@@ -4051,7 +4053,7 @@ function applyPacks(){
   const done=menu.packs||[]; let added=0;
   for(const[pid,list]of Object.entries(PACKS)){
     if(done.includes(pid))continue;
-    for(const[id,r]of Object.entries(list))if(!recipes[id]&&!Object.values(recipes).some(x=>norm(x.name)===norm(r.name))){recipes[id]=JSON.parse(JSON.stringify(r));added++;}
+    for(const[id,r]of Object.entries(list))if(!recipes[id]&&!Object.values(recipes).some(x=>norm(x.name)===norm(r.name))){recipes[id]=Object.assign(JSON.parse(JSON.stringify(r)),{createdAt:new Date().toISOString()});added++;}
     menu.packs=[...(menu.packs||[]),pid];
   }
   if(menu.packs&&menu.packs.length!==done.length){LS.set("cm_recipes",recipes);LS.set("cm_menu",menu);scheduleSync();
