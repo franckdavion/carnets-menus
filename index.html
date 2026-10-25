@@ -2249,7 +2249,8 @@ document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IM
 const rejected=r=>new Set((r&&r.noPh)||[]);
 function autoPhoto(id){const r=recipes[id],nope=rejected(r),l=autoList(id).filter(x=>!nope.has(x.u));if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
-  if(!r.photo){const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
+  if(!r.photo){if(r.cloudPhoto)return r.cloudPhoto; // a member's own photo, from the common book
+    const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
     if(r.pick&&r.pick.u)return r.pick.u; // chosen in "Choisir une photo"
     if(r.image&&!LS.get("cm_badimg",{})[id])return r.image; // photo of the site the recipe came from
     if(r.noAuto)return"";const a=autoPhoto(id);return a?a.u:"";}const m=rPhotos();if(m[id])return m[id];
@@ -3905,8 +3906,8 @@ const PAGES="cm_pages";
 async function savePagePhoto(id,file){const url=URL.createObjectURL(file);try{const img=await loadImg(url),k=Math.min(1,1400/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
   c.getContext("2d").drawImage(img,0,0,c.width,c.height);const m=LS.get(PAGES,{});m[id]=c.toDataURL("image/jpeg",0.7);const ks=Object.keys(m);
   for(;;){try{localStorage.setItem(PAGES,JSON.stringify(m));break;}catch(e){const k2=Object.keys(m).filter(x=>x!==id);if(!k2.length)break;delete m[k2[0]];}}
-  lastRecHtml="";if(!$("#recSheet").hidden)renderRecSheet();}catch(e){}finally{URL.revokeObjectURL(url);}}
-function pageHtml(id){const p=LS.get(PAGES,{})[id];return p?`<div class="page-ph"><span class="label">📄 Page du livre</span><img src="${p}" alt="Page du livre" data-act="pageZoom"></div>`:"";}
+  lastRecHtml="";if(!$("#recSheet").hidden)renderRecSheet();cloudSoon();}catch(e){}finally{URL.revokeObjectURL(url);}}
+function pageHtml(id){const p=LS.get(PAGES,{})[id]||(recipes[id]&&recipes[id].cloudPage);return p?`<div class="page-ph"><span class="label">📄 Page du livre</span><img src="${p}" alt="Page du livre" data-act="pageZoom"></div>`:"";}
 function impOpen(withPhoto,fromForm){impFromForm=!!fromForm;impFile=null;$("#scanImg").hidden=true;$("#scanImg").classList.remove("big");$("#impAi").hidden=true;$("#qi-name").value="";$("#qi-text").value="";
   $("#impPhoto").hidden=!withPhoto;$("#impStep2").textContent=withPhoto?"2 · La recette":"La recette";$("#impTitle").textContent=withPhoto?"📸 Importer une photo":"📝 Nouvelle recette (texte libre)";
   $("#scanSheet").hidden=false;$("#scanSheet .sheet-in").scrollTop=0;if(!withPhoto)setTimeout(()=>$("#qi-name").focus(),80);}
@@ -4137,6 +4138,14 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
       rows.push(Object.assign({legacy_id:id,updated_at:new Date().toISOString(),name:r.name||"Sans nom",cat:r.cat||"Plat",cats:r.cats||[],time:Number(r.time)||0,serves:Number(r.serves)||4,ing:r.ing||[],steps:String(r.steps||""),image:r.image||null,tags:r.tags||[],source:r.source||null},r.cloudAuthor?{}:{author_id:uid}));H[id]=h;}
     for(let i=0;i<rows.length;i+=200){const{error}=await sb.from("recipes").upsert(rows.slice(i,i+200),{onConflict:"legacy_id"});if(error)throw error;}
     rows.forEach(x=>{const r=recipes[x.legacy_id];if(r&&!r.cloudAuthor){r.cloudAuthor=uid;r.cloudBy=cloud.profile.pseudo;}});
+    // my own photos (dish, page of the book) go to the shared photo storage
+    const PH=LS.get("cm_cloud_photos",{}),pages=LS.get(PAGES,{}),loc=rPhotos();let nUp=0;
+    for(const id of Object.keys(recipes)){const r=recipes[id];if(!myCloudRecipe(id)||!H[id])continue;
+      const want={p:r.photo&&loc[id]?String(r.photo):"",g:pages[id]?stepHash(pages[id]):""},had=PH[id]||{};if(want.p===(had.p||"")&&want.g===(had.g||""))continue;
+      const pp={};const up=async(key,data)=>{const bl=await(await fetch(data)).blob();const path=`${uid}/${id}-${key}.jpg`;const{error}=await sb.storage.from("recipe-photos").upload(path,bl,{upsert:true,contentType:"image/jpeg",cacheControl:"3600"});if(error)throw error;return path;};
+      if(want.p)pp.p=await up("photo-"+want.p,loc[id]);if(want.g)pp.g=await up("page",pages[id]);
+      const{error}=await sb.from("recipes").update({photo_path:Object.keys(pp).length?J(pp):null,updated_at:new Date().toISOString()}).eq("legacy_id",id);if(error)throw error;PH[id]=want;nUp++;if(nUp%20===0)LS.set("cm_cloud_photos",PH);}
+    LS.set("cm_cloud_photos",PH);
     const del=LS.get("cm_cloud_del",[]);if(del.length){await sb.from("recipes").delete().in("legacy_id",del);del.forEach(k=>delete H[k]);LS.set("cm_cloud_del",[]);}
     LS.set("cm_cloudhash",H);if(rows.length)LS.set("cm_recipes",recipes);LS.set("cm_cloud_at",Date.now());}
   catch(e){cloud.msg="Synchro en attente (réseau ?)";}finally{cloud.busy=false;}}
@@ -4150,7 +4159,9 @@ async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
   for(;;){const{data,error}=await sb.from("recipes_with_author").select("*").gt("updated_at",since).order("updated_at").range(from,from+999);if(error)throw error;rows=rows.concat(data||[]);if(!data||data.length<1000)break;from+=1000;}
   const H=LS.get("cm_cloudhash",{});let added=0;
   for(const x of rows){const id=x.legacy_id||("c-"+x.id),old=recipes[id],sh={};SHARED_F.forEach(k=>{if(x[k]!==null&&x[k]!==undefined)sh[k]=x[k];});
-    if(!old)added++;recipes[id]=Object.assign({},old||{createdAt:x.created_at},sh,{cloudAuthor:x.author_id,cloudBy:x.author_pseudo||"",updatedAt:x.updated_at});H[id]=hashOf(sharedOf(recipes[id]));
+    if(!old)added++;recipes[id]=Object.assign({},old||{createdAt:x.created_at},sh,{cloudAuthor:x.author_id,cloudBy:x.author_pseudo||"",updatedAt:x.updated_at});
+    {let pp={};try{pp=x.photo_path?JSON.parse(x.photo_path):{};}catch(e){pp={p:x.photo_path};}const pub=k=>sb.storage.from("recipe-photos").getPublicUrl(k).data.publicUrl;
+     if(pp.p)recipes[id].cloudPhoto=pub(pp.p);else delete recipes[id].cloudPhoto;if(pp.g)recipes[id].cloudPage=pub(pp.g);else delete recipes[id].cloudPage;}H[id]=hashOf(sharedOf(recipes[id]));
     if(x.updated_at>LS.get("cm_cloud_since",""))LS.set("cm_cloud_since",x.updated_at);}
   // recipes removed from the common book by their author
   const{data:ids}=await sb.from("recipes").select("legacy_id");if(ids){const live=new Set(ids.map(x=>x.legacy_id));for(const[id,r]of Object.entries(recipes))if(r.cloudAuthor&&r.cloudAuthor!==uid&&!live.has(id))delete recipes[id];}
