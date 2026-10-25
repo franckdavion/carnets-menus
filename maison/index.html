@@ -372,6 +372,14 @@ h1.day{font-family:var(--display);font-weight:800}
 .lb-nav.prev{left:0;border-radius:0 12px 12px 0}.lb-nav.next{right:0;border-radius:12px 0 0 12px}
 @media (hover:none){.lb-nav{display:none}}
 
+/* links with the Carnet, Google events, addresses */
+a.btn{text-decoration:none;color:inherit}
+a.btn.primary{color:var(--on-accent)}
+.linkcard{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px;font-size:14.5px;color:var(--muted)}
+.linkcard .linkbtn{flex:none;white-space:nowrap}
+.gbar{flex:none;width:4px;align-self:stretch;border-radius:2px;margin:2px 0}
+.addr{color:var(--ink);font-weight:600}
+
 /* ---------- welcome ---------- */
 .welcome{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:flex-end;
   padding-top:calc(env(safe-area-inset-top) + 32px);padding-bottom:calc(env(safe-area-inset-bottom) + 28px)}

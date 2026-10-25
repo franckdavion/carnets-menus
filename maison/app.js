@@ -176,8 +176,8 @@ async function loadCloud(hid) {
   if (bad) throw bad.error;
   // messages and positions need the second script; the rest of the app works without it
   const v2 = !ms.error && !lc.error;
-  const recipes = S.recipes;
-  S = { hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
+  const recipes = S.recipes, favs = S.favs;
+  S = { v5: "carnet_user" in hh.data, favs, hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
     msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
     bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes };
   saveLocal();
@@ -215,8 +215,14 @@ function softRender() {
 async function loadRecipes() {
   if (S.recipes) return S.recipes;
   if (mode !== "cloud") { S.recipes = DEMO_RECIPES; return S.recipes; }
-  const { data, error } = await sb.from("recipes").select("id,name,cat,time,serves,ing,image,steps").order("name");
-  S.recipes = error ? [] : data;
+  let all = [], error = null;
+  for (let from = 0; ; from += 1000) {
+    const r = await sb.from("recipes").select("id,legacy_id,name,cat,time,serves,ing,image,steps").order("name").range(from, from + 999);
+    if (r.error) { error = r.error; break; }
+    all = all.concat(r.data || []); if (!r.data || r.data.length < 1000) break;
+  }
+  S.recipes = error && !all.length ? [] : all;
+  if (typeof loadFavs === "function") await loadFavs();
   return S.recipes;
 }
 
@@ -449,7 +455,12 @@ function geoTick(force) {
   if (!force && Date.now() - geoLast < 4 * 60 * 1000) return;
   geoLast = Date.now();
   navigator.geolocation.getCurrentPosition(
-    p => upsert("locs", { id: S.me, lat: +p.coords.latitude.toFixed(5), lng: +p.coords.longitude.toFixed(5), accuracy: Math.round(p.coords.accuracy), updated_at: new Date().toISOString() }),
+    async p => {
+      const lat = +p.coords.latitude.toFixed(5), lng = +p.coords.longitude.toFixed(5);
+      const row = { id: S.me, lat, lng, accuracy: Math.round(p.coords.accuracy), updated_at: new Date().toISOString() };
+      if (S.v5 || mode === "demo") { const a = await addressOf(lat, lng); if (a) row.address = a; }
+      upsert("locs", row);
+    },
     err => {
       if (err.code === 1) { LS.set(geoKey(), false); softRender(); }
       if (force || err.code === 1) toast(err.code === 1 ? "Localisation refusée. Sur iPhone : Réglages › Confidentialité › Service de localisation › Sites Safari, puis « Lorsque l'app est active »." : "Position introuvable pour l'instant. Réessayez dans un moment.");
@@ -473,8 +484,23 @@ function ago(iso) {
 function locListHtml() {
   return members().map(m => {
     const l = S.locs.find(x => x.id === m.id);
-    return `<button class="row" ${l ? `data-act="locate" data-v="${m.id}"` : "disabled"}>${av(m, "lg")}<span class="main"><span class="t">${esc(m.name)}${m.id === S.me ? " (moi)" : ""}</span><span class="m">${l ? "Vu " + esc(ago(l.updated_at)) : m.user_id || m.id === S.me ? "Ne partage pas sa position" : "Sans compte"}</span></span></button>`;
+    return `<button class="row" ${l ? `data-act="locate" data-v="${m.id}"` : "disabled"}>${av(m, "lg")}<span class="main"><span class="t">${esc(m.name)}${m.id === S.me ? " (moi)" : ""}</span><span class="m">${l ? (l.address ? `<span class="addr">${esc(l.address)}</span><br>` : "") + "Vu " + esc(ago(l.updated_at)) : m.user_id || m.id === S.me ? "Ne partage pas sa position" : "Sans compte"}</span></span></button>`;
   }).join("");
+}
+// street address of a position (OpenStreetMap), looked up again only after a move of ~40 m
+let addrCache = LS.get("mz_addr", null);
+async function addressOf(lat, lng) {
+  if (addrCache && Math.abs(addrCache.lat - lat) < 0.0004 && Math.abs(addrCache.lng - lng) < 0.0005) return addrCache.a;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&accept-language=fr&lat=${lat}&lon=${lng}`, { headers: { Accept: "application/json" } });
+    if (!r.ok) return addrCache ? addrCache.a : "";
+    const j = await r.json(), a = j.address || {};
+    const street = [a.house_number, a.road || a.pedestrian || a.footway || a.path || a.square || a.place].filter(Boolean).join(" ");
+    const town = a.city || a.town || a.village || a.municipality || a.hamlet || "";
+    const label = [street || a.amenity || a.building || a.neighbourhood || a.suburb, town].filter(Boolean).join(", ") || String(j.display_name || "").split(",").slice(0, 3).join(",");
+    addrCache = { lat, lng, a: label }; LS.set("mz_addr", addrCache);
+    return label;
+  } catch (e) { return addrCache ? addrCache.a : ""; }
 }
 function refreshLocList() { const el = $("#locList"); if (el) el.innerHTML = locListHtml(); }
 function loadLeaflet() {
@@ -499,7 +525,7 @@ function drawMarkers(fit) {
   for (const l of S.locs) {
     const m = member(l.id); if (!m) continue;
     const icon = L.divIcon({ className: "pin", html: `<span class="av lg" style="--c:${esc(m.color)}">${esc(initial(m.name))}</span>`, iconSize: [44, 44], iconAnchor: [22, 22] });
-    mapMarkers.push(L.marker([l.lat, l.lng], { icon, title: m.name }).addTo(map).bindPopup(`<strong>${esc(m.name)}</strong><br>${esc(ago(l.updated_at))}`));
+    mapMarkers.push(L.marker([l.lat, l.lng], { icon, title: m.name }).addTo(map).bindPopup(`<strong>${esc(m.name)}</strong><br>${l.address ? esc(l.address) + "<br>" : ""}${esc(ago(l.updated_at))}`));
     pts.push([l.lat, l.lng]);
   }
   if (!fit) return;
@@ -730,7 +756,8 @@ function menuView() {
     </section>`;
   }
   const n = S.meals.filter(m => m.day >= weekR && m.day <= addDays(weekR, 6) && m.recipe_id).length;
-  out += `<div class="btns"><button class="btn primary block" data-act="toShop" ${n ? "" : "disabled"}>Ajouter les ingrédients aux courses</button></div>
+  if (isLinked()) out += `<div class="card linkcard" style="margin-top:14px"><span>Menu synchronisé avec le Carnet de menus. Les ingrédients des repas validés arrivent seuls dans Courses.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
+  else out += `<div class="btns"><button class="btn primary block" data-act="toShop" ${n ? "" : "disabled"}>Ajouter les ingrédients aux courses</button></div>
     ${n ? "" : `<p class="muted small" style="margin-top:8px">Choisissez des recettes du livre pour que leurs ingrédients arrivent dans les courses.</p>`}`;
   return out;
 }
@@ -739,14 +766,18 @@ function shopView() {
   const items = S.shop, todo = items.filter(x => !x.done), done = items.filter(x => x.done);
   const byAisle = AISLES.map(a => [a, todo.filter(x => x.aisle === a).sort((p, q) => p.name.localeCompare(q.name))]).filter(([, l]) => l.length);
   const item = x => `<button class="shop-item ${x.done ? "done" : ""}" data-act="shopToggle" data-v="${x.id}" aria-pressed="${!!x.done}"><span class="box">${I.tick}</span><span class="nm">${esc(x.name)}</span><span class="q">${esc(x.qty)}</span></button>`;
-  return `<form data-form="shopAdd" class="inline" style="margin-top:14px" autocomplete="off">
+  const owner = isLinked() ? member((S.members.find(m => m.user_id === S.hh.carnet_user) || {}).id) : null;
+  const clearable = done.filter(x => !String(x.source || "").startsWith("carnet:"));
+  return `${isLinked() ? `<div class="card linkcard"><span>Synchronisée avec le Carnet de menus${owner ? " de " + esc(owner.name) : ""}.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>` : ""}
+    <form data-form="shopAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="shopIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
       <button class="btn ink" type="submit">Ajouter</button></form>
     ${!items.length ? `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>Ajoutez des articles ci-dessus, ou envoyez les ingrédients du menu depuis l'onglet Menu.</div>` : ""}
     ${byAisle.map(([a, l]) => `<p class="group-h">${esc(a)}</p><div class="list">${l.map(item).join("")}</div>`).join("")}
     ${!todo.length && items.length ? `<div class="empty" style="margin-top:16px"><strong>Tout est dans le panier.</strong></div>` : ""}
     ${done.length ? `<p class="group-h">Dans le panier</p><div class="list">${done.map(item).join("")}</div>
-      <div class="btns"><button class="btn" data-act="shopClear">Retirer les ${done.length} articles cochés</button></div>` : ""}`;
+      ${clearable.length ? `<div class="btns"><button class="btn" data-act="shopClear">Retirer les ${clearable.length} articles cochés</button></div>` : ""}
+      ${isLinked() && clearable.length < done.length ? `<p class="muted small" style="margin-top:8px">Les ingrédients des repas quittent la liste quand les courses sont terminées dans le Carnet.</p>` : ""}` : ""}`;
 }
 
 /* ---------- welcome, auth, setup ---------- */
@@ -903,12 +934,15 @@ async function mealSheet(day, slot) {
       </div>
     </form>`;
 }
+// the household's meals and shopping list are synchronised with this account's Carnet de menus
+const isLinked = () => !!(S.hh && S.hh.carnet_user);
+const isFav = id => S.favs instanceof Set && S.favs.has(id);
 function recList(q, cur) {
-  const all = S.recipes || [], n = q.trim().toLowerCase();
+  const all = [...(S.recipes || [])].sort((a, b) => isFav(b.id) - isFav(a.id)), n = q.trim().toLowerCase();
   if (!all.length) return `<p class="muted small">Le livre de recettes n'est pas accessible avec ce compte. Écrivez le repas ci-dessous.</p>`;
   const l = (n ? all.filter(r => r.name.toLowerCase().includes(n)) : all).slice(0, 60);
   const curR = cur && !l.some(r => r.id === cur) ? all.find(r => r.id === cur) : null;
-  return [curR, ...l].filter(Boolean).map(r => `<button type="button" class="rec" data-act="pickRecipe" data-v="${r.id}" aria-pressed="${r.id === cur}">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span><strong>${esc(r.name)}</strong><br><span class="muted small">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted small">Aucune recette ne correspond.</p>`;
+  return [curR, ...l].filter(Boolean).map(r => `<button type="button" class="rec" data-act="pickRecipe" data-v="${r.id}" aria-pressed="${r.id === cur}">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span><strong>${isFav(r.id) ? "★ " : ""}${esc(r.name)}</strong><br><span class="muted small">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted small">Aucune recette ne correspond.</p>`;
 }
 
 function memberSheet(m) {
@@ -964,7 +998,7 @@ document.addEventListener("click", async e => {
     case "delMeal": closeSheet(); await remove("meals", v); break;
     case "toShop": menuToShopping(weekR); break;
     case "shopToggle": { const x = S.shop.find(i => i.id === v); if (x) patch("shop", v, { done: !x.done }); break; }
-    case "shopClear": { const ids = S.shop.filter(x => x.done).map(x => x.id); await removeMany("shop", ids); break; }
+    case "shopClear": { const ids = S.shop.filter(x => x.done && !String(x.source || "").startsWith("carnet:")).map(x => x.id); await removeMany("shop", ids); break; }
     case "newMember": memberSheet(null); break;
     case "editMember": memberSheet(member(v)); break;
     case "delMember": closeSheet(); await remove("members", v); break;

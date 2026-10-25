@@ -13,6 +13,7 @@ Nouvelle version du Carnet de menus, dans son propre dossier : le Carnet continu
 6. Pour la messagerie et la carte : coller aussi `supabase-foyer-2.sql` (une seule fois).
 7. Pour Anniversaires, Budget, Documents et Emploi du temps : coller `supabase-foyer-3.sql` (une seule fois).
 8. Pour la Galerie : coller `supabase-foyer-4.sql` (une seule fois).
+9. Pour relier le Carnet, Google Agenda et les adresses : coller `supabase-foyer-5.sql` (une seule fois).
 
 Sans le script, le bouton « Essayer sans compte » permet de tout tester (les données restent sur le téléphone).
 
@@ -38,6 +39,31 @@ Les modifications apparaissent en direct sur les téléphones des autres membres
 - `sw.js`, `manifest.json`, `icon-*.png` : installation sur l'écran d'accueil
 - `supabase-foyer.sql` : tables, règles d'accès et temps réel
 - `supabase-foyer-2.sql` : messagerie et positions
+- `supabase-foyer-5.sql` : Carnet relié, identifiant Google, adresses des positions
+- `pont.js` : chargé par le Carnet de menus, synchronise repas et courses avec le foyer
 - `supabase-foyer-4.sql` : galerie photo (stockage privé « household-photos »)
 - `supabase-foyer-3.sql` : anniversaires, budget, documents (stockage privé), emploi du temps
 - `modules.js` : accueil en modules, Explorer, calendrier du mois et nouveaux modules
+
+## Carnet de menus relié
+
+Dans Maisonnée › Ma famille › « Relier mon Carnet ». Ensuite, chaque fois que le Carnet est ouvert sur ce compte :
+- les repas (semaine passée → 4 semaines devant) sont synchronisés dans les deux sens ;
+- les ingrédients des repas validés du Carnet apparaissent dans Courses, et les coches vont dans les deux sens ;
+- les articles ajoutés à la main (« En plus » dans le Carnet) vont dans les deux sens.
+Si un repas a changé des deux côtés, c'est la version du Carnet qui l'emporte.
+Le Carnet a un bouton « 🏠 Maisonnée » en haut pour revenir.
+
+## Agenda Google : créer l'identifiant (une seule fois, gratuit)
+
+1. Aller sur https://console.cloud.google.com et créer un projet (ex. « Maisonnée »).
+2. « API et services » › « Bibliothèque » : chercher **Google Calendar API** › Activer.
+3. « Écran de consentement OAuth » (ou « Google Auth Platform ») : type **Externe**, nom « Maisonnée », votre e-mail.
+   Dans « Audience » / « Utilisateurs test », ajouter les adresses Gmail qui se connecteront (vous, Christine…).
+4. « Identifiants » › « Créer des identifiants » › **ID client OAuth** › type **Application Web** :
+   - Origines JavaScript autorisées : `https://franckdavion.github.io`
+   - URI de redirection autorisés : `https://franckdavion.github.io/carnets-menus/maison/`
+5. Copier l'**ID client** (il finit par `.apps.googleusercontent.com`) et le coller dans Maisonnée › Ma famille › Agenda Google.
+
+Chacun connecte ensuite son propre agenda sur son téléphone (lecture seule) : les événements Google ne sont visibles que sur ce téléphone.
+« Importer mes anniversaires » copie les anniversaires Google dans le module Anniversaires, partagé avec le foyer.

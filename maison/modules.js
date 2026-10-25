@@ -86,6 +86,7 @@ VIEWS.agenda = function () {
   const first = parse(calMonth), y = first.getFullYear(), mo = first.getMonth();
   const start = mondayOf(calMonth), end = addDays(start, 41);
   const occ = occurrences(start, end), busy = new Set(occ.map(e => e.on));
+  for (const g of G.ev.items) if (!G.cals || G.cals.includes(g.cal)) busy.add(g.day);
   let cells = "";
   for (let i = 0; i < 42; i++) {
     const day = addDays(start, i), dt = parse(day), out = dt.getMonth() !== mo;
@@ -95,15 +96,16 @@ VIEWS.agenda = function () {
   }
   let list = "";
   for (let i = 0; i < 7; i++) {
-    const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day);
+    const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
     list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span><button class="icon-btn plain" data-act="newEventOn" data-v="${day}" aria-label="Ajouter le ${esc(dayLabel(day))}">${I.plus}</button></div>
-      ${evs.length || bs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
+      ${evs.length || bs.length || gs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
       <div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="calMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button>
         <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
         <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
+      ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button></p>` : ""}
       ${calSel !== today() ? `<div style="text-align:center"><button class="linkbtn" data-act="calPick" data-v="${today()}">Revenir à aujourd'hui</button></div>` : ""}
     </div>${list}`;
 };
@@ -113,18 +115,32 @@ VIEWS.repas = function () { return menuView() + `<p class="muted small" style="m
 VIEWS.courses = function () { return shopView(); };
 
 /* ---------- recipes ---------- */
-let recQ = "";
+let recQ = "", recTab = null;
+// favourites come from this account's Carnet de menus (its private space in Supabase)
+async function loadFavs() {
+  if (mode !== "cloud" || !user || !S.recipes || !S.recipes.length) return;
+  const { data, error } = await sb.from("user_state").select("menu").eq("user_id", user.id).maybeSingle();
+  if (error || !data || !data.menu) { S.favs = new Set(); return; }
+  const priv = data.menu.priv || {}, byKey = {};
+  for (const r of S.recipes) byKey[r.legacy_id || "c-" + r.id] = r.id;
+  S.favs = new Set(Object.entries(priv).filter(([, o]) => o && o.fav).map(([k]) => byKey[k] || (k.startsWith("c-") ? k.slice(2) : null)).filter(Boolean));
+}
+const carnetCard = text => `<div class="card linkcard"><span>${text}</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
 VIEWS.recettes = function () {
   if (!S.recipes) { loadRecipes().then(() => { if (view === "recettes") render(); }); return `<p class="muted">Chargement du livre de recettes…</p>`; }
   if (!S.recipes.length) return `<div class="empty"><strong>Le livre de recettes n'est pas accessible avec ce compte.</strong>Il faut que votre compte soit validé dans le Carnet de menus.</div>`;
-  return `<input class="input" id="recQ" type="search" placeholder="Chercher parmi ${S.recipes.length} recettes" value="${esc(recQ)}" autocomplete="off" style="margin-top:6px">
-    <div class="list" id="recBook" style="margin-top:12px">${recBookHtml()}</div>
-    <p class="muted small" style="margin-top:14px">Pour ajouter ou modifier des recettes : <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
+  const nf = S.favs instanceof Set ? S.recipes.filter(r => S.favs.has(r.id)).length : 0;
+  if (recTab === null) recTab = nf ? "fav" : "all";
+  return `${carnetCard("Ajouter, modifier ou importer des recettes se fait dans le Carnet de menus.")}
+    ${nf ? `<div class="seg" role="group" aria-label="Recettes"><button data-act="recTab" data-v="fav" aria-pressed="${recTab === "fav"}">★ Mes favoris (${nf})</button><button data-act="recTab" data-v="all" aria-pressed="${recTab === "all"}">Toutes (${S.recipes.length})</button></div>` : ""}
+    <input class="input" id="recQ" type="search" placeholder="Chercher une recette" value="${esc(recQ)}" autocomplete="off" style="margin-top:10px">
+    <div class="list" id="recBook" style="margin-top:12px">${recBookHtml()}</div>`;
 };
 function recBookHtml() {
   const n = recQ.trim().toLowerCase();
-  const l = (n ? S.recipes.filter(r => r.name.toLowerCase().includes(n) || (r.cat || "").toLowerCase().includes(n)) : S.recipes).slice(0, 120);
-  return l.map(r => `<button class="row" data-act="openRecipe" data-v="${r.id}">${r.image ? `<img class="thumb" src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="thumb">${mi("recettes", "sm")}</span>`}<span class="main"><span class="t">${esc(r.name)}</span><span class="m">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted" style="padding:14px">Aucune recette ne correspond.</p>`;
+  let l = recTab === "fav" && S.favs instanceof Set ? S.recipes.filter(r => S.favs.has(r.id)) : S.recipes;
+  if (n) l = l.filter(r => r.name.toLowerCase().includes(n) || (r.cat || "").toLowerCase().includes(n));
+  return l.slice(0, 150).map(r => `<button class="row" data-act="openRecipe" data-v="${r.id}">${r.image ? `<img class="thumb" src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="thumb">${mi("recettes", "sm")}</span>`}<span class="main"><span class="t">${isFav(r.id) ? "★ " : ""}${esc(r.name)}</span><span class="m">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted" style="padding:14px">Aucune recette ne correspond.</p>`;
 }
 function recipeSheet(id) {
   const r = recipeOf(id); if (!r) return;
@@ -345,6 +361,14 @@ document.addEventListener("click", async e => {
     case "editSlot": slotSheet(S.sched.find(x => x.id === v)); break;
     case "delSlot": closeSheet(); { const x = S.sched.find(y => y.id === v); await remove("sched", v); if (x) toast("Créneau supprimé.", "Annuler", () => add("sched", x)); } break;
     case "edtDay": edtDay = +v; render(); break;
+    case "recTab": recTab = v; render(); break;
+    case "linkCarnet": {
+      const on = v === "1";
+      if (on && !confirm("Relier votre Carnet de menus à ce foyer ? Le menu et les courses du foyer seront ceux de votre Carnet, et tous les membres pourront les modifier.")) break;
+      await setHh({ carnet_user: on ? user.id : null });
+      toast(on ? "Carnet relié : ouvrez-le une fois pour lancer la synchronisation." : "Carnet délié.");
+      break;
+    }
   }
 });
 document.addEventListener("input", e => { if (e.target.id === "recQ") { recQ = e.target.value; const el = $("#recBook"); if (el) el.innerHTML = recBookHtml(); } });
@@ -621,6 +645,20 @@ document.addEventListener("submit", async e => {
   toast(n === files.length ? (n > 1 ? `${n} photos ajoutées.` : "Photo ajoutée.") : `${n} sur ${files.length} photos ajoutées. Réessayez pour les autres (réseau ?).`);
 });
 
+/* Carnet de menus link, shown in Ma famille */
+const foyerViewCarnet = VIEWS.foyer;
+VIEWS.foyer = function () {
+  let card = "";
+  if (mode === "cloud" && S.v5) {
+    const owner = S.members.find(m => m.user_id === S.hh.carnet_user);
+    card = `<h2>Carnet de menus</h2><div class="card">${
+      S.hh.carnet_user === user.id ? `<p style="margin:0 0 6px"><strong>Relié à votre Carnet.</strong></p><p class="muted small">Le menu et les courses du foyer sont synchronisés avec votre Carnet chaque fois qu'il est ouvert.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a><button class="btn ghost danger" data-act="linkCarnet" data-v="0">Délier</button></div>`
+      : S.hh.carnet_user ? `<p style="margin:0"><strong>Relié au Carnet de ${esc(owner ? owner.name : "un membre")}.</strong></p><p class="muted small" style="margin-top:6px">Le menu et les courses sont synchronisés avec son Carnet.</p>`
+      : `<p class="muted small" style="margin:0">Reliez votre Carnet de menus : le menu de la semaine et la liste de courses seront les mêmes dans les deux applis, dans les deux sens.</p><div class="btns"><button class="btn primary" data-act="linkCarnet" data-v="1">Relier mon Carnet</button></div>`}</div>`;
+  } else if (mode === "cloud" && !S.v5) card = `<h2>Carnet de menus</h2><div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-5.sql</b> dans Supabase pour relier votre Carnet, Google Agenda et les adresses.</div>`;
+  return foyerViewCarnet() + card;
+};
+
 /* storage used, shown in Ma famille */
 const foyerView0 = VIEWS.foyer;
 VIEWS.foyer = function () {
@@ -630,5 +668,138 @@ VIEWS.foyer = function () {
     <div class="meter" style="margin-top:10px"><i style="width:${Math.max(pct, used ? 1 : 0)}%;background:${pct > 85 ? "var(--late)" : "var(--accent)"}"></i></div>
     <span class="muted small">Photos de la galerie et documents. Les photos de recettes du Carnet comptent aussi dans ce 1 Go.</span></div>` : "");
 };
+
+/* ---------- Google Agenda (lecture seule, sur ce téléphone) ---------- */
+// Connexion OAuth « côté navigateur » : le jeton reste sur ce téléphone, rien n'est envoyé dans Supabase.
+const G = { tok: LS.get("mz_gtok", null), cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false };
+const gClient = () => (S.hh && S.hh.google_client_id) || "";
+const gValid = () => !!(G.tok && G.tok.exp > Date.now() + 60e3);
+const gOn = () => !!(G.tok || G.ev.items.length);
+function gConnect(silent, then) {
+  if (!gClient()) { toast("Ajoutez d'abord l'identifiant Google dans Ma famille."); return; }
+  const st = "mzg" + Math.random().toString(36).slice(2, 10) + "|" + (then || view);
+  LS.set("mz_gstate", st);
+  const q = { client_id: gClient(), redirect_uri: location.origin + location.pathname.replace(/index\.html$/, ""), response_type: "token", scope: "https://www.googleapis.com/auth/calendar.readonly", include_granted_scopes: "true", state: st };
+  if (silent) q.prompt = "none";
+  location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams(q);
+}
+(function gReturn() {
+  const h = new URLSearchParams(location.hash.slice(1)), st = h.get("state");
+  if (!st || !st.startsWith("mzg")) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  if (st !== LS.get("mz_gstate", "")) return;
+  G.after = st.split("|")[1] || "agenda";
+  if (h.get("access_token")) { G.tok = { t: h.get("access_token"), exp: Date.now() + (+h.get("expires_in") || 3600) * 1000 }; LS.set("mz_gtok", G.tok); }
+  else G.err = h.get("error") || "refus";
+})();
+async function gApi(path) {
+  const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { headers: { Authorization: "Bearer " + G.tok.t } });
+  if (r.status === 401) { G.tok = null; LS.del("mz_gtok"); throw new Error("expired"); }
+  if (!r.ok) throw new Error("google " + r.status);
+  return r.json();
+}
+async function gFetch() {
+  if (!gValid() || G.busy) return;
+  G.busy = true;
+  try {
+    const cl = await gApi("users/me/calendarList?minAccessRole=reader&maxResults=250");
+    G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, on: !!c.selected || !!c.primary }));
+    LS.set("mz_gcallist", G.list);
+    if (!G.cals) { G.cals = G.list.filter(c => c.on).map(c => c.id); LS.set("mz_gcals", G.cals); }
+    const tMin = new Date(parse(addDays(today(), -40))).toISOString(), tMax = new Date(parse(addDays(today(), 150))).toISOString(), items = [];
+    for (const c of G.list.filter(c => G.cals.includes(c.id))) {
+      let page = "";
+      do {
+        const j = await gApi(`calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page ? "&pageToken=" + page : ""}`);
+        for (const e of j.items || []) {
+          if (e.status === "cancelled" || e.eventType === "birthday") continue;
+          const base = { id: e.id, cal: c.id, calName: c.name, color: e.colorId ? c.color : c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
+          if (e.start && e.start.date) {
+            const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
+            for (let d = e.start.date, n = 0; d < end && n < 31; d = addDays(d, 1), n++) items.push({ ...base, day: d, start_time: null, end_time: null });
+          } else if (e.start && e.start.dateTime) {
+            const st = new Date(e.start.dateTime), en = e.end && e.end.dateTime ? new Date(e.end.dateTime) : null, day = ymd(st);
+            items.push({ ...base, day, start_time: pad(st.getHours()) + ":" + pad(st.getMinutes()), end_time: en && ymd(en) === day ? pad(en.getHours()) + ":" + pad(en.getMinutes()) : null });
+          }
+        }
+        page = j.nextPageToken || "";
+      } while (page);
+    }
+    G.ev = { at: Date.now(), items }; LS.set("mz_gev", G.ev);
+  } catch (e) { if (e.message !== "expired") toast("Google Agenda ne répond pas pour l'instant."); }
+  finally { G.busy = false; softRender(); }
+}
+function gRefresh(then) { if (gValid()) gFetch(); else gConnect(true, then); }
+const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
+function gRow(e) {
+  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${e.start_time ? "" : "allday"}">${e.start_time ? esc(hm(e.start_time)) : "Journée"}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
+}
+// Google birthdays → the household's Anniversaires (shared with everyone)
+async function gImportBdays() {
+  if (!S.v3) { toast("Le module Anniversaires n'est pas encore installé."); return; }
+  if (!gValid()) { gConnect(!!G.tok, "anniv-import"); return; }
+  const tMin = new Date().toISOString(), tMax = new Date(Date.now() + 367 * 864e5).toISOString();
+  let items = [];
+  try { const j = await gApi(`calendars/primary/events?eventTypes=birthday&singleEvents=true&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}`); items = j.items || []; } catch (e) {}
+  if (!items.length) { try { const j = await gApi(`calendars/${encodeURIComponent("addressbook#contacts@group.v.calendar.google.com")}/events?singleEvents=true&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}`); items = j.items || []; } catch (e) {} }
+  const nk = x => String(x).trim().toLowerCase(), have = new Set(S.bdays.map(b => nk(b.name) + "|" + b.day + "|" + b.month)), rows = [];
+  for (const e of items) {
+    const d = e.start && (e.start.date || String(e.start.dateTime || "").slice(0, 10)); if (!d) continue;
+    const name = String(e.summary || "").replace(/^(anniversaire\s+(de\s+|d['’]\s*)|anniv\.?\s+)/i, "").replace(/(['’]s)?\s+birthday$/i, "").trim();
+    if (!name) continue;
+    const dt = parse(d), key = nk(name) + "|" + dt.getDate() + "|" + (dt.getMonth() + 1);
+    if (have.has(key)) continue; have.add(key);
+    rows.push({ name: name.slice(0, 60), day: dt.getDate(), month: dt.getMonth() + 1, year: null, member_id: null, notes: "Importé de Google", created_at: new Date().toISOString() });
+  }
+  if (rows.length) await addMany("bdays", rows);
+  view = "anniv"; render();
+  toast(rows.length ? `${rows.length} anniversaire${rows.length > 1 ? "s" : ""} importé${rows.length > 1 ? "s" : ""} de Google.` : items.length ? "Tous vos anniversaires Google sont déjà là." : "Aucun anniversaire trouvé dans votre agenda Google.");
+}
+function gCard() {
+  if (mode !== "cloud") return `<h2>Agenda Google</h2><div class="card"><p class="muted small" style="margin:0">Disponible avec un vrai foyer (pas en mode démo).</p></div>`;
+  if (!S.v5) return "";
+  if (!gClient()) return `<h2>Agenda Google</h2><div class="card">
+    <p class="small" style="margin:0 0 8px">Pour afficher vos agendas et anniversaires Google, il faut une fois créer un « identifiant client » dans la console Google (gratuit). Le guide est dans le fichier LISEZMOI du dossier maison.</p>
+    <form data-form="gClient" class="inline"><input class="input" name="cid" placeholder="xxxx.apps.googleusercontent.com" required pattern=".+\\.apps\\.googleusercontent\\.com"><button class="btn ink" type="submit">Enregistrer</button></form></div>`;
+  if (!G.tok && !G.ev.items.length) return `<h2>Agenda Google</h2><div class="card"><p class="small" style="margin:0">Affichez vos agendas Google dans le Calendrier (sur ce téléphone) et importez vos anniversaires.</p><div class="btns"><button class="btn primary" data-act="gConnect">Connecter mon agenda Google</button></div></div>`;
+  return `<h2>Agenda Google</h2><div class="card">
+    <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
+    ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
+    <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
+}
+const foyerViewG = VIEWS.foyer;
+VIEWS.foyer = function () { return foyerViewG() + gCard(); };
+const gBoot = setInterval(() => {
+  if (screen !== "app") return;
+  clearInterval(gBoot);
+  if (G.err && G.after) { toast(G.err === "access_denied" ? "Connexion Google annulée." : "Google n'a pas pu vous connecter : réessayez depuis Ma famille."); }
+  if (G.after === "anniv-import" && gValid()) gImportBdays();
+  else if (G.after) { view = G.after; render(); }
+  if (gValid() && (G.after || Date.now() - G.ev.at > 15 * 60e3)) gFetch();
+}, 300);
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const v = b.dataset.v;
+  switch (b.dataset.act) {
+    case "gConnect": gConnect(false, "foyer"); break;
+    case "gRefresh": gRefresh(view); break;
+    case "gBdays": gImportBdays(); break;
+    case "gOff": G.tok = null; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté de ce téléphone."); break;
+    case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (gValid()) gFetch(); break; }
+    case "gEvent": {
+      const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
+      openSheet(ev.title, `<p style="margin-top:8px"><strong>${esc(dayLabel(ev.day))}</strong>${ev.start_time ? " · " + esc(hm(ev.start_time)) + (ev.end_time ? " – " + esc(hm(ev.end_time)) : "") : " · toute la journée"}</p>
+        ${ev.place ? `<p>${esc(ev.place)}</p>` : ""}<p class="muted small">Agenda Google « ${esc(ev.calName)} ». Pour le modifier, passez par Google Agenda.</p>
+        ${ev.link ? `<div class="btns"><a class="btn" href="${esc(ev.link)}" target="_blank" rel="noopener">Ouvrir dans Google Agenda</a></div>` : ""}`);
+      break;
+    }
+  }
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form=gClient]"); if (!f) return;
+  e.preventDefault();
+  const cid = new FormData(f).get("cid").trim();
+  await setHh({ google_client_id: cid }); toast("Identifiant Google enregistré.");
+});
 
 init();
