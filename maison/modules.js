@@ -674,37 +674,56 @@ VIEWS.foyer = function () {
     <span class="muted small">Photos de la galerie et documents. Les photos de recettes du Carnet comptent aussi dans ce 1 Go.</span></div>` : "");
 };
 
-/* ---------- Google Agenda (lecture seule, sur ce téléphone) ---------- */
-// Connexion OAuth « côté navigateur » : le jeton reste sur ce téléphone, rien n'est envoyé dans Supabase.
-const G = { tok: LS.get("mz_gtok", null), cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false };
+/* ---------- Google Agenda via Supabase (lecture seule) ---------- */
+const G = { tok: null, cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false, connected: false };
+const G_ENDPOINT = SB_URL + "/functions/v1/google-calendar";
 const gClient = () => (S.hh && S.hh.google_client_id) || "";
 const gValid = () => !!(G.tok && G.tok.exp > Date.now() + 60e3);
-const gOn = () => !!(G.tok || G.ev.items.length);
-function gConnect(silent, then) {
-  if (!gClient()) { toast("Ajoutez d'abord l'identifiant Google dans Ma famille."); return; }
-  const st = "mzg" + Math.random().toString(36).slice(2, 10) + "|" + (then || view);
-  LS.set("mz_gstate", st);
-  const q = { client_id: gClient(), redirect_uri: location.origin + location.pathname.replace(/index\.html$/, ""), response_type: "token", scope: "https://www.googleapis.com/auth/calendar.readonly", include_granted_scopes: "true", state: st };
-  if (silent) q.prompt = "none";
-  location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams(q);
+const gOn = () => !!(G.connected || G.ev.items.length);
+async function gServer(action, method = "GET") {
+  if (!sb) await loadSb();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Connexion Maisonnée requise");
+  const res = await fetch(G_ENDPOINT + "/" + action, { method, headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY } });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error || "Erreur Google Agenda");
+  return body;
+}
+async function gEnsure() {
+  if (gValid()) return true;
+  if (mode !== "cloud" || !user) return false;
+  try {
+    const t = await gServer("token");
+    G.connected = !!t.connected;
+    if (!t.connected || !t.access_token) { G.tok = null; return false; }
+    G.tok = { t: t.access_token, exp: Date.parse(t.expires_at) || Date.now() + 3500e3 };
+    return true;
+  } catch (e) { console.warn("Google Agenda", e); return false; }
+}
+async function gConnect(silent, then) {
+  try {
+    const r = await gServer("start", "POST");
+    LS.set("mz_greturn", then || view);
+    location.href = r.url;
+  } catch (e) { toast("Connexion Google impossible : " + e.message); }
 }
 (function gReturn() {
-  const h = new URLSearchParams(location.hash.slice(1)), st = h.get("state");
-  if (!st || !st.startsWith("mzg")) return;
-  history.replaceState(null, "", location.pathname + location.search);
-  if (st !== LS.get("mz_gstate", "")) return;
-  G.after = st.split("|")[1] || "agenda";
-  if (h.get("access_token")) { G.tok = { t: h.get("access_token"), exp: Date.now() + (+h.get("expires_in") || 3600) * 1000 }; LS.set("mz_gtok", G.tok); }
-  else G.err = h.get("error") || "refus";
+  const url = new URL(location.href), result = url.searchParams.get("google");
+  if (!result) return;
+  G.after = LS.get("mz_greturn", "foyer");
+  LS.del("mz_greturn");
+  G.err = result === "connected" ? null : result;
+  url.searchParams.delete("google");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
 })();
 async function gApi(path) {
   const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { headers: { Authorization: "Bearer " + G.tok.t } });
-  if (r.status === 401) { G.tok = null; LS.del("mz_gtok"); throw new Error("expired"); }
+  if (r.status === 401) { G.tok = null; throw new Error("expired"); }
   if (!r.ok) throw new Error("google " + r.status);
   return r.json();
 }
 async function gFetch() {
-  if (!gValid() || G.busy) return;
+  if (G.busy || !(await gEnsure())) return;
   G.busy = true;
   try {
     const cl = await gApi("users/me/calendarList?minAccessRole=reader&maxResults=250");
@@ -734,7 +753,7 @@ async function gFetch() {
   } catch (e) { if (e.message !== "expired") toast("Google Agenda ne répond pas pour l'instant."); }
   finally { G.busy = false; softRender(); }
 }
-function gRefresh(then) { if (gValid()) gFetch(); else gConnect(true, then); }
+async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
 const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
 function gRow(e) {
   return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${e.start_time ? "" : "allday"}">${e.start_time ? esc(hm(e.start_time)) : "Journée"}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
@@ -742,7 +761,7 @@ function gRow(e) {
 // Google birthdays → the household's Anniversaires (shared with everyone)
 async function gImportBdays() {
   if (!S.v3) { toast("Le module Anniversaires n'est pas encore installé."); return; }
-  if (!gValid()) { gConnect(!!G.tok, "anniv-import"); return; }
+  if (!(await gEnsure())) { toast("Connectez Google Agenda depuis Ma famille."); return; }
   const tMin = new Date().toISOString(), tMax = new Date(Date.now() + 367 * 864e5).toISOString();
   let items = [];
   try { const j = await gApi(`calendars/primary/events?eventTypes=birthday&singleEvents=true&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}`); items = j.items || []; } catch (e) {}
@@ -766,7 +785,7 @@ function gCard() {
   if (!gClient()) return `<h2>Agenda Google</h2><div class="card">
     <p class="small" style="margin:0 0 8px">Pour afficher vos agendas et anniversaires Google, il faut une fois créer un « identifiant client » dans la console Google (gratuit). Le guide est dans le fichier LISEZMOI du dossier maison.</p>
     <form data-form="gClient" class="inline"><input class="input" name="cid" placeholder="xxxx.apps.googleusercontent.com" required pattern=".+\\.apps\\.googleusercontent\\.com"><button class="btn ink" type="submit">Enregistrer</button></form></div>`;
-  if (!G.tok && !G.ev.items.length) return `<h2>Agenda Google</h2><div class="card"><p class="small" style="margin:0">Affichez vos agendas Google dans le Calendrier (sur ce téléphone) et importez vos anniversaires.</p><div class="btns"><button class="btn primary" data-act="gConnect">Connecter mon agenda Google</button></div></div>`;
+  if (!G.connected && !G.ev.items.length) return `<h2>Agenda Google</h2><div class="card"><p class="small" style="margin:0">Affichez vos agendas Google dans le Calendrier (sur ce téléphone) et importez vos anniversaires.</p><div class="btns"><button class="btn primary" data-act="gConnect">Connecter mon agenda Google</button></div></div>`;
   return `<h2>Agenda Google</h2><div class="card">
     <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
     ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
@@ -777,10 +796,10 @@ VIEWS.foyer = function () { return foyerViewG() + gCard(); };
 const gBoot = setInterval(() => {
   if (screen !== "app") return;
   clearInterval(gBoot);
-  if (G.err && G.after) { toast(G.err === "access_denied" ? "Connexion Google annulée." : "Google n'a pas pu vous connecter : réessayez depuis Ma famille."); }
-  if (G.after === "anniv-import" && gValid()) gImportBdays();
+  if (G.err && G.after) { toast(G.err === "cancelled" ? "Connexion Google annulée." : "Google n'a pas pu vous connecter : réessayez depuis Ma famille."); }
+  if (G.after === "anniv-import") gImportBdays();
   else if (G.after) { view = G.after; render(); }
-  if (gValid() && (G.after || Date.now() - G.ev.at > 15 * 60e3)) gFetch();
+  gEnsure().then(ok => { if (ok && (G.after || Date.now() - G.ev.at > 15 * 60e3)) gFetch(); else softRender(); });
 }, 300);
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
@@ -789,8 +808,8 @@ document.addEventListener("click", async e => {
     case "gConnect": gConnect(false, "foyer"); break;
     case "gRefresh": gRefresh(view); break;
     case "gBdays": gImportBdays(); break;
-    case "gOff": G.tok = null; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté de ce téléphone."); break;
-    case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (gValid()) gFetch(); break; }
+    case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
+    case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); gFetch(); break; }
     case "gEvent": {
       const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
       openSheet(ev.title, `<p style="margin-top:8px"><strong>${esc(dayLabel(ev.day))}</strong>${ev.start_time ? " · " + esc(hm(ev.start_time)) + (ev.end_time ? " – " + esc(hm(ev.end_time)) : "") : " · toute la journée"}</p>
