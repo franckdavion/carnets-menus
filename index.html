@@ -4183,10 +4183,17 @@ function confirmNewer(){return true;}
 async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m)m.textContent="⏳ Synchronisation…";
   try{const n=await cloudPull();await cloudPush();render();LS.set("cm_cloud_at",Date.now());cloud.msg="";if(m)m.textContent="✓ À jour · "+new Date().toLocaleTimeString("fr-FR");if(n&&!manual)toast(`🆕 ${n} recette${n>1?"s":""} de la base commune`);}
   catch(e){if(m)m.textContent="Synchro impossible pour l'instant : "+(e.message||"réseau ?");}}
-async function cloudMigrate(){if(!cloud.admin)return;const own=Object.keys(recipes).filter(id=>!recipes[id].shared&&!recipes[id].cloudAuthor);
-  if(!confirm(`Envoyer ${own.length} recettes dans la base commune, à votre nom ? Les membres validés les verront.`))return;
-  const H=LS.get("cm_cloudhash",{});H.__all=1;LS.set("cm_cloudhash",H);toast("⏳ Envoi des recettes…");await cloudPush();const H2=LS.get("cm_cloudhash",{});delete H2.__all;LS.set("cm_cloudhash",H2);
-  const{count}=await cloud.sb.from("recipes").select("id",{count:"exact",head:true});const err=cloud.lastErr||[];
+async function cloudMigrate(){if(!cloud.admin)return;const sb=cloud.sb;toast("⏳ Vérification de la base commune…");
+  // what is really in the common book (not what this phone believes)
+  const exist=new Map();let f=0;for(;;){const{data,error}=await sb.from("recipes").select("legacy_id,author_id").range(f,f+999);if(error){toast("Base inaccessible : "+error.message);return;}(data||[]).forEach(x=>exist.set(x.legacy_id,x.author_id));if(!data||data.length<1000)break;f+=1000;}
+  let fixed=0;for(const[id,r]of Object.entries(recipes))if(exist.has(id)&&!r.cloudAuthor){r.cloudAuthor=exist.get(id);fixed++;}
+  if(fixed)LS.set("cm_recipes",recipes);
+  const todo=Object.keys(recipes).filter(id=>!recipes[id].shared&&!exist.has(id));
+  if(!todo.length){cloud.msg=`✓ Tout est déjà dans la base commune (${exist.size} recettes).`;toast(cloud.msg);renderAcct();return;}
+  if(!confirm(`${todo.length} recette${todo.length>1?"s":""} de ce téléphone ne ${todo.length>1?"sont":"est"} pas encore dans la base commune. Les envoyer à votre nom ?`))return;
+  const H=LS.get("cm_cloudhash",{});todo.forEach(id=>{delete H[id];delete recipes[id].cloudAuthor;});H.__all=1;LS.set("cm_cloudhash",H);toast("⏳ Envoi des recettes…");
+  await cloudPush();const H2=LS.get("cm_cloudhash",{});delete H2.__all;LS.set("cm_cloudhash",H2);
+  const{count}=await sb.from("recipes").select("id",{count:"exact",head:true});const err=cloud.lastErr||[];
   cloud.msg=`Base commune : ${count??"?"} recettes · ${cloud.lastSent||0} envoyées maintenant`+(err.length?` · ${err.length} refusée${err.length>1?"s":""} (${err.slice(0,3).join(" ; ")})`:"");
   toast(err.length?"Envoi terminé avec des erreurs (voir Mon compte)":`✓ ${count} recettes dans la base commune`);renderAcct();}
 async function loadMembers(){const{data,error}=await cloud.sb.rpc("admin_members");cloud.members=error?[]:data;if(error)toast("Liste impossible : "+error.message);$("#memList").innerHTML=membersHtml();}
