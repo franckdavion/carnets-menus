@@ -892,12 +892,42 @@ function syncShow() {
   if (allDay) f.querySelectorAll("[data-times]").forEach(el => { el.hidden = allDay.checked; });
 }
 
-function eventSheet(e, day) {
+/* Rendez-vous : délais en minutes, enregistrés dans events.reminders (JSONB). */
+const REMINDER_DEFAULT_KEY = "mz_appointment_reminder_defaults";
+const reminderDefaults = () => {
+  const stored = LS.get(REMINDER_DEFAULT_KEY, [1440, 30]);
+  return Array.isArray(stored) ? stored.filter(n => Number.isInteger(n) && n >= 0 && n <= 525600) : [1440, 30];
+};
+function reminderRows(values) {
+  return values.map((minutes) => {
+    const unit = minutes % 1440 === 0 && minutes >= 1440 ? 1440 : minutes % 60 === 0 && minutes >= 60 ? 60 : 1;
+    return `<div class="inline reminder-row" style="gap:8px;margin:8px 0;align-items:center">
+      <input class="input" aria-label="Durée du rappel" type="number" min="0" max="525600" step="1" value="${minutes / unit}" style="min-width:70px;flex:1" data-reminder-value>
+      <select class="input" aria-label="Unité du rappel" data-reminder-unit style="flex:1"><option value="1" ${unit === 1 ? "selected" : ""}>minutes</option><option value="60" ${unit === 60 ? "selected" : ""}>heures</option><option value="1440" ${unit === 1440 ? "selected" : ""}>jours</option></select>
+      <button class="btn ghost" type="button" data-act="removeReminder" aria-label="Supprimer ce rappel">✕</button>
+    </div>`;
+  }).join("");
+}
+function appointmentReminderValues(form) {
+  const rows = [...form.querySelectorAll(".reminder-row")];
+  const values = rows.map(r => {
+    const value = Number(r.querySelector("[data-reminder-value]").value);
+    const unit = Number(r.querySelector("[data-reminder-unit]").value);
+    return Number.isInteger(value) && value >= 0 && Number.isInteger(value * unit) && value * unit <= 525600 ? value * unit : NaN;
+  });
+  return values.every(Number.isFinite) ? [...new Set(values)] : null;
+}
+function reminderVisibility(form) {
+  const box = form.querySelector("#appointmentReminderList");
+  if (box) box.hidden = form.querySelector('[name="reminder_mode"]:checked')?.value !== "custom";
+}
+function eventSheet(e, day, appointment = false) {
   const isNew = !e;
-  e = e || { title: "", day: day || (view === "agenda" ? calSel : today()), start_time: null, end_time: null, repeat: "none", members: [], place: "", notes: "" };
-  openSheet(isNew ? "Nouvel événement" : "Événement", `
+  const isAppointment = appointment || !!(e && e.kind === "appointment");
+  e = e || { title: "", day: day || (view === "agenda" ? calSel : today()), start_time: appointment ? "09:00" : null, end_time: appointment ? "09:30" : null, repeat: "none", members: [], place: "", notes: "" };
+  openSheet(isNew ? (isAppointment ? "Nouveau rendez-vous" : "Nouvel événement") : (isAppointment ? "Rendez-vous" : "Événement"), `
     <form data-form="event">
-      <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(e.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="Ex. Dentiste de Léa"></label>
+      <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(e.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="${isAppointment ? "Ex. Médecin, dentiste…" : "Ex. Dentiste de Léa"}"></label>
       <label class="field"><span class="label">Date</span><input class="input" name="day" type="date" value="${esc(e.day)}" required></label>
       <label class="switch"><strong>Toute la journée</strong><input type="checkbox" name="allday" ${e.start_time ? "" : "checked"}></label>
       <div class="inline" data-times style="gap:12px">
@@ -908,12 +938,25 @@ function eventSheet(e, day) {
       <label class="field"><span class="label">Où</span><input class="input" name="place" value="${esc(e.place)}" maxlength="120" placeholder="Facultatif"></label>
       <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, e.repeat || "none")}</div>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(e.notes)}</textarea></label>
+      ${isAppointment ? `<div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px">
+        <span class="label">Rappels du rendez-vous</span>
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="none" ${Array.isArray(e.reminders) && e.reminders.length === 0 ? "checked" : ""}> Aucun rappel</label>
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="default" ${!Array.isArray(e.reminders) ? "checked" : ""}> Mes rappels par défaut</label>
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="custom" ${Array.isArray(e.reminders) && e.reminders.length > 0 ? "checked" : ""}> Personnaliser les rappels</label>
+        <div id="appointmentReminderList" hidden>
+          <div id="appointmentReminderRows">${reminderRows(Array.isArray(e.reminders) && e.reminders.length ? e.reminders : reminderDefaults())}</div>
+          <button class="btn ghost" type="button" data-act="addReminder">+ Ajouter un rappel</button>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" name="save_reminder_defaults"> Enregistrer ces délais comme rappels par défaut</label>
+          <p class="muted small">Durées réglables à la minute près. Les notifications sur téléphone nécessitent une configuration push supplémentaire.</p>
+        </div>
+      </div>` : ""}
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
         ${isNew ? "" : `<button class="btn danger" type="button" data-act="delEvent" data-v="${e.id}">Supprimer</button>`}
       </div>
     </form>`, { id: isNew ? null : e.id });
   syncShow();
+  reminderVisibility($("#sheetIn form"));
 }
 
 async function mealSheet(day, slot) {
@@ -983,6 +1026,13 @@ document.addEventListener("click", async e => {
     case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t)); } break;
     case "idea": { const x = TASK_IDEAS[+v]; await add("tasks", { title: x.title, room: x.room, assignee: null, rotate: !!x.rotate, freq: x.freq, every_n: x.every_n || 1, weekdays: x.weekdays || [], next_due: today(), effort: x.effort, notes: "", archived: false, created_by: user ? user.id : null }); toast(`« ${x.title} » ajoutée.`); break; }
     case "newEvent": eventSheet(null); break;
+    case "addReminder": {
+      const target = $("#appointmentReminderRows");
+      if (target) target.insertAdjacentHTML("beforeend", reminderRows([10]));
+      break;
+    }
+    case "removeReminder": b.closest(".reminder-row")?.remove(); break;
+    case "newAppointment": eventSheet(null, null, true); break;
     case "editEvent": eventSheet(S.events.find(x => x.id === v)); break;
     case "delEvent": closeSheet(); { const ev = S.events.find(x => x.id === v); await remove("events", v); if (ev) toast("Événement supprimé.", "Annuler", () => add("events", ev)); } break;
     case "weekA": weekA = addDays(weekA, +v); render(); break;
@@ -1048,6 +1098,10 @@ async function setHh(p) {
   if (mode === "cloud") { const { error } = await sb.from("households").update(p).eq("id", S.hh.id); if (error) { S.hh = before; saveLocal(); render(); fail(error); } }
 }
 
+document.addEventListener("change", e => {
+  if (e.target.matches('[name="reminder_mode"]')) reminderVisibility(e.target.closest("form"));
+});
+
 document.addEventListener("submit", async e => {
   const f = e.target.closest("form[data-form]"); if (!f) return;
   e.preventDefault();
@@ -1073,6 +1127,17 @@ document.addEventListener("submit", async e => {
     case "event": {
       const allday = !!fd.allday;
       const row = { title: fd.title.trim(), day: fd.day, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
+      if (f.querySelector('[name="reminder_mode"]')) {
+        const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "default";
+        const reminders = choice === "none" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
+        if (!reminders || (choice === "custom" && !reminders.length)) {
+          toast("Ajoute un rappel valide ou choisis « Aucun rappel ».");
+          return;
+        }
+        row.kind = "appointment";
+        row.reminders = reminders;
+        if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
+      }
       const id = sheetCtx && sheetCtx.id; closeSheet();
       if (id) await patch("events", id, row);
       else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }

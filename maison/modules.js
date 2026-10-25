@@ -97,7 +97,7 @@ VIEWS.agenda = function () {
   let list = "";
   for (let i = 0; i < 7; i++) {
     const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
-    list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span><button class="icon-btn plain" data-act="newEventOn" data-v="${day}" aria-label="Ajouter le ${esc(dayLabel(day))}">${I.plus}</button></div>
+    list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span><span style="display:inline-flex;gap:6px;align-items:center"><button class="btn" type="button" data-act="newEventOn" data-v="${day}" style="padding:6px 10px;font-size:12px">Événement</button><button class="btn primary" type="button" data-act="newAppointmentOn" data-v="${day}" style="padding:6px 10px;font-size:12px">Rendez-vous</button></span></div>
       ${evs.length || bs.length || gs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
@@ -326,7 +326,7 @@ function slotSheet(s) {
 
 /* ---------- quick add from home ---------- */
 function quickAdd() {
-  const acts = [["galerie", "Photos", "pickPhotos"], ["tasks", "Tâche", "newTask"], ["agenda", "Événement", "newEvent"], ["courses", "Article de courses", "goShop"], ["budget", "Dépense", "newExp"], ["anniv", "Anniversaire", "newBday"], ["docs", "Document", "newDoc"], ["edt", "Créneau", "newSlot"], ["messages", "Message", "goMsg"]];
+  const acts = [["galerie", "Photos", "pickPhotos"], ["tasks", "Tâche", "newTask"], ["agenda", "Événement", "newEvent"], ["agenda", "Rendez-vous", "newAppointment"], ["courses", "Article de courses", "goShop"], ["budget", "Dépense", "newExp"], ["anniv", "Anniversaire", "newBday"], ["docs", "Document", "newDoc"], ["edt", "Créneau", "newSlot"], ["messages", "Message", "goMsg"]];
   openSheet("Ajouter", `<div class="sq-grid" style="margin-top:10px">${acts.map(([k, l, a]) => `<button class="sq" data-act="${a}"><span class="sq-ic">${mi(k)}</span><span class="sq-t">${l}</span></button>`).join("")}</div>`);
 }
 
@@ -343,6 +343,7 @@ document.addEventListener("click", async e => {
     case "calPick": calSel = v; if (v.slice(0, 7) !== calMonth.slice(0, 7)) calMonth = v.slice(0, 7) + "-01"; render(); break;
     case "calMonth": { const d = parse(calMonth); d.setMonth(d.getMonth() + +v); calMonth = ymd(d); calSel = calMonth.slice(0, 7) === today().slice(0, 7) ? today() : calMonth; render(); break; }
     case "newEventOn": eventSheet(null, v); break;
+    case "newAppointmentOn": eventSheet(null, v, true); break;
     case "openRecipe": recipeSheet(v); break;
     case "newBday": closeSheet(); if (!S.v3) { view = "anniv"; render(); break; } bdaySheet(null, b.dataset.m || null); break;
     case "editBday": bdaySheet(S.bdays.find(x => x.id === v)); break;
