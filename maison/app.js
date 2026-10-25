@@ -60,12 +60,13 @@ let mode = LS.get("mz_mode", null);          // "demo" | "cloud" | null
 let sb = null, user = null, rt = null;
 let screen = "loading";                       // loading | welcome | auth | setup | app
 let authMode = "login", authErr = "", setupErr = "", joinPreview = null;
-let view = LS.get("mz_view", "today");
+let view = LS.get("mz_view", "home");
+if (view === "today") view = "home";
 let who = null;                               // member filter on Today and Tâches
 let weekA = mondayOf(today()), weekR = mondayOf(today());
 let repasTab = "menu";
 let S = blank();
-function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, recipes: null }; }
+function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, recipes: null }; }
 const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
 const V2 = ["msgs", "locs"]; // tables added by supabase-foyer-2.sql
 
@@ -166,13 +167,17 @@ async function loadCloud(hid) {
     sb.from("messages").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(300),
     sb.from("member_locations").select("*").eq("household_id", hid)
   ]);
+  // anniversaires, budget, documents, emploi du temps: third script
+  const [bd, ex, dc, sc] = await Promise.all(["birthdays", "expenses", "documents", "schedule"].map(t => sb.from(t).select("*").eq("household_id", hid)));
+  const v3 = ![bd, ex, dc, sc].some(r => r.error);
   const bad = [hh, mm, tk, lg, ev, ml, sh].find(r => r.error);
   if (bad) throw bad.error;
   // messages and positions need the second script; the rest of the app works without it
   const v2 = !ms.error && !lc.error;
   const recipes = S.recipes;
   S = { hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
-    msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2, recipes };
+    msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
+    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, recipes };
   saveLocal();
 }
 
@@ -181,6 +186,7 @@ function listen(hid) {
   rt = sb.channel("foyer-" + hid);
   for (const [key, table] of Object.entries(TABLES)) {
     if (V2.includes(key) && !S.v2) continue;
+    if (V3.includes(key) && !S.v3) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
       if (p.eventType === "DELETE") { S[key] = S[key].filter(x => x.id !== p.old.id); }
       else {
@@ -206,7 +212,7 @@ function softRender() {
 async function loadRecipes() {
   if (S.recipes) return S.recipes;
   if (mode !== "cloud") { S.recipes = DEMO_RECIPES; return S.recipes; }
-  const { data, error } = await sb.from("recipes").select("id,name,cat,time,serves,ing,image").order("name");
+  const { data, error } = await sb.from("recipes").select("id,name,cat,time,serves,ing,image,steps").order("name");
   S.recipes = error ? [] : data;
   return S.recipes;
 }
@@ -387,7 +393,7 @@ async function menuToShopping(wk) {
   const old = S.shop.filter(x => x.source === src && !x.done).map(x => x.id);
   await removeMany("shop", old);
   await addMany("shop", [...agg.values()].map(x => ({ name: x.name, qty: fmtQty(x.q, x.u), aisle: AISLES.includes(x.aisle) ? x.aisle : "Divers", done: false, source: src, added_by: S.me, created_at: new Date().toISOString() })));
-  repasTab = "shop"; render();
+  view = "courses"; render();
   toast(`${agg.size} ingrédients ajoutés aux courses.`);
 }
 
@@ -535,23 +541,27 @@ function render() {
   if (screen === "welcome") return renderWelcome(app);
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
-  const fab = { today: ["Tâche", "newTask"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"] }[view];
+  if (!VIEWS[view]) view = "home";
+  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"] }[view];
   if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
   const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
       <textarea class="input" name="body" rows="1" maxlength="2000" placeholder="Écrire au foyer…" aria-label="Message"></textarea>
       <button class="send" type="submit" aria-label="Envoyer">${I.send}</button></div></form>` : "";
+  const mod = modOf(view), isHome = view === "home";
+  const avatars = `<button class="stack" data-act="go" data-v="foyer" aria-label="Ma famille">${members().slice(0, 4).map(m => av(m)).join("")}</button>`;
+  const head = isHome
+    ? `<button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button><span class="inline" style="gap:2px"><button class="icon-btn plain" data-act="go" data-v="carte" aria-label="Localisation">${I.pin}</button>${avatars}</span>`
+    : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : avatars}`;
   app.innerHTML = `
-    <header class="top"><div class="wrap">
-      <button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button>
-      <span class="inline" style="gap:4px">
-        <button class="icon-btn plain ${view === "carte" ? "on" : ""}" data-act="go" data-v="carte" aria-label="Où sont-ils ?">${I.pin}</button>
-        <button class="stack" data-act="go" data-v="foyer" aria-label="Membres du foyer">${members().slice(0, 5).map(m => av(m)).join("")}</button>
-      </span>
-    </div></header>
-    <main class="wrap view-${view}" id="main">${VIEWS[view] ? VIEWS[view]() : ""}</main>
+    <header class="top"><div class="wrap">${head}</div></header>
+    <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
     ${fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
     ${composer}
-    <nav class="tabs" aria-label="Sections"><div class="wrap">${TABS.map(([k, l, ic]) => `<button data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ""}>${ic}<span>${l}</span>${k === "messages" ? `<i class="badge" id="msgBadge" hidden></i>` : ""}</button>`).join("")}</div></nav>`;
+    <nav class="pill" aria-label="Navigation">
+      <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
+      <button data-act="go" data-v="messages" ${view === "messages" ? 'aria-current="page"' : ""}>${I.chat}<span>Messages</span><i class="badge" id="msgBadge" hidden></i></button>
+      <button data-act="go" data-v="explore" ${view === "explore" ? 'aria-current="page"' : ""}>${I.grid}<span>Explorer</span></button>
+    </nav>`;
   if (view === "messages") renderMsgs();
   if (view === "carte") mountMap();
   updateBadge();
@@ -622,10 +632,9 @@ const VIEWS = {
     const bal = S.members.length > 1 ? `<h2>Qui a fait quoi, ces 7 jours</h2>
       <div class="list"><div class="bal">${members().map(m => { const c = counts.get(m.id) || { n: 0, e: 0 }; return `${av(m, "sm")}<span class="bar" title="${esc(m.name)}"><i style="width:${Math.round(c.e / max * 100)}%;background:${esc(m.color)}"></i></span><span class="n">${c.n} ${c.n > 1 ? "tâches" : "tâche"}</span>`; }).join("")}</div></div>
       <p class="muted small" style="margin-top:8px">Les barres tiennent compte de la durée de chaque tâche (rapide, moyenne, longue).</p>` : "";
-    if (!live().length) return `<h1 class="day">Tâches</h1>
-      <div class="empty"><strong>Commencez par quelques classiques.</strong>Touchez une idée pour l'ajouter, ou créez la vôtre avec le bouton « Tâche ».
+    if (!live().length) return `<div class="empty"><strong>Commencez par quelques classiques.</strong>Touchez une idée pour l'ajouter, ou créez la vôtre avec le bouton « Tâche ».
         <div class="chips" style="margin-top:12px">${TASK_IDEAS.map((x, i) => `<button class="chip" data-act="idea" data-v="${i}">${esc(x.title)}</button>`).join("")}</div></div>`;
-    return `<h1 class="day">Tâches</h1>${whoFilter()}
+    return `${whoFilter()}
       ${groups.map(([title, f, cls]) => { const g = list.filter(f); return g.length ? `<p class="group-h ${cls || ""}">${title}</p><div class="list">${g.map(t => taskRow(t, { when: title === "Cette semaine" || title === "Plus tard" })).join("")}</div>` : ""; }).join("")}
       ${!list.length ? `<div class="empty" style="margin-top:16px"><strong>Rien pour cette personne.</strong>Choisissez « Tout le monde » pour voir toutes les tâches.</div>` : ""}
       ${bal}`;
@@ -656,14 +665,13 @@ const VIEWS = {
   },
 
   messages() {
-    if (!S.v2) return `<h1 class="day">Messages</h1>${v2Notice()}`;
-    return `<h1 class="day">Messages</h1><div id="msgList" class="msgs" aria-live="polite"></div>`;
+    if (!S.v2) return v2Notice();
+    return `<div id="msgList" class="msgs" aria-live="polite"></div>`;
   },
 
   carte() {
-    if (!S.v2) return `<h1 class="day">Où sont-ils ?</h1>${v2Notice()}`;
-    return `<h1 class="day">Où sont-ils ?</h1>
-      <div id="map" class="map" role="img" aria-label="Carte des positions partagées"></div>
+    if (!S.v2) return v2Notice();
+    return `<div id="map" class="map" role="img" aria-label="Carte des positions partagées"></div>
       <div class="card" style="margin-top:12px"><label class="switch" style="margin:0"><span><strong>Partager ma position</strong><br><span class="muted small">${geoOn() ? "Mise à jour à chaque ouverture de l'appli." : "Seuls les membres du foyer la voient. Vous pouvez arrêter à tout moment."}</span></span><input type="checkbox" data-geo ${geoOn() ? "checked" : ""} ${S.me ? "" : "disabled"}></label></div>
       <div class="list" id="locList" style="margin-top:12px">${locListHtml()}</div>
       <p class="muted small" style="margin-top:10px">Sur iPhone, une appli web ne lit la position que lorsqu'elle est ouverte : la carte montre la dernière position connue.</p>`;
@@ -671,8 +679,7 @@ const VIEWS = {
 
   foyer() {
     const isDemo = mode === "demo";
-    return `<h1 class="day">${esc(S.hh.name)}</h1>
-      <div class="btns" style="margin-top:4px"><button class="btn" data-act="renameHh">Renommer le foyer</button></div>
+    return `<div class="card inline" style="justify-content:space-between"><span><span class="muted small">Foyer</span><br><strong style="font-size:20px">${esc(S.hh.name)}</strong></span><button class="btn" data-act="renameHh">Renommer</button></div>
       <h2>Membres</h2>
       <div class="list">${members().map(m => `<button class="row" data-act="editMember" data-v="${m.id}">${av(m, "lg")}<span class="main"><span class="t">${esc(m.name)}${m.id === S.me ? " (moi)" : ""}</span><span class="m">${m.user_id || (isDemo && m.id === S.me) ? "A un compte" : "Sans compte"}</span></span></button>`).join("")}</div>
       <div class="btns"><button class="btn" data-act="newMember">Ajouter un membre sans compte</button></div>
@@ -852,7 +859,7 @@ function syncShow() {
 
 function eventSheet(e, day) {
   const isNew = !e;
-  e = e || { title: "", day: day || (weekA > today() ? weekA : today()), start_time: null, end_time: null, repeat: "none", members: [], place: "", notes: "" };
+  e = e || { title: "", day: day || (view === "agenda" ? calSel : today()), start_time: null, end_time: null, repeat: "none", members: [], place: "", notes: "" };
   openSheet(isNew ? "Nouvel événement" : "Événement", `
     <form data-form="event">
       <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(e.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="Ex. Dentiste de Léa"></label>
@@ -981,9 +988,9 @@ document.addEventListener("click", async e => {
     case "logout": if (sb) await sb.auth.signOut(); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
     case "auth": authMode = v; authErr = ""; screen = "auth"; render(); break;
     case "back": screen = "welcome"; render(); break;
-    case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "today"; render(); geoTick(); break;
+    case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "home"; render(); geoTick(); break;
     case "leaveDemo": mode = null; LS.del("mz_mode"); S = blank(); screen = "welcome"; render(); break;
-    case "resetDemo": if (confirm("Effacer toutes les données de la démo ?")) { LS.del("mz_demo"); S = demoData(); saveLocal(); view = "today"; render(); toast("Démo remise à zéro."); } break;
+    case "resetDemo": if (confirm("Effacer toutes les données de la démo ?")) { LS.del("mz_demo"); S = demoData(); saveLocal(); view = "home"; render(); toast("Démo remise à zéro."); } break;
     case "cancelJoin": LS.del("mz_join"); joinPreview = null; setupErr = ""; render(); break;
     case "closeSheet": closeSheet(); break;
     case "msgMenu": { if (!confirm("Supprimer ce message pour tout le foyer ?")) break; S.msgs = S.msgs.filter(x => x.id !== v); saveLocal(); renderMsgs();
@@ -1030,7 +1037,7 @@ document.addEventListener("submit", async e => {
       const row = { title: fd.title.trim(), day: fd.day, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
       const id = sheetCtx && sheetCtx.id; closeSheet();
       if (id) await patch("events", id, row);
-      else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); render(); toast("Événement ajouté."); }
+      else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }
       break;
     }
     case "meal": {
@@ -1154,9 +1161,9 @@ function demoUpgrade(d) {
     { id: "m2", household_id: "demo", lat: 48.8738, lng: 2.2950, accuracy: 30, updated_at: new Date(Date.now() - 25 * 6e4).toISOString() },
     { id: "m3", household_id: "demo", lat: 48.8462, lng: 2.3371, accuracy: 30, updated_at: new Date(Date.now() - 3 * 36e5).toISOString() }
   ];
-  return d;
+  return demoUpgrade3(d);
 }
 
 /* ---------- go ---------- */
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-init();
+// init() is called at the end of modules.js, once every module is registered
