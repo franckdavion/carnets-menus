@@ -10,6 +10,7 @@ Nouvelle version du Carnet de menus, dans son propre dossier : le Carnet continu
 3. Ouvrir l'appli : `https://franckdavion.github.io/carnets-menus/maison/`
 4. Se connecter avec le compte du Carnet de menus, puis « Créer un foyer ».
 5. Dans l'onglet Foyer, « Envoyer une invitation » aux autres membres.
+6. Pour la messagerie et la carte : coller aussi `supabase-foyer-2.sql` (une seule fois).
 
 Sans le script, le bouton « Essayer sans compte » permet de tout tester (les données restent sur le téléphone).
 
@@ -19,7 +20,9 @@ Sans le script, le bouton « Essayer sans compte » permet de tout tester (les d
 - **Tâches** : tâches récurrentes (chaque jour, certains jours, tous les X jours, chaque mois), attribuées ou « chacun son tour », et le bilan des 7 derniers jours.
 - **Agenda** : événements du foyer, avec les membres concernés et les répétitions.
 - **Repas** : menu de la semaine partagé (livre de recettes du Carnet) et liste de courses commune.
-- **Foyer** : membres (avec ou sans compte), code d'invitation, couverts par repas.
+- **Messages** : discussion commune du foyer.
+- **Où sont-ils ?** (icône de position en haut) : chacun choisit de partager sa position ; elle se met à jour quand l'appli est ouverte.
+- **Foyer** (prénoms en haut) : membres (avec ou sans compte), code d'invitation, couverts par repas.
 
 Les modifications apparaissent en direct sur les téléphones des autres membres.
 
@@ -28,3 +31,4 @@ Les modifications apparaissent en direct sur les téléphones des autres membres
 - `index.html`, `app.js` : l'appli
 - `sw.js`, `manifest.json`, `icon-*.png` : installation sur l'écran d'accueil
 - `supabase-foyer.sql` : tables, règles d'accès et temps réel
+- `supabase-foyer-2.sql` : messagerie et positions

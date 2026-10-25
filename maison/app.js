@@ -65,8 +65,9 @@ let who = null;                               // member filter on Today and Tâc
 let weekA = mondayOf(today()), weekR = mondayOf(today());
 let repasTab = "menu";
 let S = blank();
-function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], recipes: null }; }
-const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items" };
+function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, recipes: null }; }
+const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
+const V2 = ["msgs", "locs"]; // tables added by supabase-foyer-2.sql
 
 const member = id => S.members.find(m => m.id === id) || null;
 const members = () => [...S.members].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
@@ -88,6 +89,17 @@ async function add(key, row) {
     if (error) { S[key] = S[key].filter(x => x.id !== row.id); saveLocal(); render(); fail(error); return null; }
   }
   return row;
+}
+async function upsert(key, row) {
+  row = { household_id: S.hh.id, ...row };
+  const i = S[key].findIndex(x => x.id === row.id), before = i >= 0 ? S[key][i] : null;
+  if (i >= 0) S[key][i] = { ...before, ...row }; else S[key].push(row);
+  saveLocal(); softRender();
+  if (mode === "cloud") {
+    const { error } = await sb.from(TABLES[key]).upsert(row);
+    if (error) { if (before) S[key][i] = before; else S[key] = S[key].filter(x => x.id !== row.id); saveLocal(); softRender(); fail(error); return false; }
+  }
+  return true;
 }
 async function patch(key, id, p) {
   const r = S[key].find(x => x.id === id); if (!r) return;
@@ -143,19 +155,24 @@ function loadSb() {
 
 async function loadCloud(hid) {
   const since = addDays(today(), -60);
-  const [hh, mm, tk, lg, ev, ml, sh] = await Promise.all([
+  const [hh, mm, tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
     sb.from("households").select("*").eq("id", hid).single(),
     sb.from("household_members").select("*").eq("household_id", hid),
     sb.from("tasks").select("*").eq("household_id", hid).eq("archived", false),
     sb.from("task_log").select("*").eq("household_id", hid).gte("done_on", since),
     sb.from("events").select("*").eq("household_id", hid),
     sb.from("meals").select("*").eq("household_id", hid).gte("day", addDays(today(), -14)),
-    sb.from("shopping_items").select("*").eq("household_id", hid)
+    sb.from("shopping_items").select("*").eq("household_id", hid),
+    sb.from("messages").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(300),
+    sb.from("member_locations").select("*").eq("household_id", hid)
   ]);
   const bad = [hh, mm, tk, lg, ev, ml, sh].find(r => r.error);
   if (bad) throw bad.error;
+  // messages and positions need the second script; the rest of the app works without it
+  const v2 = !ms.error && !lc.error;
   const recipes = S.recipes;
-  S = { hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data, recipes };
+  S = { hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
+    msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2, recipes };
   saveLocal();
 }
 
@@ -163,6 +180,7 @@ function listen(hid) {
   if (rt) { sb.removeChannel(rt); rt = null; }
   rt = sb.channel("foyer-" + hid);
   for (const [key, table] of Object.entries(TABLES)) {
+    if (V2.includes(key) && !S.v2) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
       if (p.eventType === "DELETE") { S[key] = S[key].filter(x => x.id !== p.old.id); }
       else {
@@ -178,6 +196,9 @@ function listen(hid) {
 // re-render without disturbing an open sheet or a field being typed in
 let pending = false;
 function softRender() {
+  // live views update in place so typing a message or looking at the map is not interrupted
+  if (screen === "app" && view === "messages" && $("#msgList") && !$("#sheet").open) { renderMsgs(); return; }
+  if (screen === "app" && view === "carte" && map && !$("#sheet").open) { drawMarkers(); refreshLocList(); return; }
   if ($("#sheet").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) { pending = true; return; }
   render();
 }
@@ -194,7 +215,7 @@ async function loadRecipes() {
 async function init() {
   const url = new URL(location.href), code = url.searchParams.get("code");
   if (code) { LS.set("mz_join", code.toUpperCase()); url.searchParams.delete("code"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
-  if (mode === "demo") { S = LS.get("mz_demo", null) || demoData(); screen = "app"; return render(); }
+  if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
   // show the last known state straight away, then refresh from the cloud
   const cache = LS.get("mz_cache", null);
   if (mode === "cloud" && cache && cache.hh) { S = { ...blank(), ...cache, recipes: null }; screen = "app"; render(); }
@@ -220,13 +241,14 @@ async function enterCloud() {
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
-  listen(hid); screen = "app"; render();
+  listen(hid); screen = "app"; render(); geoTick();
   loadRecipes().then(() => softRender());
 }
 
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || mode !== "cloud" || !S.hh || !user) return;
   try { await loadCloud(S.hh.id); softRender(); } catch (e) {}
+  geoTick();
 });
 
 /* ---------- task logic ---------- */
@@ -369,6 +391,115 @@ async function menuToShopping(wk) {
   toast(`${agg.size} ingrédients ajoutés aux courses.`);
 }
 
+/* ---------- messages ---------- */
+const readKey = () => "mz_read_" + (S.hh ? S.hh.id : "");
+const unread = () => { const r = LS.get(readKey(), ""); return S.msgs.filter(m => m.member_id !== S.me && m.created_at > r).length; };
+function updateBadge() { const b = $("#msgBadge"); if (!b) return; const n = view === "messages" ? 0 : unread(); b.hidden = !n; b.textContent = n > 9 ? "9+" : n; }
+const timeHM = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+function v2Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-2.sql</b> dans Supabase (comme le premier), puis rouvrez l'appli.</div>`; }
+function msgListHtml() {
+  if (!S.msgs.length) return `<div class="empty"><strong>Aucun message pour l'instant.</strong>Ce que vous écrivez ici, tout le foyer le voit.</div>`;
+  let out = "", lastDay = "", lastWho = null;
+  for (const m of [...S.msgs].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    const day = ymd(new Date(m.created_at));
+    if (day !== lastDay) { out += `<p class="msg-day">${esc(dayLabel(day))}</p>`; lastDay = day; lastWho = null; }
+    const mine = m.member_id === S.me, who = member(m.member_id), first = lastWho !== m.member_id;
+    out += `<div class="msg ${mine ? "mine" : ""} ${first ? "first" : ""}">
+      ${mine ? "" : first ? av(who, "sm") : `<span class="av-gap"></span>`}
+      <div class="bubble" ${mine ? `data-act="msgMenu" data-v="${m.id}" role="button" tabindex="0" aria-label="Message envoyé à ${esc(timeHM(m.created_at))}, toucher pour supprimer"` : who ? `style="--c:${esc(who.color)}"` : ""}>
+        ${!mine && first ? `<span class="from">${esc(who ? who.name : "Ancien membre")}</span>` : ""}<span class="txt">${esc(m.body)}</span><span class="at">${esc(timeHM(m.created_at))}</span></div></div>`;
+    lastWho = m.member_id;
+  }
+  return out;
+}
+function renderMsgs() {
+  const el = $("#msgList"); if (!el) return;
+  el.innerHTML = msgListHtml();
+  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const last = S.msgs.reduce((a, m) => m.created_at > a ? m.created_at : a, "");
+  if (last && document.visibilityState === "visible") LS.set(readKey(), last);
+  updateBadge();
+}
+async function sendMsg(body) {
+  if (!S.me) { toast("Votre compte n'est relié à aucun membre de ce foyer."); return false; }
+  const row = { id: uuid(), household_id: S.hh.id, member_id: S.me, body, created_at: new Date().toISOString() };
+  S.msgs.push(row); saveLocal(); renderMsgs();
+  if (mode === "cloud") {
+    const { error } = await sb.from("messages").insert(row);
+    if (error) { S.msgs = S.msgs.filter(x => x.id !== row.id); saveLocal(); renderMsgs(); fail(error); return false; }
+  }
+  return true;
+}
+
+/* ---------- positions ---------- */
+let map = null, mapMarkers = [], mapView = null, geoLast = 0;
+const geoKey = () => "mz_geo_" + (S.hh ? S.hh.id : "");
+const geoOn = () => !!LS.get(geoKey(), false);
+function geoTick(force) {
+  if (!S.hh || !S.me || !S.v2 || !geoOn() || !navigator.geolocation) return;
+  if (!force && Date.now() - geoLast < 4 * 60 * 1000) return;
+  geoLast = Date.now();
+  navigator.geolocation.getCurrentPosition(
+    p => upsert("locs", { id: S.me, lat: +p.coords.latitude.toFixed(5), lng: +p.coords.longitude.toFixed(5), accuracy: Math.round(p.coords.accuracy), updated_at: new Date().toISOString() }),
+    err => {
+      if (err.code === 1) { LS.set(geoKey(), false); softRender(); }
+      if (force || err.code === 1) toast(err.code === 1 ? "Localisation refusée. Sur iPhone : Réglages › Confidentialité › Service de localisation › Sites Safari, puis « Lorsque l'app est active »." : "Position introuvable pour l'instant. Réessayez dans un moment.");
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+}
+setInterval(() => { if (document.visibilityState === "visible") geoTick(); }, 60 * 1000);
+async function geoToggle(on) {
+  LS.set(geoKey(), on);
+  if (on) { geoLast = 0; geoTick(true); toast("Position partagée avec le foyer."); }
+  else { if (S.locs.some(l => l.id === S.me)) await remove("locs", S.me); toast("Vous ne partagez plus votre position."); }
+  render();
+}
+function ago(iso) {
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 90) return "à l'instant";
+  const m = Math.round(s / 60); if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60); if (h < 24) return `il y a ${h} h`;
+  const d = Math.round(h / 24); return d === 1 ? "hier" : `il y a ${d} jours`;
+}
+function locListHtml() {
+  return members().map(m => {
+    const l = S.locs.find(x => x.id === m.id);
+    return `<button class="row" ${l ? `data-act="locate" data-v="${m.id}"` : "disabled"}>${av(m, "lg")}<span class="main"><span class="t">${esc(m.name)}${m.id === S.me ? " (moi)" : ""}</span><span class="m">${l ? "Vu " + esc(ago(l.updated_at)) : m.user_id || m.id === S.me ? "Ne partage pas sa position" : "Sans compte"}</span></span></button>`;
+  }).join("");
+}
+function refreshLocList() { const el = $("#locList"); if (el) el.innerHTML = locListHtml(); }
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  return new Promise((ok, ko) => {
+    const c = document.createElement("link"); c.rel = "stylesheet"; c.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(c);
+    const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; s.onload = ok; s.onerror = ko; document.head.appendChild(s);
+  });
+}
+async function mountMap() {
+  if (!$("#map")) return;
+  try { await loadLeaflet(); } catch (e) { const el = $("#map"); if (el) el.innerHTML = `<p class="muted" style="padding:16px">La carte ne se charge pas : vérifiez la connexion.</p>`; return; }
+  const el = $("#map"); if (!el || map) return;
+  map = L.map(el, { zoomControl: false });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+  drawMarkers(true);
+}
+function drawMarkers(fit) {
+  if (!map || !window.L) return;
+  mapMarkers.forEach(m => m.remove()); mapMarkers = [];
+  const pts = [];
+  for (const l of S.locs) {
+    const m = member(l.id); if (!m) continue;
+    const icon = L.divIcon({ className: "pin", html: `<span class="av lg" style="--c:${esc(m.color)}">${esc(initial(m.name))}</span>`, iconSize: [44, 44], iconAnchor: [22, 22] });
+    mapMarkers.push(L.marker([l.lat, l.lng], { icon, title: m.name }).addTo(map).bindPopup(`<strong>${esc(m.name)}</strong><br>${esc(ago(l.updated_at))}`));
+    pts.push([l.lat, l.lng]);
+  }
+  if (!fit) return;
+  if (mapView) map.setView(mapView.c, mapView.z);
+  else if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+  else if (pts.length) map.setView(pts[0], 14);
+  else map.setView([46.6, 2.4], 5);
+}
+
 /* ---------- toast ---------- */
 let toastT = null;
 function toast(msg, label, fn) {
@@ -389,9 +520,12 @@ const I = {
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>',
-  tick: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>'
+  tick: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  chat: '<svg viewBox="0 0 24 24"><path d="M4 5.5h16v11H9.5L5 20v-3.5H4z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.4"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><path d="M4 12 20 4l-4 16-4.5-6.5z"/><path d="m11.5 13.5 4-4"/></svg>'
 };
-const TABS = [["today", "Aujourd'hui", I.today], ["tasks", "Tâches", I.tasks], ["agenda", "Agenda", I.agenda], ["repas", "Repas", I.repas], ["foyer", "Foyer", I.foyer]];
+const TABS = [["today", "Aujourd'hui", I.today], ["tasks", "Tâches", I.tasks], ["agenda", "Agenda", I.agenda], ["repas", "Repas", I.repas], ["messages", "Messages", I.chat]];
 
 /* ---------- render ---------- */
 function render() {
@@ -402,14 +536,25 @@ function render() {
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
   const fab = { today: ["Tâche", "newTask"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"] }[view];
+  if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
+  const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
+      <textarea class="input" name="body" rows="1" maxlength="2000" placeholder="Écrire au foyer…" aria-label="Message"></textarea>
+      <button class="send" type="submit" aria-label="Envoyer">${I.send}</button></div></form>` : "";
   app.innerHTML = `
     <header class="top"><div class="wrap">
       <button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button>
-      <button class="stack" data-act="go" data-v="foyer" aria-label="Membres du foyer">${members().slice(0, 5).map(m => av(m)).join("")}</button>
+      <span class="inline" style="gap:4px">
+        <button class="icon-btn plain ${view === "carte" ? "on" : ""}" data-act="go" data-v="carte" aria-label="Où sont-ils ?">${I.pin}</button>
+        <button class="stack" data-act="go" data-v="foyer" aria-label="Membres du foyer">${members().slice(0, 5).map(m => av(m)).join("")}</button>
+      </span>
     </div></header>
-    <main class="wrap" id="main">${VIEWS[view] ? VIEWS[view]() : ""}</main>
+    <main class="wrap view-${view}" id="main">${VIEWS[view] ? VIEWS[view]() : ""}</main>
     ${fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
-    <nav class="tabs" aria-label="Sections"><div class="wrap">${TABS.map(([k, l, ic]) => `<button data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ""}>${ic}<span>${l}</span></button>`).join("")}</div></nav>`;
+    ${composer}
+    <nav class="tabs" aria-label="Sections"><div class="wrap">${TABS.map(([k, l, ic]) => `<button data-act="go" data-v="${k}" ${view === k ? 'aria-current="page"' : ""}>${ic}<span>${l}</span>${k === "messages" ? `<i class="badge" id="msgBadge" hidden></i>` : ""}</button>`).join("")}</div></nav>`;
+  if (view === "messages") renderMsgs();
+  if (view === "carte") mountMap();
+  updateBadge();
 }
 
 function whoFilter() {
@@ -508,6 +653,20 @@ const VIEWS = {
     const tabs = `<div class="seg" role="group" aria-label="Repas"><button data-act="repasTab" data-v="menu" aria-pressed="${repasTab === "menu"}">Menu</button><button data-act="repasTab" data-v="shop" aria-pressed="${repasTab === "shop"}">Courses${S.shop.filter(x => !x.done).length ? ` (${S.shop.filter(x => !x.done).length})` : ""}</button></div>`;
     return `<h1 class="day">Repas</h1>${tabs}${repasTab === "menu" ? menuView() : shopView()}
       <p class="muted small" style="margin-top:26px">Import de recettes, cave à vins, photos : <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">ouvrir le Carnet de menus</a>.</p>`;
+  },
+
+  messages() {
+    if (!S.v2) return `<h1 class="day">Messages</h1>${v2Notice()}`;
+    return `<h1 class="day">Messages</h1><div id="msgList" class="msgs" aria-live="polite"></div>`;
+  },
+
+  carte() {
+    if (!S.v2) return `<h1 class="day">Où sont-ils ?</h1>${v2Notice()}`;
+    return `<h1 class="day">Où sont-ils ?</h1>
+      <div id="map" class="map" role="img" aria-label="Carte des positions partagées"></div>
+      <div class="card" style="margin-top:12px"><label class="switch" style="margin:0"><span><strong>Partager ma position</strong><br><span class="muted small">${geoOn() ? "Mise à jour à chaque ouverture de l'appli." : "Seuls les membres du foyer la voient. Vous pouvez arrêter à tout moment."}</span></span><input type="checkbox" data-geo ${geoOn() ? "checked" : ""} ${S.me ? "" : "disabled"}></label></div>
+      <div class="list" id="locList" style="margin-top:12px">${locListHtml()}</div>
+      <p class="muted small" style="margin-top:10px">Sur iPhone, une appli web ne lit la position que lorsqu'elle est ouverte : la carte montre la dernière position connue.</p>`;
   },
 
   foyer() {
@@ -822,15 +981,21 @@ document.addEventListener("click", async e => {
     case "logout": if (sb) await sb.auth.signOut(); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
     case "auth": authMode = v; authErr = ""; screen = "auth"; render(); break;
     case "back": screen = "welcome"; render(); break;
-    case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = LS.get("mz_demo", null) || demoData(); saveLocal(); screen = "app"; view = "today"; render(); break;
+    case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "today"; render(); geoTick(); break;
     case "leaveDemo": mode = null; LS.del("mz_mode"); S = blank(); screen = "welcome"; render(); break;
     case "resetDemo": if (confirm("Effacer toutes les données de la démo ?")) { LS.del("mz_demo"); S = demoData(); saveLocal(); view = "today"; render(); toast("Démo remise à zéro."); } break;
     case "cancelJoin": LS.del("mz_join"); joinPreview = null; setupErr = ""; render(); break;
     case "closeSheet": closeSheet(); break;
+    case "msgMenu": { if (!confirm("Supprimer ce message pour tout le foyer ?")) break; S.msgs = S.msgs.filter(x => x.id !== v); saveLocal(); renderMsgs();
+      if (mode === "cloud") { const { error } = await sb.from("messages").delete().eq("id", v); if (error) fail(error); } break; }
+    case "locate": { const l = S.locs.find(x => x.id === v); if (l && map) { map.setView([l.lat, l.lng], 15); window.scrollTo({ top: 0, behavior: "smooth" }); mapMarkers.forEach(mk => { const p = mk.getLatLng(); if (p.lat === l.lat && p.lng === l.lng) mk.openPopup(); }); } break; }
   }
 });
 
-document.addEventListener("change", e => { if (e.target.name === "allday") syncShow(); });
+document.addEventListener("change", e => { if (e.target.name === "allday") syncShow(); if (e.target.matches("[data-geo]")) geoToggle(e.target.checked); });
+// message box grows with its text; Entrée envoie sur un clavier physique
+document.addEventListener("input", e => { if (e.target.name === "body" && e.target.closest(".composer")) { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; } });
+document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); } });
 document.addEventListener("input", e => { if (e.target.id === "recSearch") $("#recList").innerHTML = recList(e.target.value, sheetCtx && sheetCtx.recipe); });
 
 async function setHh(p) {
@@ -890,6 +1055,12 @@ document.addEventListener("submit", async e => {
       break;
     }
     case "hhName": closeSheet(); await setHh({ name: fd.name.trim() }); break;
+    case "msg": {
+      const body = (fd.body || "").trim(); if (!body) break;
+      const ta = f.querySelector("textarea"); ta.value = ""; ta.style.height = "auto"; ta.focus();
+      if (!(await sendMsg(body))) { ta.value = body; }
+      break;
+    }
     case "auth": {
       btn.disabled = true; authErr = "";
       try {
@@ -962,7 +1133,28 @@ function demoData() {
   const meal = (day, slot, o) => ({ id: uuid(), household_id: hid, day, slot, recipe_id: null, label: "", cook: null, ...o });
   const meals = [meal(d, "soir", { recipe_id: "d-r3", cook: "m1" }), meal(addDays(d, 1), "soir", { recipe_id: "d-r5", cook: "m2" }), meal(addDays(d, 2), "midi", { label: "Restes" }), meal(addDays(d, 2), "soir", { recipe_id: "d-r6", cook: "m3" })];
   const shop = [["Pain", "Boulangerie"], ["Bananes", "Fruits & légumes"], ["Liquide vaisselle", "Hygiène & maison"], ["Yaourts nature", "Crémerie"]].map(([name, aisle]) => ({ id: uuid(), household_id: hid, name, qty: "", aisle, done: false, source: "", added_by: "m1" }));
-  return { hh: { id: hid, name: "Chez nous", invite_code: "DEMO00", people: 3 }, me: "m1", members: M, tasks, log, events, meals, shop, recipes: null };
+  return demoUpgrade({ hh: { id: hid, name: "Chez nous", invite_code: "DEMO00", people: 3 }, me: "m1", members: M, tasks, log, events, meals, shop, recipes: null });
+}
+
+// demo data saved before messages and positions existed gets them added
+function demoUpgrade(d) {
+  if (!d) return null;
+  d.v2 = true;
+  if (!d.msgs) {
+    const at = (h, m) => { const x = new Date(); x.setHours(h, m, 0, 0); return x.toISOString(); };
+    const y = (h, m) => { const x = new Date(Date.now() - 864e5); x.setHours(h, m, 0, 0); return x.toISOString(); };
+    d.msgs = [
+      { id: uuid(), household_id: "demo", member_id: "m2", body: "Quelqu'un peut récupérer Léa au judo mercredi ?", created_at: y(18, 12) },
+      { id: uuid(), household_id: "demo", member_id: "m1", body: "Oui, je finis tôt ce jour-là.", created_at: y(18, 20) },
+      { id: uuid(), household_id: "demo", member_id: "m3", body: "Merci papa !", created_at: y(18, 21) },
+      { id: uuid(), household_id: "demo", member_id: "m2", body: "Je passe à la boulangerie en rentrant, il faut autre chose ?", created_at: at(9, 5) }
+    ];
+  }
+  if (!d.locs) d.locs = [
+    { id: "m2", household_id: "demo", lat: 48.8738, lng: 2.2950, accuracy: 30, updated_at: new Date(Date.now() - 25 * 6e4).toISOString() },
+    { id: "m3", household_id: "demo", lat: 48.8462, lng: 2.3371, accuracy: 30, updated_at: new Date(Date.now() - 3 * 36e5).toISOString() }
+  ];
+  return d;
 }
 
 /* ---------- go ---------- */

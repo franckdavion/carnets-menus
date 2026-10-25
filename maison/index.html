@@ -239,6 +239,38 @@ dialog.sheet[open]{animation:up .22s ease-out}
   max-width:min(92vw,520px);font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:4px}
 
+/* ---------- messages ---------- */
+main.wrap.view-messages{padding-bottom:calc(var(--tabbar) + env(safe-area-inset-bottom) + 96px)}
+.msgs{display:flex;flex-direction:column;gap:3px}
+.msg-day{align-self:center;font-size:13px;font-weight:700;color:var(--muted);margin:16px 0 6px}
+.msg{display:flex;align-items:flex-end;gap:8px;max-width:86%}
+.msg.first{margin-top:8px}
+.msg.mine{align-self:flex-end;flex-direction:row-reverse}
+.av-gap{width:22px;flex:none}
+.bubble{--c:var(--muted);background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--c);
+  border-radius:4px 16px 16px 4px;padding:8px 12px 6px;min-width:64px}
+.msg.mine .bubble{background:var(--accent);color:var(--on-accent);border:0;border-radius:16px 16px 4px 16px;cursor:pointer}
+.bubble .from{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:1px}
+.bubble .txt{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble .at{display:block;text-align:right;font-size:11.5px;opacity:.7;margin-top:2px;font-variant-numeric:tabular-nums}
+.composer{position:fixed;left:0;right:0;bottom:calc(var(--tabbar) + env(safe-area-inset-bottom));z-index:6;
+  background:var(--bg);border-top:1px solid var(--line);padding:8px 0}
+.composer textarea.input{min-height:46px;max-height:140px;resize:none;border-radius:23px;padding:11px 16px;line-height:1.3}
+.send{flex:none;width:46px;height:46px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
+.send svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.tabs button{position:relative}
+.badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--late);color:#fff;font:700 11px/18px var(--body);font-style:normal;text-align:center}
+
+/* ---------- map ---------- */
+.map{height:min(52vh,420px);border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);background:var(--soft);z-index:0}
+.pin{background:none;border:0}
+.pin .av{box-shadow:0 0 0 3px #fff,0 3px 10px rgba(0,0,0,.3)}
+.leaflet-popup-content{font:15px/1.35 var(--body)}
+.icon-btn.plain{border-color:transparent;background:none}
+.icon-btn.plain.on{color:var(--accent)}
+.row:disabled{opacity:1;color:inherit;cursor:default}
+
 /* ---------- welcome ---------- */
 .welcome{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:flex-end;
   padding-top:calc(env(safe-area-inset-top) + 32px);padding-bottom:calc(env(safe-area-inset-bottom) + 28px)}
