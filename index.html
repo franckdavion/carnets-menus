@@ -397,6 +397,7 @@ img.rp-th,img.dish-ph{width:56px!important;height:56px!important}img.mc-ph{width
 input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,select{font-size:16px!important}
 html,body{overflow-x:hidden;max-width:100%}
 .web-find{display:flex;flex-direction:column;gap:8px;border:2px solid var(--accent);border-radius:14px;padding:12px 14px;background:var(--surface);margin-top:6px}.web-find .row{gap:8px}.web-find .btn{flex:1;justify-content:center;min-height:44px}
+.mem{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding:10px 0}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -670,6 +671,7 @@ code{font-family:var(--f-mono);font-size:.92em}
     <div class="set-list">
       <button class="set-row" data-act="openSync"><span class="si">🔄</span><span class="st"><b>Partage entre téléphones</b><small><span class="sync-chip" id="syncChip" data-state="off">Synchro désactivée</span></small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="backup"><span class="si">💾</span><span class="st"><b>Sauvegarder</b><small>créer un fichier de secours de tout le carnet</small></span><span class="chev">›</span></button>
+      <button class="set-row" data-act="openAcct"><span class="si">👤</span><span class="st"><b>Mon compte</b><small id="setAcct">connexion, base de recettes commune</small></span><span class="chev">›</span></button>
       <button class="set-row" data-act="openShare"><span class="si">👨‍👩‍👧</span><span class="st"><b>Carnet partagé</b><small>partager mes recettes avec la famille</small></span><span class="chev">›</span></button>
       <label class="set-row" for="restoreIn"><span class="si">📂</span><span class="st"><b>Restaurer</b><small>depuis un fichier de secours</small></span><span class="chev">›</span></label>
     </div>
@@ -1006,6 +1008,13 @@ Préparation :
   </div>
 </div>
 
+<div class="sheet" id="acctSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between"><h2 id="acctTitle">Mon compte</h2><button type="button" class="btn ghost" data-act="closeAcct">Fermer</button></div>
+    <div id="acctBody" style="display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</div>
+
 <div class="sheet" id="photoSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2>Choisir une photo</h2><button type="button" class="btn ghost" data-act="closePhoto">Fermer</button></div>
@@ -1295,9 +1304,9 @@ function shopping(all){
 }
 
 /* ---------- storage (on this phone) ---------- */
-function saveMenu(){LS.set("cm_menu",menu);scheduleSync();}
-function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();}
-function removeRecipe(id){for(const wk of Object.values(menu.weeks||{}))for(const[k,sl]of Object.entries(wk||{})){if(!sl)continue;if(sl.id===id)delete wk[k];else{if(sl.entree===id)delete sl.entree;if(sl.dessert===id)delete sl.dessert;}}saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
+function saveMenu(){LS.set("cm_menu",menu);LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();}
+function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();cloudSoon();}
+function removeRecipe(id){cloudDeleted(id);for(const wk of Object.values(menu.weeks||{}))for(const[k,sl]of Object.entries(wk||{})){if(!sl)continue;if(sl.id===id)delete wk[k];else{if(sl.entree===id)delete sl.entree;if(sl.dessert===id)delete sl.dessert;}}saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
 
 /* ---------- sync through a private GitHub repository ---------- */
 let sync=LS.get("cm_sync",null);
@@ -2862,6 +2871,16 @@ document.addEventListener("click",e=>{
     const id=(norm(name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
     saveRecipe(id,{name,cat:"Plat",time:0,serves:4,ing:[],steps:text,createdAt:new Date().toISOString()});const pf=impFile;if(pf)savePagePhoto(id,pf);
     $("#scanSheet").hidden=true;impFile=null;view="rec";render();openRecSheet(id);setTimeout(clearSheetBack,60);toast("Recette ajoutée · ✏️ Modifier pour ajouter les ingrédients aux courses");}
+  else if(a==="openAcct"){$("#acctSheet").hidden=false;renderAcct();}
+  else if(a==="closeAcct"){$("#acctSheet").hidden=true;}
+  else if(a==="acctMode"){acctMode=b.dataset.v;renderAcct();}
+  else if(a==="acctGo"){acctSubmit();}
+  else if(a==="acctOut"){cloudSignOut();}
+  else if(a==="acctSync"){cloudSync(true);}
+  else if(a==="acctMigrate"){cloudMigrate();}
+  else if(a==="acctMembers"){loadMembers();}
+  else if(a==="memSet"){setMember(b.dataset.id,b.dataset.s,b.dataset.r||null);}
+  else if(a==="acctPseudo"){savePseudo();}
   else if(a==="cropCancel"){const c=crop;crop=null;$("#cropSheet").hidden=true;if(c&&c.isNew)toast("Photo non ajoutée");}
   else if(a==="cropOk"){cropSave();}
   else if(a==="cropFit"){if(crop){crop.fit=b.dataset.v;crop.z=1;crop.ox=crop.oy=0;$("#cropZoom").value=1;drawCrop();}}
@@ -3704,7 +3723,7 @@ function renderRecSheet(){
       <button type="button" data-act="toggle" data-id="${esc(id)}"><span>📅</span>+ Menu</button>
       <button type="button" data-act="recTab" data-v="ing"><span>🛒</span>Courses</button>
       <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button></div>
-    ${proposeHtml(id)}${pageHtml(id)}
+    ${r.cloudBy?`<div class="muted" style="font-size:13px">👤 Ajoutée par <b>${esc(r.cloudBy)}</b></div>`:""}${proposeHtml(id)}${pageHtml(id)}
     ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
     <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
     <div class="rs-body">${body}</div>`;
@@ -3853,7 +3872,7 @@ function openSheet(id){
 }
 // edit any recipe from anywhere; a recipe shared by a relative is first copied into my notebook
 function editRecipe(id){const r=recipes[id];if(!r)return;
-  if(r.shared){const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
+  if(r.shared||(r.cloudAuthor&&cloud.user&&r.cloudAuthor!==cloud.user.id&&!cloud.admin)){const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
     const nid=(norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6);
     saveRecipe(nid,n);toast("Copiée dans votre carnet pour la personnaliser");id=nid;}
   editBack=!$("#recSheet").hidden;if(editBack){recSheetId=id;$("#recSheet").hidden=true;}openSheet(id);}
@@ -4060,6 +4079,97 @@ async function pvSave(){const src=$("#pvImg").src;try{const bl=await(await fetch
     if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return;}catch(e){if(e&&e.name==="AbortError")return;}}
     const u=URL.createObjectURL(f),a=document.createElement("a");a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);toast("Photo téléchargée");}
   catch(e){toast("Impossible d'enregistrer : restez appuyé sur la photo → « Enregistrer »");}}
+/* ---------- accounts and cloud (Supabase): shared recipe book, private space per member, admin ---------- */
+const SB_URL="https://cluqleqbbidozpioekog.supabase.co",SB_KEY="sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
+const SHARED_F=["name","cat","cats","time","serves","ing","steps","image","tags","source"],PRIV_F=["fav","ratings","photo","pick","noAuto","autoIdx","noPh","viewServ"];
+let cloud={sb:null,user:null,profile:null,admin:false,busy:false,members:null,msg:""},acctMode="login",cloudT=null;
+function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";sc.onload=()=>ok(window.supabase);sc.onerror=ko;document.head.appendChild(sc);});}
+async function sbc(){if(cloud.sb)return cloud.sb;const S=await loadSb();cloud.sb=S.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"cm_sb_auth"}});return cloud.sb;}
+const cloudOn=()=>!!(cloud.user&&cloud.profile&&cloud.profile.status==="active");
+async function cloudInit(){if(!LS.get("cm_sb_auth",null)&&!localStorage.getItem("cm_sb_auth"))return; // never signed in: nothing to load
+  try{const sb=await sbc();const{data}=await sb.auth.getSession();await cloudSession(data.session);sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT"||ev==="SIGNED_IN")cloudSession(ses);});}catch(e){}}
+async function cloudSession(ses){cloud.user=ses&&ses.user||null;cloud.profile=null;cloud.admin=false;
+  if(cloud.user){try{const{data}=await cloud.sb.from("profiles").select("*").eq("id",cloud.user.id).single();cloud.profile=data||null;cloud.admin=!!(data&&data.role==="admin"&&data.status==="active");
+      cloud.sb.from("profiles").update({last_seen:new Date().toISOString()}).eq("id",cloud.user.id).then(()=>{});}catch(e){}}
+  setAcctLine();if(!$("#acctSheet").hidden)renderAcct();if(cloudOn())cloudSync();}
+function setAcctLine(){const el=$("#setAcct");if(el)el.textContent=cloud.user?(cloud.profile?`${cloud.profile.pseudo}${cloud.admin?" · 👑 admin":""}${cloud.profile.status==="pending"?" · en attente de validation":cloud.profile.status==="blocked"?" · bloqué":" · synchronisé"}`:"connecté"):"connexion, base de recettes commune";}
+function renderAcct(){const b=$("#acctBody");const u=cloud.user,p=cloud.profile;
+  if(!u){b.innerHTML=`<p class="muted" style="margin:0;font-size:14px">Avec un compte, vous retrouvez vos menus, courses, cave et favoris sur n'importe quel téléphone, et vous partagez la base de recettes commune avec les membres. Vos menus et courses restent privés : personne d'autre ne peut les voir.</p>
+    <div class="row">${[["login","Se connecter"],["signup","Créer un compte"]].map(([v,l])=>`<button type="button" class="chip" data-act="acctMode" data-v="${v}" aria-pressed="${acctMode===v}">${l}</button>`).join("")}</div>
+    ${acctMode==="signup"?`<label class="field"><span class="label">Pseudo (affiché sur vos recettes)</span><input id="ac-pseudo" autocomplete="nickname" placeholder="Ex. Franck"></label>`:""}
+    <label class="field"><span class="label">E-mail</span><input id="ac-mail" type="email" autocomplete="email" inputmode="email"></label>
+    <label class="field"><span class="label">Mot de passe${acctMode==="signup"?" (8 caractères minimum)":""}</span><input id="ac-pass" type="password" autocomplete="${acctMode==="signup"?"new-password":"current-password"}"></label>
+    <button type="button" class="btn primary" data-act="acctGo">${acctMode==="signup"?"Créer mon compte":"Se connecter"}</button><div class="muted" id="ac-msg" style="font-size:13px">${esc(cloud.msg||"")}</div>`;return;}
+  const st=p?p.status:"";
+  b.innerHTML=`<div class="note">Connecté : <b>${esc(p?p.pseudo:u.email)}</b>${cloud.admin?" · 👑 administrateur":""}<br><small class="muted">${esc(u.email||"")}</small></div>
+    ${st==="pending"?`<div class="note">⏳ Votre compte attend la validation de l'administrateur. Vous pourrez ensuite accéder à la base commune.</div>`:st==="blocked"?`<div class="note">⛔ Ce compte est bloqué par l'administrateur.</div>`:""}
+    ${p?`<label class="field"><span class="label">Pseudo</span><div class="row" style="flex-wrap:nowrap;gap:8px"><input id="ac-pseudo2" value="${esc(p.pseudo)}" style="flex:1;min-width:0"><button type="button" class="btn" data-act="acctPseudo">OK</button></div></label>`:""}
+    ${cloudOn()?`<div class="row"><button type="button" class="btn" data-act="acctSync">🔄 Synchroniser maintenant</button></div><div class="muted" style="font-size:13px" id="ac-sync">${esc(cloud.msg||LS.get("cm_cloud_at","")&&"Dernière synchro : "+new Date(LS.get("cm_cloud_at",0)).toLocaleString("fr-FR")||"")}</div>`:""}
+    ${cloud.admin?`<div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">👑 Administration</span>
+      <button type="button" class="btn" data-act="acctMigrate">📤 Envoyer toutes mes recettes dans la base commune</button>
+      <button type="button" class="btn" data-act="acctMembers">👥 Gérer les membres</button><div id="memList">${membersHtml()}</div></div>`:""}
+    <button type="button" class="btn ghost" data-act="acctOut" style="align-self:flex-start">Se déconnecter</button>`;}
+async function acctSubmit(){const mail=$("#ac-mail").value.trim(),pass=$("#ac-pass").value,m=$("#ac-msg");
+  if(!/.+@.+\..+/.test(mail)||pass.length<(acctMode==="signup"?8:1)){m.textContent="Vérifiez l'e-mail et le mot de passe.";return;}
+  m.textContent="⏳ …";try{const sb=await sbc();
+    if(acctMode==="signup"){const ps=$("#ac-pseudo").value.trim();if(ps.length<2){m.textContent="Choisissez un pseudo (2 lettres minimum).";return;}
+      const{data,error}=await sb.auth.signUp({email:mail,password:pass,options:{data:{pseudo:ps},emailRedirectTo:APP_URL}});if(error)throw error;
+      if(!data.session){cloud.msg="✉️ Un e-mail de confirmation vient de partir : cliquez sur le lien qu'il contient, puis revenez vous connecter.";acctMode="login";renderAcct();return;}
+      await cloudSession(data.session);}
+    else{const{data,error}=await sb.auth.signInWithPassword({email:mail,password:pass});if(error)throw error;await cloudSession(data.session);}
+    cloud.msg="";sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT")cloudSession(null);});}
+  catch(e){m.textContent=/Invalid login/i.test(e.message||"")?"E-mail ou mot de passe incorrect.":/confirm/i.test(e.message||"")?"Confirmez d'abord votre e-mail (lien reçu par mail).":/registered|exists/i.test(e.message||"")?"Ce compte existe déjà : connectez-vous.":"Échec : "+(e.message||"réseau ?");}}
+async function cloudSignOut(){try{await cloud.sb.auth.signOut();}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
+async function savePseudo(){const v=$("#ac-pseudo2").value.trim();if(v.length<2)return;const{error}=await cloud.sb.from("profiles").update({pseudo:v}).eq("id",cloud.user.id);if(error){toast("Pseudo non enregistré");return;}cloud.profile.pseudo=v;setAcctLine();toast("Pseudo enregistré");}
+// what of a recipe is shared (in the common book) and what stays private (favourite, ratings, own photo…)
+const sharedOf=r=>{const o={};SHARED_F.forEach(k=>{if(r[k]!==undefined)o[k]=r[k];});return o;};
+const hashOf=o=>stepHash(J(o));
+function myCloudRecipe(id){const r=recipes[id];return r&&!r.shared&&(!r.cloudAuthor||r.cloudAuthor===cloud.user.id||cloud.admin);}
+function cloudSoon(){if(!cloudOn())return;clearTimeout(cloudT);cloudT=setTimeout(()=>cloudPush(),2500);}
+function cloudDeleted(id){const r=recipes[id];if(!r||!cloud.user||!(r.cloudAuthor||LS.get("cm_cloudhash",{})[id]))return;const d=LS.get("cm_cloud_del",[]);d.push(id);LS.set("cm_cloud_del",d);cloudSoon();}
+async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
+  try{// private space: the whole menu + the private part of every recipe
+    const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}
+    const payload={menu,priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
+    if(LS.get("cm_cloud_ph","")!==ph){const{error}=await sb.from("user_state").upsert({user_id:uid,menu:payload,updated_at:new Date().toISOString()});if(!error)LS.set("cm_cloud_ph",ph);}
+    // my recipes in the common book
+    const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
+      rows.push(Object.assign({legacy_id:id,updated_at:new Date().toISOString(),name:r.name||"Sans nom",cat:r.cat||"Plat",cats:r.cats||[],time:Number(r.time)||0,serves:Number(r.serves)||4,ing:r.ing||[],steps:String(r.steps||""),image:r.image||null,tags:r.tags||[],source:r.source||null},r.cloudAuthor?{}:{author_id:uid}));H[id]=h;}
+    for(let i=0;i<rows.length;i+=200){const{error}=await sb.from("recipes").upsert(rows.slice(i,i+200),{onConflict:"legacy_id"});if(error)throw error;}
+    rows.forEach(x=>{const r=recipes[x.legacy_id];if(r&&!r.cloudAuthor){r.cloudAuthor=uid;r.cloudBy=cloud.profile.pseudo;}});
+    const del=LS.get("cm_cloud_del",[]);if(del.length){await sb.from("recipes").delete().in("legacy_id",del);del.forEach(k=>delete H[k]);LS.set("cm_cloud_del",[]);}
+    LS.set("cm_cloudhash",H);if(rows.length)LS.set("cm_recipes",recipes);LS.set("cm_cloud_at",Date.now());}
+  catch(e){cloud.msg="Synchro en attente (réseau ?)";}finally{cloud.busy=false;}}
+async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
+  // 1. private space (menus, courses, cave, favourites…): the most recent copy wins
+  const{data:st}=await sb.from("user_state").select("menu,updated_at").eq("user_id",uid).maybeSingle();
+  if(st&&st.menu&&st.menu.menu&&(st.menu.at||0)>LS.get("cm_menu_at",0)&&(!LS.get("cm_cloud_ph","")||confirmNewer(st.menu.at))){menu=Object.assign(menu||{},st.menu.menu);LS.set("cm_menu",menu);LS.set("cm_menu_at",st.menu.at);
+    for(const[id,o]of Object.entries(st.menu.priv||{}))if(recipes[id])Object.assign(recipes[id],o);}
+  // 2. the common book (only what changed since last time)
+  const since=LS.get("cm_cloud_since","1970-01-01T00:00:00Z");let rows=[],from=0;
+  for(;;){const{data,error}=await sb.from("recipes_with_author").select("*").gt("updated_at",since).order("updated_at").range(from,from+999);if(error)throw error;rows=rows.concat(data||[]);if(!data||data.length<1000)break;from+=1000;}
+  const H=LS.get("cm_cloudhash",{});let added=0;
+  for(const x of rows){const id=x.legacy_id||("c-"+x.id),old=recipes[id],sh={};SHARED_F.forEach(k=>{if(x[k]!==null&&x[k]!==undefined)sh[k]=x[k];});
+    if(!old)added++;recipes[id]=Object.assign({},old||{createdAt:x.created_at},sh,{cloudAuthor:x.author_id,cloudBy:x.author_pseudo||"",updatedAt:x.updated_at});H[id]=hashOf(sharedOf(recipes[id]));
+    if(x.updated_at>LS.get("cm_cloud_since",""))LS.set("cm_cloud_since",x.updated_at);}
+  // recipes removed from the common book by their author
+  const{data:ids}=await sb.from("recipes").select("legacy_id");if(ids){const live=new Set(ids.map(x=>x.legacy_id));for(const[id,r]of Object.entries(recipes))if(r.cloudAuthor&&r.cloudAuthor!==uid&&!live.has(id))delete recipes[id];}
+  LS.set("cm_cloudhash",H);LS.set("cm_recipes",recipes);return added;}
+function confirmNewer(){return true;}
+async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m)m.textContent="⏳ Synchronisation…";
+  try{const n=await cloudPull();await cloudPush();render();LS.set("cm_cloud_at",Date.now());cloud.msg="";if(m)m.textContent="✓ À jour · "+new Date().toLocaleTimeString("fr-FR");if(n&&!manual)toast(`🆕 ${n} recette${n>1?"s":""} de la base commune`);}
+  catch(e){if(m)m.textContent="Synchro impossible pour l'instant : "+(e.message||"réseau ?");}}
+async function cloudMigrate(){if(!cloud.admin)return;const own=Object.keys(recipes).filter(id=>!recipes[id].shared&&!recipes[id].cloudAuthor);
+  if(!confirm(`Envoyer ${own.length} recettes dans la base commune, à votre nom ? Les membres validés les verront.`))return;
+  const H=LS.get("cm_cloudhash",{});H.__all=1;LS.set("cm_cloudhash",H);toast("⏳ Envoi des recettes…");await cloudPush();const H2=LS.get("cm_cloudhash",{});delete H2.__all;LS.set("cm_cloudhash",H2);
+  toast(`✓ Recettes envoyées dans la base commune`);renderAcct();}
+async function loadMembers(){const{data,error}=await cloud.sb.rpc("admin_members");cloud.members=error?[]:data;if(error)toast("Liste impossible : "+error.message);$("#memList").innerHTML=membersHtml();}
+function membersHtml(){const l=cloud.members;if(!l)return"";if(!l.length)return`<p class="muted">Aucun membre.</p>`;
+  const S={pending:"⏳ en attente",active:"✅ actif",blocked:"⛔ bloqué"};
+  return l.map(m=>`<div class="mem"><div><b>${esc(m.pseudo)}</b>${m.role==="admin"?" 👑":""} <span class="muted">· ${S[m.status]||m.status}</span><br><small class="muted">${esc(m.email||"")} · inscrit le ${new Date(m.created_at).toLocaleDateString("fr-FR")}${m.last_seen?" · vu "+ago(Date.parse(m.last_seen)):""} · ${m.recipes_count} recette${m.recipes_count>1?"s":""}</small></div>
+    ${m.id===cloud.user.id?"":`<div class="row" style="gap:6px">${m.status!=="active"?`<button type="button" class="btn primary" data-act="memSet" data-id="${m.id}" data-s="active">Valider</button>`:`<button type="button" class="btn" data-act="memSet" data-id="${m.id}" data-s="blocked">Bloquer</button>`}${m.status==="active"?(m.role==="admin"?`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="member">Retirer admin</button>`:`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="admin">Rendre admin</button>`):""}</div>`}</div>`).join("");}
+async function setMember(id,st,role){const{error}=await cloud.sb.rpc("admin_set_member",{member:id,new_status:st,new_role:role});if(error){toast("Refusé : "+error.message);return;}toast("Accès mis à jour");loadMembers();}
+setTimeout(cloudInit,800);document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudOn())cloudSync();});
 /* ---------- boot ---------- */
 {const v=$("#v-wine"),inn=$("#winesIn");while(inn.firstChild)v.appendChild(inn.firstChild);const h=v.querySelector(".row");if(h){h.querySelector("[data-act=closeWines]")?.remove();}
   const b=document.createElement("p");b.className="muted";b.style.cssText="margin:0;font-size:13px";b.textContent="Vos bouteilles : ajoutez-les avec leur appellation, type, millésime et quantité ; touchez − / + quand vous en ouvrez ou en achetez. Liez un vin à une recette ou à un repas prévu dans sa fiche.";h&&h.after(b);}
