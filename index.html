@@ -4142,9 +4142,13 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
       const arr=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"):[];
       rows.push(Object.assign({legacy_id:id,updated_at:new Date().toISOString(),name:String(r.name||"Sans nom").slice(0,300),cat:String(r.cat||"Plat"),cats:arr(r.cats),time:Math.round(Number(r.time)||0),serves:Math.max(1,Math.round(Number(r.serves)||4)),ing:Array.isArray(r.ing)?r.ing:[],steps:Array.isArray(r.steps)?r.steps.join("\n"):String(r.steps||""),image:typeof r.image==="string"?r.image:null,tags:arr(r.tags),source:typeof r.source==="string"?r.source:null},r.cloudAuthor?{}:{author_id:uid}));H[id]=h;}
     cloud.lastErr=[];let sent=0;
-    for(let i=0;i<rows.length;i+=200){const part=rows.slice(i,i+200);const{error}=await sb.from("recipes").upsert(part,{onConflict:"legacy_id"});
+    // an upsert is checked as an insert by the security rules: existing recipes are updated, new ones inserted in my name
+    let exist=new Set();if(rows.length){let f=0;for(;;){const{data,error}=await sb.from("recipes").select("legacy_id").range(f,f+999);if(error)throw error;(data||[]).forEach(x=>exist.add(x.legacy_id));if(!data||data.length<1000)break;f+=1000;}}
+    const ins=rows.filter(x=>!exist.has(x.legacy_id)).map(x=>Object.assign({},x,{author_id:uid})),upd=rows.filter(x=>exist.has(x.legacy_id)).map(x=>{const y=Object.assign({},x);delete y.author_id;return y;});
+    for(let i=0;i<ins.length;i+=200){const part=ins.slice(i,i+200);const{error}=await sb.from("recipes").insert(part);
       if(!error){sent+=part.length;continue;}
-      for(const row of part){const{error:e2}=await sb.from("recipes").upsert([row],{onConflict:"legacy_id"});if(e2){cloud.lastErr.push(row.name+" : "+e2.message);delete H[row.legacy_id];}else sent++;}}
+      for(const row of part){const{error:e2}=await sb.from("recipes").insert([row]);if(e2){cloud.lastErr.push(row.name+" : "+e2.message);delete H[row.legacy_id];}else sent++;}}
+    for(const row of upd){const id=row.legacy_id;delete row.legacy_id;const{error}=await sb.from("recipes").update(row).eq("legacy_id",id);row.legacy_id=id;if(error){cloud.lastErr.push(row.name+" : "+error.message);delete H[id];}else sent++;}
     cloud.lastSent=sent;rows.splice(0,rows.length,...rows.filter(x=>H[x.legacy_id]));
     rows.forEach(x=>{const r=recipes[x.legacy_id];if(r&&!r.cloudAuthor){r.cloudAuthor=uid;r.cloudBy=cloud.profile.pseudo;}});
     // my own photos (dish, page of the book) go to the shared photo storage
