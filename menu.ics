@@ -120,8 +120,7 @@ UID:20261025-midi@carnet-menus
 DTSTAMP:20261025T000000Z
 DTSTART;TZID=Europe/Paris:20261025T120000
 DTEND;TZID=Europe/Paris:20261025T133000
-SUMMARY:Midi : Poulet rôti & pomme de terre (+ Salade de mâche aux œufs
-  et lardons)
+SUMMARY:Midi : Poulet rôti & pomme de terre
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
