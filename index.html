@@ -396,6 +396,7 @@ img.rp-th,img.dish-ph{width:56px!important;height:56px!important}img.mc-ph{width
 /* iPhone zooms the whole page in when a field has text smaller than 16 px, and stays zoomed (app wider than the screen): never below 16 px */
 input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,select{font-size:16px!important}
 html,body{overflow-x:hidden;max-width:100%}
+.web-find{display:flex;flex-direction:column;gap:8px;border:2px solid var(--accent);border-radius:14px;padding:12px 14px;background:var(--surface);margin-top:6px}.web-find .row{gap:8px}.web-find .btn{flex:1;justify-content:center;min-height:44px}
 .tech{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface);font-size:14px}
 .tech summary{cursor:pointer;color:var(--accent);font-weight:600}.tech ol{margin:6px 0 2px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
 .tech.dark{background:rgba(255,255,255,.08);border-color:transparent;color:#eef3ee}.tech.dark summary{color:#9ED9B0}
@@ -1605,9 +1606,10 @@ function renderRecipes(){
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
-  if(!list.length){const near=filter.q?closeNames(filter.q,Object.keys(recipes)):[];
-    el.innerHTML=near.length?`<div class="empty">Pas de « ${esc(filter.q)} »… vouliez-vous dire :<div class="row" style="justify-content:center;margin-top:10px">${near.map(id=>`<button class="btn" data-act="recSearch" data-q="${esc(recipes[id].name)}">${esc(recipes[id].name)}</button>`).join("")}</div></div>`
-      :'<div class="empty">Aucune recette ne correspond à cette recherche.</div>';return;}
+  if(!list.length){const near=filter.q?closeNames(filter.q,Object.keys(recipes)):[],q=filter.q.trim(),e=encodeURIComponent(q);
+    const web=q?`<div class="web-find"><span class="label">🌐 Rechercher « ${esc(q)} » sur Internet</span><div class="row"><a class="btn primary" target="_blank" rel="noopener" href="https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}">Marmiton ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.750g.com/recherche?q=${e}">750g ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/search?q=${e}+recette">Google ↗</a></div><span class="muted" style="font-size:12px">Une recette vous plaît ? Copiez son lien et collez-le dans « Importer du web ».</span></div>`:"";
+    el.innerHTML=(near.length?`<div class="empty">Pas de « ${esc(filter.q)} »… vouliez-vous dire :<div class="row" style="justify-content:center;margin-top:10px">${near.map(id=>`<button class="btn" data-act="recSearch" data-q="${esc(recipes[id].name)}">${esc(recipes[id].name)}</button>`).join("")}</div></div>`
+      :`<div class="empty">Aucune recette ne correspond${q?` à « ${esc(q)} »`:" à cette recherche"}.</div>`)+web;return;}
   const shown=list.slice(0,Math.max(recLimit,list.findIndex(([id])=>id===openId)+1));
   el.innerHTML=shown.map(([id,r])=>{
     const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=viewServ[id]||(on?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
@@ -3131,7 +3133,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.act==="checkX"){menu.extras[Number(t.dataset.i)].done=t.checked;render();saveMenu(300);}
 });
 $("#q").value=filter.q||"";
-$("#q").addEventListener("input",e=>{filter.q=e.target.value;recLimit=50;renderRecipes();});
+$("#q").addEventListener("input",e=>{filter.q=e.target.value;recLimit=50;renderRecipes();const w=$("#recList .web-find");if(w)setTimeout(()=>{const r=w.getBoundingClientRect(),vh=window.visualViewport?visualViewport.height:innerHeight;if(r.bottom>vh)w.scrollIntoView({block:"end",behavior:"smooth"});},250);});
 $("#extraForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#extraIn").value.trim();if(!v)return;
   menu.extras=[...(menu.extras||[]),{t:v,done:false}];$("#extraIn").value="";render();saveMenu();});
 
