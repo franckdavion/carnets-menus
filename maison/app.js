@@ -66,7 +66,7 @@ let who = null;                               // member filter on Today and Tâc
 let weekA = mondayOf(today()), weekR = mondayOf(today());
 let repasTab = "menu";
 let S = blank();
-function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, recipes: null }; }
+function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null }; }
 const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
 const V2 = ["msgs", "locs"]; // tables added by supabase-foyer-2.sql
 
@@ -170,6 +170,8 @@ async function loadCloud(hid) {
   // anniversaires, budget, documents, emploi du temps: third script
   const [bd, ex, dc, sc] = await Promise.all(["birthdays", "expenses", "documents", "schedule"].map(t => sb.from(t).select("*").eq("household_id", hid)));
   const v3 = ![bd, ex, dc, sc].some(r => r.error);
+  const ph = await sb.from("photos").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(2000);
+  const v4 = !ph.error;
   const bad = [hh, mm, tk, lg, ev, ml, sh].find(r => r.error);
   if (bad) throw bad.error;
   // messages and positions need the second script; the rest of the app works without it
@@ -177,7 +179,7 @@ async function loadCloud(hid) {
   const recipes = S.recipes;
   S = { hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
     msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
-    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, recipes };
+    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes };
   saveLocal();
 }
 
@@ -187,6 +189,7 @@ function listen(hid) {
   for (const [key, table] of Object.entries(TABLES)) {
     if (V2.includes(key) && !S.v2) continue;
     if (V3.includes(key) && !S.v3) continue;
+    if (key === "photos" && !S.v4) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
       if (p.eventType === "DELETE") { S[key] = S[key].filter(x => x.id !== p.old.id); }
       else {
@@ -542,7 +545,7 @@ function render() {
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
   if (!VIEWS[view]) view = "home";
-  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"] }[view];
+  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
   if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
   const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
       <textarea class="input" name="body" rows="1" maxlength="2000" placeholder="Écrire au foyer…" aria-label="Message"></textarea>
@@ -564,6 +567,7 @@ function render() {
     </nav>`;
   if (view === "messages") renderMsgs();
   if (view === "carte") mountMap();
+  if (typeof afterRender === "function") afterRender();
   updateBadge();
 }
 

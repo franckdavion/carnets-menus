@@ -12,6 +12,7 @@ Nouvelle version du Carnet de menus, dans son propre dossier : le Carnet continu
 5. Dans l'onglet Foyer, « Envoyer une invitation » aux autres membres.
 6. Pour la messagerie et la carte : coller aussi `supabase-foyer-2.sql` (une seule fois).
 7. Pour Anniversaires, Budget, Documents et Emploi du temps : coller `supabase-foyer-3.sql` (une seule fois).
+8. Pour la Galerie : coller `supabase-foyer-4.sql` (une seule fois).
 
 Sans le script, le bouton « Essayer sans compte » permet de tout tester (les données restent sur le téléphone).
 
@@ -19,7 +20,7 @@ Sans le script, le bouton « Essayer sans compte » permet de tout tester (les d
 
 L'accueil affiche les tâches du jour puis une grille de modules (à personnaliser dans Explorer). En bas : Accueil, Messages, Explorer.
 
-- **Anniversaires**, **Budget**, **Documents**, **Emploi du temps**, **Recettes** : nouveaux modules.
+- **Anniversaires**, **Budget**, **Documents**, **Emploi du temps**, **Recettes**, **Galerie** : nouveaux modules.
 
 - **Aujourd'hui** : tâches du jour, repas du jour, agenda d'aujourd'hui et demain. La barre de couleurs montre qui a fait quoi.
 - **Tâches** : tâches récurrentes (chaque jour, certains jours, tous les X jours, chaque mois), attribuées ou « chacun son tour », et le bilan des 7 derniers jours.
@@ -37,5 +38,6 @@ Les modifications apparaissent en direct sur les téléphones des autres membres
 - `sw.js`, `manifest.json`, `icon-*.png` : installation sur l'écran d'accueil
 - `supabase-foyer.sql` : tables, règles d'accès et temps réel
 - `supabase-foyer-2.sql` : messagerie et positions
+- `supabase-foyer-4.sql` : galerie photo (stockage privé « household-photos »)
 - `supabase-foyer-3.sql` : anniversaires, budget, documents (stockage privé), emploi du temps
 - `modules.js` : accueil en modules, Explorer, calendrier du mois et nouveaux modules

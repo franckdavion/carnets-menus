@@ -21,6 +21,8 @@ const MI = {
   docs: '<path class="f" d="M4 9a3 3 0 0 1 3-3h6l3 3h9a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M10 20h7"/>',
   edt: '<rect class="f" x="4" y="6" width="20" height="18" rx="4"/><path d="M4 12h20M11 12v12M17 12v8"/><circle cx="24" cy="23" r="5.5" style="fill:var(--surface)"/><path d="M24 20.5V23l1.8 1.3"/>'
 };
+MC.galerie = "#F4729C";
+MI.galerie = '<rect class="f" x="4" y="9" width="24" height="17" rx="5"/><path d="M11 9l2-3.5h6L21 9"/><circle cx="16" cy="17.5" r="4.3"/><circle class="s" cx="23.5" cy="13" r="1.2"/>';
 const mi = (k, cls = "") => `<span class="mi ${cls}" style="--mc:${MC[k]}" aria-hidden="true"><svg viewBox="0 0 32 32">${MI[k]}</svg></span>`;
 I.grid = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>';
 I.home = '<svg viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><circle cx="12" cy="14.5" r="2"/></svg>';
@@ -36,6 +38,7 @@ const MODS = [
   { k: "messages", t: "Messages", g: "Essentiels", sub() { const n = unread(); if (n) return plural(n, "nouveau message", "nouveaux messages"); const l = S.msgs.at(-1); return l ? `${(member(l.member_id) || {}).name || "?"} : ${l.body}` : "Écrivez au foyer"; } },
   { k: "repas", t: "Repas", g: "Essentiels", sub() { const m = mealAt(today(), "soir"); return m ? `Ce soir : ${mealName(m)}` : "Rien de prévu ce soir"; } },
   { k: "recettes", t: "Recettes", g: "Essentiels", sub() { return S.recipes && S.recipes.length ? plural(S.recipes.length, "recette", "recettes") : "Votre livre de recettes"; } },
+  { k: "galerie", t: "Galerie", g: "Essentiels", sub() { const n = S.photos.length; return n ? plural(n, "photo", "photos") : "Vos photos de famille"; } },
   { k: "foyer", t: "Ma famille", g: "Essentiels", sub() { return plural(S.members.length, "membre", "membres"); } },
   { k: "anniv", t: "Anniversaires", g: "Organisation", sub() { const b = nextBdays()[0]; return b ? `${b.name} ${b.days === 0 ? "aujourd'hui !" : b.days === 1 ? "demain" : "dans " + b.days + " j"}` : "Vos dates importantes"; } },
   { k: "budget", t: "Budget", g: "Organisation", sub() { const m = today().slice(0, 7); const t = S.exp.filter(e => e.kind !== "in" && String(e.day).startsWith(m)).reduce((a, e) => a + Number(e.amount), 0); return t ? `${eur(t)} ce mois-ci` : "Suivez vos dépenses"; } },
@@ -302,7 +305,7 @@ function slotSheet(s) {
 
 /* ---------- quick add from home ---------- */
 function quickAdd() {
-  const acts = [["tasks", "Tâche", "newTask"], ["agenda", "Événement", "newEvent"], ["courses", "Article de courses", "goShop"], ["budget", "Dépense", "newExp"], ["anniv", "Anniversaire", "newBday"], ["docs", "Document", "newDoc"], ["edt", "Créneau", "newSlot"], ["messages", "Message", "goMsg"]];
+  const acts = [["galerie", "Photos", "pickPhotos"], ["tasks", "Tâche", "newTask"], ["agenda", "Événement", "newEvent"], ["courses", "Article de courses", "goShop"], ["budget", "Dépense", "newExp"], ["anniv", "Anniversaire", "newBday"], ["docs", "Document", "newDoc"], ["edt", "Créneau", "newSlot"], ["messages", "Message", "goMsg"]];
   openSheet("Ajouter", `<div class="sq-grid" style="margin-top:10px">${acts.map(([k, l, a]) => `<button class="sq" data-act="${a}"><span class="sq-ic">${mi(k)}</span><span class="sq-t">${l}</span></button>`).join("")}</div>`);
 }
 
@@ -416,6 +419,7 @@ document.addEventListener("submit", async e => {
 function demoUpgrade3(d) {
   if (!d) return d;
   d.v3 = true;
+  d.v4 = true; if (!d.photos) d.photos = [];
   const t = today(), td = parse(t), hid = "demo";
   if (!d.bdays) d.bdays = [
     { id: uuid(), household_id: hid, name: "Marie", day: parse(addDays(t, 12)).getDate(), month: parse(addDays(t, 12)).getMonth() + 1, year: 1985, member_id: "m2", notes: "" },
@@ -438,5 +442,193 @@ function demoUpgrade3(d) {
   }
   return d;
 }
+
+/* ---------- gallery ---------- */
+TABLES.photos = "photos";
+const PH_BUCKET = "household-photos";
+let phAlbum = "", phPending = [], lbList = [], lbIdx = -1;
+const purl = {}; // signed address cache: path -> { url, until }
+function v4Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-4.sql</b> dans Supabase (comme les précédents), puis rouvrez l'appli.</div>`; }
+const albums = () => [...new Set(S.photos.map(p => p.album).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const phSorted = () => S.photos.filter(p => !phAlbum || p.album === phAlbum).sort((a, b) => String(b.taken_at || b.created_at).localeCompare(String(a.taken_at || a.created_at)));
+
+async function signPaths(paths) {
+  const now = Date.now(), need = [...new Set(paths)].filter(p => p && !(purl[p] && purl[p].until > now + 6e4));
+  if (!need.length || mode !== "cloud") return;
+  for (let i = 0; i < need.length; i += 100) {
+    const { data, error } = await sb.storage.from(PH_BUCKET).createSignedUrls(need.slice(i, i + 100), 3600);
+    if (error || !data) continue;
+    for (const d of data) if (d.signedUrl) purl[d.path] = { url: d.signedUrl, until: now + 3500e3 };
+  }
+}
+async function photoSrc(p, full) {
+  if (mode !== "cloud") return full ? (p.data || p.thumb) : p.thumb;
+  const path = full ? p.file_path : p.thumb_path;
+  await signPaths([path]);
+  return purl[path] ? purl[path].url : "";
+}
+
+VIEWS.galerie = function () {
+  if (!S.v4) return v4Notice();
+  const al = albums(), list = phSorted();
+  let grid = "", lastMonth = "";
+  list.forEach((p, i) => {
+    const mth = String(p.taken_at || p.created_at).slice(0, 7);
+    if (mth !== lastMonth) { grid += `${lastMonth ? "</div>" : ""}<p class="group-h">${esc(cap(monthName(mth + "-01")))}</p><div class="ph-grid">`; lastMonth = mth; }
+    grid += `<button class="ph" data-act="lbOpen" data-v="${i}" aria-label="Photo${p.caption ? " : " + esc(p.caption) : ""}"><img data-ph="${p.id}" alt="" loading="lazy"></button>`;
+  });
+  if (lastMonth) grid += "</div>";
+  return `${al.length ? `<div class="who" style="margin-top:4px"><button class="plain" data-act="phAlbum" data-v="" aria-pressed="${!phAlbum}">Toutes</button>${al.map(a => `<button class="plain" data-act="phAlbum" data-v="${esc(a)}" aria-pressed="${phAlbum === a}">${esc(a)} <span class="muted">${S.photos.filter(p => p.album === a).length}</span></button>`).join("")}</div>` : ""}
+    ${list.length ? grid : `<div class="empty" style="margin-top:12px"><strong>Aucune photo pour l'instant.</strong>Ajoutez des photos depuis votre téléphone : tout le foyer les verra, et elles restent privées.</div>`}`;
+};
+async function fillThumbs() {
+  const imgs = [...document.querySelectorAll("img[data-ph]")];
+  if (!imgs.length) return;
+  const byId = Object.fromEntries(S.photos.map(p => [p.id, p]));
+  if (mode === "cloud") await signPaths(imgs.map(i => (byId[i.dataset.ph] || {}).thumb_path));
+  for (const i of imgs) { const p = byId[i.dataset.ph]; if (!p || i.src) continue; const u = mode === "cloud" ? (purl[p.thumb_path] || {}).url : p.thumb; if (u) i.src = u; }
+}
+function afterRender() { if (view === "galerie") fillThumbs(); }
+
+/* adding photos: pick → choose album → shrink → upload */
+const phIn = document.createElement("input");
+phIn.type = "file"; phIn.accept = "image/*"; phIn.multiple = true; phIn.hidden = true;
+document.body.appendChild(phIn);
+phIn.addEventListener("change", () => {
+  phPending = [...phIn.files]; phIn.value = "";
+  if (!phPending.length) return;
+  if (mode === "demo" && S.photos.length + phPending.length > 12) { toast("En mode démo, la galerie est limitée à 12 photos."); phPending = phPending.slice(0, Math.max(0, 12 - S.photos.length)); if (!phPending.length) return; }
+  const al = albums();
+  openSheet(phPending.length > 1 ? `Ajouter ${phPending.length} photos` : "Ajouter la photo", `
+    <form data-form="phUpload">
+      <div class="field"><span class="label">Album</span>${chipsHtml("album", [["", "Aucun"], ...al.map(a => [a, a])], phAlbum)}</div>
+      <label class="field"><span class="label">Ou un nouvel album</span><input class="input" name="newAlbum" maxlength="40" placeholder="Ex. Vacances d'été"></label>
+      ${phPending.length === 1 ? `<label class="field"><span class="label">Légende</span><input class="input" name="caption" maxlength="200" placeholder="Facultatif"></label>` : ""}
+      <p class="muted small" style="margin-top:10px">Les photos sont réduites (≈ 1600 pixels) pour ménager l'espace du foyer.</p>
+      <div class="sheet-sticky btns" style="margin-top:0"><button class="btn primary block" type="submit">Ajouter</button></div>
+    </form>`);
+});
+async function shrink(file, max, q) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+  catch (e) { src = await new Promise((ok, ko) => { const im = new Image(); im.onload = () => ok(im); im.onerror = ko; im.src = URL.createObjectURL(file); }); }
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+  const blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", q));
+  return { blob, w: c.width, h: c.height };
+}
+const blobToDataURL = b => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(b); });
+async function uploadPhotos(files, album, caption, btn) {
+  let ok = 0;
+  for (let i = 0; i < files.length; i++) {
+    if (btn) btn.textContent = `Envoi ${i + 1} sur ${files.length}…`;
+    const f = files[i], id = uuid();
+    try {
+      const big = await shrink(f, mode === "cloud" ? 1600 : 900, mode === "cloud" ? 0.82 : 0.7), small = await shrink(f, 420, 0.72);
+      const row = { id, household_id: S.hh.id, member_id: S.me, album, caption: files.length === 1 ? caption : "", storage: "supabase", width: big.w, height: big.h, size: big.blob.size + small.blob.size,
+        taken_at: f.lastModified ? new Date(f.lastModified).toISOString() : null, created_at: new Date().toISOString() };
+      if (mode === "cloud") {
+        row.file_path = `${S.hh.id}/${id}.jpg`; row.thumb_path = `${S.hh.id}/${id}-t.jpg`;
+        let r = await sb.storage.from(PH_BUCKET).upload(row.file_path, big.blob, { contentType: "image/jpeg" }); if (r.error) throw r.error;
+        r = await sb.storage.from(PH_BUCKET).upload(row.thumb_path, small.blob, { contentType: "image/jpeg" }); if (r.error) throw r.error;
+        r = await sb.from("photos").insert(row); if (r.error) { await sb.storage.from(PH_BUCKET).remove([row.file_path, row.thumb_path]); throw r.error; }
+      } else { row.file_path = row.thumb_path = ""; row.data = await blobToDataURL(big.blob); row.thumb = await blobToDataURL(small.blob); }
+      S.photos.unshift(row); ok++; saveLocal();
+    } catch (e) { console.warn(e); }
+  }
+  return ok;
+}
+
+/* full-screen viewer */
+function lbOpen(i) {
+  lbList = phSorted(); lbIdx = i;
+  let el = $("#lb");
+  if (!el) { el = document.createElement("div"); el.id = "lb"; el.className = "lb"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); document.body.appendChild(el); }
+  el.hidden = false; document.body.style.overflow = "hidden"; lbDraw();
+}
+function lbClose() { const el = $("#lb"); if (el) el.hidden = true; document.body.style.overflow = ""; lbIdx = -1; }
+async function lbDraw() {
+  const el = $("#lb"), p = lbList[lbIdx]; if (!el || !p) return lbClose();
+  const m = member(p.member_id), mine = p.member_id === S.me;
+  const when = new Date(p.taken_at || p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  el.innerHTML = `<div class="lb-top"><button class="icon-btn plain" data-act="lbClose" aria-label="Fermer">✕</button><span>${lbIdx + 1} / ${lbList.length}</span><span style="width:44px"></span></div>
+    <div class="lb-img"><img id="lbImg" alt="${esc(p.caption || "Photo")}"></div>
+    <div class="lb-info">${p.caption ? `<p style="margin:0 0 4px">${esc(p.caption)}</p>` : ""}<span class="small">${m ? esc(m.name) + " · " : ""}${esc(when)}${p.album ? " · " + esc(p.album) : ""}</span>
+      <div class="btns" style="margin-top:10px"><button class="btn" data-act="lbSave">Enregistrer</button><button class="btn" data-act="lbAlbum">Album</button>${mine ? `<button class="btn danger" data-act="lbDel">Supprimer</button>` : ""}</div></div>
+    ${lbIdx > 0 ? `<button class="lb-nav prev" data-act="lbGo" data-v="-1" aria-label="Photo précédente">${I.left}</button>` : ""}${lbIdx < lbList.length - 1 ? `<button class="lb-nav next" data-act="lbGo" data-v="1" aria-label="Photo suivante">${I.right}</button>` : ""}`;
+  const img = $("#lbImg"), thumb = mode === "cloud" ? (purl[p.thumb_path] || {}).url : p.thumb;
+  if (thumb) img.src = thumb;
+  const full = await photoSrc(p, true); if (full && $("#lbImg") === img) img.src = full;
+}
+let lbX = null;
+document.addEventListener("touchstart", e => { if (e.target.closest && e.target.closest("#lb .lb-img")) lbX = e.touches[0].clientX; }, { passive: true });
+document.addEventListener("touchend", e => {
+  if (lbX === null) return; const dx = e.changedTouches[0].clientX - lbX; lbX = null;
+  if (Math.abs(dx) > 50) { const n = lbIdx + (dx < 0 ? 1 : -1); if (n >= 0 && n < lbList.length) { lbIdx = n; lbDraw(); } }
+}, { passive: true });
+document.addEventListener("keydown", e => {
+  if (lbIdx < 0) return;
+  if (e.key === "Escape") lbClose();
+  if (e.key === "ArrowRight" && lbIdx < lbList.length - 1) { lbIdx++; lbDraw(); }
+  if (e.key === "ArrowLeft" && lbIdx > 0) { lbIdx--; lbDraw(); }
+});
+
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const v = b.dataset.v;
+  switch (b.dataset.act) {
+    case "pickPhotos": closeSheet(); if (!S.v4) { view = "galerie"; render(); break; } phIn.click(); break;
+    case "phAlbum": phAlbum = v; render(); break;
+    case "lbOpen": lbOpen(+v); break;
+    case "lbClose": lbClose(); break;
+    case "lbGo": lbIdx += +v; lbDraw(); break;
+    case "lbSave": {
+      const p = lbList[lbIdx]; if (!p) break;
+      try {
+        const blob = await (await fetch(await photoSrc(p, true))).blob(), file = new File([blob], `photo-${String(p.taken_at || p.created_at).slice(0, 10)}.jpg`, { type: "image/jpeg" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch (er) {} }
+        else { const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); }
+      } catch (er) { toast("Impossible d'enregistrer : restez appuyé sur la photo, puis « Enregistrer »."); }
+      break;
+    }
+    case "lbAlbum": {
+      const p = lbList[lbIdx]; if (!p) break;
+      openSheet("Changer d'album", `<form data-form="phAlbumSet"><div class="field"><span class="label">Album</span>${chipsHtml("album", [["", "Aucun"], ...albums().map(a => [a, a])], p.album)}</div>
+        <label class="field"><span class="label">Ou un nouvel album</span><input class="input" name="newAlbum" maxlength="40"></label>
+        <label class="field"><span class="label">Légende</span><input class="input" name="caption" maxlength="200" value="${esc(p.caption)}"></label>
+        <div class="btns"><button class="btn primary block" type="submit">Enregistrer</button></div></form>`, { photo: p.id });
+      break;
+    }
+    case "lbDel": {
+      const p = lbList[lbIdx]; if (!p || !confirm("Supprimer cette photo pour tout le foyer ?")) break;
+      await remove("photos", p.id);
+      if (mode === "cloud" && !S.photos.some(x => x.id === p.id)) await sb.storage.from(PH_BUCKET).remove([p.file_path, p.thumb_path]);
+      lbList = phSorted(); if (lbIdx >= lbList.length) lbIdx = lbList.length - 1; if (lbIdx < 0) lbClose(); else lbDraw();
+      break;
+    }
+  }
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form]"); if (!f || !["phUpload", "phAlbumSet"].includes(f.dataset.form)) return;
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(f).entries()), album = (fd.newAlbum || "").trim() || chipVal(f, "album") || "";
+  if (f.dataset.form === "phAlbumSet") { const id = sheetCtx.photo; closeSheet(); await patch("photos", id, { album, caption: (fd.caption || "").trim() }); if (lbIdx >= 0) { lbList = phSorted(); lbIdx = Math.max(0, lbList.findIndex(x => x.id === id)); lbDraw(); } return; }
+  const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+  const files = phPending; phPending = [];
+  const n = await uploadPhotos(files, album, (fd.caption || "").trim(), btn);
+  closeSheet(); phAlbum = album; view = "galerie"; render();
+  toast(n === files.length ? (n > 1 ? `${n} photos ajoutées.` : "Photo ajoutée.") : `${n} sur ${files.length} photos ajoutées. Réessayez pour les autres (réseau ?).`);
+});
+
+/* storage used, shown in Ma famille */
+const foyerView0 = VIEWS.foyer;
+VIEWS.foyer = function () {
+  const used = S.photos.reduce((a, p) => a + (p.size || 0), 0) + S.docs.reduce((a, d) => a + (d.size || 0), 0), mo = used / 1048576;
+  const pct = Math.min(100, Math.round(mo / 1024 * 100));
+  return foyerView0() + (mode === "cloud" ? `<h2>Espace de stockage</h2><div class="card"><strong>${mo < 10 ? mo.toFixed(1).replace(".", ",") : Math.round(mo)} Mo utilisés</strong> <span class="muted small">sur 1 Go gratuits</span>
+    <div class="meter" style="margin-top:10px"><i style="width:${Math.max(pct, used ? 1 : 0)}%;background:${pct > 85 ? "var(--late)" : "var(--accent)"}"></i></div>
+    <span class="muted small">Photos de la galerie et documents. Les photos de recettes du Carnet comptent aussi dans ce 1 Go.</span></div>` : "");
+};
 
 init();
