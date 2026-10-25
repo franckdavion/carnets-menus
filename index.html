@@ -4098,6 +4098,7 @@ function applyRoleUi(){const isAdmin=!!cloud.admin||(!cloud.user&&!!sync),showSy
   const r=$("#rowSync");if(r)r.hidden=!showSync;document.querySelectorAll(".admin-only").forEach(el=>el.hidden=!isAdmin);}
 function setAcctLine(){applyRoleUi();const el=$("#setAcct");if(el)el.textContent=cloud.user?(cloud.profile?`${cloud.profile.pseudo}${cloud.admin?" · 👑 admin":""}${cloud.profile.status==="pending"?" · en attente de validation":cloud.profile.status==="blocked"?" · bloqué":" · synchronisé"}`:"connecté"):"connexion, base de recettes commune";}
 function renderAcct(){const b=$("#acctBody");const u=cloud.user,p=cloud.profile;
+  if(cloudOn())cloud.sb.from("recipes").select("id",{count:"exact",head:true}).then(({count})=>{const el=$("#ac-count");if(el&&count!=null)el.textContent=`📚 Base commune : ${count} recettes · sur ce téléphone : ${Object.keys(recipes).length}`;});
   if(!u){b.innerHTML=`<p class="muted" style="margin:0;font-size:14px">Avec un compte, vous retrouvez vos menus, courses, cave et favoris sur n'importe quel téléphone, et vous partagez la base de recettes commune avec les membres. Vos menus et courses restent privés : personne d'autre ne peut les voir.</p>
     <div class="row">${[["login","Se connecter"],["signup","Créer un compte"]].map(([v,l])=>`<button type="button" class="chip" data-act="acctMode" data-v="${v}" aria-pressed="${acctMode===v}">${l}</button>`).join("")}</div>
     ${acctMode==="signup"?`<label class="field"><span class="label">Pseudo (affiché sur vos recettes)</span><input id="ac-pseudo" autocomplete="nickname" placeholder="Ex. Franck"></label>`:""}
@@ -4108,7 +4109,7 @@ function renderAcct(){const b=$("#acctBody");const u=cloud.user,p=cloud.profile;
   b.innerHTML=`<div class="note">Connecté : <b>${esc(p?p.pseudo:u.email)}</b>${cloud.admin?" · 👑 administrateur":""}<br><small class="muted">${esc(u.email||"")}</small></div>
     ${st==="pending"?`<div class="note">⏳ Votre compte attend la validation de l'administrateur. Vous pourrez ensuite accéder à la base commune.</div>`:st==="blocked"?`<div class="note">⛔ Ce compte est bloqué par l'administrateur.</div>`:""}
     ${p?`<label class="field"><span class="label">Pseudo</span><div class="row" style="flex-wrap:nowrap;gap:8px"><input id="ac-pseudo2" value="${esc(p.pseudo)}" style="flex:1;min-width:0"><button type="button" class="btn" data-act="acctPseudo">OK</button></div></label>`:""}
-    ${cloudOn()?`<div class="row"><button type="button" class="btn" data-act="acctSync">🔄 Synchroniser maintenant</button></div><div class="muted" style="font-size:13px" id="ac-sync">${esc(cloud.msg||LS.get("cm_cloud_at","")&&"Dernière synchro : "+new Date(LS.get("cm_cloud_at",0)).toLocaleString("fr-FR")||"")}</div>`:""}
+    ${cloudOn()?`<div class="muted" style="font-size:13px" id="ac-count"></div><div class="row"><button type="button" class="btn" data-act="acctSync">🔄 Synchroniser maintenant</button></div><div class="muted" style="font-size:13px" id="ac-sync">${esc(cloud.msg||LS.get("cm_cloud_at","")&&"Dernière synchro : "+new Date(LS.get("cm_cloud_at",0)).toLocaleString("fr-FR")||"")}</div>`:""}
     ${cloud.admin?`<div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">👑 Administration</span>
       <button type="button" class="btn" data-act="acctMigrate">📤 Envoyer toutes mes recettes dans la base commune</button>
       <button type="button" class="btn" data-act="acctMembers">👥 Gérer les membres</button><div id="memList">${membersHtml()}</div></div>`:""}
@@ -4138,8 +4139,13 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
     if(LS.get("cm_cloud_ph","")!==ph){const{error}=await sb.from("user_state").upsert({user_id:uid,menu:payload,updated_at:new Date().toISOString()});if(!error)LS.set("cm_cloud_ph",ph);}
     // my recipes in the common book
     const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
-      rows.push(Object.assign({legacy_id:id,updated_at:new Date().toISOString(),name:r.name||"Sans nom",cat:r.cat||"Plat",cats:r.cats||[],time:Number(r.time)||0,serves:Number(r.serves)||4,ing:r.ing||[],steps:String(r.steps||""),image:r.image||null,tags:r.tags||[],source:r.source||null},r.cloudAuthor?{}:{author_id:uid}));H[id]=h;}
-    for(let i=0;i<rows.length;i+=200){const{error}=await sb.from("recipes").upsert(rows.slice(i,i+200),{onConflict:"legacy_id"});if(error)throw error;}
+      const arr=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"):[];
+      rows.push(Object.assign({legacy_id:id,updated_at:new Date().toISOString(),name:String(r.name||"Sans nom").slice(0,300),cat:String(r.cat||"Plat"),cats:arr(r.cats),time:Math.round(Number(r.time)||0),serves:Math.max(1,Math.round(Number(r.serves)||4)),ing:Array.isArray(r.ing)?r.ing:[],steps:Array.isArray(r.steps)?r.steps.join("\n"):String(r.steps||""),image:typeof r.image==="string"?r.image:null,tags:arr(r.tags),source:typeof r.source==="string"?r.source:null},r.cloudAuthor?{}:{author_id:uid}));H[id]=h;}
+    cloud.lastErr=[];let sent=0;
+    for(let i=0;i<rows.length;i+=200){const part=rows.slice(i,i+200);const{error}=await sb.from("recipes").upsert(part,{onConflict:"legacy_id"});
+      if(!error){sent+=part.length;continue;}
+      for(const row of part){const{error:e2}=await sb.from("recipes").upsert([row],{onConflict:"legacy_id"});if(e2){cloud.lastErr.push(row.name+" : "+e2.message);delete H[row.legacy_id];}else sent++;}}
+    cloud.lastSent=sent;rows.splice(0,rows.length,...rows.filter(x=>H[x.legacy_id]));
     rows.forEach(x=>{const r=recipes[x.legacy_id];if(r&&!r.cloudAuthor){r.cloudAuthor=uid;r.cloudBy=cloud.profile.pseudo;}});
     // my own photos (dish, page of the book) go to the shared photo storage
     const PH=LS.get("cm_cloud_photos",{}),pages=LS.get(PAGES,{}),loc=rPhotos();let nUp=0;
@@ -4176,7 +4182,9 @@ async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m
 async function cloudMigrate(){if(!cloud.admin)return;const own=Object.keys(recipes).filter(id=>!recipes[id].shared&&!recipes[id].cloudAuthor);
   if(!confirm(`Envoyer ${own.length} recettes dans la base commune, à votre nom ? Les membres validés les verront.`))return;
   const H=LS.get("cm_cloudhash",{});H.__all=1;LS.set("cm_cloudhash",H);toast("⏳ Envoi des recettes…");await cloudPush();const H2=LS.get("cm_cloudhash",{});delete H2.__all;LS.set("cm_cloudhash",H2);
-  toast(`✓ Recettes envoyées dans la base commune`);renderAcct();}
+  const{count}=await cloud.sb.from("recipes").select("id",{count:"exact",head:true});const err=cloud.lastErr||[];
+  cloud.msg=`Base commune : ${count??"?"} recettes · ${cloud.lastSent||0} envoyées maintenant`+(err.length?` · ${err.length} refusée${err.length>1?"s":""} (${err.slice(0,3).join(" ; ")})`:"");
+  toast(err.length?"Envoi terminé avec des erreurs (voir Mon compte)":`✓ ${count} recettes dans la base commune`);renderAcct();}
 async function loadMembers(){const{data,error}=await cloud.sb.rpc("admin_members");cloud.members=error?[]:data;if(error)toast("Liste impossible : "+error.message);$("#memList").innerHTML=membersHtml();}
 function membersHtml(){const l=cloud.members;if(!l)return"";if(!l.length)return`<p class="muted">Aucun membre.</p>`;
   const S={pending:"⏳ en attente",active:"✅ actif",blocked:"⛔ bloqué"};
