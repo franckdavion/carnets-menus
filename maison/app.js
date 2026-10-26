@@ -1079,7 +1079,15 @@ async function saveGoogleEvent(calendarId, row) {
   if (!response.ok) {
     const info = await response.json().catch(() => ({}));
     if (response.status === 401) throw new Error("Session Google expirée. Reconnecte Google Agenda depuis Ma famille.");
-    if (response.status === 403) throw new Error("Google refuse la création de rendez-vous (403). Reconnecte Google Agenda avec l’autorisation de modifier les événements.");
+    if (response.status === 403) {
+      // which rights did Google really give? (the consent screen has one checkbox per right)
+      let scopes = "";
+      try { const ti = await (await fetch("https://oauth2.googleapis.com/tokeninfo?access_token=" + encodeURIComponent(G.tok.t))).json(); scopes = ti.scope || ""; } catch (_) {}
+      if (scopes && !/auth\/calendar(\.events)?(\s|$)/.test(scopes))
+        throw new Error("Google n'a donné à Maisonnée que le droit de LIRE ton agenda. Dans Ma famille › Agenda Google : Déconnecter, puis Connecter, et sur l'écran Google coche bien la case « Afficher et modifier les événements de tous vos agendas ».");
+      if (scopes) throw new Error("Google refuse d'écrire dans cet agenda : tu n'as peut-être que le droit de le consulter. Choisis un autre agenda (par exemple ton agenda principal).");
+      throw new Error("Google refuse la création de rendez-vous (403). Reconnecte Google Agenda avec l’autorisation de modifier les événements.");
+    }
     throw new Error(info.error?.message || `Erreur Google (${response.status})`);
   }
   return response.json();
