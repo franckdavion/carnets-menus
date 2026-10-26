@@ -1069,7 +1069,7 @@ function syncGColorBox(form) {
 // default calendar for new appointments: the one chosen in Ma famille, otherwise the family's « Agendas »
 function defaultDest() {
   const all = (typeof G !== "undefined" ? G.list : []) || [], ok = c => c && (c.accessRole === "owner" || c.accessRole === "writer");
-  const chosen = LS.get("mz_last_google_destination", null);
+  const chosen = LS.get("mz_default_dest", null);
   if (chosen === "local") return "local";
   if (chosen && ok(all.find(c => c.id === chosen))) return chosen;
   const fam = all.find(c => ok(c) && /^agendas?$/i.test(String(c.name).trim()));

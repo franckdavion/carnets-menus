@@ -897,7 +897,7 @@ document.addEventListener("click", async e => {
 
 document.addEventListener("change", e => {
   if (!e.target.matches("[data-defdest]")) return;
-  LS.set("mz_last_google_destination", e.target.value);
+  LS.set("mz_default_dest", e.target.value);
   toast("Agenda par défaut : " + e.target.options[e.target.selectedIndex].text + ".");
 });
 
