@@ -1043,7 +1043,7 @@ document.addEventListener("click", async e => {
   }
   const v = b.dataset.v, act = b.dataset.act;
   switch (act) {
-    case "go": view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
+    case "go": if (v === "repas") { window.location.assign(CARNET_URL); break; } view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
     case "who": who = v || null; render(); break;
     case "done": {
       b.classList.add("on"); b.disabled = true;
