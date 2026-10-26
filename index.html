@@ -1276,13 +1276,14 @@ function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
   return`<div class="use-first"><span class="label">🧊 À consommer en priorité (ou à congeler)</span>${l.map(x=>`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span style="font-size:14px"><b>${esc(x.ing.join(", "))}</b><br><small class="muted">achetés pour ${esc(x.name)}</small></span><button type="button" class="btn ghost" data-act="useFirstDone" data-id="${x.id}">✓ Fait</button></div>`).join("")}</div>`;}
 function shopping(all){
   const acc={};
-  const add=(rid,n,when,role)=>{n=n*portionFactor(recipes[rid],role);
+  const add=(rid,n,when,role,skip)=>{n=n*portionFactor(recipes[rid],role);
     const r=recipes[rid]; if(!r)return;
     const f=n/(r.serves||4);
     for(const i of r.ing||[]){
       if(!i.n)continue;
       const[q,u]=toBase(i.q,i.u);
       const key=norm(i.n)+"|"+u;
+      if(skip&&skip.includes(key))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
       if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:i.r||"Divers",from:[]};
       acc[key].q+=q*ingMult(r,i,f*(r.serves||4));
       const lab=r.name+(when?" ("+when+")":"");
@@ -1294,7 +1295,8 @@ function shopping(all){
   for(const x of selectedShopDates())for(const[m]of MEALS){
     const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id])continue;
     const when=x.dn+" "+x.d.getDate()+" "+m;
-    add(sl.id,sl.n,when,"main"); if(sl.entree)add(sl.entree,sl.n,when,"entree"); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert");
+    const sk=Array.isArray(sl.noIng)?sl.noIng:null;
+    add(sl.id,sl.n,when,"main",sk); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk);
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
   const today=ymd(new Date()), bt=menu.bought||{};

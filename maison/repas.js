@@ -74,8 +74,7 @@ VIEWS.repas = function () {
       <strong>${rWeek === cur ? "Cette semaine" : rWeek === addDays(cur, 7) ? "Semaine prochaine" : "Semaine du " + esc(fmtShort(rWeek))}</strong>
       <button class="icon-btn plain" data-act="rWeek" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>
     <div class="btns" style="margin-top:6px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">Réglages</button></div>
-    ${open.length ? `<div class="card warn" style="margin-top:12px"><strong>${open.length} repas en brouillon</strong><span class="small">Pas encore dans les courses.</span>
-      <div class="btns" style="margin-top:8px"><button class="btn primary" data-act="rLockAll">Valider et envoyer aux courses</button></div></div>` : ""}`;
+    ${open.length ? `<p class="muted small" style="margin:12px 2px 0">✎ ${open.length} repas en brouillon : touchez un repas pour voir ses ingrédients et l'envoyer aux courses.</p>` : ""}`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
@@ -131,11 +130,33 @@ function mealSlotSheet(k) {
     ${ro ? "" : `<div class="btns">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
       <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>
-      <button class="btn ${s.lock ? "" : "primary"}" data-act="rLock" data-v="${esc(k)}">${s.lock ? "Déverrouiller" : "Valider"}</button></div>
+      </div>
     <div class="inline" style="justify-content:space-between;margin-top:16px"><span>Personnes</span><span class="inline"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong style="min-width:2ch;text-align:center">${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></span></div>
     <div class="field"><span class="label">Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
     <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
+    ${ingBlock(k, s)}
     <div class="sheet-sticky btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>`}`);
+}
+// the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
+function slotIngredients(k) {
+  return cj(`(()=>{const s=${slotJs(k)};if(!s)return[];const acc={},skip=Array.isArray(s.noIng)?s.noIng:[];
+    const add=(rid,role)=>{const r=recipes[rid];if(!r)return;const n=(s.n||menu.people||4)*portionFactor(r,role),f=n/(r.serves||4);
+      for(const i of r.ing||[]){if(!i.n)continue;const[q,u]=toBase(i.q,i.u),key=norm(i.n)+"|"+u;
+        if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0};acc[key].q+=q*ingMult(r,i,f*(r.serves||4));}};
+    add(s.id,"main");if(s.entree)add(s.entree,"entree");if(s.dessert)add(s.dessert,"dessert");
+    return Object.values(acc).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",on:!skip.includes(i.key)}));})()`);
+}
+function ingBlock(k, s) {
+  let list = [];
+  try { list = slotIngredients(k); } catch (_) {}
+  if (!list.length) return `<p class="muted small" style="margin-top:16px">Pas d'ingrédients notés pour cette recette.</p>`;
+  const n = list.filter(i => i.on).length;
+  return `<div class="field" style="margin-top:16px"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} pour les courses</span>
+    <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà.</p>
+    <div class="card" style="padding:0">${list.map(i => `<button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span><span class="nm">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></button>`).join("")}</div></div>
+    <div class="btns" style="margin-top:10px">${s.lock
+      ? `<p class="small" style="margin:0 0 6px;width:100%">🔒 Validé : ${n} ingrédient${n > 1 ? "s" : ""} dans les courses.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
+      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>Valider et envoyer ${n} ingrédient${n > 1 ? "s" : ""} aux courses</button>`}</div>`;
 }
 function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
@@ -160,7 +181,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rWeek", "rPropose", "rPrefs", "rLockAll", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
+  if (!["rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -184,7 +205,10 @@ document.addEventListener("click", async e => {
       else cev(`(()=>{const s=W()[${JSON.stringify(k)}];if(s)s[${JSON.stringify(role)}]=${JSON.stringify(v)};})()`);
       carnetSave(); mealSlotSheet(k); break;
     }
-    case "rLock": cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;})()`); shopIncludeWeek(); carnetSave(); mealSlotSheet(v); break;
+    case "rLock": { const on = cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;return !!(s&&s.lock);})()`); shopIncludeWeek();
+      carnetSave(on ? "Validé : les ingrédients partent dans les courses." : "Retiré des courses (repas gardé en brouillon)."); mealSlotSheet(v); break; }
+    case "rIng": cev(`(()=>{const s=${slotJs(v)};if(!s)return;const k=${JSON.stringify(b.dataset.k)},l=Array.isArray(s.noIng)?s.noIng.slice():[];
+      const i=l.indexOf(k);if(i>=0)l.splice(i,1);else l.push(k);if(l.length)s.noIng=l;else delete s.noIng;})()`); carnetSave(); mealSlotSheet(v); break;
     case "rServ": cev(`(()=>{const s=${slotJs(v)};if(s)s.n=Math.max(1,Math.min(20,(s.n||menu.people||4)+(${+b.dataset.d})));})()`); carnetSave(); mealSlotSheet(v); break;
     case "rSide": cev(`(()=>{const s=${slotJs(v)};if(s)delete s[${JSON.stringify(b.dataset.r)}];})()`); carnetSave(); mealSlotSheet(v); break;
     case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré."); break;
