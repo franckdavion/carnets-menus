@@ -80,16 +80,18 @@ VIEWS.repas = function () {
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
     for (const m of ["midi", "soir"]) {
       const k = dn + "|" + m, x = sl[k];
-      const lockIc = x.s && x.name ? (x.s.lock ? "🔒" : "✎") : "";
-      out += `<button class="slot ${x.past ? "past" : ""}" data-act="rSlot" data-v="${esc(k)}" ${x.past && !x.name ? "disabled" : ""}>
+      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Gardé et dans les courses">🔒</span>`
+        : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
+      const dis = x.past && !x.name;
+      out += `<div class="slot ${x.past ? "past" : ""}" ${dis ? "" : `role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"`}>
         <b>${m === "midi" ? "Midi" : "Soir"}</b>
         <span class="what ${x.name ? "" : "none"}">${x.name ? esc(x.name) + (x.kind ? ` <span class="muted small">· ${esc(x.kind)}</span>` : "") + (x.ent || x.des ? `<br><span class="muted small">${[x.ent && "entrée : " + esc(x.ent), x.des && "dessert : " + esc(x.des)].filter(Boolean).join(" · ")}</span>` : "")
           : x.skip ? "Pas de repas prévu" : x.past ? "—" : "Choisir"}</span>
-        <span class="small" title="${x.s && x.s.lock ? "Dans les courses" : "Pas encore dans les courses"}">${lockIc}</span></button>`;
+        ${pin}</div>`;
     }
     out += `</section>`;
   }
-  out += `<p class="muted small" style="margin-top:14px">🔒 dans les courses · ✎ pas encore. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
+  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas (il ne part pas aux courses). 🔒 : gardé et dans les courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
   return out;
 };
 
@@ -126,11 +128,13 @@ function mealSlotSheet(k) {
   const ro = x.past;
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
-    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : ""}</p>
+    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
     ${ro ? "" : `<div class="btns">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
       <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>
+      ${s.lock ? "" : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder ce choix"}</button>`}
       </div>
+    ${s.lock ? "" : `<p class="muted small" style="margin:6px 0 0">${s.keep ? "« Proposer ma semaine » ne changera pas ce repas. Il n'est pas encore dans les courses." : "« Garder ce choix » : « Proposer ma semaine » ne le changera plus, sans l'envoyer aux courses."}</p>`}
     <div class="inline" style="justify-content:space-between;margin-top:16px"><span>Personnes</span><span class="inline"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong style="min-width:2ch;text-align:center">${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></span></div>
     <div class="field"><span class="label">Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
     <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
@@ -181,7 +185,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
+  if (!["rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -207,6 +211,9 @@ document.addEventListener("click", async e => {
     }
     case "rLock": { const on = cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;return !!(s&&s.lock);})()`); shopIncludeWeek();
       carnetSave(on ? "Validé : les ingrédients partent dans les courses." : "Retiré des courses."); mealSlotSheet(v); break; }
+    case "rKeep": { const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;if(s.keep)delete s.keep;else s.keep=true;return !!s.keep;})()`);
+      carnetSave(on ? "Gardé : « Proposer ma semaine » ne le changera plus." : "Ce repas pourra de nouveau changer.");
+      if (b.closest("#sheet")) mealSlotSheet(v); break; }
     case "rIng": cev(`(()=>{const s=${slotJs(v)};if(!s)return;const k=${JSON.stringify(b.dataset.k)},l=Array.isArray(s.noIng)?s.noIng.slice():[];
       const i=l.indexOf(k);if(i>=0)l.splice(i,1);else l.push(k);if(l.length)s.noIng=l;else delete s.noIng;})()`); carnetSave(); mealSlotSheet(v); break;
     case "rServ": cev(`(()=>{const s=${slotJs(v)};if(s)s.n=Math.max(1,Math.min(20,(s.n||menu.people||4)+(${+b.dataset.d})));})()`); carnetSave(); mealSlotSheet(v); break;

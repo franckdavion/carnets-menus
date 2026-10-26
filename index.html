@@ -3468,9 +3468,9 @@ function planWeek(replaceAll,days,meals){
   if(!pool.length){toast("Ajoutez d'abord des recettes (hors desserts)");return;}
   const before=filledSlots().map(k=>W()[k].id);
   rerollAvoid=replaceAll?before:[];
-  const week=weekMap(), targets=SLOT_ORDER.filter(k=>inDays(k)&&!isPast(k)&&!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock)));
+  const week=weekMap(), targets=SLOT_ORDER.filter(k=>inDays(k)&&!isPast(k)&&!skipped(k)&&(!W()[k]||(replaceAll&&!W()[k].lock&&!W()[k].keep)));
   targets.forEach(k=>delete week[k]);
-  if(replaceAll)SLOT_ORDER.forEach(k=>{if(inDays(k)&&!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock){delete W()[k];delete week[k];}});
+  if(replaceAll)SLOT_ORDER.forEach(k=>{if(inDays(k)&&!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock&&!W()[k].keep){delete W()[k];delete week[k];}});
   for(const k of targets){
     const best=pool.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
     week[k]=best; const old=W()[k];
