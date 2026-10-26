@@ -1835,6 +1835,8 @@ function finishTrip(){
   for(const x of menu.extras||[]){if(x.done)got.push({n:x.t,q:"",r:"En plus"});else{miss.push(x.t);keep.push(Object.assign({},x,{missed:today}));}}
   menu.extras=keep; menu.checked={};
   menu.trips=[{d:today,got,miss},...(menu.trips||[])].slice(0,20);
+  // dates each product was bought (the last 8): Maisonnée's « produits réguliers » use them
+  {const bl=Object.assign({},menu.buyLog);for(const g of got){const k=norm(String(g.n).split(" : ")[0]);bl[k]=[...(bl[k]||[]).filter(d=>d!==today),today].slice(-8);}menu.buyLog=bl;}
   lastFinish=snap; finishAsk=false;
   $("#storeSheet").hidden=true; render(); saveMenu();
   toast(`Courses terminées : ${got.length} article${got.length>1?"s":""} acheté${got.length>1?"s":""}`);
@@ -2803,7 +2805,8 @@ function renderDaily(){
     return`<div class="daily-ed"><input id="dailyEdName" value="${esc(t)}" aria-label="Nom du produit"><select id="dailyEdCat" aria-label="Catégorie">${cats.map(c=>`<option${c===g?" selected":""}>${esc(c)}</option>`).join("")}</select>
       <div class="row"><button type="button" class="btn primary" data-act="dailyEdSave">Enregistrer</button><button type="button" class="btn danger" data-act="dailyEdDel">Supprimer</button><button type="button" class="btn ghost" data-act="dailyEdClose">Fermer</button></div></div>`;};
   const mine=menu.daily||[],loose=mine.filter(t=>!DAILY.some(([g])=>g===dailyCat(t)));
-  $("#dailyList").innerHTML=(loose.length?`<div class="field"><span class="label">Mes produits</span><div class="dchips">${loose.map(t=>chip(t,true)).join("")}</div>${editor("Mes produits")}</div>`:"")
+  const favs=(menu.dailyFav||[]).filter(t=>!dailyEdit);
+  $("#dailyList").innerHTML=(favs.length?`<div class="field"><span class="label">⭐ Mes favoris</span><div class="dchips">${favs.map(t=>chip(t,(menu.daily||[]).includes(t))).join("")}</div></div>`:"")+(loose.length?`<div class="field"><span class="label">Mes produits</span><div class="dchips">${loose.map(t=>chip(t,true)).join("")}</div>${editor("Mes produits")}</div>`:"")
     +DAILY.map(([g,its])=>{const own=mine.filter(t=>dailyCat(t)===g),base=its.filter(t=>!dailyHidden(t));if(!base.length&&!own.length)return"";
       return`<div class="field"><span class="label">${esc(g)}</span><div class="dchips">${base.map(t=>chip(t,false)).join("")}${own.map(t=>chip(t,true)).join("")}</div>${editor(g)}</div>`;}).join("");
   const sel=$("#dailyCat"),cur=sel.value;sel.innerHTML=["Mes produits",...DAILY.map(x=>x[0])].map(g=>`<option${g===cur?" selected":""}>${esc(g)}</option>`).join("");

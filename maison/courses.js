@@ -88,9 +88,11 @@ VIEWS.courses = function () {
     ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="list">${D.plan.map(d => d.meals.map((m, i) => `<div class="cx-item">
         <span class="nm"><button type="button" class="cx-name" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez pour voir ses ingrédients</span></span>
         <button type="button" class="${m.lock ? "cx-have on" : "btn primary"}" style="${m.lock ? "" : "padding:6px 12px;font-size:14px"}" data-act="cxMealLock" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${m.lock ? "✓ Dans les courses" : "🛒 Ajouter"}</button></div>`).join("")).join("")}</div>` : ""}
+    ${typeof catDueHtml === "function" ? catDueHtml() : ""}
     <form data-form="cxAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="cxIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
-      <button class="btn ink" type="submit">Ajouter</button></form>`;
+      <button class="btn ink" type="submit">Ajouter</button></form>
+    <div class="btns" style="margin-top:8px"><button class="btn block" data-act="catOpen">🛍️ Catalogue · favoris, produits réguliers</button></div>`;
   if (cxUndo) out += `<div class="card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Courses terminées.</span><button class="btn" data-act="cxFinishUndo">Annuler</button></div>`;
   if (D.xr.length) out += `<p class="group-h">Recettes ajoutées hors menu</p><div class="list">${D.xr.map(x => `<div class="cx-item"><span class="nm">${esc(x.name)}${x.dup ? `<span class="cx-from">déjà au menu validé : pas compté deux fois</span>` : ""}</span><span class="q">${x.n} pers.</span><button type="button" class="cx-x" data-act="cxRmR" data-v="${esc(x.id)}" aria-label="Retirer ${esc(x.name)}">✕</button></div>`).join("")}</div>`;
   if (!total) out += `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>${sel.length ? "Envoyez des repas de ces jours aux courses depuis Repas, ou ajoutez des articles ci-dessus." : "Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;
