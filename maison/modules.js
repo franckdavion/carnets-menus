@@ -792,7 +792,7 @@ async function gFetch() {
     const cl = await gApi("users/me/calendarList?minAccessRole=reader&maxResults=250");
     // colours chosen for a single event in Google (« Tomate », « Paon »…) override the calendar's colour
     if (!G.palette) { try { const co = await gApi("colors"); G.palette = Object.fromEntries(Object.entries(co.event || {}).map(([k, v]) => [k, v.background])); } catch (_) { G.palette = {}; } }
-    G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, accessRole: c.accessRole || "reader", on: !!c.selected || !!c.primary }));
+    G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, accessRole: c.accessRole || "reader", on: !!c.selected || !!c.primary, defRem: (c.defaultReminders || []).filter(r => r.method === "popup").map(r => r.minutes) }));
     LS.set("mz_gcallist", G.list);
     if (!G.cals) { G.cals = G.list.filter(c => c.on).map(c => c.id); LS.set("mz_gcals", G.cals); }
     const tMin = new Date(parse(addDays(today(), -40))).toISOString(), tMax = new Date(parse(addDays(today(), 150))).toISOString(), items = [];
@@ -802,7 +802,7 @@ async function gFetch() {
         const j = await gApi(`calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page ? "&pageToken=" + page : ""}`);
         for (const e of j.items || []) {
           if (e.status === "cancelled" || e.eventType === "birthday") continue;
-          const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "", desc: e.description || "", gs: e.start || null, ge: e.end || null, rec: !!e.recurringEventId };
+          const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "", desc: e.description || "", gs: e.start || null, ge: e.end || null, rec: !!e.recurringEventId, rem: e.reminders || null };
           if (e.start && e.start.date) {
             const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
             const nd = Math.min(31, Math.max(1, diffDays(e.start.date, end)));
@@ -847,7 +847,10 @@ function gRow(e) {
   const span = !multi ? "" : e.k === 0 ? "jusqu'au " + esc(parse(e.endDay).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })) + " · " : last ? `dernier jour · ${e.n}/${e.n} · ` : `jour ${e.k + 1}/${e.n} · `;
   const t = last && e.end_time ? "→ " + esc(hm(e.end_time)) : e.start_time ? esc(hm(e.start_time)) : "Journée";
   if (multi) e = { ...e, end_time: null };
-  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${t === "Journée" ? "allday" : ""}">${t}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.colorId && gColorNames()[e.colorId] ? `<span class="who-tag" style="--c:${esc(e.color)}">${esc(gColorNames()[e.colorId])}</span> · ` : ""}${span}${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
+  const cal = G.list.find(c => c.id === e.cal), canW = cal && (!cal.accessRole || cal.accessRole === "owner" || cal.accessRole === "writer");
+  const remOn = e.rem ? (e.rem.useDefault ? ((cal && cal.defRem) || []).length > 0 : (e.rem.overrides || []).length > 0) : !!(cal && cal.defRem && cal.defRem.length);
+  const bell = canW && e.gs && (!multi || e.k === 0) ? `<button class="bell-btn ${remOn ? "on" : ""}" data-act="remSheet" data-src="g" data-v="${esc(e.id)}" data-day="${e.day}" aria-label="${remOn ? "Voir ou changer les rappels" : "Ajouter un rappel"}">🔔</button>` : "";
+  return `<div class="row ev-row"><button class="open" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${t === "Journée" ? "allday" : ""}">${t}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.colorId && gColorNames()[e.colorId] ? `<span class="who-tag" style="--c:${esc(e.color)}">${esc(gColorNames()[e.colorId])}</span> · ` : ""}${span}${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>${bell}</div>`;
 }
 function gColorsSheet() {
   const names = gColorNames();
@@ -925,6 +928,7 @@ document.addEventListener("click", async e => {
     case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
     case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (b.closest("#sheet")) gCalsSheet(); gFetch().then(() => { if (view === "agenda") softRender(); }); break; }
     case "gCalsSheet": gCalsSheet(); break;
+    case "remSheet": remSheet(b.dataset.src, v, b.dataset.day); break;
     case "gEvent": {
       const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
       // calendars this account may write to: edit right here, in Maisonnée

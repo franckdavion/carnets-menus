@@ -852,7 +852,9 @@ function eventRow(e, withDay, withDate) {
   else if (e.end_time && e.start_time) meta.push("jusqu'à " + esc(hm(e.end_time)));
   if (e.place) meta.push(esc(e.place));
   if (e.repeat && e.repeat !== "none") { const custom = recurrenceInfo(e.repeat); meta.push(esc(custom ? `tous les ${custom.interval} ${ {days:"jours",weeks:"semaines",months:"mois",years:"ans"}[custom.unit]}` : (REPEATS.find(r => r[0] === e.repeat) || [, ""])[1].toLowerCase())); }
-  return `<button class="row" data-act="editEvent" data-v="${e.id}">${when}<span class="main"><span class="t">${esc(e.title)}</span>${meta.length ? `<span class="m">${meta.join(" · ")}</span>` : ""}</span><span class="stack" style="padding:0">${ms.slice(0, 3).map(m => av(m, "sm")).join("")}</span></button>`;
+  const on = Array.isArray(e.reminders) && e.reminders.length > 0;
+  return `<div class="row ev-row"><button class="open" data-act="editEvent" data-v="${e.id}">${when}<span class="main"><span class="t">${esc(e.title)}</span>${meta.length ? `<span class="m">${meta.join(" · ")}</span>` : ""}</span><span class="stack" style="padding:0">${ms.slice(0, 3).map(m => av(m, "sm")).join("")}</span></button>
+    <button class="bell-btn ${on ? "on" : ""}" data-act="remSheet" data-src="l" data-v="${e.id}" data-day="${e.on || e.day}" aria-label="${on ? "Voir ou changer les rappels" : "Ajouter un rappel"}">🔔</button></div>`;
 }
 
 function menuView() {
@@ -1044,13 +1046,76 @@ const reminderDefaults = () => {
 function reminderRows(values) {
   return values.map((minutes) => {
     const unit = minutes % 1440 === 0 && minutes >= 1440 ? 1440 : minutes % 60 === 0 && minutes >= 60 ? 60 : 1;
-    return `<div class="inline reminder-row" style="gap:8px;margin:8px 0;align-items:center">
-      <input class="input" aria-label="Durée du rappel" type="number" min="0" max="525600" step="1" value="${minutes / unit}" style="min-width:70px;flex:1" data-reminder-value>
-      <select class="input" aria-label="Unité du rappel" data-reminder-unit style="flex:1"><option value="1" ${unit === 1 ? "selected" : ""}>minutes</option><option value="60" ${unit === 60 ? "selected" : ""}>heures</option><option value="1440" ${unit === 1440 ? "selected" : ""}>jours</option></select>
-      <button class="btn ghost" type="button" data-act="removeReminder" aria-label="Supprimer ce rappel">✕</button>
+    return `<div class="reminder-row" style="margin:10px 0;padding:8px 0;border-top:1px solid var(--line)">
+      <div class="inline" style="gap:8px;align-items:center">
+        <input class="input" aria-label="Durée du rappel" type="number" min="0" max="40320" step="1" value="${minutes / unit}" style="min-width:64px;flex:1" data-reminder-value>
+        <select class="input" aria-label="Unité du rappel" data-reminder-unit style="flex:1.3"><option value="1" ${unit === 1 ? "selected" : ""}>minutes avant</option><option value="60" ${unit === 60 ? "selected" : ""}>heures avant</option><option value="1440" ${unit === 1440 ? "selected" : ""}>jours avant</option></select>
+        <button class="btn ghost" type="button" data-act="removeReminder" aria-label="Supprimer ce rappel">✕</button>
+      </div>
+      <label class="inline" style="gap:8px;margin-top:6px;align-items:center"><span class="small muted" style="flex:none">🔔 Le</span><input class="input" type="datetime-local" data-reminder-at aria-label="Date et heure du rappel" style="flex:1"></label>
     </div>`;
   }).join("");
 }
+// start of the event in the form (an all-day event is reminded from 9 h in Maisonnée, from midnight in Google)
+function remStart(form) {
+  const day = form.querySelector('[name="day"]')?.value; if (!day) return null;
+  const allday = form.querySelector('[name="allday"]')?.checked || !form.querySelector('[name="start"]')?.value;
+  const t = allday ? (form.querySelector("[data-rem-allday]")?.dataset.remAllday || "09:00") : form.querySelector('[name="start"]').value;
+  return new Date(`${day}T${t}:00`);
+}
+const remLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const remWhen = d => d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" }) + " à " + pad(d.getHours()) + " h " + pad(d.getMinutes());
+const remDelay = m => m === 0 ? "à l'heure" : m % 1440 === 0 ? `${m / 1440} jour${m / 1440 > 1 ? "s" : ""} avant` : m % 60 === 0 ? `${m / 60} h avant` : m > 60 ? `${Math.floor(m / 60)} h ${m % 60} avant` : `${m} min avant`;
+// what is planned with the choice ticked now: « mardi 28 oct. à 13 h 30 (30 min avant) »
+function remPlanned(form) {
+  const mode = form.querySelector('[name="reminder_mode"]:checked')?.value || "none";
+  const st = remStart(form), box = form.querySelector("[data-rem-google]");
+  let mins = mode === "none" ? [] : mode === "default" ? reminderDefaults() : mode === "google" ? JSON.parse(box ? box.dataset.remGoogle || "[]" : "[]") : (appointmentReminderValues(form) || []);
+  mins = [...new Set(mins)].sort((x, y) => y - x);
+  return { mode, st, mins };
+}
+function remRefresh(form, from) {
+  if (!form) return;
+  const st = remStart(form);
+  // each custom row: delay ⇄ exact moment
+  for (const r of form.querySelectorAll(".reminder-row")) {
+    const at = r.querySelector("[data-reminder-at]"), val = r.querySelector("[data-reminder-value]"), un = r.querySelector("[data-reminder-unit]");
+    if (!st) continue;
+    if (from === at) {
+      const d = at.value ? new Date(at.value) : null; if (!d) continue;
+      let m = Math.max(0, Math.round((st - d) / 60000)); m = Math.min(m, 40320);
+      const unit = m % 1440 === 0 && m >= 1440 ? 1440 : m % 60 === 0 && m >= 60 ? 60 : 1;
+      val.value = m / unit; un.value = String(unit);
+    } else {
+      const m = Number(val.value) * Number(un.value);
+      if (Number.isFinite(m)) at.value = remLocal(new Date(st.getTime() - m * 60000));
+    }
+  }
+  const out = form.querySelector("#remPlanned"); if (!out) return;
+  const { mins } = remPlanned(form);
+  out.innerHTML = !st ? "" : mins.length
+    ? `🔔 <strong>Rappel${mins.length > 1 ? "s" : ""} prévu${mins.length > 1 ? "s" : ""} :</strong><br>${mins.map(m => `${esc(remWhen(new Date(st.getTime() - m * 60000)))} <span class="muted">(${esc(remDelay(m))})</span>`).join("<br>")}`
+    : `<span class="muted">🔕 Aucun rappel prévu.</span>`;
+}
+// the reminders box, in the full window of an event and in the small « Rappels » window (bell)
+function remBoxHtml(e, g, isAppointment, googleDefaults) {
+  const R = e.reminders, mode0 = g && e.gDefault ? "google" : Array.isArray(R) ? (R.length ? "custom" : "none") : isAppointment ? "default" : "none";
+  const rows = Array.isArray(R) && R.length ? R : g && e.gDefault && googleDefaults && googleDefaults.length ? googleDefaults : reminderDefaults();
+  const opt = (v, t) => `<label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center;margin:6px 0"><input type="radio" name="reminder_mode" value="${v}" ${mode0 === v ? "checked" : ""}> ${t}</label>`;
+  return `<div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px" data-appt="${isAppointment ? 1 : 0}" data-rem-allday="${g ? "00:00" : "09:00"}" data-rem-google='${esc(JSON.stringify(googleDefaults || []))}'>
+      <span class="label">Rappels${isAppointment ? " du rendez-vous" : ""}</span>
+      <p class="small" id="remPlanned" style="margin:4px 0 10px;line-height:1.5"></p>
+      ${g ? opt("google", "Rappels habituels de Google Agenda") : ""}${opt("none", "Aucun rappel")}${opt("default", "Mes rappels par défaut")}${opt("custom", "Choisir les rappels (délai ou heure exacte)")}
+      <div id="appointmentReminderList" hidden>
+        <div id="appointmentReminderRows">${reminderRows(rows)}</div>
+        <button class="btn ghost" type="button" data-act="addReminder">+ Ajouter un rappel</button>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" name="save_reminder_defaults"> Enregistrer ces délais comme rappels par défaut</label>
+        <p class="muted small">Changez le délai ou directement le jour et l'heure du rappel (4 semaines avant au plus).${g ? " Google Agenda envoie ces rappels sur les téléphones où il est installé." : ""}</p>
+      </div>
+    </div>`;
+}
+document.addEventListener("input", e => { const f = e.target.closest && e.target.closest("form"); if (f && f.querySelector("#remPlanned")) remRefresh(f, e.target.matches("[data-reminder-at]") ? e.target : null); });
+document.addEventListener("change", e => { const f = e.target.closest && e.target.closest("form"); if (f && f.querySelector("#remPlanned")) remRefresh(f, e.target.matches("[data-reminder-at]") ? e.target : null); });
 function appointmentReminderValues(form) {
   const rows = [...form.querySelectorAll(".reminder-row")];
   const values = rows.map(r => {
@@ -1064,6 +1129,7 @@ function reminderVisibility(form) {
   const box = form.querySelector("#appointmentReminderList");
   if (box) box.hidden = form.querySelector('[name="reminder_mode"]:checked')?.value !== "custom";
 }
+const gCalDefaults = cal => ((typeof G !== "undefined" && G.list.find(c => c.id === cal)) || {}).defRem || [];
 /* Couleurs Google par personne : la couleur d'un rendez-vous dit pour quel enfant il est */
 const G_COLORS = [["1", "Lavande", "#a4bdfc"], ["2", "Sauge", "#7ae7bf"], ["3", "Raisin", "#dbadff"], ["4", "Flamant", "#ff887c"], ["5", "Banane", "#fbd75b"], ["6", "Mandarine", "#ffb878"], ["7", "Paon", "#46d6db"], ["8", "Graphite", "#e1e1e1"], ["9", "Myrtille", "#5484ed"], ["10", "Basilic", "#51b749"], ["11", "Tomate", "#dc2127"]];
 // who each colour stands for, shared by the household (falls back to this phone if the column is missing)
@@ -1156,6 +1222,22 @@ async function saveGoogleEvent(calendarId, row) {
   }
   return response.json();
 }
+// bell: only the reminders of an event, ready to change
+function remSheet(src, id, day) {
+  let e, g = null, isAppt;
+  if (src === "g") {
+    const ev = (G.ev.items || []).find(x => x.id === id && x.day === day) || (G.ev.items || []).find(x => x.id === id); if (!ev || !ev.gs) return;
+    e = gToForm(ev); const rm = ev.rem;
+    if (!rm || rm.useDefault) e.gDefault = true; else e.reminders = (rm.overrides || []).map(o => o.minutes);
+    g = { cal: ev.cal, id: ev.id }; isAppt = !!e.start_time;
+  } else { e = S.events.find(x => x.id === id); if (!e) return; e = { ...e, day: day || e.day }; isAppt = e.kind === "appointment"; }
+  openSheet("Rappels", `<form data-form="remOnly">
+      <p style="margin:6px 0 0"><strong>${esc(e.title)}</strong><br><span class="muted small">${esc(dayLabel(e.day))}${e.start_time ? " · " + esc(hm(e.start_time)) : " · toute la journée"}</span></p>
+      <input type="hidden" name="day" value="${esc(e.day)}"><input type="hidden" name="start" value="${esc(String(e.start_time || "").slice(0, 5))}">${e.start_time ? "" : `<input type="checkbox" name="allday" checked hidden>`}
+      ${remBoxHtml(e, g, isAppt, g ? gCalDefaults(g.cal) : null)}
+      <div class="sheet-sticky btns" style="margin-top:0"><button class="btn primary" type="submit" style="flex:1">Enregistrer</button></div></form>`, { src, id, g });
+  const f = $("#sheetIn form"); reminderVisibility(f); remRefresh(f);
+}
 let sheetRemMode = "none";
 function eventSheet(e, day, appointment = false, g = null) {
   const isNew = !e;
@@ -1186,22 +1268,7 @@ function eventSheet(e, day, appointment = false, g = null) {
         </div>
       </div>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(e.notes)}</textarea></label>
-      ${(() => { // which choice is ticked: Google events keep Google's usual reminders unless changed; a plain event has none
-        const R = e.reminders, mode0 = g && e.gDefault ? "google" : Array.isArray(R) ? (R.length ? "custom" : "none") : isAppointment ? "default" : "none";
-        sheetRemMode = mode0; return ""; })()}
-      <div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px" data-appt="${isAppointment ? 1 : 0}">
-        <span class="label">Rappels${isAppointment ? " du rendez-vous" : ""}</span>
-        ${g ? `<label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="google" ${sheetRemMode === "google" ? "checked" : ""}> Rappels habituels de Google Agenda</label>` : ""}
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="none" ${sheetRemMode === "none" ? "checked" : ""}> Aucun rappel</label>
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="default" ${sheetRemMode === "default" ? "checked" : ""}> Mes rappels par défaut</label>
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="custom" ${sheetRemMode === "custom" ? "checked" : ""}> Personnaliser les rappels</label>
-        <div id="appointmentReminderList" hidden>
-          <div id="appointmentReminderRows">${reminderRows(Array.isArray(e.reminders) && e.reminders.length ? e.reminders : reminderDefaults())}</div>
-          <button class="btn ghost" type="button" data-act="addReminder">+ Ajouter un rappel</button>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" name="save_reminder_defaults"> Enregistrer ces délais comme rappels par défaut</label>
-          <p class="muted small">Durées réglables à la minute près.${g ? " Google Agenda envoie ces rappels sur les téléphones où il est installé." : ""}</p>
-        </div>
-      </div>
+      ${remBoxHtml(e, g, isAppointment, g ? gCalDefaults(g.cal) : null)}
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
         ${isNew ? "" : g ? `<button class="btn danger" type="button" data-act="gDel">Supprimer</button>` : `<button class="btn danger" type="button" data-act="delEvent" data-v="${e.id}">Supprimer</button>`}
@@ -1209,7 +1276,7 @@ function eventSheet(e, day, appointment = false, g = null) {
       ${g ? `<p class="muted small" style="margin-top:10px">Les modifications sont enregistrées directement dans Google Agenda.</p>` : ""}
     </form>`, { id: isNew ? null : e.id, g });
   syncShow();
-  reminderVisibility($("#sheetIn form"));
+  reminderVisibility($("#sheetIn form")); remRefresh($("#sheetIn form"));
   syncGColorBox($("#sheetIn form"));
   if (g) { const bx = $("#gColorBox"); if (bx) bx.hidden = false; }
 }
@@ -1289,10 +1356,10 @@ document.addEventListener("click", async e => {
     case "newEvent": eventSheet(null); break;
     case "addReminder": {
       const target = $("#appointmentReminderRows");
-      if (target) target.insertAdjacentHTML("beforeend", reminderRows([10]));
+      if (target) { target.insertAdjacentHTML("beforeend", reminderRows([10])); remRefresh(target.closest("form")); }
       break;
     }
-    case "removeReminder": b.closest(".reminder-row")?.remove(); break;
+    case "removeReminder": { const f = b.closest("form"); b.closest(".reminder-row")?.remove(); remRefresh(f); break; }
     case "newAppointment": eventSheet(null, null, true); break;
     case "gDel": {
       const g = sheetCtx && sheetCtx.g; if (!g) break;
@@ -1414,6 +1481,30 @@ document.addEventListener("submit", async e => {
       const id = sheetCtx && sheetCtx.id; closeSheet();
       if (id) await patch("tasks", id, row);
       else { await add("tasks", { ...row, archived: false, created_by: user ? user.id : null, created_at: new Date().toISOString() }); toast("Tâche ajoutée."); }
+      break;
+    }
+    case "remOnly": {
+      const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "none";
+      const rem = choice === "none" || choice === "google" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
+      if (!rem || (choice === "custom" && !rem.length)) { eventFormFeedback(f, "Ajoute un rappel valide (4 semaines au plus) ou choisis « Aucun rappel »."); return; }
+      if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, rem);
+      const ctx = sheetCtx || {}; btn.disabled = true;
+      try {
+        if (ctx.g) {
+          if (!(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
+          const body = { reminders: choice === "google" ? { useDefault: true } : { useDefault: false, overrides: rem.slice(0, 5).map(minutes => ({ method: "popup", minutes })) } };
+          const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(ctx.g.cal) + "/events/" + encodeURIComponent(ctx.g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          if (!r.ok) throw new Error(r.status === 403 ? "Google refuse : cet agenda est en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
+          for (const x of G.ev.items) if (x.id === ctx.g.id) x.rem = body.reminders;
+          closeSheet(); toast("Rappels enregistrés dans Google Agenda."); render();
+        } else {
+          const e0 = S.events.find(x => x.id === ctx.id);
+          const ok = await patch("events", ctx.id, { reminders: rem, kind: rem.length || (e0 && e0.kind === "appointment") ? "appointment" : "event" });
+          if (!ok) throw new Error("vérifie la connexion");
+          closeSheet(); toast(rem.length ? "Rappels enregistrés." : "Plus de rappel pour ce rendez-vous.");
+        }
+      } catch (err) { eventFormFeedback(f, "Rappels non enregistrés : " + (err.message || "réseau ?")); }
+      finally { btn.disabled = false; }
       break;
     }
     case "event": {
