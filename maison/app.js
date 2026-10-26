@@ -1038,9 +1038,13 @@ function reminderVisibility(form) {
   if (box) box.hidden = form.querySelector('[name="reminder_mode"]:checked')?.value !== "custom";
 }
 function googleDestinationOptions() {
-  const available = (typeof G !== "undefined" && G.connected ? G.list : []).filter(c => c.accessRole !== "reader" && c.accessRole !== "freeBusyReader");
+  // every Google calendar is listed; the ones this account may only read are shown greyed out, with the reason
+  const all = (typeof G !== "undefined" && G.connected ? G.list : []);
+  const canWrite = c => c.accessRole === "owner" || c.accessRole === "writer";
   const preferred = LS.get("mz_last_google_destination", "local");
-  return `<label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${available.map(c => `<option value="${esc(c.id)}" ${preferred === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>`;
+  const ro = all.filter(c => !canWrite(c));
+  return `<label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${all.map(c => `<option value="${esc(c.id)}" ${canWrite(c) ? (preferred === c.id ? "selected" : "") : "disabled"}>${esc(c.name)}${canWrite(c) ? "" : " (lecture seule)"}</option>`).join("")}</select></label>
+    ${ro.length ? `<p class="muted small" style="margin:6px 0 0">${ro.map(c => esc(c.name)).join(", ")} : ${ro.length > 1 ? "agendas partagés" : "agenda partagé"} avec vous en lecture seule. Pour y ajouter des rendez-vous, son propriétaire doit vous donner le droit « Apporter des modifications aux événements » dans Google Agenda.</p>` : ""}`;
 }
 // Erreurs visibles dans la fenêtre modale (un toast derrière <dialog> est invisible sur iOS).
 function eventFormFeedback(form, message) {
