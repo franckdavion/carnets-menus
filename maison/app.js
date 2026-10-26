@@ -43,7 +43,7 @@ const ROOMS = ["Cuisine", "Ménage", "Linge", "Salle de bain", "Courses", "Exté
 const AISLES = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
 const EFFORT = [[1, "Rapide"], [2, "Moyen"], [3, "Long"]];
 const FREQS = [["once", "Une fois"], ["daily", "Chaque jour"], ["weekly", "Chaque semaine"], ["every", "Tous les … jours"], ["monthly", "Chaque mois"]];
-const REPEATS = [["none", "Non"], ["weekly", "Chaque semaine"], ["monthly", "Chaque mois"], ["yearly", "Chaque année"]];
+const REPEATS = [["none", "Non"], ["weekly", "Chaque semaine"], ["monthly", "Chaque mois"], ["yearly", "Chaque année"], ["custom", "Personnaliser"]];
 const TASK_IDEAS = [
   { title: "Sortir les poubelles", room: "Cuisine", freq: "weekly", weekdays: [1, 4], effort: 1 },
   { title: "Passer l'aspirateur", room: "Ménage", freq: "weekly", weekdays: [6], effort: 2 },
@@ -335,17 +335,36 @@ const live = () => S.tasks.filter(t => !t.archived);
 const visibleFor = (t, m) => !m || t.assignee === m || !t.assignee;
 
 /* ---------- events ---------- */
+function recurrenceInfo(repeat) {
+  const m = /^custom:(\d{1,3}):(days|weeks|months|years)$/.exec(repeat || "");
+  return m ? { interval: Number(m[1]), unit: m[2] } : null;
+}
+function recurrenceDate(start, i, unit, interval) {
+  const n = i * interval;
+  if (unit === "days") return addDays(start, n);
+  if (unit === "weeks") return addDays(start, 7 * n);
+  const d = parse(start), months = unit === "years" ? n * 12 : n;
+  const first = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return ymd(new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), last)));
+}
+function returnToTodayAgenda() {
+  const d = today();
+  view = "agenda"; LS.set("mz_view", "agenda");
+  weekA = mondayOf(d); calSel = d; calMonth = d.slice(0, 7) + "-01";
+  render(); window.scrollTo(0, 0);
+}
 function occurrences(from, to) {
   const out = [];
   for (const e of S.events) {
     if (e.repeat === "none" || !e.repeat) { if (e.day >= from && e.day <= to) out.push({ ...e, on: e.day }); continue; }
     if (e.day > to) continue;
-    const start = parse(e.day);
+    const custom = recurrenceInfo(e.repeat);
+    const unit = custom?.unit || ({weekly:"weeks",monthly:"months",yearly:"years"}[e.repeat]);
+    if (!unit) continue;
+    const interval = custom?.interval || 1;
     for (let i = 0; i < 800; i++) {
-      let d;
-      if (e.repeat === "weekly") d = addDays(e.day, 7 * i);
-      else if (e.repeat === "monthly") { const x = new Date(start.getFullYear(), start.getMonth() + i, 1); const last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); d = ymd(new Date(x.getFullYear(), x.getMonth(), Math.min(start.getDate(), last))); }
-      else d = ymd(new Date(start.getFullYear() + i, start.getMonth(), start.getDate()));
+      const d = recurrenceDate(e.day, i, unit, interval);
       if (d > to) break;
       if (d >= from) out.push({ ...e, on: d });
     }
@@ -740,7 +759,7 @@ function eventRow(e, withDay, withDate) {
   if (withDay || withDate) meta.push(esc(withDate ? dayLabel(e.on) : (e.on === today() ? "Aujourd'hui" : "Demain")));
   if (e.end_time && e.start_time) meta.push("jusqu'à " + esc(hm(e.end_time)));
   if (e.place) meta.push(esc(e.place));
-  if (e.repeat && e.repeat !== "none") meta.push(esc((REPEATS.find(r => r[0] === e.repeat) || [, ""])[1].toLowerCase()));
+  if (e.repeat && e.repeat !== "none") { const custom = recurrenceInfo(e.repeat); meta.push(esc(custom ? `tous les ${custom.interval} ${ {days:"jours",weeks:"semaines",months:"mois",years:"ans"}[custom.unit]}` : (REPEATS.find(r => r[0] === e.repeat) || [, ""])[1].toLowerCase())); }
   return `<button class="row" data-act="editEvent" data-v="${e.id}">${when}<span class="main"><span class="t">${esc(e.title)}</span>${meta.length ? `<span class="m">${meta.join(" · ")}</span>` : ""}</span><span class="stack" style="padding:0">${ms.slice(0, 3).map(m => av(m, "sm")).join("")}</span></button>`;
 }
 
@@ -933,8 +952,9 @@ function googleEventPayload(row) {
   const nextDay = addDays(row.day, 1);
   const payload = { summary: row.title, location: row.place || "", description: row.notes || "", start: start ? {dateTime: start, timeZone: "Europe/Paris"} : {date: row.day}, end: end && start ? {dateTime: end, timeZone: "Europe/Paris"} : {date: nextDay} };
   if (row.repeat && row.repeat !== "none") {
-    const freq = { weekly: "WEEKLY", monthly: "MONTHLY", yearly: "YEARLY" }[row.repeat];
-    if (freq) payload.recurrence = [`RRULE:FREQ=${freq}`];
+    const custom = recurrenceInfo(row.repeat);
+    const freq = custom ? {days:"DAILY",weeks:"WEEKLY",months:"MONTHLY",years:"YEARLY"}[custom.unit] : { weekly: "WEEKLY", monthly: "MONTHLY", yearly: "YEARLY" }[row.repeat];
+    if (freq) payload.recurrence = [`RRULE:FREQ=${freq}${custom ? ";INTERVAL=" + custom.interval : ""}`];
   }
   if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.slice(0,5).map(minutes => ({method:"popup",minutes}))};
   return payload;
@@ -967,7 +987,14 @@ function eventSheet(e, day, appointment = false) {
       <div class="field"><span class="label">Qui est concerné</span>${chipsHtml("members", memberOpts(), e.members, true)}</div>
       ${isNew ? googleDestinationOptions() : ""}
       <label class="field"><span class="label">Où</span><input class="input" name="place" value="${esc(e.place)}" maxlength="120" placeholder="Facultatif"></label>
-      <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, e.repeat || "none")}</div>
+      <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, recurrenceInfo(e.repeat) ? "custom" : e.repeat || "none")}
+        <div id="customRepeatOptions" ${recurrenceInfo(e.repeat) ? "" : "hidden"} style="margin-top:12px">
+          <div class="inline" style="gap:10px;align-items:end">
+            <label class="field" style="flex:1"><span class="label">Tous les</span><input class="input" type="number" name="repeat_interval" min="1" max="365" step="1" value="${recurrenceInfo(e.repeat)?.interval || 2}"></label>
+            <label class="field" style="flex:1"><span class="label">Unité</span><select class="input" name="repeat_unit">${[["days","Jours"],["weeks","Semaines"],["months","Mois"],["years","Années"]].map(([u,l]) => `<option value="${u}" ${recurrenceInfo(e.repeat)?.unit === u ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          </div>
+        </div>
+      </div>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(e.notes)}</textarea></label>
       ${isAppointment ? `<div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px">
         <span class="label">Rappels du rendez-vous</span>
@@ -1039,7 +1066,9 @@ document.addEventListener("click", async e => {
   if (b.dataset.chip) {
     if (b.hasAttribute("data-multi")) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
     else b.parentElement.querySelectorAll(`[data-chip="${b.dataset.chip}"]`).forEach(x => x.setAttribute("aria-pressed", x === b));
-    syncShow(); return;
+    syncShow();
+    if (b.dataset.chip === "repeat") { const box = document.querySelector("#customRepeatOptions"); if (box) box.hidden = chipVal(b.closest("form"), "repeat") !== "custom"; }
+    return;
   }
   const v = b.dataset.v, act = b.dataset.act;
   switch (act) {
@@ -1158,6 +1187,12 @@ document.addEventListener("submit", async e => {
     case "event": {
       const allday = !!fd.allday;
       const row = { title: fd.title.trim(), day: fd.day, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
+      if (row.repeat === "custom") {
+        const n = Number(fd.repeat_interval);
+        if (!Number.isInteger(n) || n < 1 || n > 365) { toast("Choisis un intervalle entre 1 et 365."); return; }
+        if (!["days","weeks","months","years"].includes(fd.repeat_unit)) { toast("Choisis une unité de répétition."); return; }
+        row.repeat = `custom:${n}:${fd.repeat_unit}`;
+      }
       if (f.querySelector('[name="reminder_mode"]')) {
         const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "default";
         const reminders = choice === "none" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
@@ -1176,7 +1211,7 @@ document.addEventListener("submit", async e => {
         try {
           await saveGoogleEvent(destination, row);
           LS.set("mz_last_google_destination", destination);
-          closeSheet();
+          closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
           toast("Rendez-vous enregistré dans Google Agenda.");
         } catch (err) { toast(err.message || "Enregistrement Google impossible."); }
@@ -1184,11 +1219,14 @@ document.addEventListener("submit", async e => {
         break;
       }
       LS.set("mz_last_google_destination", "local");
-      const id = sheetCtx && sheetCtx.id; closeSheet();
+      const id = sheetCtx && sheetCtx.id;
+      btn.disabled = true;
       try {
         if (id) await patch("events", id, row);
-        else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }
+        else await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() });
+        closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.");
       } catch (err) { console.error("Enregistrement rendez-vous", err); toast("Échec de l'enregistrement : " + (err?.message || "vérifie la connexion")); }
+      finally { btn.disabled = false; }
       break;
     }
     case "meal": {
