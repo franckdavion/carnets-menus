@@ -105,7 +105,7 @@ VIEWS.agenda = function () {
         <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
         <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
-      ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button></p>` : ""}
+      ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button>${G.list.length ? ` · <button class="linkbtn small" data-act="gCalsSheet">Agendas affichés</button>` : ""}</p>` : ""}
       ${calSel !== today() ? `<div style="text-align:center"><button class="linkbtn" data-act="calPick" data-v="${today()}">Revenir à aujourd'hui</button></div>` : ""}
     </div>${list}`;
 };
@@ -823,6 +823,12 @@ async function gFetch() {
   finally { G.busy = false; softRender(); }
 }
 async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
+// Calendrier › « Agendas affichés »: which Google calendars appear in the calendar (on this phone)
+function gCalsSheet() {
+  openSheet("Agendas affichés", `<p class="muted small" style="margin:6px 0 10px">Touchez un agenda pour l'afficher ou le masquer dans le Calendrier (sur ce téléphone).</p>
+    <div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>
+    <div class="sheet-sticky btns"><button class="btn primary block" data-act="closeSheet">Terminé</button></div>`);
+}
 const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
 // a Google event as the Maisonnée form expects it
 function gToForm(ev) {
@@ -917,7 +923,8 @@ document.addEventListener("click", async e => {
     case "gBdays": gImportBdays(); break;
     case "gColors": gColorsSheet(); break;
     case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
-    case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); gFetch(); break; }
+    case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (b.closest("#sheet")) gCalsSheet(); gFetch().then(() => { if (view === "agenda") softRender(); }); break; }
+    case "gCalsSheet": gCalsSheet(); break;
     case "gEvent": {
       const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
       // calendars this account may write to: edit right here, in Maisonnée
