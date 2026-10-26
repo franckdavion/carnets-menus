@@ -690,7 +690,7 @@ function render() {
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
-    ${view === "agenda" ? `<button class="fab" data-act="newEvent">${I.plus}Événement</button><button class="fab" data-act="newAppointment" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Rendez-vous</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
+    ${view === "agenda" ? `<button class="fab" data-act="newEvent">${I.plus}Événement</button><button class="fab" data-act="newAppointment" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Rendez-vous</button>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>

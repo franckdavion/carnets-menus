@@ -246,19 +246,57 @@ function expSheet(e) {
 
 /* ---------- documents ---------- */
 const DOC_CATS = ["Identité", "Santé", "Maison", "École", "Voiture", "Banque & impôts", "Assurances", "Garanties", "Autre"];
-let docFilter = "";
+let docFilter = "", docPath = ""; // docPath: folder shown ("Maison/Travaux"), "" = all folders
 const docKind = d => /pdf/.test(d.mime) ? "PDF" : /^image\//.test(d.mime) ? "Photo" : d.file_name ? (d.file_name.split(".").pop() || "").toUpperCase().slice(0, 4) : "—";
+/* folders: a document's « category » is its folder (sub-folders written "Maison/Travaux").
+   Empty folders are kept with the household (households.doc_folders, script supabase-foyer-12.sql), otherwise on this phone. */
+const docFoldersSaved = () => (S.hh && Array.isArray(S.hh.doc_folders) ? S.hh.doc_folders : LS.get("mz_docfolders", []));
+function docFolders() {
+  const set = new Set();
+  const addPath = p => { const parts = String(p || "").split("/").filter(Boolean); for (let i = 1; i <= parts.length; i++) set.add(parts.slice(0, i).join("/")); };
+  docFoldersSaved().forEach(addPath); S.docs.forEach(d => addPath(d.category));
+  return [...set].sort((x, y) => x.localeCompare(y, "fr"));
+}
+const docName = p => p.split("/").pop();
+const docParent = p => p.split("/").slice(0, -1).join("/");
+const docIn = p => S.docs.filter(d => d.category === p || d.category.startsWith(p + "/")).length;
+async function docSaveFolders(list) {
+  list = [...new Set(list)].sort();
+  LS.set("mz_docfolders", list);
+  if (mode === "cloud" && S.hh && "doc_folders" in S.hh) {
+    const before = S.hh.doc_folders; S.hh.doc_folders = list; saveLocal();
+    const { error } = await sb.from("households").update({ doc_folders: list }).eq("id", S.hh.id);
+    if (error) { S.hh.doc_folders = before; saveLocal(); }
+  }
+}
 VIEWS.docs = function () {
   if (!S.v3) return v3Notice();
-  const cats = DOC_CATS.filter(c => S.docs.some(d => d.category === c));
-  const l = S.docs.filter(d => !docFilter || d.category === docFilter).sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title));
+  const all = docFolders();
+  if (docPath && !all.includes(docPath)) docPath = "";
+  const subs = all.filter(f => docParent(f) === docPath);
+  const l = S.docs.filter(d => docPath ? d.category === docPath : !all.includes(d.category)).sort((a, b) => a.title.localeCompare(b.title));
   const soon = S.docs.filter(d => d.expires_on && diffDays(today(), d.expires_on) <= 30).sort((a, b) => a.expires_on.localeCompare(b.expires_on));
   const row = d => { const m = member(d.member_id), left = d.expires_on ? diffDays(today(), d.expires_on) : null;
-    return `<button class="row" data-act="openDoc" data-v="${d.id}"><span class="filebox">${esc(docKind(d))}</span><span class="main"><span class="t">${esc(d.title)}</span><span class="m">${esc(d.category)}${m ? " · " + esc(m.name) : ""}${left !== null ? ` · <span class="${left <= 30 ? "hot" : ""}">${left < 0 ? "expiré depuis le " + esc(fmtShort(d.expires_on)) : "expire le " + esc(parse(d.expires_on).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }))}</span>` : ""}</span></span></button>`; };
-  return `${soon.length ? `<div class="card warn"><strong>À renouveler</strong><span class="small">${soon.map(d => esc(d.title)).join(", ")}</span></div>` : ""}
-    ${cats.length > 1 ? `<div class="who" style="margin-top:12px"><button class="plain" data-act="docFilter" data-v="" aria-pressed="${!docFilter}">Tous</button>${cats.map(c => `<button class="plain" data-act="docFilter" data-v="${esc(c)}" aria-pressed="${docFilter === c}">${esc(c)}</button>`).join("")}</div>` : ""}
-    ${l.length ? `<div class="list" style="margin-top:12px">${l.map(row).join("")}</div>` : `<div class="empty" style="margin-top:12px"><strong>Aucun document.</strong>Rangez ici cartes d'identité, carnets de santé, contrats, garanties… Seuls les membres du foyer y ont accès.</div>`}`;
+    return `<button class="row" data-act="openDoc" data-v="${d.id}"><span class="filebox">${esc(docKind(d))}</span><span class="main"><span class="t">${esc(d.title)}</span><span class="m">${m ? esc(m.name) : "Tout le foyer"}${left !== null ? ` · <span class="${left <= 30 ? "hot" : ""}">${left < 0 ? "expiré depuis le " + esc(fmtShort(d.expires_on)) : "expire le " + esc(parse(d.expires_on).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }))}</span>` : ""}</span></span></button>`; };
+  const frow = f => { const n = docIn(f), k = all.filter(x => docParent(x) === f).length;
+    return `<button class="row" data-act="docOpenFolder" data-v="${esc(f)}"><span class="filebox" style="font-size:20px">📁</span><span class="main"><span class="t">${esc(docName(f))}</span><span class="m">${n ? plural(n, "document", "documents") : "vide"}${k ? " · " + plural(k, "dossier", "dossiers") : ""}</span></span></button>`; };
+  const crumbs = docPath ? docPath.split("/").map((x, i, arr) => ` › <button class="linkbtn" data-act="docOpenFolder" data-v="${esc(arr.slice(0, i + 1).join("/"))}">${esc(x)}</button>`).join("") : "";
+  return `${!docPath && soon.length ? `<div class="card warn"><strong>À renouveler</strong><span class="small">${soon.map(d => esc(d.title)).join(", ")}</span></div>` : ""}
+    ${docPath ? `<div class="inline" style="flex-wrap:wrap;gap:4px;margin-top:4px"><button class="linkbtn" data-act="docOpenFolder" data-v="">Documents</button>${crumbs}</div>
+      <div class="btns" style="margin-top:6px"><button class="btn" data-act="docRenameFolder">Renommer le dossier</button><button class="btn ghost danger" data-act="docDelFolder">Supprimer</button></div>` : ""}
+    ${subs.length ? `<p class="group-h">Dossiers</p><div class="list">${subs.map(frow).join("")}</div>` : ""}
+    ${l.length ? `${subs.length || docPath ? `<p class="group-h">Documents</p>` : ""}<div class="list" style="margin-top:${subs.length || docPath ? 0 : 12}px">${l.map(row).join("")}</div>`
+      : !subs.length ? `<div class="empty" style="margin-top:12px"><strong>${docPath ? "Dossier vide." : "Aucun document."}</strong>${docPath ? "Ajoutez un document ici, ou un sous-dossier." : "Rangez ici cartes d'identité, carnets de santé, contrats, garanties… Seuls les membres du foyer y ont accès."}</div>` : ""}
+    <div style="height:70px"></div>`;
 };
+function folderSheet(rename) {
+  const cur = rename ? docName(docPath) : "";
+  openSheet(rename ? "Renommer le dossier" : "Nouveau dossier", `<form data-form="docFolder">
+    ${!rename && docPath ? `<p class="muted small" style="margin:6px 0 0">Dans « ${esc(docPath.split("/").join(" › "))} »</p>` : ""}
+    <label class="field"><span class="label">Nom du dossier</span><input class="input" name="name" value="${esc(cur)}" maxlength="40" required placeholder="Ex. Travaux, Factures 2026…"></label>
+    ${mode === "cloud" && S.hh && !("doc_folders" in S.hh) ? `<p class="muted small">Un dossier vide reste sur ce téléphone tant que le script supabase-foyer-12.sql n'est pas collé dans Supabase ; dès qu'il contient un document, tout le foyer le voit.</p>` : ""}
+    <div class="sheet-sticky btns" style="margin-top:0"><button class="btn primary" type="submit" style="flex:1">${rename ? "Renommer" : "Créer"}</button></div></form>`, { rename: !!rename });
+}
 function docSheet(d) {
   const isNew = !d;
   d = d || { title: "", category: "Autre", member_id: null, expires_on: null, notes: "", file_name: "" };
@@ -267,7 +305,7 @@ function docSheet(d) {
       ${isNew ? `<label class="field"><span class="label">Fichier (photo ou PDF, 10 Mo maxi)</span><input class="input" name="file" type="file" accept="image/*,application/pdf" required></label>` :
         d.file_path || d.data ? `<div class="btns" style="margin-top:6px"><button class="btn primary" type="button" data-act="viewDoc" data-v="${d.id}">Ouvrir ${esc(d.file_name || "le fichier")}</button></div>` : `<p class="muted small" style="margin-top:6px">Exemple sans fichier joint.</p>`}
       <label class="field"><span class="label">Nom</span><input class="input" name="title" value="${esc(d.title)}" ${isNew ? "" : "required"} maxlength="80" placeholder="${isNew ? "Par défaut : le nom du fichier" : ""}"></label>
-      <div class="field"><span class="label">Catégorie</span>${chipsHtml("category", DOC_CATS.map(c => [c, c]), d.category)}</div>
+      <label class="field"><span class="label">Dossier</span><select class="input" name="folder">${(() => { const fs = docFolders(), cur = isNew ? (docPath || "Autre") : d.category; if (!fs.includes(cur)) fs.push(cur); return fs.sort((x, y) => x.localeCompare(y, "fr")).map(f => `<option value="${esc(f)}" ${f === cur ? "selected" : ""}>${esc(f.split("/").join(" › "))}</option>`).join(""); })()}</select></label>
       ${S.members.length ? `<div class="field"><span class="label">À qui</span>${chipsHtml("member", [["", "Tout le foyer"], ...memberOpts()], d.member_id || "")}</div>` : ""}
       <label class="field"><span class="label">Date d'expiration</span><input class="input" name="expires_on" type="date" value="${esc(d.expires_on || "")}"></label>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Numéro de contrat, où est l'original…">${esc(d.notes)}</textarea></label>
@@ -353,6 +391,15 @@ document.addEventListener("click", async e => {
     case "openDoc": docSheet(S.docs.find(x => x.id === v)); break;
     case "viewDoc": viewDoc(v); break;
     case "docFilter": docFilter = v; render(); break;
+    case "docOpenFolder": docPath = v || ""; render(); window.scrollTo(0, 0); break;
+    case "newFolder": closeSheet(); if (!S.v3) { view = "docs"; render(); break; } folderSheet(false); break;
+    case "docRenameFolder": folderSheet(true); break;
+    case "docDelFolder": {
+      if (docIn(docPath) || docFolders().some(x => docParent(x) === docPath)) { toast("Videz d'abord ce dossier (documents et sous-dossiers)."); break; }
+      const gone = docPath; docPath = docParent(gone);
+      await docSaveFolders(docFoldersSaved().filter(x => x !== gone && !x.startsWith(gone + "/")));
+      render(); toast("Dossier supprimé."); break;
+    }
     case "delDoc": {
       if (!confirm("Supprimer ce document pour tout le foyer ?")) break;
       closeSheet(); const d = S.docs.find(x => x.id === v); await remove("docs", v);
@@ -378,7 +425,7 @@ document.addEventListener("input", e => { if (e.target.id === "recQ") { recQ = e
 const parseAmount = s => Math.round(parseFloat(String(s).replace(/\s/g, "").replace(",", ".")) * 100) / 100;
 document.addEventListener("submit", async e => {
   const f = e.target.closest("form[data-form]"); if (!f) return;
-  const kind = f.dataset.form; if (!["bday", "exp", "budLimit", "doc", "slot", "recToMenu"].includes(kind)) return;
+  const kind = f.dataset.form; if (!["bday", "exp", "budLimit", "doc", "docFolder", "slot", "recToMenu"].includes(kind)) return;
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(f).entries()), id = sheetCtx && sheetCtx.id;
   switch (kind) {
@@ -398,9 +445,28 @@ document.addEventListener("submit", async e => {
       break;
     }
     case "budLimit": { const v = fd.limit.trim() ? parseAmount(fd.limit) : null; closeSheet(); await setHh({ budget_limit: v && v > 0 ? v : null }); break; }
+    case "docFolder": {
+      const name = (fd.name || "").replace(/\//g, "-").trim(); if (!name) break;
+      closeSheet();
+      if (sheetCtx.rename) {
+        const old = docPath, nw = docParent(old) ? docParent(old) + "/" + name : name;
+        if (nw === old) break;
+        if (docFolders().includes(nw)) { toast("Un dossier porte déjà ce nom."); break; }
+        const mv = p => p === old ? nw : p.startsWith(old + "/") ? nw + p.slice(old.length) : p;
+        for (const d of S.docs.filter(x => x.category === old || x.category.startsWith(old + "/"))) await patch("docs", d.id, { category: mv(d.category) });
+        await docSaveFolders(docFoldersSaved().map(mv).concat(nw));
+        docPath = nw; render(); toast("Dossier renommé.");
+      } else {
+        const nw = docPath ? docPath + "/" + name : name;
+        if (docFolders().includes(nw)) { docPath = nw; render(); break; }
+        await docSaveFolders([...docFoldersSaved(), nw]);
+        docPath = nw; render(); window.scrollTo(0, 0); toast("Dossier créé.");
+      }
+      break;
+    }
     case "doc": {
       const btn = f.querySelector("[type=submit]");
-      const meta = { category: chipVal(f, "category") || "Autre", member_id: chipVal(f, "member") || null, expires_on: fd.expires_on || null, notes: fd.notes.trim() };
+      const meta = { category: fd.folder || "Autre", member_id: chipVal(f, "member") || null, expires_on: fd.expires_on || null, notes: fd.notes.trim() };
       if (id) { closeSheet(); await patch("docs", id, { ...meta, title: fd.title.trim() }); break; }
       const file = f.querySelector("[name=file]").files[0]; if (!file) break;
       if (file.size > 10 * 1024 * 1024) { toast("Fichier trop lourd : 10 Mo maximum."); break; }
