@@ -294,6 +294,9 @@ async function loadRecipes() {
 /* ---------- startup ---------- */
 async function init() {
   const url = new URL(location.href), code = url.searchParams.get("code");
+  // opened from a notification (e.g. a new message): go straight to that page
+  const goTo = url.searchParams.get("v");
+  if (goTo) { view = goTo; LS.set("mz_view", goTo); url.searchParams.delete("v"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
   if (code) { LS.set("mz_join", code.toUpperCase()); url.searchParams.delete("code"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
   if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
   // show the last known state straight away, then refresh from the cloud

@@ -276,6 +276,61 @@ Deno.serve(async req => {
     }
   }
 
+  // ==========================================
+  // NOUVEAUX MESSAGES DE LA MESSAGERIE DU FOYER
+  // (appel chaque minute : un message est signalé au plus tard une minute après son envoi)
+  // ==========================================
+  const { data: msgs, error: msgError } = await supabase
+    .from("messages")
+    .select("id,household_id,member_id,body,created_at")
+    .gte("created_at", new Date(now - 3 * MINUTE).toISOString())
+    .order("created_at")
+    .limit(200);
+
+  if (!msgError) {
+    for (const msg of msgs || []) {
+      const { data: mem } = await supabase
+        .from("household_members")
+        .select("id,user_id,name")
+        .eq("household_id", msg.household_id);
+
+      const author = (mem || []).find(m => m.id === msg.member_id);
+      // tout le foyer sauf l'auteur
+      const readers = (mem || []).filter(m => m.user_id && m.id !== msg.member_id);
+
+      for (const m of readers) {
+        const { error: claimError } = await supabase
+          .from("maison_push_deliveries")
+          .insert({ id: `msg:${msg.id}:${m.user_id}` });
+        if (claimError) continue;
+
+        const { data: subs } = await supabase
+          .from("maison_push_subscriptions")
+          .select("id,subscription")
+          .eq("user_id", m.user_id);
+
+        const text = String(msg.body || "").replace(/\s+/g, " ").trim();
+        for (const sub of subs || []) {
+          try {
+            await webpush.sendNotification(sub.subscription, JSON.stringify({
+              title: `💬 ${author?.name || "Message"}`,
+              body: text.length > 180 ? text.slice(0, 177) + "…" : text,
+              tag: `msg-${msg.id}`,
+              url: "./?v=messages"
+            }));
+            sent++;
+          } catch (e) {
+            failed++;
+            if ([404, 410].includes((e as { statusCode?: number }).statusCode || 0)) {
+              await supabase.from("maison_push_subscriptions").delete().eq("id", sub.id);
+            }
+            console.error("Push message error:", JSON.stringify({ statusCode: (e as { statusCode?: number })?.statusCode, message: (e as { message?: string })?.message }));
+          }
+        }
+      }
+    }
+  }
+
   // ménage : les traces d'envoi de plus de 40 jours ne servent plus
   if (new Date(now).getUTCMinutes() === 0) {
     await supabase.from("maison_push_deliveries").delete().lt("sent_at", new Date(now - 40 * 86400000).toISOString());
