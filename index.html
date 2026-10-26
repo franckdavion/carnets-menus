@@ -4161,7 +4161,7 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
       if(cur&&cur.menu&&cur.menu.menu)applyRemoteState(cur.menu);
       priv=privNow();
       const payload={menu:shareMenu(),priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
-      const{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:new Date().toISOString()});
+      const at=new Date().toISOString(),{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:at});if(!error)stateSeen=at;
       if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(payload.menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);}}
     // my recipes in the common book
     const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
@@ -4230,7 +4230,12 @@ function applyRemoteState(remote){
 // the others' changes arrive every minute while the carnet is open
 // inside Maisonnée (hidden copy): only while its Repas page is open, so two copies never work at once
 const bgIdle=()=>{try{return window.frameElement&&!(window.parent&&window.parent.mzRepasActive);}catch(e){return false;}};
-setInterval(()=>{if(document.visibilityState==="visible"&&cloudOn()&&cloud.owner&&!cloud.busy&&!bgIdle())cloudSync();},60e3);
+// every 15 s a light look at the date of the shared carnet; the whole sync only when it changed (and every minute anyway)
+let stateSeen="",peekN=0;
+async function cloudPeek(){try{const{data}=await cloud.sb.from("user_state").select("updated_at").eq("user_id",stateUid()).maybeSingle();
+  const u=(data&&data.updated_at)||"";if(u&&u===stateSeen)return false;stateSeen=u;return true;}catch(e){return true;}}
+setInterval(async()=>{if(document.visibilityState!=="visible"||!cloudOn()||!cloud.owner||cloud.busy||bgIdle())return;
+  peekN=(peekN+1)%4;if(peekN===0||await cloudPeek())cloudSync();},15e3);
 async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
   // 1. the carnet (menus, courses, cave, favourites…): shared by the household, merged with what changed here
   const{data:st}=await sb.from("user_state").select("menu,updated_at").eq("user_id",stateUid()).maybeSingle();

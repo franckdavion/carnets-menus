@@ -43,6 +43,14 @@ function carnetBoot() {
   };
   f.addEventListener("load", () => { CK.ready = false; setTimeout(tick, 400); });
 }
+// the others' changes arrive in the hidden Carnet (checked every 15 s): Repas and Courses are redrawn when its data changed
+let ckSig = "";
+setInterval(() => {
+  if (!CK.ready || screen !== "app" || (view !== "repas" && view !== "courses") || document.visibilityState !== "visible") return;
+  let sg = ""; try { sg = cev("hashOf([menu.weeks,menu.checked,menu.extras,menu.shopDays,menu.have,menu.shopExtra,menu.bought])"); } catch (_) { return; }
+  if (ckSig && sg !== ckSig) softRender();
+  ckSig = sg;
+}, 3000);
 // the others' changes: refresh from the shared carnet when the page comes back
 async function carnetRefresh() { if (!CK.ready) return; try { await cev("cloudSync()"); } catch (_) {} if (view === "repas" || view === "courses") softRender(); }
 function carnetSave(msg) { cev("saveMenu()"); render(); if (msg) toast(msg); }
