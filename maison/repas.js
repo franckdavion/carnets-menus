@@ -154,6 +154,7 @@ function mealSlotSheet(k) {
   const dlg = $("#sheet"), same = dlg.open && ($("#sheetTitle") || {}).textContent === title, st = dlg.scrollTop, si = $("#sheetIn").scrollTop;
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
+    <button class="linkbtn" data-act="rRecipe" data-v="${esc(k)}" style="margin:2px 0 4px">📖 Voir la recette</button>
     <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
     ${ro ? "" : `<div class="btns">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
@@ -189,6 +190,38 @@ function ingBlock(k, s) {
       ? `<p class="small" style="margin:0 0 6px;width:100%">🔒 Validé : ${n} ingrédient${n > 1 ? "s" : ""} dans les courses.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
       : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>Valider et envoyer ${n} ingrédient${n > 1 ? "s" : ""} aux courses</button>`}</div>`;
 }
+// 📖 the recipe of a meal, as in the Carnet: photo, time, ingredients for the meal's people, steps
+function rRecipeSheet(k) {
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  const R = cj(`(()=>{const s=${slotJs(k)};const r=s&&recipes[s.id];if(!r)return null;
+    const n=s.n||menu.people||4,f=n/(r.serves||4);
+    const ing=(r.ing||[]).filter(i=>i.n).map(i=>{const[q,u]=toBase(i.q,i.u);const qq=q*ingMult(r,i,f*(r.serves||4));return{n:i.n.trim(),qt:q?fmt(qq,u)||"":""};});
+    let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){steps=String(r.steps||"").split("\\n").map(x=>x.trim()).filter(Boolean);}
+    steps=steps.map(x=>typeof x==="string"?x:(x&&(x.t||x.text))||"").filter(Boolean);
+    return{id:s.id,name:r.name,ph:rPhotoSrc(s.id)||"",time:r.time||0,n,ing,steps,src:typeof r.source==="string"&&/^https?:/.test(r.source)?r.source:""};})()`);
+  if (!R) return;
+  const [dn, m] = k.split("|");
+  openSheet(R.name, `
+    ${R.ph ? `<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">` : ""}
+    <p class="muted small" style="margin:8px 0 0">${esc(dn)} ${esc(m)}${R.time ? ` · ⏱ ${R.time} min` : ""} · pour ${R.n} pers.</p>
+    ${R.ing.length ? `<p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm">${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
+    ${R.steps.length ? `<p class="group-h">Préparation</p><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
+    ${R.src ? `<p class="small" style="margin-top:14px"><a href="${esc(R.src)}" target="_blank" rel="noopener" style="color:var(--accent)">Recette d'origine ↗</a></p>` : ""}
+    <div class="btns" style="margin-top:16px"><button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Ouvrir dans le Carnet</button></div>
+    <div class="sheet-sticky btns"><button class="btn" data-act="rSlot" data-v="${esc(k)}">← Retour au repas</button><button class="btn primary" data-act="rChoose" data-v="${esc(k)}" data-r="main" style="flex:1">Changer de recette</button></div>`);
+}
+// leaving for the Carnet: remember where we are, to come back to the same week with the same meal open
+function rRecipeOpen(k, id) {
+  LS.set("mz_return", { view: "repas", week: rWeek, slot: k, at: Date.now() });
+  location.assign(CARNET_URL + "?recette=" + encodeURIComponent(id));
+}
+(function rReturn() {
+  const r = LS.get("mz_return", null); if (!r) return;
+  LS.del("mz_return");
+  if (Date.now() - r.at > 6 * 3600e3) return;
+  view = "repas"; LS.set("mz_view", "repas"); if (r.week) rWeek = r.week;
+  if (r.slot) CK.waiters.push(() => setTimeout(() => { if (view === "repas") mealSlotSheet(r.slot); }, 50));
+})();
 function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
   openSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
@@ -212,13 +245,15 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
+  if (!["rRecipe", "rRecipeOpen", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
     case "rPropose": rProposeSheet(); break;
     case "rPrefs": rPrefsSheet(); break;
     case "rSlot": mealSlotSheet(v); break;
+    case "rRecipe": rRecipeSheet(v); break;
+    case "rRecipeOpen": rRecipeOpen(v, b.dataset.id); return;
     case "rLockAll": {
       const n = cev(`(()=>{let n=0;for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k)){s.lock=true;n++;}}return n;})()`);
       shopIncludeWeek();
