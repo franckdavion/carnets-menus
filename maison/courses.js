@@ -16,11 +16,13 @@ function cclick(d) {
 function cxData() {
   return cj(`(()=>{const all=shopDates(),selK=selectedShopDates().map(x=>x.key);
     const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0}));
+    const plan=selectedShopDates().map(x=>({key:x.key,lab:x.dn+" "+x.d.getDate(),w:ymd(mondayOf(x.d)),meals:MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];
+      return s&&recipes[s.id]?{k,m:lab,name:recipes[s.id].name,n:s.n||menu.people||4,lock:!!s.lock}:null;}).filter(Boolean)})).filter(d=>d.meals.length);
     const items=shopping().map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",r:RAYONS.includes(i.r)?i.r:"Divers",from:i.from||[],on:!!menu.checked[i.key],miss:(menu.missed||{})[i.key]||""}));
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
     const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
-    return {days,items,extras,xr,have,learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
+    return {days,plan,items,extras,xr,have,learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
 }
 /* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
    An item typed by hand finds its aisle by its name; moved once by hand, it stays there next time (menu.rayonLearn,
@@ -83,6 +85,9 @@ VIEWS.courses = function () {
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
     <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour ajouter ou retirer tous ses repas · 🛒 tous ses repas sont dans les courses · ◐ une partie.</p>
+    ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="list">${D.plan.map(d => d.meals.map((m, i) => `<div class="cx-item">
+        <span class="nm"><button type="button" class="cx-name" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez pour voir ses ingrédients</span></span>
+        <button type="button" class="${m.lock ? "cx-have on" : "btn primary"}" style="${m.lock ? "" : "padding:6px 12px;font-size:14px"}" data-act="cxMealLock" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${m.lock ? "✓ Dans les courses" : "🛒 Ajouter"}</button></div>`).join("")).join("")}</div>` : ""}
     <form data-form="cxAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="cxIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
       <button class="btn ink" type="submit">Ajouter</button></form>`;
@@ -114,13 +119,16 @@ VIEWS.courses = function () {
 };
 
 document.addEventListener("toggle", e => { if (e.target.id === "cxHave") cxHaveOpen = e.target.open; }, true);
-const CX_ACTS = ["cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxMealLock", "cxMeal", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
   switch (a) {
     case "cxHaveClose": cxHaveOpen = false; break;
+    case "cxMealLock": { const on = cev(`(()=>{const s=((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}];if(!s)return false;if(s.lock)delete s.lock;else s.lock=true;saveMenu();return !!s.lock;})()`);
+      msg = on ? "Ajouté aux courses." : "Retiré des courses."; break; }
+    case "cxMeal": rWeek = b.dataset.w; mealSlotSheet(v); return;
     case "cxMove": cxMoveSheet(b.dataset.n, b.dataset.r); return;
     case "cxMoveTo": cev(`(()=>{menu.rayonLearn=Object.assign({},menu.rayonLearn,{[${JSON.stringify(String(b.dataset.n).trim().toLowerCase())}]:${JSON.stringify(v)}});saveMenu();})()`); closeSheet(); msg = `Rangé dans « ${v} ».`; break;
     case "cxOrder": cxOrderDraft = cxOrder(cxData().order); cxOrderSheet(); return;
