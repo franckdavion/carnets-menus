@@ -728,6 +728,8 @@ async function gFetch() {
   G.busy = true;
   try {
     const cl = await gApi("users/me/calendarList?minAccessRole=reader&maxResults=250");
+    // colours chosen for a single event in Google (« Tomate », « Paon »…) override the calendar's colour
+    if (!G.palette) { try { const co = await gApi("colors"); G.palette = Object.fromEntries(Object.entries(co.event || {}).map(([k, v]) => [k, v.background])); } catch (_) { G.palette = {}; } }
     G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, accessRole: c.accessRole || "reader", on: !!c.selected || !!c.primary }));
     LS.set("mz_gcallist", G.list);
     if (!G.cals) { G.cals = G.list.filter(c => c.on).map(c => c.id); LS.set("mz_gcals", G.cals); }
@@ -738,7 +740,7 @@ async function gFetch() {
         const j = await gApi(`calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page ? "&pageToken=" + page : ""}`);
         for (const e of j.items || []) {
           if (e.status === "cancelled" || e.eventType === "birthday") continue;
-          const base = { id: e.id, cal: c.id, calName: c.name, color: e.colorId ? c.color : c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
+          const base = { id: e.id, cal: c.id, calName: c.name, color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
           if (e.start && e.start.date) {
             const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
             for (let d = e.start.date, n = 0; d < end && n < 31; d = addDays(d, 1), n++) items.push({ ...base, day: d, start_time: null, end_time: null });
