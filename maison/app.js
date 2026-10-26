@@ -1066,12 +1066,20 @@ function syncGColorBox(form) {
   const box = form && form.querySelector("#gColorBox"), sel = form && form.querySelector('[name="google_destination"]');
   if (box && sel) box.hidden = sel.value === "local";
 }
+// default calendar for new appointments: the one chosen in Ma famille, otherwise the family's « Agendas »
+function defaultDest() {
+  const all = (typeof G !== "undefined" ? G.list : []) || [], ok = c => c && (c.accessRole === "owner" || c.accessRole === "writer");
+  const chosen = LS.get("mz_last_google_destination", null);
+  if (chosen === "local") return "local";
+  if (chosen && ok(all.find(c => c.id === chosen))) return chosen;
+  const fam = all.find(c => ok(c) && /^agendas?$/i.test(String(c.name).trim()));
+  return fam ? fam.id : "local";
+}
 function googleDestinationOptions() {
   // every Google calendar is listed; the ones this account may only read are shown greyed out, with the reason
   const all = (typeof G !== "undefined" && G.connected ? G.list : []);
   const canWrite = c => c.accessRole === "owner" || c.accessRole === "writer";
-  let preferred = LS.get("mz_last_google_destination", "local");
-  if (preferred !== "local" && !all.some(c => c.id === preferred && canWrite(c))) preferred = "local";
+  const preferred = G.connected ? defaultDest() : "local";
   const ro = all.filter(c => !canWrite(c));
   const label = preferred === "local" ? "Maisonnée (agenda familial)" : (all.find(c => c.id === preferred) || {}).name;
   return `<p class="small" id="destLine" style="margin:14px 0 0">Enregistré dans <strong>${esc(label)}</strong>${all.some(canWrite) ? ` · <button type="button" class="linkbtn small" data-act="destChange">Changer</button>` : ""}</p>
