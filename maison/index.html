@@ -487,6 +487,10 @@ body.maison-sheet-open{overflow:hidden!important;overscroll-behavior:none}
 body.maison-sheet-open #app{touch-action:none}
 dialog.sheet{overscroll-behavior:contain;touch-action:pan-y;}
 dialog.sheet .sheet-in{touch-action:pan-y}
+/* Quand le clavier est ouvert, la feuille occupe seulement la zone visible. */
+dialog.sheet.maison-keyboard{position:fixed;bottom:auto!important;margin:0 auto!important;left:0;right:0;overflow-y:auto!important;border-radius:var(--r-lg) var(--r-lg) 0 0}
+/* Évite le zoom automatique d'iOS qui décale les champs. */
+@media (max-width:767px){dialog.sheet input,dialog.sheet textarea,dialog.sheet select{font-size:max(16px,1em)}}
 
 
 </style>
@@ -499,17 +503,45 @@ dialog.sheet .sheet-in{touch-action:pan-y}
 <script src="app.js"></script>
 <script src="modules.js"></script>
 <script>
-// Le viewport visuel se réduit quand le clavier iOS apparaît.
-if (window.visualViewport) {
-  const updateKeyboardViewport = () => {
-    const vv = window.visualViewport;
-    document.documentElement.style.setProperty('--maison-vh', Math.max(220, vv.height - 8) + 'px');
-  };
-  visualViewport.addEventListener('resize', updateKeyboardViewport, {passive:true});
-  visualViewport.addEventListener('scroll', updateKeyboardViewport, {passive:true});
-  window.addEventListener('orientationchange', updateKeyboardViewport, {passive:true});
-  updateKeyboardViewport();
-}
+// iOS : garder chaque champ des formulaires au-dessus du clavier.
+// visualViewport décrit la zone réellement visible, même dans une PWA installée.
+(() => {
+  const vv = window.visualViewport;
+  const sheet = document.getElementById('sheet');
+  if (!vv || !sheet) return;
+  const editable = el => el && el.matches('input:not([type=checkbox]):not([type=radio]):not([type=hidden]), textarea, select, [contenteditable="true"]');
+  let timer;
+  function adjust() {
+    const keyboard = window.innerHeight - vv.height > 130;
+    document.documentElement.style.setProperty('--maison-vh', Math.max(180, vv.height - 12) + 'px');
+    if (sheet.open && keyboard) {
+      sheet.classList.add('maison-keyboard');
+      sheet.style.top = Math.max(0, vv.offsetTop + 6) + 'px';
+      sheet.style.height = Math.max(180, vv.height - 12) + 'px';
+      sheet.style.maxHeight = Math.max(180, vv.height - 12) + 'px';
+    } else {
+      sheet.classList.remove('maison-keyboard');
+      sheet.style.removeProperty('top');
+      sheet.style.removeProperty('height');
+      sheet.style.removeProperty('max-height');
+    }
+  }
+  function showFocused() {
+    adjust();
+    const field = document.activeElement;
+    if (!sheet.open || !sheet.contains(field) || !editable(field)) return;
+    const r = field.getBoundingClientRect(), b = sheet.getBoundingClientRect();
+    if (r.bottom > b.bottom - 24) sheet.scrollTop += r.bottom - b.bottom + 24;
+    else if (r.top < b.top + 18) sheet.scrollTop -= b.top + 18 - r.top;
+  }
+  vv.addEventListener('resize', () => { adjust(); clearTimeout(timer); timer=setTimeout(showFocused, 130); }, {passive:true});
+  vv.addEventListener('scroll', adjust, {passive:true});
+  document.addEventListener('focusin', e => { if (!sheet.contains(e.target) || !editable(e.target)) return; setTimeout(showFocused, 100); setTimeout(showFocused, 350); });
+  document.addEventListener('focusout', () => setTimeout(adjust, 300));
+  sheet.addEventListener('close', adjust);
+  window.addEventListener('orientationchange', () => setTimeout(adjust, 250));
+  adjust();
+})();
 </script>
 </body>
 </html>
