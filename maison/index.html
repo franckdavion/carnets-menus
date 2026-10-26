@@ -495,6 +495,10 @@ dialog.sheet.maison-keyboard{position:fixed;bottom:auto!important;margin:0 auto!
 @media (max-width:767px){dialog.sheet input,dialog.sheet textarea,dialog.sheet select{font-size:max(16px,1em)}}
 
 
+/* iPhone: date and time fields keep inside their column (Safari gives them a wide built-in size) */
+input[type=date].input,input[type=time].input{display:block;min-width:0;width:100%;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
+input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-webkit-date-and-time-value{text-align:left}
+.inline>.field{min-width:0}
 </style>
 </head>
 <body>

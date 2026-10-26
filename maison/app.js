@@ -1057,9 +1057,9 @@ const gColorLabel = id => gColorNames()[id] || (G_COLORS.find(c => c[0] === id) 
 function gColorChooser() {
   const names = gColorNames(), named = G_COLORS.filter(([id]) => names[id]), rest = G_COLORS.filter(([id]) => !names[id]);
   const chip = ([id, n]) => `<button type="button" class="chip" data-chip="gcolor" data-v="${id}" aria-pressed="false"><span class="cat-dot" style="--c:${esc(gColorHex(id))}"></span>${esc(names[id] || n)}</button>`;
+  // every colour is shown at once (the folding « Autres couleurs » list did not open on iPhone)
   return `<div class="field" id="gColorBox" hidden><span class="label">Pour qui (couleur dans Google)</span>
-    <div class="chips" role="group"><button type="button" class="chip" data-chip="gcolor" data-v="" aria-pressed="true">Couleur de l'agenda</button>${named.map(chip).join("")}</div>
-    ${rest.length ? `<details style="margin-top:8px"><summary class="muted small">Autres couleurs</summary><div class="chips" style="margin-top:8px">${rest.map(chip).join("")}</div></details>` : ""}
+    <div class="chips" role="group"><button type="button" class="chip" data-chip="gcolor" data-v="" aria-pressed="true">Couleur de l'agenda</button>${named.map(chip).join("")}${rest.map(chip).join("")}</div>
     ${named.length ? "" : `<p class="muted small" style="margin:6px 0 0">Astuce : dans Ma famille › Agenda Google › « Couleurs des enfants », donnez un prénom à chaque couleur.</p>`}</div>`;
 }
 function syncGColorBox(form) {
