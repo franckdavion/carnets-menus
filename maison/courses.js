@@ -15,7 +15,7 @@ function cclick(d) {
 }
 function cxData() {
   return cj(`(()=>{const all=shopDates(),selK=selectedShopDates().map(x=>x.key);
-    const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0}));
+    const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0,n:x.n}));
     const plan=selectedShopDates().map(x=>({key:x.key,lab:x.dn+" "+x.d.getDate(),w:ymd(mondayOf(x.d)),meals:MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];
       return s&&recipes[s.id]?{k,m:lab,name:recipes[s.id].name,n:s.n||menu.people||4,lock:!!s.lock}:null;}).filter(Boolean)})).filter(d=>d.meals.length);
     const items=shopping().map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",r:RAYONS.includes(i.r)?i.r:"Divers",from:i.from||[],on:!!menu.checked[i.key],miss:(menu.missed||{})[i.key]||""}));
@@ -81,10 +81,10 @@ VIEWS.courses = function () {
   const total = D.items.length + D.extras.length;
   const sel = D.days.filter(x => x.on);
   let out = `<div class="card linkcard"><span>La même liste que le Carnet de menus, pour tout le foyer.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
-  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? "✓ " : ""}${esc(x.lab)} ${x.full ? "🛒" : x.any ? "◐" : ""}</button>`).join("")}</div>
+  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? "✓ " + esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
-    <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour ajouter ou retirer tous ses repas · 🛒 tous ses repas sont dans les courses · ◐ une partie.</p>
+    <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour voir ses repas et choisir ce qui part dans les courses.</p>
     ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="list">${D.plan.map(d => d.meals.map((m, i) => `<div class="cx-item">
         <span class="nm"><button type="button" class="cx-name" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez pour voir ses ingrédients</span></span>
         <button type="button" class="${m.lock ? "cx-have on" : "btn primary"}" style="${m.lock ? "" : "padding:6px 12px;font-size:14px"}" data-act="cxMealLock" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${m.lock ? "✓ Dans les courses" : "🛒 Ajouter"}</button></div>`).join("")).join("")}</div>` : ""}
@@ -119,7 +119,27 @@ VIEWS.courses = function () {
 };
 
 document.addEventListener("toggle", e => { if (e.target.id === "cxHave") cxHaveOpen = e.target.open; }, true);
-const CX_ACTS = ["cxMealLock", "cxMeal", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+// « Courses pour » : a day's summary first (same rules as the Carnet: dayApply)
+let cxDayK = null, cxDaySel = {};
+function cxDaySheet(d, fresh) {
+  const x = cj(`(()=>{const x=dayInfo(${JSON.stringify(d)});if(!x)return null;const inList=selectedShopDates().some(y=>y.key===x.key);
+    return{key:x.key,title:(t=>t.charAt(0).toUpperCase()+t.slice(1))(x.d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})),w:ymd(mondayOf(x.d)),inList,
+      meals:MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];return s&&recipes[s.id]?{k,lab,name:recipes[s.id].name,n:s.n||menu.people,lock:!!s.lock}:null;}).filter(Boolean)};})()`);
+  if (!x) return;
+  if (fresh) { cxDayK = d; cxDaySel = {}; for (const m of x.meals) cxDaySel[m.k] = x.inList ? m.lock : true; }
+  const ks = Object.keys(cxDaySel).filter(k => cxDaySel[k] !== false);
+  const n = cev(`dayIngCount(dayInfo(${JSON.stringify(d)}),${JSON.stringify(ks)})`);
+  const sc = $("#sheet").open ? $("#sheet").scrollTop : 0;
+  openSheet(x.title, `<p class="muted small" style="margin:4px 0 8px">${x.inList ? "Ce jour est dans la liste de courses." : "Ce qui est prévu ce jour-là : choisissez ce qui part dans les courses."}</p>
+    ${x.meals.length ? `<div class="list">${x.meals.map(m => { const on = cxDaySel[m.k] !== false;
+      return `<div class="cx-item"><span class="nm"><span class="cx-from" style="margin:0">${esc(m.lab)}</span><strong>${esc(m.name)}</strong> <span class="muted small">· ${m.n} pers.</span><br><button type="button" class="linkbtn small" data-act="cxDsSee" data-w="${esc(x.w)}" data-k="${esc(m.k)}">voir / changer</button></span>
+        <button type="button" class="cx-have ${on ? "on" : ""}" data-act="cxDsTog" data-k="${esc(m.k)}" aria-pressed="${on}">${on ? "✓ Dans les courses" : "Pas cette fois"}</button></div>`; }).join("")}</div>` : `<p class="muted">Aucun repas prévu ce jour.</p>`}
+    <div class="sheet-sticky btns" style="flex-direction:column;align-items:stretch">
+      <button class="btn primary" data-act="cxDsApply" ${ks.length || x.inList ? "" : "disabled"}>${x.inList ? "Mettre à jour" : "🛒 Ajouter ce jour aux courses"} · ${ks.length} repas, ${n} ingrédient${n > 1 ? "s" : ""}</button>
+      ${x.inList ? `<button class="btn ghost" data-act="cxDsRemove">Retirer ce jour des courses</button>` : ""}</div>`);
+  if (!fresh) $("#sheet").scrollTop = sc;
+}
+const CX_ACTS = ["cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
@@ -142,8 +162,13 @@ document.addEventListener("click", e => {
     case "cxHaveUndo": cclick({ act: "haveUndo", k: v }); break;
     case "cxRmX": cclick({ act: "rmX", i: v }); break;
     case "cxRmR": cclick({ act: "shopRm", id: v }); break;
-    case "cxDay": { let was = false; try { was = !!(cxData().days.find(x => x.key === v) || {}).on; } catch (_) {}
-      cclick({ act: "shopDay", d: v }); msg = was ? "Repas du jour retirés des courses." : "Repas du jour ajoutés aux courses."; break; }
+    case "cxDay": cxDaySheet(v, true); return;
+    case "cxDsTog": cxDaySel[b.dataset.k] = cxDaySel[b.dataset.k] === false; cxDaySheet(cxDayK, false); return;
+    case "cxDsSee": rWeek = b.dataset.w; mealSlotSheet(b.dataset.k); return;
+    case "cxDsApply": case "cxDsRemove": {
+      const add = a === "cxDsApply";
+      msg = cev(`(()=>{dayK=${JSON.stringify(cxDayK)};daySel=${JSON.stringify(cxDaySel)};const r=dayApply(${add});saveMenu();return r;})()`);
+      closeSheet(); break; }
     case "cxDaysAll": cclick({ act: "shopDaysAll" }); break;
     case "cxDaysNone": cclick({ act: "shopDaysNone" }); break;
     case "cxFinish": cxFinishAsk = true; break;

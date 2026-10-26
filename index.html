@@ -66,6 +66,7 @@ button{cursor:pointer}
 .lk-cur{border-top:1px dashed var(--line);padding-top:10px;order:98}.lk-cur summary{cursor:pointer;font-size:14px;color:var(--accent);font-weight:600;padding:6px 0}
 .lk-cur h4{margin:8px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .lk-cl{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:3px 0;color:var(--muted)}.lk-cl b{font-family:var(--f-mono);font-weight:500;white-space:nowrap}
+.ds-row{display:flex;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
 #f-steps.flash{outline:2px solid var(--accent);outline-offset:2px}
 .lk-meals{display:flex;flex-direction:column;gap:6px}
 .lk-meal{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px}
@@ -867,6 +868,7 @@ code{font-family:var(--f-mono);font-size:.92em}
   </div>
 </div>
 
+<div class="sheet" id="daySheet" hidden><div class="sheet-in" id="daySheetIn"></div></div>
 <div class="sheet" id="drivesSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Mes drives</h2><button type="button" class="btn primary" data-act="closeDrives">Terminé</button></div>
@@ -1745,7 +1747,7 @@ function eraseItem(i){const until=haveUntil(),today=ymd(new Date());menu.bought=
 function renderShop(items,extras,ids){
   const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
-  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🛒":x.locked?" ◐":"";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
+  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key);return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ "+esc(dayShort(x)):esc(dayShort(x))+` · ${x.n} repas`}</button></span>`;}).join("")}</div>
     <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>${shopPlanHtml(sel)}`
     :`<span class="muted" style="font-size:13px">Aucun repas prévu dans les 3 prochaines semaines.</span>`;
   const range=sel.length?(sel.length===1?dayShort(sel[0]):`Du ${dayShort(sel[0])} au ${dayShort(sel[sel.length-1])}`):"Aucun jour choisi";
@@ -3002,10 +3004,11 @@ document.addEventListener("click",e=>{
   else if(a==="sideToggle"){toggleSide(b.dataset.t);render();renderSide();saveMenu(300);}
   else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
   else if(a==="rmSide"){removePart(b.dataset.k,"extra",b.dataset.i);}
-  else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
-    const d=b.dataset.d,add=!keys.includes(d);keys=add?[...keys,d].sort():keys.filter(k=>k!==d);menu.shopDays=keys;
-    {const x=all.find(y=>y.key===d);if(x)for(const[m]of MEALS){const sl=x.wk[slotKey(x.dn,m)];if(sl&&recipes[sl.id]){if(add)sl.lock=true;else delete sl.lock;}}}
-    render();saveMenu(300);if(typeof toast==="function")toast(add?"Repas du jour ajoutés aux courses":"Repas du jour retirés des courses");}
+  else if(a==="shopDay")openDaySheet(b.dataset.d);
+  else if(a==="dsTog"){daySel[b.dataset.k]=daySel[b.dataset.k]===false;renderDaySheet();}
+  else if(a==="dsSee"){const w=b.dataset.w;$("#daySheet").hidden=true;if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}slotK=b.dataset.k;renderSlotSheet();$("#slotSheet").hidden=false;}
+  else if(a==="dsApply"||a==="dsRemove"){const r=dayApply(a==="dsApply");$("#daySheet").hidden=true;render();saveMenu(300);toast(r);}
+  else if(a==="closeDay")$("#daySheet").hidden=true;
   else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
   else if(a==="shopSwap"&&!b.dataset.go&&mealBought(b.dataset.w,b.dataset.k)){bumpCtx={w:b.dataset.w,k:b.dataset.k};const s=menu.weeks[bumpCtx.w][bumpCtx.k];
     $("#bumpTxt").textContent=`« ${recipes[s.id].name} » (${slotLabel(bumpCtx.k)}) : ses ingrédients ont déjà été achetés. Que voulez-vous en faire ?`;$("#bumpSheet").hidden=false;}
@@ -3551,6 +3554,29 @@ $("#prefForm").addEventListener("submit",e=>{e.preventDefault();prefDraft.avoid=
   prefDraft.days={};document.querySelectorAll("#p-days select").forEach(s=>{if(s.value)prefDraft.days[s.dataset.day]=s.value;});
   menu.prefs=prefDraft;$("#prefSheet").hidden=true;render();saveMenu();toast("Préférences enregistrées");});
 $("#prefSheet").addEventListener("click",e=>{if(e.target.id==="prefSheet")$("#prefSheet").hidden=true;});
+/* ---------- « Courses pour » : a day's summary before it goes to the shopping list ---------- */
+let dayK=null,daySel={};
+const dayInfo=d=>shopDates().find(y=>y.key===d)||null;
+function openDaySheet(d){const x=dayInfo(d);if(!x)return;dayK=d;daySel={};const inList=selectedShopDates().some(y=>y.key===d);
+  for(const[m]of MEALS){const k=slotKey(x.dn,m),sl=x.wk[k];if(sl&&recipes[sl.id])daySel[k]=inList?!!sl.lock:true;}
+  renderDaySheet();$("#daySheet").hidden=false;}
+function dayIngCount(x,ks){return new Set(ks.flatMap(k=>{const sl=x.wk[k];return[sl.id,sl.entree,sl.dessert].filter(Boolean).flatMap(id=>((recipes[id]||{}).ing||[]).filter(i=>i.n).map(i=>norm(i.n)));})).size;}
+function renderDaySheet(){const x=dayInfo(dayK);if(!x){$("#daySheet").hidden=true;return;}
+  const inList=selectedShopDates().some(y=>y.key===dayK),w=ymd(mondayOf(x.d)),ks=Object.keys(daySel).filter(k=>daySel[k]!==false),n=dayIngCount(x,ks);
+  const rows=MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),sl=x.wk[k];if(!sl||!recipes[sl.id])return"";const on=daySel[k]!==false;
+    return`<div class="ds-row"><div style="flex:1;min-width:0"><span class="muted" style="font-size:13px">${lab}</span><br><b>${esc(recipes[sl.id].name)}</b> <span class="muted" style="font-size:13px">· ${sl.n||menu.people} pers.</span><br><button type="button" class="link" data-act="dsSee" data-k="${k}" data-w="${w}">voir / changer</button></div>
+      <button type="button" class="chip" data-act="dsTog" data-k="${k}" aria-pressed="${on}">${on?"✓ Dans les courses":"Pas cette fois"}</button></div>`;}).join("");
+  $("#daySheetIn").innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>${esc((t=>t.charAt(0).toUpperCase()+t.slice(1))(x.d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})))}</h2><button type="button" class="btn" data-act="closeDay">Fermer</button></div>
+    <p class="muted" style="margin:0;font-size:14px">${inList?"Ce jour est dans la liste de courses.":"Ce qui est prévu ce jour-là : choisissez ce qui part dans les courses."}</p>
+    <div>${rows||'<p class="muted">Aucun repas prévu ce jour.</p>'}</div>
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:8px">
+      <button type="button" class="btn primary" data-act="dsApply" ${ks.length||inList?"":"disabled"}>${inList?"Mettre à jour":"🛒 Ajouter ce jour aux courses"} · ${ks.length} repas, ${n} ingrédient${n>1?"s":""}</button>
+      ${inList?'<button type="button" class="btn ghost" data-act="dsRemove">Retirer ce jour des courses</button>':""}</div>`;}
+function dayApply(add){const x=dayInfo(dayK);if(!x)return"";const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(y=>y.key===k)):defaultShopKeys(all);
+  keys=keys.filter(k=>k!==dayK);if(add)keys.push(dayK);menu.shopDays=keys.sort();
+  for(const[m]of MEALS){const k=slotKey(x.dn,m),sl=x.wk[k];if(!sl||!recipes[sl.id])continue;if(add&&daySel[k]!==false)sl.lock=true;else delete sl.lock;}
+  return add?"Liste de courses mise à jour":"Jour retiré des courses";}
+$("#daySheet").addEventListener("click",e=>{if(e.target.id==="daySheet")$("#daySheet").hidden=true;});
 
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
