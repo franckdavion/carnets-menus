@@ -74,7 +74,7 @@ VIEWS.repas = function () {
       <strong>${rWeek === cur ? "Cette semaine" : rWeek === addDays(cur, 7) ? "Semaine prochaine" : "Semaine du " + esc(fmtShort(rWeek))}</strong>
       <button class="icon-btn plain" data-act="rWeek" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>
     <div class="btns" style="margin-top:6px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">Réglages</button></div>
-    ${open.length ? `<p class="muted small" style="margin:12px 2px 0">✎ ${open.length} repas en brouillon : touchez un repas pour voir ses ingrédients et l'envoyer aux courses.</p>` : ""}`;
+    ${open.length ? `<p class="muted small" style="margin:12px 2px 0">🛒 ${open.length} repas pas encore dans les courses : touchez un repas pour voir ses ingrédients et l'y envoyer.</p>` : ""}`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
@@ -85,11 +85,11 @@ VIEWS.repas = function () {
         <b>${m === "midi" ? "Midi" : "Soir"}</b>
         <span class="what ${x.name ? "" : "none"}">${x.name ? esc(x.name) + (x.kind ? ` <span class="muted small">· ${esc(x.kind)}</span>` : "") + (x.ent || x.des ? `<br><span class="muted small">${[x.ent && "entrée : " + esc(x.ent), x.des && "dessert : " + esc(x.des)].filter(Boolean).join(" · ")}</span>` : "")
           : x.skip ? "Pas de repas prévu" : x.past ? "—" : "Choisir"}</span>
-        <span class="small" title="${x.s && x.s.lock ? "Validé" : "Brouillon"}">${lockIc}</span></button>`;
+        <span class="small" title="${x.s && x.s.lock ? "Dans les courses" : "Pas encore dans les courses"}">${lockIc}</span></button>`;
     }
     out += `</section>`;
   }
-  out += `<p class="muted small" style="margin-top:14px">🔒 validé, dans les courses · ✎ brouillon. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
+  out += `<p class="muted small" style="margin-top:14px">🔒 dans les courses · ✎ pas encore. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
   return out;
 };
 
@@ -99,7 +99,7 @@ function rProposeSheet() {
     <p class="muted small" style="margin-top:6px">Le Carnet choisit selon vos réglages : favoris, nombre de repas végé et poisson, soirs légers, sans répéter les recettes des dernières semaines.</p>
     <form data-form="rPropose">
       <div class="field"><span class="label">Que remplir</span>${chipsHtml("rfill", [["empty", "Seulement les cases vides"], ["all", "Tout refaire (sauf les repas validés)"]], "empty")}</div>
-      <div class="field"><span class="label">Ensuite</span>${chipsHtml("rmode", [["draft", "Brouillon, à valider plus tard"], ["lock", "Valider directement"]], "draft")}</div>
+      <div class="field"><span class="label">Ensuite</span>${chipsHtml("rmode", [["draft", "Je valide repas par repas"], ["lock", "Tout envoyer aux courses"]], "draft")}</div>
       <p class="muted small">Validé = verrouillé et envoyé dans la liste de courses.</p>
       <div class="sheet-sticky btns"><button class="btn primary block" type="submit">Proposer</button></div>
     </form>`);
@@ -126,7 +126,7 @@ function mealSlotSheet(k) {
   const ro = x.past;
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
-    <p class="muted small" style="margin:0">${x.kind ? esc(x.kind) + " · " : ""}${s.lock ? "🔒 validé, dans les courses" : "✎ brouillon"}</p>
+    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : ""}</p>
     ${ro ? "" : `<div class="btns">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
       <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>
@@ -206,7 +206,7 @@ document.addEventListener("click", async e => {
       carnetSave(); mealSlotSheet(k); break;
     }
     case "rLock": { const on = cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;return !!(s&&s.lock);})()`); shopIncludeWeek();
-      carnetSave(on ? "Validé : les ingrédients partent dans les courses." : "Retiré des courses (repas gardé en brouillon)."); mealSlotSheet(v); break; }
+      carnetSave(on ? "Validé : les ingrédients partent dans les courses." : "Retiré des courses."); mealSlotSheet(v); break; }
     case "rIng": cev(`(()=>{const s=${slotJs(v)};if(!s)return;const k=${JSON.stringify(b.dataset.k)},l=Array.isArray(s.noIng)?s.noIng.slice():[];
       const i=l.indexOf(k);if(i>=0)l.splice(i,1);else l.push(k);if(l.length)s.noIng=l;else delete s.noIng;})()`); carnetSave(); mealSlotSheet(v); break;
     case "rServ": cev(`(()=>{const s=${slotJs(v)};if(s)s.n=Math.max(1,Math.min(20,(s.n||menu.people||4)+(${+b.dataset.d})));})()`); carnetSave(); mealSlotSheet(v); break;
@@ -231,7 +231,7 @@ document.addEventListener("submit", e => {
     if (lock) { cev(`(()=>{for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!isPast(k))s.lock=true;}})()`); shopIncludeWeek(); }
     const after = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]).length`);
     closeSheet();
-    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée et validée : les ingrédients partent dans les courses.` : `${n} repas proposés en brouillon. Touchez un repas pour le changer.`);
+    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée et validée : les ingrédients partent dans les courses.` : `${n} repas proposés. Touchez un repas pour voir ses ingrédients et l'envoyer aux courses.`);
   } else {
     const fd = Object.fromEntries(new FormData(f).entries()), days = {};
     for (const d of RDAYS) if (fd["st-" + d]) days[d] = fd["st-" + d];
