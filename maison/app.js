@@ -1267,7 +1267,8 @@ document.addEventListener("click", async e => {
     case "pushSettings": await showPushSettings(); break;
     case "pushEnable": await enablePush(); break;
     case "pushDisable": await disablePush(); break;
-    case "go": view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
+    case "go": if (v === "recettes") { window.location.assign(CARNET_URL); break; } // the Recettes tile opens the Carnet de menus
+      view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
     case "who": who = v || null; render(); break;
     case "done": {
       b.classList.add("on"); b.disabled = true;
