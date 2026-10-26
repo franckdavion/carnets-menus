@@ -736,7 +736,7 @@ async function gFetch() {
         const j = await gApi(`calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page ? "&pageToken=" + page : ""}`);
         for (const e of j.items || []) {
           if (e.status === "cancelled" || e.eventType === "birthday") continue;
-          const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
+          const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "", desc: e.description || "", gs: e.start || null, ge: e.end || null, rec: !!e.recurringEventId };
           if (e.start && e.start.date) {
             const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
             const nd = Math.min(31, Math.max(1, diffDays(e.start.date, end)));
@@ -758,6 +758,18 @@ async function gFetch() {
 }
 async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
 const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
+// a Google event as the Maisonnée form expects it
+function gToForm(ev) {
+  const hhmm = x => pad(x.getHours()) + ":" + pad(x.getMinutes());
+  let day, end_day, start_time = null, end_time = null;
+  if (ev.gs.date) { day = ev.gs.date; end_day = addDays(ev.ge && ev.ge.date ? ev.ge.date : addDays(day, 1), -1); }
+  else {
+    const st = new Date(ev.gs.dateTime), en = ev.ge && ev.ge.dateTime ? new Date(ev.ge.dateTime) : new Date(st.getTime() + 3600e3);
+    day = ymd(st); start_time = hhmm(st);
+    if (hhmm(en) === "00:00" && ymd(en) > day) { end_day = addDays(ymd(en), -1); end_time = "23:59"; } else { end_day = ymd(en); end_time = hhmm(en); }
+  }
+  return { id: "g:" + ev.id, title: ev.title, day, end_day: end_day > day ? end_day : null, start_time, end_time, place: ev.place, notes: ev.desc, repeat: "none", members: [], kind: null };
+}
 function gRow(e) {
   const multi = (e.n || 1) > 1, last = multi && e.k === e.n - 1;
   const span = !multi ? "" : e.k === 0 ? "jusqu'au " + esc(parse(e.endDay).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })) + " · " : last ? `dernier jour · ${e.n}/${e.n} · ` : `jour ${e.k + 1}/${e.n} · `;
@@ -841,6 +853,9 @@ document.addEventListener("click", async e => {
     case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); gFetch(); break; }
     case "gEvent": {
       const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
+      // calendars this account may write to: edit right here, in Maisonnée
+      const cal = G.list.find(c => c.id === ev.cal);
+      if (cal && (cal.accessRole === "owner" || cal.accessRole === "writer") && ev.gs) { eventSheet(gToForm(ev), null, false, { cal: ev.cal, id: ev.id, rec: ev.rec, colorId: ev.colorId }); break; }
       openSheet(ev.title, `<p style="margin-top:8px"><strong>${esc(dayLabel(ev.day))}</strong>${ev.start_time ? " · " + esc(hm(ev.start_time)) + (ev.end_time ? " – " + esc(hm(ev.end_time)) : "") : " · toute la journée"}</p>
         ${ev.place ? `<p>${esc(ev.place)}</p>` : ""}<p class="muted small">Agenda Google « ${esc(ev.calName)} ». Pour le modifier, passez par Google Agenda.</p>
         ${ev.link ? `<div class="btns"><a class="btn" href="${esc(ev.link)}" target="_blank" rel="noopener">Ouvrir dans Google Agenda</a></div>` : ""}`);

@@ -1054,12 +1054,12 @@ const G_COLORS = [["1", "Lavande", "#a4bdfc"], ["2", "Sauge", "#7ae7bf"], ["3", 
 const gColorNames = () => (S.hh && S.hh.google_colors) || LS.get("mz_gcolor_names", {});
 const gColorHex = id => (typeof G !== "undefined" && G.palette && G.palette[id]) || (G_COLORS.find(c => c[0] === id) || [])[2] || "";
 const gColorLabel = id => gColorNames()[id] || (G_COLORS.find(c => c[0] === id) || [, ""])[1];
-function gColorChooser() {
+function gColorChooser(current = "") {
   const names = gColorNames(), named = G_COLORS.filter(([id]) => names[id]), rest = G_COLORS.filter(([id]) => !names[id]);
-  const chip = ([id, n]) => `<button type="button" class="chip" data-chip="gcolor" data-v="${id}" aria-pressed="false"><span class="cat-dot" style="--c:${esc(gColorHex(id))}"></span>${esc(names[id] || n)}</button>`;
+  const chip = ([id, n]) => `<button type="button" class="chip" data-chip="gcolor" data-v="${id}" aria-pressed="${current === id}"><span class="cat-dot" style="--c:${esc(gColorHex(id))}"></span>${esc(names[id] || n)}</button>`;
   // every colour is shown at once (the folding « Autres couleurs » list did not open on iPhone)
   return `<div class="field" id="gColorBox" hidden><span class="label">Pour qui (couleur dans Google)</span>
-    <div class="chips" role="group"><button type="button" class="chip" data-chip="gcolor" data-v="" aria-pressed="true">Couleur de l'agenda</button>${named.map(chip).join("")}${rest.map(chip).join("")}</div>
+    <div class="chips" role="group"><button type="button" class="chip" data-chip="gcolor" data-v="" aria-pressed="${!current}">Couleur de l'agenda</button>${named.map(chip).join("")}${rest.map(chip).join("")}</div>
     ${named.length ? "" : `<p class="muted small" style="margin:6px 0 0">Astuce : dans Ma famille › Agenda Google › « Couleurs des enfants », donnez un prénom à chaque couleur.</p>`}</div>`;
 }
 function syncGColorBox(form) {
@@ -1140,7 +1140,7 @@ async function saveGoogleEvent(calendarId, row) {
   }
   return response.json();
 }
-function eventSheet(e, day, appointment = false) {
+function eventSheet(e, day, appointment = false, g = null) {
   const isNew = !e;
   const isAppointment = appointment || !!(e && e.kind === "appointment");
   e = e || { title: "", day: day || (view === "agenda" ? calSel : today()), start_time: appointment ? "09:00" : null, end_time: appointment ? "09:30" : null, repeat: "none", members: [], place: "", notes: "" };
@@ -1157,10 +1157,10 @@ function eventSheet(e, day, appointment = false) {
         <label class="field" style="flex:1"><span class="label">Début</span><input class="input" name="start" type="time" value="${esc(String(e.start_time || "").slice(0, 5))}"></label>
         <label class="field" style="flex:1"><span class="label">Fin</span><input class="input" name="end" type="time" value="${esc(String(e.end_time || "").slice(0, 5))}"></label>
       </div>
-      <div class="field"><span class="label">Qui est concerné</span>${chipsHtml("members", memberOpts(), e.members, true)}</div>
-      ${isNew ? googleDestinationOptions() + gColorChooser() : ""}
+      ${g ? "" : `<div class="field"><span class="label">Qui est concerné</span>${chipsHtml("members", memberOpts(), e.members, true)}</div>`}
+      ${isNew ? googleDestinationOptions() + gColorChooser() : g ? `<p class="small" style="margin:14px 0 0">Agenda Google <strong>${esc((G.list.find(c => c.id === g.cal) || {}).name || "")}</strong>${g.rec ? " · seule cette date d'un événement répété est modifiée" : ""}</p>` + gColorChooser(g.colorId || "") : ""}
       <label class="field"><span class="label">Où</span><input class="input" name="place" value="${esc(e.place)}" maxlength="120" placeholder="Facultatif"></label>
-      <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, recurrenceInfo(e.repeat) ? "custom" : e.repeat || "none")}
+      <div class="field" ${g ? "hidden" : ""}><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, recurrenceInfo(e.repeat) ? "custom" : e.repeat || "none")}
         <div id="customRepeatOptions" ${recurrenceInfo(e.repeat) ? "" : "hidden"} style="margin-top:12px">
           <div class="inline" style="gap:10px;align-items:end">
             <label class="field" style="flex:1"><span class="label">Tous les</span><input class="input" type="number" name="repeat_interval" min="1" max="365" step="1" value="${recurrenceInfo(e.repeat)?.interval || 2}"></label>
@@ -1183,12 +1183,14 @@ function eventSheet(e, day, appointment = false) {
       </div>` : ""}
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
-        ${isNew ? "" : `<button class="btn danger" type="button" data-act="delEvent" data-v="${e.id}">Supprimer</button>`}
+        ${isNew ? "" : g ? `<button class="btn danger" type="button" data-act="gDel">Supprimer</button>` : `<button class="btn danger" type="button" data-act="delEvent" data-v="${e.id}">Supprimer</button>`}
       </div>
-    </form>`, { id: isNew ? null : e.id });
+      ${g ? `<p class="muted small" style="margin-top:10px">Les modifications sont enregistrées directement dans Google Agenda.</p>` : ""}
+    </form>`, { id: isNew ? null : e.id, g });
   syncShow();
   reminderVisibility($("#sheetIn form"));
   syncGColorBox($("#sheetIn form"));
+  if (g) { const bx = $("#gColorBox"); if (bx) bx.hidden = false; }
 }
 
 async function mealSheet(day, slot) {
@@ -1270,6 +1272,17 @@ document.addEventListener("click", async e => {
     }
     case "removeReminder": b.closest(".reminder-row")?.remove(); break;
     case "newAppointment": eventSheet(null, null, true); break;
+    case "gDel": {
+      const g = sheetCtx && sheetCtx.g; if (!g) break;
+      if (!confirm(g.rec ? "Supprimer cette date de l'événement dans Google Agenda ?" : "Supprimer cet événement dans Google Agenda ? Il disparaîtra pour tous ceux qui partagent l'agenda.")) break;
+      try {
+        if (!(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
+        const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "DELETE", headers: { Authorization: "Bearer " + G.tok.t } });
+        if (!r.ok && r.status !== 410) throw new Error("Erreur Google (" + r.status + ")");
+        G.ev.items = G.ev.items.filter(x => x.id !== g.id); closeSheet(); render(); toast("Supprimé de Google Agenda."); gFetch();
+      } catch (err) { toast("Suppression impossible : " + (err.message || "réseau ?")); }
+      break;
+    }
     case "destChange": { const bx = $("#destBox"), ln = $("#destLine"); if (bx) bx.hidden = false; if (ln) ln.hidden = true; break; }
     case "spanQuick": {
       const f = b.closest("form"), st = f.querySelector("[name=day]"), en = f.querySelector("[name=end_day]"); if (!st || !en || !st.value) break;
@@ -1396,6 +1409,20 @@ document.addEventListener("submit", async e => {
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
       if (!row.title || !row.day) { eventFormFeedback(f, "Indique le titre et la date du rendez-vous."); return; }
+      if (sheetCtx?.g) {
+        const g = sheetCtx.g, payload = googleEventPayload(row);
+        delete payload.recurrence; delete payload.reminders;
+        payload.colorId = chipVal(f, "gcolor") || null;
+        btn.disabled = true;
+        try {
+          if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
+          const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          if (!r.ok) throw new Error(r.status === 403 ? "Google refuse la modification : cet agenda est peut-être en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
+          closeSheet(); toast("Modifié dans Google Agenda."); if (typeof gFetch === "function") gFetch();
+        } catch (err) { eventFormFeedback(f, "Modification impossible : " + (err.message || "réseau ?")); }
+        finally { btn.disabled = false; }
+        break;
+      }
       const destination = fd.google_destination || "local";
       if (destination !== "local" && !sheetCtx?.id) {
         btn.disabled = true;
