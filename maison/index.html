@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Maisonnée</title>
 <meta name="description" content="Les tâches, l'agenda et les repas de la maison, partagés entre vous.">
-<meta name="theme-color" content="#F1F4F9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121926" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#071323">
+
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Maisonnée">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -425,6 +425,31 @@ a.btn.primary{color:var(--on-accent)}
 .tiles>.tile:nth-child(11){--mc:#6a86f0}
 .tiles>.tile:nth-child(12){--mc:#e46ca6}
 .tiles>.tile:nth-child(13){--mc:#6cc4f2}
+
+
+/* === Maisonnée C v2 — thème nuit forcé, esthétique uniquement === */
+:root, :root:not([data-theme]) {
+  --bg:#071323; --surface:#13243b; --soft:#1b304a; --line:#365274;
+  --ink:#f3f8ff; --muted:#a8bbd6; --accent:#57a5ff; --on-accent:#fff;
+  --danger:#ff887d; --late:#ff887d; --hot:#ffb073;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root{--bg:#071323;--surface:#13243b;--soft:#1b304a;--line:#365274;--ink:#f3f8ff;--muted:#a8bbd6;--accent:#57a5ff;--on-accent:#fff;--danger:#ff887d;--late:#ff887d;--hot:#ffb073;color-scheme:dark}}
+html{background:#071323}
+body{background:radial-gradient(ellipse 90% 28% at 50% 6%,rgba(21,89,164,.26),transparent 75%),radial-gradient(ellipse 90% 35% at 50% 88%,rgba(11,71,144,.19),transparent 80%),#071323;background-attachment:fixed;color:#f3f8ff}
+.top{background:linear-gradient(180deg,rgba(7,19,35,.98),rgba(7,19,35,.90));-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid rgba(93,163,244,.11)}
+.tile{border:1.5px solid var(--mc,#67b8ff);background:linear-gradient(148deg,rgba(255,255,255,.22),rgba(255,255,255,.06) 24%,transparent 47%),linear-gradient(160deg,#263e62 0%,#162b48 48%,#09182c 100%);box-shadow:inset 0 2px 2px rgba(255,255,255,.52),inset 0 -3px 8px color-mix(in srgb,var(--mc,#67b8ff) 32%,transparent),0 12px 22px rgba(0,0,0,.48),0 0 9px color-mix(in srgb,var(--mc,#67b8ff) 82%,transparent),0 0 25px color-mix(in srgb,var(--mc,#67b8ff) 53%,transparent);}
+.tile::before{height:56%;background:linear-gradient(155deg,rgba(255,255,255,.27),rgba(255,255,255,.055) 40%,transparent 76%);opacity:1}
+.tile::after{height:3px;filter:blur(4px);opacity:1}
+.tile .mi{filter:drop-shadow(0 4px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px var(--mc,#67b8ff)) drop-shadow(0 0 14px var(--mc,#67b8ff))}
+.tile .mi svg{stroke-width:2.9;filter:drop-shadow(1px 2px 1px rgba(255,255,255,.35))}
+.tile-t{color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.45)}
+.tile-s{color:#c1d0e5}
+.pill{background:linear-gradient(160deg,rgba(43,79,128,.98),rgba(8,25,48,.98));border:1.5px solid rgba(109,185,255,.88);box-shadow:inset 0 2px 2px rgba(255,255,255,.35),0 12px 32px rgba(0,0,0,.6),0 0 22px rgba(34,139,255,.46)}
+.pill button[aria-current="page"]{color:#8cc6ff;background:linear-gradient(160deg,rgba(43,143,255,.55),rgba(8,66,153,.32));box-shadow:inset 0 1px 2px rgba(255,255,255,.24),0 0 20px rgba(47,139,255,.62)}
+.fab{background:linear-gradient(155deg,#8dd6ff,#348bff 52%,#0859d5);border:1.5px solid #b4e4ff;box-shadow:inset 0 2px 2px rgba(255,255,255,.62),inset 0 -4px 7px rgba(0,36,130,.48),0 9px 25px rgba(0,42,130,.58),0 0 25px rgba(48,147,255,.66)}
+.card,.list,.cal,.day-card,.sq-ic{box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 6px 20px rgba(0,0,0,.17)}
+@media (prefers-reduced-motion:reduce){.tile{transition:none}}
 
 </style>
 </head>
