@@ -13,6 +13,7 @@
 <link rel="icon" href="icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Carnet de menus</title>
+<script src="maison/espace.js"></script>
 <script>(function(){try{var d=document.documentElement,g=function(k,v){var x=localStorage.getItem(k);return x?JSON.parse(x):v};
 d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));d.setAttribute("data-depth",g("cm_depth","plat"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1356,8 +1357,6 @@ function setStatus(k,e){
   chip.textContent=t; chip.dataset.state=k; if(line)line.textContent=t;
 }
 function scheduleSync(ms=800){if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
-// household carnet: the old GitHub sync copy is not used any more, it only filled the phone's storage
-try{if(localStorage.getItem("cm_state_owner"))localStorage.removeItem("cm_base");}catch(e){}
 function cloudCarnet(){try{return !!((typeof cloud!=="undefined"&&cloud.owner)||LS.get("cm_state_owner",""));}catch(e){return false;}}
 async function runSync(){
   if(!sync)return;
