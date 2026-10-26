@@ -55,6 +55,70 @@ const TASK_IDEAS = [
   { title: "Faire les courses", room: "Courses", freq: "weekly", weekdays: [5], effort: 2 }
 ];
 
+
+/* Notifications Maisonnée : abonnement Web Push par utilisateur (iOS PWA inclus).
+   La clé VAPID publique est renseignée dans maison/push-config.js après configuration. */
+const pushSupported = () => ("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+function vapidBytes(base64) {
+  const padding = "=".repeat((4 - base64.length % 4) % 4);
+  const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+function pushStatusText() {
+  if (mode !== "cloud" || !user) return "Connectez-vous à votre foyer pour recevoir des rappels.";
+  if (!pushSupported()) return "Les notifications push ne sont pas disponibles dans ce navigateur. Sur iPhone, ouvrez Maisonnée depuis l'écran d'accueil.";
+  if (!window.MAISON_PUSH_VAPID_PUBLIC) return "Configuration serveur requise : renseignez la clé VAPID publique dans push-config.js.";
+  return Notification.permission === "granted" ? "Notifications autorisées sur cet appareil." :
+    Notification.permission === "denied" ? "Notifications refusées : autorisez Maisonnée dans les réglages de l'iPhone." :
+    "Activez les notifications pour recevoir les rappels lorsque Maisonnée est fermée.";
+}
+async function showPushSettings() {
+  const status = pushStatusText();
+  let current = null;
+  if (pushSupported()) {
+    try { const reg = await navigator.serviceWorker.ready; current = await reg.pushManager.getSubscription(); } catch (_) {}
+  }
+  openSheet("Notifications", `<div style="display:grid;gap:14px">
+    <p>${esc(status)}</p>
+    <p class="muted small">Les rappels des rendez-vous internes seront envoyés aux membres connectés du foyer. Chaque téléphone doit activer les notifications séparément.</p>
+    <button class="btn primary block" type="button" data-act="pushEnable" ${mode !== "cloud" || !pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC ? "disabled" : ""}>${current ? "Réactiver cet appareil" : "Activer sur cet iPhone"}</button>
+    ${current ? '<button class="btn block" type="button" data-act="pushDisable">Désactiver sur cet appareil</button>' : ""}
+    <p class="muted small">L'autorisation doit être demandée après un appui sur le bouton. Les notifications sont envoyées par le serveur, pas par l'application fermée.</p>
+  </div>`);
+}
+async function enablePush() {
+  try {
+    if (mode !== "cloud" || !user || !sb) throw Error("Connectez-vous au foyer.");
+    if (!pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC) throw Error(pushStatusText());
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw Error("Autorisation refusée sur cet appareil.");
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: vapidBytes(window.MAISON_PUSH_VAPID_PUBLIC)
+    });
+    const { error } = await sb.from("maison_push_subscriptions").upsert({
+      user_id: user.id, endpoint: subscription.endpoint, subscription: subscription.toJSON(),
+      updated_at: new Date().toISOString()
+    }, {onConflict:"endpoint"});
+    if (error) throw error;
+    closeSheet(); toast("Notifications activées sur cet appareil.");
+  } catch (err) { console.error("Activation push", err); alert("Notifications : " + (err.message || err)); }
+}
+async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      if (sb && user) {
+        const { error } = await sb.from("maison_push_subscriptions").delete().eq("endpoint", sub.endpoint).eq("user_id", user.id);
+        if (error) throw error;
+      }
+      await sub.unsubscribe();
+    }
+    closeSheet(); toast("Notifications désactivées sur cet appareil.");
+  } catch (err) { alert("Désactivation impossible : " + (err.message || err)); }
+}
+
 /* ---------- state ---------- */
 let mode = LS.get("mz_mode", null);          // "demo" | "cloud" | null
 let sb = null, user = null, rt = null;
@@ -598,8 +662,8 @@ function render() {
   const mod = modOf(view), isHome = view === "home";
   const avatars = `<button class="stack" data-act="go" data-v="foyer" aria-label="Ma famille">${members().slice(0, 4).map(m => av(m)).join("")}</button>`;
   const head = isHome
-    ? `<button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button><span class="inline" style="gap:2px"><button class="icon-btn plain" data-act="go" data-v="carte" aria-label="Localisation">${I.pin}</button>${avatars}</span>`
-    : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : avatars}`;
+    ? `<button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button><span class="inline" style="gap:2px"><button class="icon-btn plain" data-act="go" data-v="carte" aria-label="Localisation">${I.pin}</button>${avatars}<button class="icon-btn plain" data-act="pushSettings" aria-label="Notifications">🔔</button></span>`
+    : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : `${avatars}<button class="icon-btn plain" data-act="pushSettings" aria-label="Notifications">🔔</button>`}`;
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
@@ -1117,6 +1181,9 @@ document.addEventListener("click", async e => {
   }
   const v = b.dataset.v, act = b.dataset.act;
   switch (act) {
+    case "pushSettings": await showPushSettings(); break;
+    case "pushEnable": await enablePush(); break;
+    case "pushDisable": await disablePush(); break;
     case "go": if (v === "repas") { window.location.assign(CARNET_URL); break; } view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
     case "who": who = v || null; render(); break;
     case "done": {

@@ -1,0 +1,2 @@
+/* Clé VAPID PUBLIQUE uniquement. */
+window.MAISON_PUSH_VAPID_PUBLIC = "BDoxoioPgqI6aa9CJj0eq6e705pTpok4JZ28ZyKew8sOIQWoDt6GqMcYz0U6f_PfvSjDDYuXIMrIODOdnsbS5uA";
