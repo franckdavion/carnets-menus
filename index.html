@@ -4137,14 +4137,14 @@ function cloudDeleted(id){const r=recipes[id];if(!r||!cloud.user||!(r.cloudAutho
 async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
   try{// private space: the whole menu + the private part of every recipe
     let priv=privNow();
-    if(LS.get("cm_cloud_ph","")!==hashOf(menu)+hashOf(priv)){
+    if(cloudPh!==hashOf(menu)+hashOf(priv)){
       // someone else may have changed the shared carnet since our last look: merge before writing
       const{data:cur}=await sb.from("user_state").select("menu").eq("user_id",stateUid()).maybeSingle();
       if(cur&&cur.menu&&cur.menu.menu)applyRemoteState(cur.menu);
       priv=privNow();
       const payload={menu,priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
       const{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:new Date().toISOString()});
-      if(!error){LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",{menu:JSON.parse(J(menu)),priv});}}
+      if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);}}
     // my recipes in the common book
     const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
       const arr=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"):[];
@@ -4171,13 +4171,17 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
     LS.set("cm_cloudhash",H);if(rows.length)LS.set("cm_recipes",recipes);LS.set("cm_cloud_at",Date.now());}
   catch(e){cloud.msg="Synchro en attente (réseau ?)";}finally{cloud.busy=false;}}
 /* ---------- carnet partagé du foyer (Maisonnée) ---------- */
+// Reference copy for merging, kept PER OPEN COPY of the Carnet (read once from the phone's storage at start).
+// Two copies open at once in the same browser (a tab, Maisonnée's background Carnet) used to share it,
+// each then believed its own week was the newer one and they kept overwriting each other.
+let cloudBase=LS.get("cm_cloud_base",null), cloudPh=LS.get("cm_cloud_ph","");
 const stateUid=()=>cloud.owner||cloud.user.id;
 const sharedCarnet=()=>!!(cloud.owner&&cloud.user&&cloud.owner!==cloud.user.id);
 function privNow(){const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}return priv;}
 // remote = {menu, priv, at}: three-way merge with the last copy both sides agreed on (cm_cloud_base)
 function applyRemoteState(remote){
   const R0={menu:remote.menu||{},priv:remote.priv||{}},local={menu,priv:privNow()};
-  const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched?null:LS.get("cm_cloud_base",null);
+  const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched?null:cloudBase;
   let m;
   if(switched){
     if(sharedCarnet()||LS.get("cm_state_owner","")){ // joining another carnet: take it as it is, keep a copy of this phone's
@@ -4187,7 +4191,7 @@ function applyRemoteState(remote){
     LS.set("cm_state_owner",stateUid());}
   else if(!base)m=(remote.at||0)>LS.get("cm_menu_at",0)?R0:local;
   else m=merge3(base,local,R0);
-  LS.set("cm_cloud_base",JSON.parse(J(R0)));
+  cloudBase=JSON.parse(J(R0));LS.set("cm_cloud_base",cloudBase);
   if(J(m.menu)!==J(menu)){menu=normMenu(m.menu);LS.set("cm_menu",menu);LS.set("cm_menu_at",Math.max(remote.at||0,LS.get("cm_menu_at",0)));}
   let chg=false;const mp=m.priv||{};
   for(const id of new Set([...Object.keys(local.priv),...Object.keys(mp)])){if(!recipes[id]||J(local.priv[id])===J(mp[id]))continue;
@@ -4195,7 +4199,9 @@ function applyRemoteState(remote){
   if(chg)LS.set("cm_recipes",recipes);
 }
 // the others' changes arrive every minute while the carnet is open
-setInterval(()=>{if(document.visibilityState==="visible"&&cloudOn()&&cloud.owner&&!cloud.busy)cloudSync();},60e3);
+// inside Maisonnée (hidden copy): only while its Repas page is open, so two copies never work at once
+const bgIdle=()=>{try{return window.frameElement&&!(window.parent&&window.parent.mzRepasActive);}catch(e){return false;}};
+setInterval(()=>{if(document.visibilityState==="visible"&&cloudOn()&&cloud.owner&&!cloud.busy&&!bgIdle())cloudSync();},60e3);
 async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
   // 1. the carnet (menus, courses, cave, favourites…): shared by the household, merged with what changed here
   const{data:st}=await sb.from("user_state").select("menu,updated_at").eq("user_id",stateUid()).maybeSingle();

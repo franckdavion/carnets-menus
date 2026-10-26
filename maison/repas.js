@@ -8,6 +8,8 @@ const CK = { frame: null, ready: false, err: "", busy: false, waiters: [] };
 const cev = code => CK.frame.contentWindow.eval(code);          // lire / appeler dans le Carnet
 const cj = code => JSON.parse(cev(`JSON.stringify(${code})`));  // copie simple de ses données
 let rWeek = mondayOf(today()), rPick = null;                     // semaine affichée, recherche de recette
+// read by the hidden Carnet: it only syncs on its own while this page is open
+Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && view === "repas" });
 
 function carnetBoot() {
   if (CK.frame || mode !== "cloud") return;

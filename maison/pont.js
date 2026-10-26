@@ -168,7 +168,9 @@
     const orig = cloudSync;
     window.cloudSync = async function () { const r = await orig.apply(this, arguments); soon(400); return r; };
   }
-  setInterval(() => { if (document.visibilityState === "visible") pontSync(); }, 60e3);
+  // the hidden copy of the Carnet inside Maisonnée only syncs while Maisonnée's Repas page is open
+  const bgIdle = () => { try { return window.frameElement && !(window.parent && window.parent.mzRepasActive); } catch (e) { return false; } };
+  setInterval(() => { if (document.visibilityState === "visible" && !bgIdle()) pontSync(); }, 60e3);
   window.pontSync = pontSync;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addBackButton); else addBackButton();
