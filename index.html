@@ -1371,6 +1371,7 @@ async function runSync(){
         for(const[id,r]of Object.entries(L0.recipes))if(!merged.recipes[id]&&!SEED[id])merged.recipes[id]=r;}
       else merged=merge3(base,L0,remote)||{};
       merged={v:1,recipes:merged.recipes||{},menu:normMenu(merged.menu)};
+      if(L0.menu.mzBase)merged.menu.mzBase=L0.menu.mzBase;else delete merged.menu.mzBase; // this copy's own bridge bookmark
       // Plain-language plan for Home Assistant: {"Lundi|midi":"Dahl de lentilles corail", ...}
       { const nowSl=merged.menu.weeks[ymd(mondayOf(new Date()))]||{};
         merged.planning=Object.fromEntries(SLOT_ORDER.filter(k=>nowSl[k]&&merged.recipes[nowSl[k].id]).map(k=>[k,merged.recipes[nowSl[k].id].name])); }
@@ -4137,14 +4138,14 @@ function cloudDeleted(id){const r=recipes[id];if(!r||!cloud.user||!(r.cloudAutho
 async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
   try{// private space: the whole menu + the private part of every recipe
     let priv=privNow();
-    if(cloudPh!==hashOf(menu)+hashOf(priv)){
+    if(cloudPh!==hashOf(shareMenu())+hashOf(priv)){
       // someone else may have changed the shared carnet since our last look: merge before writing
       const{data:cur}=await sb.from("user_state").select("menu").eq("user_id",stateUid()).maybeSingle();
       if(cur&&cur.menu&&cur.menu.menu)applyRemoteState(cur.menu);
       priv=privNow();
-      const payload={menu,priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
+      const payload={menu:shareMenu(),priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
       const{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:new Date().toISOString()});
-      if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);}}
+      if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(payload.menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);}}
     // my recipes in the common book
     const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
       const arr=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"):[];
@@ -4176,12 +4177,16 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
 // each then believed its own week was the newer one and they kept overwriting each other.
 let cloudBase=LS.get("cm_cloud_base",null), cloudPh=LS.get("cm_cloud_ph","");
 const stateUid=()=>cloud.owner||cloud.user.id;
+// menu.mzBase is this copy's own bookmark for the Maisonnée bridge (what its week and Maisonnée's meals last agreed on).
+// It never travels: mixed with another copy's bookmark it made the bridge undo or delete meals.
+const noMz=m=>{const o=Object.assign({},m||{});delete o.mzBase;return o;};
+const shareMenu=()=>noMz(menu);
 const sharedCarnet=()=>!!(cloud.owner&&cloud.user&&cloud.owner!==cloud.user.id);
 function privNow(){const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}return priv;}
 // remote = {menu, priv, at}: three-way merge with the last copy both sides agreed on (cm_cloud_base)
 function applyRemoteState(remote){
-  const R0={menu:remote.menu||{},priv:remote.priv||{}},local={menu,priv:privNow()};
-  const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched?null:cloudBase;
+  const R0={menu:noMz(remote.menu),priv:remote.priv||{}},local={menu:shareMenu(),priv:privNow()},myMz=menu.mzBase;
+  const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched||!cloudBase?null:{menu:noMz(cloudBase.menu),priv:cloudBase.priv||{}};
   let m;
   if(switched){
     if(sharedCarnet()||LS.get("cm_state_owner","")){ // joining another carnet: take it as it is, keep a copy of this phone's
@@ -4192,7 +4197,8 @@ function applyRemoteState(remote){
   else if(!base)m=(remote.at||0)>LS.get("cm_menu_at",0)?R0:local;
   else m=merge3(base,local,R0);
   cloudBase=JSON.parse(J(R0));LS.set("cm_cloud_base",cloudBase);
-  if(J(m.menu)!==J(menu)){menu=normMenu(m.menu);LS.set("cm_menu",menu);LS.set("cm_menu_at",Math.max(remote.at||0,LS.get("cm_menu_at",0)));}
+  const nm=noMz(m.menu);if(myMz)nm.mzBase=myMz;
+  if(J(nm)!==J(menu)){menu=normMenu(nm);LS.set("cm_menu",menu);LS.set("cm_menu_at",Math.max(remote.at||0,LS.get("cm_menu_at",0)));}
   let chg=false;const mp=m.priv||{};
   for(const id of new Set([...Object.keys(local.priv),...Object.keys(mp)])){if(!recipes[id]||J(local.priv[id])===J(mp[id]))continue;
     PRIV_F.forEach(k=>delete recipes[id][k]);Object.assign(recipes[id],mp[id]||{});chg=true;}

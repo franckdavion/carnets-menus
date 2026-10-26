@@ -6,8 +6,10 @@
    - la liste de courses : articles calculés par le Carnet (repas validés), articles ajoutés à la main, coches.
    Il ajoute aussi un bouton « Maisonnée » en haut du Carnet pour revenir dans l'autre appli. */
 (() => {
-  const P = { busy: false, again: false, timer: null, skip: false, map: null, mapAt: 0, hid: null };
-  const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined";
+  const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, map: null, mapAt: 0, hid: null };
+  // only after this copy has received the shared carnet once: a copy still showing what it had in memory
+  // (phone just reopened, new device) must not send its old week to Maisonnée
+  const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
 
   /* ---------- button back to Maisonnée ---------- */
   function addBackButton() {
@@ -63,12 +65,21 @@
       /* 1. meals: each side's change goes to the other; if both changed, the Carnet (open now) wins */
       const M = {};
       for (const m of ml.data) M[m.day + "|" + m.slot] = m;
+      // a meal saved in Maisonnée by name (recipe not in the common book) is the same Carnet recipe when the name matches
+      const byName = {};
+      for (const [id, r] of Object.entries(recipes)) if (r && r.name && !byName[norm(r.name)]) byName[norm(r.name)] = id;
       for (let d = new Date(start); ymd(d) <= to; d = addDays(d, 1)) {
         const day = ymd(d), wk = ymd(mondayOf(d)), dn = DAYS[(d.getDay() + 6) % 7];
         for (const [slot] of MEALS) {
           const k = day + "|" + slot, sk = slotKey(dn, slot), sl = ((menu.weeks || {})[wk] || {})[sk];
           const cSig = sl && recipes[sl.id] ? "R:" + sl.id : "";
-          const mm = M[k], mSig = mm ? (mm.recipe_id ? "R:" + uuidToKey(mm.recipe_id) : mm.label ? "T:" + mm.label : "") : "";
+          const mm = M[k];
+          let mSig = "";
+          if (mm && mm.recipe_id) mSig = "R:" + uuidToKey(mm.recipe_id);
+          else if (mm && mm.label) {
+            const n = norm(mm.label);
+            mSig = sl && recipes[sl.id] && norm(recipes[sl.id].name) === n ? "R:" + sl.id : byName[n] ? "R:" + byName[n] : "T:" + mm.label;
+          }
           const b = base.meals[k];
           let cNew = cSig, mNew = mSig;
           if (!b) { if (cSig && cSig !== mSig) mNew = cSig; else if (!cSig && mSig.startsWith("R:")) cNew = mSig; }
@@ -80,7 +91,6 @@
               const key = mNew.slice(2), ru = keyToUuid(key);
               const row = { household_id: hid, day, slot, recipe_id: ru || null, label: ru ? "" : (recipes[key] ? recipes[key].name : ""), updated_at: now };
               ops.push(sb.from("meals").upsert(row, { onConflict: "household_id,day,slot" }));
-              if (!ru) mNew = "T:" + row.label;
             }
           }
           if (cNew !== cSig) {
@@ -166,7 +176,7 @@
   }
   if (typeof cloudSync === "function") {
     const orig = cloudSync;
-    window.cloudSync = async function () { const r = await orig.apply(this, arguments); soon(400); return r; };
+    window.cloudSync = async function () { const r = await orig.apply(this, arguments); if (!cloud.msg) P.cloudOk = true; soon(400); return r; };
   }
   // the hidden copy of the Carnet inside Maisonnée only syncs while Maisonnée's Repas page is open
   const bgIdle = () => { try { return window.frameElement && !(window.parent && window.parent.mzRepasActive); } catch (e) { return false; } };
