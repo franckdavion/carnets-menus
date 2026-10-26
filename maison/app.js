@@ -977,6 +977,19 @@ function googleDestinationOptions() {
   const preferred = LS.get("mz_last_google_destination", "local");
   return `<label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${available.map(c => `<option value="${esc(c.id)}" ${preferred === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>`;
 }
+// Erreurs visibles dans la fenêtre modale (un toast derrière <dialog> est invisible sur iOS).
+function eventFormFeedback(form, message) {
+  let box = form.querySelector("[data-event-feedback]");
+  if (!box) {
+    box = document.createElement("div");
+    box.setAttribute("data-event-feedback", "");
+    box.setAttribute("role", "alert");
+    box.style.cssText = "padding:12px 14px;margin:12px 0;border:1px solid #ff9999;border-radius:12px;background:#4b1c30;color:#fff;font-weight:600;line-height:1.45";
+    form.querySelector(".sheet-sticky")?.before(box);
+  }
+  box.textContent = message;
+  box.scrollIntoView({block:"nearest",behavior:"smooth"});
+}
 function googleEventPayload(row) {
   const start = row.start_time ? `${row.day}T${row.start_time}:00` : null;
   const end = row.end_time ? `${row.day}T${row.end_time}:00` : null;
@@ -997,7 +1010,8 @@ async function saveGoogleEvent(calendarId, row) {
   });
   if (!response.ok) {
     const info = await response.json().catch(() => ({}));
-    if (response.status === 403) throw new Error("Google refuse l'écriture. Il faut autoriser la création d'événements lors de la connexion Google.");
+    if (response.status === 401) throw new Error("Session Google expirée. Reconnecte Google Agenda depuis Ma famille.");
+    if (response.status === 403) throw new Error("Google refuse la création de rendez-vous (403). Reconnecte Google Agenda avec l’autorisation de modifier les événements.");
     throw new Error(info.error?.message || `Erreur Google (${response.status})`);
   }
   return response.json();
@@ -1220,22 +1234,22 @@ document.addEventListener("submit", async e => {
       const row = { title: fd.title.trim(), day: fd.day, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
       if (row.repeat === "custom") {
         const n = Number(fd.repeat_interval);
-        if (!Number.isInteger(n) || n < 1 || n > 365) { toast("Choisis un intervalle entre 1 et 365."); return; }
-        if (!["days","weeks","months","years"].includes(fd.repeat_unit)) { toast("Choisis une unité de répétition."); return; }
+        if (!Number.isInteger(n) || n < 1 || n > 365) { eventFormFeedback(f, "Choisis un intervalle entre 1 et 365."); return; }
+        if (!["days","weeks","months","years"].includes(fd.repeat_unit)) { eventFormFeedback(f, "Choisis une unité de répétition."); return; }
         row.repeat = `custom:${n}:${fd.repeat_unit}`;
       }
       if (f.querySelector('[name="reminder_mode"]')) {
         const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "default";
         const reminders = choice === "none" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
         if (!reminders || (choice === "custom" && !reminders.length)) {
-          toast("Ajoute un rappel valide ou choisis « Aucun rappel ».");
+          eventFormFeedback(f, "Ajoute un rappel valide ou choisis « Aucun rappel ».");
           return;
         }
         row.kind = "appointment";
         row.reminders = reminders;
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
-      if (!row.title || !row.day) { toast("Indique le titre et la date du rendez-vous."); return; }
+      if (!row.title || !row.day) { eventFormFeedback(f, "Indique le titre et la date du rendez-vous."); return; }
       const destination = fd.google_destination || "local";
       if (destination !== "local" && !sheetCtx?.id) {
         btn.disabled = true;
@@ -1245,7 +1259,7 @@ document.addEventListener("submit", async e => {
           closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
           toast("Rendez-vous enregistré dans Google Agenda.");
-        } catch (err) { toast(err.message || "Enregistrement Google impossible."); }
+        } catch (err) { console.error("Enregistrement Google Agenda", err); eventFormFeedback(f, "Enregistrement Google impossible : " + (err?.message || "Erreur inconnue")); }
         finally { btn.disabled = false; }
         break;
       }
@@ -1256,7 +1270,7 @@ document.addEventListener("submit", async e => {
         if (id) await patch("events", id, row);
         else await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() });
         closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.");
-      } catch (err) { console.error("Enregistrement rendez-vous", err); toast("Échec de l'enregistrement : " + (err?.message || "vérifie la connexion")); }
+      } catch (err) { console.error("Enregistrement rendez-vous", err); eventFormFeedback(f, "Échec de l’enregistrement : " + (err?.message || "vérifie la connexion")); }
       finally { btn.disabled = false; }
       break;
     }
@@ -1401,6 +1415,6 @@ document.addEventListener("invalid", event => {
     if (!sheet?.open) return;
     const rect = field.getBoundingClientRect(), bounds = sheet.getBoundingClientRect();
     sheet.scrollTop += rect.top - bounds.top - 100;
-    if (typeof toast === "function") toast("Complète le champ obligatoire : " + (field.closest("label")?.querySelector(".label")?.textContent || "titre ou date") + ".");
+    eventFormFeedback(field.form, "Complète le champ obligatoire : " + (field.closest("label")?.querySelector(".label")?.textContent || "titre ou date") + ".");
   }, 30);
 }, true);
