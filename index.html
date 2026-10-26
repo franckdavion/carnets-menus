@@ -4280,10 +4280,10 @@ function membersHtml(){const l=cloud.members;if(!l)return"";if(!l.length)return`
   return l.map(m=>`<div class="mem"><div><b>${esc(m.pseudo)}</b>${m.role==="admin"?" 👑":""} <span class="muted">· ${S[m.status]||m.status}</span><br><small class="muted">${esc(m.email||"")} · inscrit le ${new Date(m.created_at).toLocaleDateString("fr-FR")}${m.last_seen?" · vu "+ago(Date.parse(m.last_seen)):""} · ${m.recipes_count} recette${m.recipes_count>1?"s":""}</small></div>
     ${m.id===cloud.user.id?"":`<div class="row" style="gap:6px">${m.status!=="active"?`<button type="button" class="btn primary" data-act="memSet" data-id="${m.id}" data-s="active">Valider</button>`:`<button type="button" class="btn" data-act="memSet" data-id="${m.id}" data-s="blocked">Bloquer</button>`}${m.status==="active"?(m.role==="admin"?`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="member">Retirer admin</button>`:`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="admin">Rendre admin</button>`):""}</div>`}</div>`).join("");}
 async function setMember(id,st,role){const{error}=await cloud.sb.rpc("admin_set_member",{member:id,new_status:st,new_role:role});if(error){toast("Refusé : "+error.message);return;}toast("Accès mis à jour");loadMembers();}
-// opened from Maisonnée on a recipe (?recette=<id>): show it as soon as the recipes are here
+// opened from Maisonnée on a recipe (?recette=<id>): its sheet (read, cook, edit), over whatever page is behind
 (function(){const u=new URL(location.href),id=u.searchParams.get("recette");if(!id||u.searchParams.get("arriere-plan"))return;
   u.searchParams.delete("recette");history.replaceState(null,"",u.pathname+u.search+u.hash);
-  let n=0;const t=setInterval(()=>{n++;if(typeof recipes!=="undefined"&&recipes[id]){clearInterval(t);openRecipe(id);}else if(n>60)clearInterval(t);},250);})();
+  let n=0;const t=setInterval(()=>{n++;if(typeof recipes!=="undefined"&&recipes[id]){clearInterval(t);openRecSheet(id);}else if(n>60)clearInterval(t);},250);})();
 // hidden copy inside Maisonnée: no password field, so the iPhone never offers to save a password for it
 if(new URLSearchParams(location.search).get("arriere-plan")){const strip=()=>document.querySelectorAll('input[type=password]').forEach(i=>{i.type="text";i.autocomplete="off";i.value="";});
   strip();new MutationObserver(strip).observe(document.body,{childList:true,subtree:true});}
