@@ -1319,19 +1319,9 @@ function demoUpgrade(d) {
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 // init() is called at the end of modules.js, once every module is registered
 
-// Maintenir le champ actif visible au-dessus du clavier iOS.
-document.addEventListener("focusin", event => {
-  if (!event.target.matches("dialog.sheet input, dialog.sheet textarea, dialog.sheet select")) return;
-  // Ne pas déplacer tout le document : seul le contenu de la fenêtre défile.
-  setTimeout(() => {
-    const sheet = document.getElementById("sheet");
-    if (!sheet?.open || document.activeElement !== event.target) return;
-    const field = event.target.getBoundingClientRect();
-    const bounds = sheet.getBoundingClientRect();
-    if (field.bottom > bounds.bottom - 95) sheet.scrollTop += field.bottom - bounds.bottom + 110;
-    else if (field.top < bounds.top + 65) sheet.scrollTop -= bounds.top + 75 - field.top;
-  }, 350);
-});
+// La hauteur de la fenêtre suit visualViewport (index.html).
+// Ne pas imposer de scrollTop au focus : sur iOS cela entre en conflit
+// avec le déplacement natif du clavier et rend le défilement instable.
 
 // Afficher les erreurs de validation au lieu de laisser « Enregistrer » sans réaction.
 document.addEventListener("invalid", event => {

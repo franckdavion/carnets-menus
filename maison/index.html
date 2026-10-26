@@ -466,7 +466,23 @@ body{
     0 0 12px rgba(130,224,255,.98),0 0 33px rgba(50,167,255,.90),0 0 56px rgba(19,106,255,.50)}
 }
 .tile:active,.sq:active{filter:brightness(1.15)}
-/* Respect du correctif existant de défilement horizontal et du clavier iOS. */
+/* iPhone : la fenêtre de saisie suit la hauteur réellement visible avec le clavier.
+   Appliqué à tous les formulaires ouverts dans Maisonnée. */
+html,body{overscroll-behavior-y:auto}
+dialog.sheet{
+  max-height:calc(var(--maison-vh, 100dvh) - 12px) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scroll-padding-bottom:110px;
+}
+dialog.sheet .sheet-in{padding-bottom:max(28px, env(safe-area-inset-bottom))}
+dialog.sheet input,dialog.sheet textarea,dialog.sheet select{scroll-margin-bottom:125px}
+/* Les boutons de validation restent accessibles sans bloquer le défilement. */
+dialog.sheet .sheet-sticky{position:relative;bottom:auto}
+
 
 </style>
 </head>
@@ -479,8 +495,13 @@ body{
 <script>
 // Le viewport visuel se réduit quand le clavier iOS apparaît.
 if (window.visualViewport) {
-  const updateKeyboardViewport = () => document.documentElement.style.setProperty('--maison-vh', window.visualViewport.height + 'px');
-  visualViewport.addEventListener('resize', updateKeyboardViewport);
+  const updateKeyboardViewport = () => {
+    const vv = window.visualViewport;
+    document.documentElement.style.setProperty('--maison-vh', Math.max(220, vv.height - 8) + 'px');
+  };
+  visualViewport.addEventListener('resize', updateKeyboardViewport, {passive:true});
+  visualViewport.addEventListener('scroll', updateKeyboardViewport, {passive:true});
+  window.addEventListener('orientationchange', updateKeyboardViewport, {passive:true});
   updateKeyboardViewport();
 }
 </script>
