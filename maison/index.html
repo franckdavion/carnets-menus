@@ -434,6 +434,34 @@ body{
   border:1px solid #a7e9ff;box-shadow:inset 0 2px 0 rgba(255,255,255,.55),0 6px 18px rgba(0,0,0,.36),0 0 20px rgba(53,158,255,.75)}
 .input,select.input,textarea.input{background:#101e35;color:var(--ink);border-color:#47668b}
 .input::placeholder{color:#9db4d2}
+/* === Design C V2 · intensité lumineuse restaurée (CSS uniquement) === */
+.tile,.sq{
+  border-color:rgba(137,218,255,.88);
+  background:linear-gradient(155deg,rgba(51,100,164,.98) 0%,rgba(24,55,103,.98) 48%,rgba(9,23,52,.99) 100%);
+  box-shadow:inset 0 2px 1px rgba(240,251,255,.52),inset 0 -13px 22px rgba(0,8,31,.42),
+    inset 2px 0 13px rgba(86,174,255,.20),0 11px 25px rgba(0,0,0,.45),
+    0 0 9px rgba(90,202,255,.90),0 0 25px rgba(43,149,255,.78),0 0 47px rgba(19,106,255,.40);
+}
+.tile::before,.sq::before{
+  background:linear-gradient(180deg,rgba(235,249,255,.32),rgba(135,209,255,.11) 47%,transparent);
+}
+.tile .mi,.sq .mi{filter:drop-shadow(0 0 6px rgba(182,236,255,.95)) drop-shadow(0 0 15px rgba(42,163,255,.85))}
+.btn,.icon-btn,.chip,.seg button[aria-pressed="true"]{
+  border-color:rgba(151,222,255,.85);
+  box-shadow:inset 0 2px 1px rgba(232,249,255,.42),inset 0 -6px 12px rgba(2,13,37,.33),
+    0 6px 16px rgba(0,0,0,.37),0 0 9px rgba(108,209,255,.82),0 0 23px rgba(44,146,255,.59);
+}
+.btn.primary,.fab{
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.78),inset 0 -6px 12px rgba(12,77,172,.30),
+    0 7px 20px rgba(0,0,0,.42),0 0 10px rgba(173,236,255,.96),
+    0 0 28px rgba(48,166,255,.90),0 0 49px rgba(35,126,255,.48);
+}
+@media (hover:hover){
+  .tile:hover,.sq:hover{border-color:#b8efff;box-shadow:inset 0 2px 1px rgba(255,255,255,.60),
+    inset 0 -13px 22px rgba(0,8,31,.42),0 12px 26px rgba(0,0,0,.45),
+    0 0 12px rgba(130,224,255,.98),0 0 33px rgba(50,167,255,.90),0 0 56px rgba(19,106,255,.50)}
+}
+.tile:active,.sq:active{filter:brightness(1.15)}
 /* Respect du correctif existant de défilement horizontal et du clavier iOS. */
 
 </style>
