@@ -482,6 +482,11 @@ dialog.sheet .sheet-in{padding-bottom:max(28px, env(safe-area-inset-bottom))}
 dialog.sheet input,dialog.sheet textarea,dialog.sheet select{scroll-margin-bottom:125px}
 /* Les boutons de validation restent accessibles sans bloquer le défilement. */
 dialog.sheet .sheet-sticky{position:relative;bottom:auto}
+/* Keep the underlying agenda frozen while any modal is open. */
+body.maison-sheet-open{overflow:hidden!important;overscroll-behavior:none}
+body.maison-sheet-open #app{touch-action:none}
+dialog.sheet{overscroll-behavior:contain;touch-action:pan-y;}
+dialog.sheet .sheet-in{touch-action:pan-y}
 
 
 </style>

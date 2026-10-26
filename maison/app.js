@@ -865,15 +865,46 @@ function renderSetup(app) {
 
 /* ---------- sheets ---------- */
 let sheetCtx = null;
+let sheetPageScroll = null;
+function lockSheetBackground() {
+  if (sheetPageScroll !== null) return;
+  sheetPageScroll = window.scrollY;
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${sheetPageScroll}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+  document.body.classList.add("maison-sheet-open");
+}
+function unlockSheetBackground() {
+  if (sheetPageScroll === null) return;
+  const y = sheetPageScroll;
+  sheetPageScroll = null;
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  document.body.classList.remove("maison-sheet-open");
+  window.scrollTo(0, y);
+}
 function openSheet(title, body, ctx = {}) {
   sheetCtx = ctx;
   $("#sheetIn").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div>${body}`;
-  const d = $("#sheet"); if (!d.open) d.showModal();
+  const d = $("#sheet");
+  if (!d.open) { lockSheetBackground(); d.showModal(); }
   d.scrollTop = 0;
-  const first = d.querySelector("[autofocus]"); if (first) setTimeout(() => first.focus(), 60);
+  // Do not focus an input when opening: iOS must keep the keyboard closed.
+  if (document.activeElement?.matches?.("input, textarea, select")) document.activeElement.blur();
 }
 function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
-$("#sheet").addEventListener("close", () => { sheetCtx = null; if (pending) render(); });
+$("#sheet").addEventListener("close", () => { unlockSheetBackground(); sheetCtx = null; if (pending) render(); });
+// A tap on non-interactive space inside any sheet dismisses the iPhone keyboard.
+$("#sheet").addEventListener("pointerdown", e => {
+  if (!document.activeElement?.matches?.("input, textarea, select, [contenteditable=true]")) return;
+  if (e.target.closest("input, textarea, select, button, label, [contenteditable=true], a, [role=button]")) return;
+  document.activeElement.blur();
+});
 $("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) closeSheet(); });
 
 const chipsHtml = (name, opts, cur, multi) => `<div class="chips" role="group">${opts.map(([v, l, pre]) => `<button type="button" class="chip" data-chip="${name}" data-v="${esc(v)}" ${multi ? "data-multi" : ""} aria-pressed="${multi ? (cur || []).map(String).includes(String(v)) : String(cur) === String(v)}">${pre || ""}${esc(l)}</button>`).join("")}</div>`;
