@@ -14,16 +14,14 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 8. Mettre à jour GitHub Pages avec les fichiers modifiés et nouveaux du dossier `maison/`.
 9. Sur chaque iPhone : ouvrir Maisonnée depuis son icône sur l'écran d'accueil, se connecter, appuyer sur la cloche, puis « Activer sur cet iPhone ». Accepter la demande iOS.
 
-## Périmètre réellement opérationnel après configuration
+## Ce qui est notifié (fonction maison-push-dispatch)
 
-- Abonnement Web Push individuel, désabonnement, réception en arrière-plan.
-- Envoi automatique des rappels des **rendez-vous internes non récurrents** avec délai de 0 minute à 4 semaines, à partir de leur heure de début.
-- Si l'événement est « toute la journée », l'heure de référence est 9 h (heure de Paris).
-- Envoi aux membres du foyer concernés par l'événement.
-- Les rendez-vous Google, répétitions, tâches, anniversaires, messages, courses, cloche d'historique, préférences individuelles et heures silencieuses ne sont **pas encore reliés à l'envoi**. Ils demandent une deuxième phase. Le bouton cloche ouvre actuellement les paramètres, pas un historique.
-- Un rendez-vous en mode démo ne génère pas de notification serveur.
-- L'envoi est au mieux une fois par membre et rappel. En cas d'échec transitoire, l'envoi n'est pas réessayé automatiquement.
-- Aucun test réel de livraison Apple Push n'a été effectué : tester sur un iPhone après déploiement.
+- **Rappels des rendez-vous Maisonnée**, simples ou répétés, de 0 minute à 4 semaines avant (9 h pour un rendez-vous « toute la journée »), aux membres concernés.
+- **Nouveaux messages** du foyer, à tous sauf l'auteur, dans la minute.
+- **Résumé du matin**, à l'heure choisie par chacun : tâches du jour (les siennes et celles de « n'importe qui »), agenda Maisonnée du jour, repas du soir, anniversaires du jour, documents qui expirent aujourd'hui, dans 7 ou 30 jours.
+- **Anniversaires** : la veille à 19 h.
+- Chacun choisit ce qu'il reçoit dans la cloche 🔔 (table `maison_push_prefs`, script `supabase-foyer-10.sql`).
+- Les rendez-vous enregistrés dans **Google Agenda** sont rappelés par Google Agenda lui-même.
 
 ## Sécurité
 

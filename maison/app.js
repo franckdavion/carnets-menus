@@ -76,11 +76,24 @@ async function showPushSettings() {
   const status = pushStatusText();
   let current = null;
   if (pushSupported()) {
-    try { const reg = await navigator.serviceWorker.ready; current = await reg.pushManager.getSubscription(); } catch (_) {}
+    // never wait forever: if the app's background worker is not ready yet, open the settings anyway
+    try { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, ko) => setTimeout(ko, 1500))]); current = await reg.pushManager.getSubscription(); } catch (_) {}
   }
+  // what this person wants to receive (shared by all their devices, read by the server)
+  let pr = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true }, prOk = false;
+  if (mode === "cloud" && user && sb) { try { const { data, error } = await sb.from("maison_push_prefs").select("prefs").eq("user_id", user.id).maybeSingle(); if (!error) { prOk = true; pr = { ...pr, ...((data && data.prefs) || {}) }; } } catch (_) {} }
+  const sw = (k, t, d) => `<label class="switch" style="margin:0"><span><strong>${t}</strong><br><span class="muted small">${d}</span></span><input type="checkbox" data-pref="${k}" ${pr[k] ? "checked" : ""} ${prOk ? "" : "disabled"}></label>`;
   openSheet("Notifications", `<div style="display:grid;gap:14px">
     <p>${esc(status)}</p>
-    <p class="muted small">Les rappels des rendez-vous internes seront envoyés aux membres connectés du foyer. Chaque téléphone doit activer les notifications séparément.</p>
+    <p class="muted small">Chaque téléphone doit activer les notifications séparément. Ces choix valent pour tous vos appareils.</p>
+    <div class="card" style="display:grid;gap:14px">
+      ${sw("messages", "Messages", "un nouveau message du foyer")}
+      ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)")}
+      ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
+      <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
+      ${sw("birthdays", "Anniversaires", "la veille à 19 h, et le jour même dans le résumé")}
+      ${prOk ? "" : `<p class="muted small" style="margin:0">Pour choisir, collez d'abord le script supabase-foyer-10.sql dans Supabase.</p>`}
+    </div>
     <button class="btn primary block" type="button" data-act="pushEnable" ${mode !== "cloud" || !pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC ? "disabled" : ""}>${current ? "Réactiver cet appareil" : "Activer sur cet iPhone"}</button>
     ${current ? '<button class="btn block" type="button" data-act="pushDisable">Désactiver sur cet appareil</button>' : ""}
     <p class="muted small">L'autorisation doit être demandée après un appui sur le bouton. Les notifications sont envoyées par le serveur, pas par l'application fermée.</p>
@@ -1366,6 +1379,13 @@ async function setHh(p) {
 
 document.addEventListener("change", e => {
   if (e.target.matches('[name="reminder_mode"]')) reminderVisibility(e.target.closest("form"));
+});
+document.addEventListener("change", async e => {
+  if (!e.target.matches("[data-pref]") || mode !== "cloud" || !user) return;
+  const box = e.target.closest(".card"), pr = {};
+  box.querySelectorAll("[data-pref]").forEach(el => { pr[el.dataset.pref] = el.type === "checkbox" ? el.checked : el.value; });
+  const { error } = await sb.from("maison_push_prefs").upsert({ user_id: user.id, prefs: pr, updated_at: new Date().toISOString() });
+  toast(error ? "Réglage non enregistré (réseau ?)." : "Réglage enregistré.");
 });
 
 document.addEventListener("submit", async e => {
