@@ -2256,16 +2256,21 @@ $("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("
 document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG")return;
   if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);return;}
   if(!im.dataset.auto)return;
-  const r=recipes[im.dataset.auto];if(!r)return;const c=autoCache[autoKey(r)];if(!c||!c.list)return;
+  const r=recipes[im.dataset.auto];if(!r)return;if(r.autoPick===im.getAttribute("src")){delete r.autoPick;autoPickSave();clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);}const c=autoCache[autoKey(r)];if(!c||!c.list)return;
   const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);}},true);
 const rejected=r=>new Set((r&&r.noPh)||[]);
+let autoPickT=null;function autoPickSave(){clearTimeout(autoPickT);autoPickT=setTimeout(()=>{LS.set("cm_recipes",recipes);cloudSoon();},3000);}
 function autoPhoto(id){const r=recipes[id],nope=rejected(r),l=autoList(id).filter(x=>!nope.has(x.u));if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
   if(!r.photo){if(r.cloudPhoto)return r.cloudPhoto; // a member's own photo, from the common book
     const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
     if(r.pick&&r.pick.u)return r.pick.u; // chosen in "Choisir une photo"
     if(r.image&&!LS.get("cm_badimg",{})[id])return r.image; // photo of the site the recipe came from
-    if(r.noAuto)return"";const a=autoPhoto(id);return a?a.u:"";}const m=rPhotos();if(m[id])return m[id];
+    if(r.noAuto)return"";
+    // the photo found automatically is remembered in the shared carnet, so every phone of the household shows the same one
+    if(r.autoPick&&!rejected(r).has(r.autoPick))return r.autoPick;
+    const a=autoPhoto(id);if(a&&cloudCarnet()){r.autoPick=a.u;autoPickSave();}return a?a.u:"";}
+  const m=rPhotos();if(m[id])return m[id];if(r.cloudPhoto)return r.cloudPhoto; // my photo, taken on another phone of the household
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,"photos/r-"+id+".jpg").then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
   return"";}
 /* ---------- Recadrer: frame 3:2 like the recipe photo; drag, pinch / slider zoom, fill or whole photo, rotate ---------- */
@@ -2321,7 +2326,7 @@ function thumbHtml(id,cls){const r=recipes[id],s=r?rPhotoSrc(id):"";
 function refreshThumbs(){document.querySelectorAll(".ph-none[data-th]").forEach(el=>{const id=el.dataset.th;if(recipes[id]&&rPhotoSrc(id))el.outerHTML=thumbHtml(id,el.dataset.cls);});}
 function recPhotoBlock(id,big){const r=recipes[id],src=rPhotoSrc(id);if(r.shared&&!src)return"";
   const pick=label=>r.shared?"":`<label class="btn rp-pick">${label}<input type="file" accept="image/*" class="rphoto-in" data-id="${esc(id)}" hidden></label>`;
-  const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?autoPhoto(id):null;
+  const from=!r.photo&&(LS.get("cm_sh_photos",{})[id]||{}).by,site=!r.photo&&!from&&src&&src===r.image,auto=!r.photo&&!from&&!site&&src?(autoList(id).find(x=>x.u===src)||autoPhoto(id)):null;
   if(!r.photo&&!from&&r.pick&&src===r.pick.u)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" loading="lazy"><span class="muted rp-credit">Photo choisie${r.pick.page?` · <a href="${esc(r.pick.page)}" target="_blank" rel="noopener">${esc(r.pick.src||"source")}</a>`:""}</span>
     ${r.shared?"":`<div class="row rp-acts"><button type="button" class="btn" data-act="cropEdit" data-id="${esc(id)}">✂️ Recadrer</button><button type="button" class="btn" data-act="photoPick" data-id="${esc(id)}">🔎 Autre photo</button>${pick("📷 Ma photo")}<button type="button" class="btn ghost" data-act="autoOff" data-id="${esc(id)}">Sans photo</button></div>`}</div>`;
   if(site)return`<div class="rp${big?" big":""}"><img src="${esc(src)}" alt="" data-site="${esc(id)}" loading="lazy"><span class="muted rp-credit">Photo du site d'origine${r.source?` · <a href="${esc(r.source)}" target="_blank" rel="noopener">${esc((()=>{try{return new URL(r.source).hostname.replace(/^www\./,"");}catch(e){return"voir";}})())}</a>`:""}</span>
@@ -3138,7 +3143,7 @@ document.addEventListener("click",e=>{
   else if(a==="goFind"){$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
   else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
   else if(a==="rphotoRm"){removeRecipePhoto(id);}
-  else if(a==="autoNext"){const r=recipes[id],l=autoList(id);if(r&&l.length>1){saveRecipe(id,Object.assign({},r,{autoIdx:((Number(r.autoIdx)||0)+1)%l.length}));}else toast("Pas d'autre photo trouvée pour ce plat");}
+  else if(a==="autoNext"){const r=recipes[id],l=autoList(id).filter(x=>!rejected(r).has(x.u));if(r&&l.length>1){const cur=l.findIndex(x=>x.u===r.autoPick),ni=((cur>=0?cur:Number(r.autoIdx)||0)+1)%l.length;saveRecipe(id,Object.assign({},r,{autoIdx:ni,autoPick:l[ni].u}));}else toast("Pas d'autre photo trouvée pour ce plat");}
   else if(a==="photoPick"){openPhotoPick(id);}
   else if(a==="openReview"){reviewMode="all";reviewLimit=60;renderReview();$("#reviewSheet").hidden=false;$("#reviewSheet .sheet-in").scrollTop=0;}
   else if(a==="closeReview"){$("#reviewSheet").hidden=true;}
@@ -3147,14 +3152,14 @@ document.addEventListener("click",e=>{
   else if(a==="reviewPick"){openPhotoPick(id);}
   else if(a==="closePhoto"){$("#photoSheet").hidden=true;}
   else if(a==="photoReject"){const c=photoCands[Number(b.dataset.i)],r=recipes[photoId];if(c&&r){const n=Object.assign({},r,{noPh:[...new Set([...(r.noPh||[]),c.u])].slice(-40)});
-      if(n.pick&&n.pick.u===c.u)delete n.pick;saveRecipe(photoId,n);renderPhotoGrid();toast("Photo supprimée pour ce plat");}}
+      if(n.pick&&n.pick.u===c.u)delete n.pick;if(n.autoPick===c.u)delete n.autoPick;saveRecipe(photoId,n);renderPhotoGrid();toast("Photo supprimée pour ce plat");}}
   else if(a==="photoChoose"){choosePhoto(photoCands[Number(b.dataset.i)]);}
   else if(a==="photoPaste"){pasteImage();}
   else if(a==="photoUrlOk"){const u=$("#photoUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){toast("Collez une adresse qui commence par https://");return;}
     const t=new Image();t.onload=()=>choosePhoto({u,page:u,src:(()=>{try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return"internet";}})()});t.onerror=()=>toast("Cette adresse n'est pas une image lisible");t.src=u;}
   else if(a==="siteOff"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.image;delete n.noAuto;saveRecipe(id,n);}}
   else if(a==="autoOn"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.noAuto;saveRecipe(id,n);}}
-  else if(a==="autoOff"){const r=recipes[id];if(r){const n=Object.assign({},r,{noAuto:true});delete n.pick;delete n.image;saveRecipe(id,n);toast("Photo retirée : « Ajouter ma photo » reste possible");}}
+  else if(a==="autoOff"){const r=recipes[id];if(r){const n=Object.assign({},r,{noAuto:true});delete n.pick;delete n.autoPick;delete n.image;saveRecipe(id,n);toast("Photo retirée : « Ajouter ma photo » reste possible");}}
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
@@ -4094,7 +4099,7 @@ async function pvSave(){const src=$("#pvImg").src;try{const bl=await(await fetch
   catch(e){toast("Impossible d'enregistrer : restez appuyé sur la photo → « Enregistrer »");}}
 /* ---------- accounts and cloud (Supabase): shared recipe book, private space per member, admin ---------- */
 const SB_URL="https://cluqleqbbidozpioekog.supabase.co",SB_KEY="sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
-const SHARED_F=["name","cat","cats","time","serves","ing","steps","image","tags","source"],PRIV_F=["fav","ratings","photo","pick","noAuto","autoIdx","noPh","viewServ"];
+const SHARED_F=["name","cat","cats","time","serves","ing","steps","image","tags","source"],PRIV_F=["fav","ratings","photo","pick","noAuto","autoIdx","noPh","viewServ","autoPick"];
 let cloud={sb:null,user:null,profile:null,admin:false,busy:false,members:null,msg:""},acctMode="login",cloudT=null;
 function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";sc.onload=()=>ok(window.supabase);sc.onerror=ko;document.head.appendChild(sc);});}
 async function sbc(){if(cloud.sb)return cloud.sb;const S=await loadSb();cloud.sb=S.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"cm_sb_auth"}});return cloud.sb;}
@@ -4193,7 +4198,8 @@ const stateUid=()=>cloud.owner||cloud.user.id;
 const noMz=m=>{const o=Object.assign({},m||{});delete o.mzBase;return o;};
 const shareMenu=()=>noMz(menu);
 const sharedCarnet=()=>!!(cloud.owner&&cloud.user&&cloud.owner!==cloud.user.id);
-function privNow(){const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}return priv;}
+// favourites, chosen photos… of recipes this phone does not have (yet): kept as they are, never dropped from the shared carnet
+function privNow(){const priv={},po=LS.get("cm_priv_other",{});for(const id in po)if(!recipes[id])priv[id]=po[id];for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}return priv;}
 // remote = {menu, priv, at}: three-way merge with the last copy both sides agreed on (cm_cloud_base)
 function applyRemoteState(remote){
   const R0={menu:noMz(remote.menu),priv:remote.priv||{}},local={menu:shareMenu(),priv:privNow()},myMz=menu.mzBase;
@@ -4216,6 +4222,7 @@ function applyRemoteState(remote){
   for(const id of new Set([...Object.keys(local.priv),...Object.keys(mp)])){if(!recipes[id]||J(local.priv[id])===J(mp[id]))continue;
     PRIV_F.forEach(k=>delete recipes[id][k]);Object.assign(recipes[id],mp[id]||{});chg=true;}
   if(chg)LS.set("cm_recipes",recipes);
+  const po={};for(const id in mp)if(!recipes[id])po[id]=mp[id];LS.set("cm_priv_other",po);
 }
 // the others' changes arrive every minute while the carnet is open
 // inside Maisonnée (hidden copy): only while its Repas page is open, so two copies never work at once
@@ -4236,6 +4243,7 @@ async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
     if(x.updated_at>LS.get("cm_cloud_since",""))LS.set("cm_cloud_since",x.updated_at);}
   // recipes removed from the common book by their author
   const{data:ids}=await sb.from("recipes").select("legacy_id");if(ids){const live=new Set(ids.map(x=>x.legacy_id));for(const[id,r]of Object.entries(recipes))if(r.cloudAuthor&&r.cloudAuthor!==uid&&!live.has(id))delete recipes[id];}
+  {const po=LS.get("cm_priv_other",{});let n=0;for(const id in po)if(recipes[id]){PRIV_F.forEach(k=>delete recipes[id][k]);Object.assign(recipes[id],po[id]);delete po[id];n++;}if(n)LS.set("cm_priv_other",po);}
   LS.set("cm_cloudhash",H);LS.set("cm_recipes",recipes);return added;}
 function confirmNewer(){return true;}
 async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m)m.textContent="⏳ Synchronisation…";
