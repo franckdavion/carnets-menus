@@ -104,7 +104,7 @@ VIEWS.repas = function () {
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
     for (const m of ["midi", "soir"]) {
       const k = dn + "|" + m, x = sl[k];
-      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Gardé et dans les courses">🔒</span>`
+      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Gardé et dans les courses">🛒</span>`
         : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
       const dis = x.past && !x.name;
       out += `<div class="slot ${x.past ? "past" : ""}" ${dis ? "" : `role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"`}>
@@ -115,7 +115,7 @@ VIEWS.repas = function () {
     }
     out += `</section>`;
   }
-  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas (il ne part pas aux courses). 🔒 : gardé et dans les courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
+  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas (il ne part pas aux courses). 🛒 : dans les courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
   return out;
 };
 
@@ -155,7 +155,7 @@ function mealSlotSheet(k) {
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
     <button class="linkbtn" data-act="rRecipe" data-v="${esc(k)}" style="margin:2px 0 4px">📖 Voir la recette</button>
-    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
+    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "✓ dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
     ${ro ? "" : `<div class="btns">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
       <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>
@@ -187,8 +187,8 @@ function ingBlock(k, s) {
     <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà.</p>
     <div class="card" style="padding:0">${list.map(i => `<button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span><span class="nm">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></button>`).join("")}</div></div>
     <div class="btns" style="margin-top:10px">${s.lock
-      ? `<p class="small" style="margin:0 0 6px;width:100%">🔒 Validé : ${n} ingrédient${n > 1 ? "s" : ""} dans les courses.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
-      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>Valider et envoyer ${n} ingrédient${n > 1 ? "s" : ""} aux courses</button>`}</div>`;
+      ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
+      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}</div>`;
 }
 // 📖 the recipe of a meal, as in the Carnet: photo, time, ingredients for the meal's people, steps
 function rRecipeSheet(k) {
@@ -272,7 +272,7 @@ document.addEventListener("click", async e => {
       carnetSave(); mealSlotSheet(k); break;
     }
     case "rLock": { const on = cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;return !!(s&&s.lock);})()`); shopIncludeWeek();
-      carnetSave(on ? "Validé : les ingrédients partent dans les courses." : "Retiré des courses."); mealSlotSheet(v); break; }
+      carnetSave(on ? "Ajouté aux courses : les ingrédients sont dans la liste." : "Retiré des courses."); mealSlotSheet(v); break; }
     case "rKeep": { const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;if(s.keep)delete s.keep;else s.keep=true;return !!s.keep;})()`);
       carnetSave(on ? "Gardé : « Proposer ma semaine » ne le changera plus." : "Ce repas pourra de nouveau changer.");
       if (b.closest("#sheet")) mealSlotSheet(v); break; }

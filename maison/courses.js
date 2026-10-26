@@ -79,10 +79,10 @@ VIEWS.courses = function () {
   const total = D.items.length + D.extras.length;
   const sel = D.days.filter(x => x.on);
   let out = `<div class="card linkcard"><span>La même liste que le Carnet de menus, pour tout le foyer.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
-  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? "✓ " : ""}${esc(x.lab)} ${x.full ? "🔒" : x.any ? "◐" : "🔓"}</button>`).join("")}</div>
+  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? "✓ " : ""}${esc(x.lab)} ${x.full ? "🛒" : x.any ? "◐" : ""}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
-    <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. 🔒 repas envoyés aux courses · 🔓 pas encore (dans Repas).</p>
+    <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour ajouter ou retirer tous ses repas · 🛒 tous ses repas sont dans les courses · ◐ une partie.</p>
     <form data-form="cxAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="cxIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
       <button class="btn ink" type="submit">Ajouter</button></form>`;
@@ -134,7 +134,8 @@ document.addEventListener("click", e => {
     case "cxHaveUndo": cclick({ act: "haveUndo", k: v }); break;
     case "cxRmX": cclick({ act: "rmX", i: v }); break;
     case "cxRmR": cclick({ act: "shopRm", id: v }); break;
-    case "cxDay": cclick({ act: "shopDay", d: v }); break;
+    case "cxDay": { let was = false; try { was = !!(cxData().days.find(x => x.key === v) || {}).on; } catch (_) {}
+      cclick({ act: "shopDay", d: v }); msg = was ? "Repas du jour retirés des courses." : "Repas du jour ajoutés aux courses."; break; }
     case "cxDaysAll": cclick({ act: "shopDaysAll" }); break;
     case "cxDaysNone": cclick({ act: "shopDaysNone" }); break;
     case "cxFinish": cxFinishAsk = true; break;

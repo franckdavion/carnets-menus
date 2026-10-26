@@ -1565,10 +1565,10 @@ function renderIdea(){
 }
 
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
-function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return["p1","🔓 à valider"];
-  const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","🔒 validé"];
+function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return["p1","🛒 à ajouter aux courses"];
+  const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","✓ dans les courses"];
   const r=recipes[s.id],dd=parseYmd(date),when=`${k.split("|")[0]} ${dd.getDate()} ${k.split("|")[1]}`;
-  const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","🔒 validé"]:["p3","🔒 courses faites"];}
+  const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","✓ dans les courses"]:["p3","✓ courses faites"];}
 function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
   const side=s?[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"en plus : "+s.extra.join(", "):""].filter(Boolean):[];
   if(!r&&!side.length)return past?""
@@ -1585,7 +1585,7 @@ function weekToValidate(){const ws=weekStartDate(),today=ymd(new Date()),out=[];
 function renderWeekFrame(){const grid=LS.get("cm_wmode","list")==="grid";
   $("#wmodeSeg").innerHTML=[["list","☰ Liste"],["grid","▦ Tableau"]].map(([v,l])=>`<button type="button" class="chip" data-act="weekMode" data-v="${v}" aria-pressed="${(v==="grid")===grid}">${l}</button>`).join("");
   $("#menuList").hidden=grid;$("#weekGrid").hidden=!grid;$("#weekEditBtn").hidden=!grid;
-  const t=weekToValidate();$("#weekValidate").innerHTML=t.length?`<button type="button" class="btn primary week-cta" data-act="weekValidate">🔓 Valider la semaine (${t.length} repas) → voir les ingrédients</button>`:"";
+  const t=weekToValidate();$("#weekValidate").innerHTML=t.length?`<button type="button" class="btn primary week-cta" data-act="weekValidate">🛒 Tout ajouter aux courses (${t.length} repas) → voir les ingrédients</button>`:"";
   $("#weekTitle").textContent="Semaine du "+shortDate(weekStartDate());}
 function renderMenu(){
   const el=$("#menuList"), filled=filledSlots();renderWeekFrame();
@@ -1687,7 +1687,7 @@ function lockPreview(targets,edit,keep){ // targets: [{w,k}]; edit = a meal alre
     const parts=[r.name,s.entree&&recipes[s.entree]?"entrée "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert "+recipes[s.dessert].name:""].filter(Boolean).join(" + ");
     return`<div class="lk-meal"><div style="flex:1;min-width:0"><b>${esc(dn)} ${date.getDate()} · ${t.k.endsWith("midi")?"midi":"soir"}</b><span>${esc(parts)}</span><small class="muted">recette prévue pour ${r.serves||4}${r.cat==="Entrée"&&canMain(r)?` · servie en plat ×${String(portionFactor(r,"main")).replace(".",",")}`:""}</small></div>
       <div class="ctl"><button type="button" class="step sm" data-act="lockN" data-i="${ix}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${s.n} pers.</span><button type="button" class="step sm" data-act="lockN" data-i="${ix}" data-d="1" aria-label="Une personne de plus">+</button></div></div>`;}).join("");
-  $("#lockTitle").textContent=edit?"Repas validé":targets.length>1?`Valider ${targets.length} repas`:"Valider ce repas";
+  $("#lockTitle").textContent=edit?"Dans les courses":targets.length>1?`Ajouter ${targets.length} repas aux courses`:"Ajouter ce repas aux courses";
   renderLock();if(!keep){$("#lockSheet").hidden=false;$("#lockSheet .sheet-in").scrollTop=0;}
 }
 let lockOrigN=[],lockDays=[];
@@ -1705,10 +1705,10 @@ function renderLock(){
       return`<details class="lk-cur"><summary>Voir la liste de courses actuelle (${cur.length+ex.length} article${cur.length+ex.length>1?"s":""})</summary>
         ${gs.map(g=>`<h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-cl"><span>${esc(i.n)}</span><b>${esc(fmt(i.q,i.u))}</b></div>`).join("")}`).join("")}
         ${ex.length?`<h4>En plus</h4>${ex.map(x=>`<div class="lk-cl"><span>${esc(x.t)}</span></div>`).join("")}`:""}</details>`;})()}
-    ${lockEdit?`<button type="button" class="btn danger" data-act="lockUndo" style="align-self:flex-start;order:99">🔓 Dévalider ce repas (retire ses ingrédients)</button>`:""}
+    ${lockEdit?`<button type="button" class="btn danger" data-act="lockUndo" style="align-self:flex-start;order:99">Retirer ce repas des courses</button>`:""}
     ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-it${i.buy?" on":""}"><button type="button" class="lk-t" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${esc(i.n)}<small>${!i.buy&&i.erased?"effacé de la liste · touchez pour le remettre":i.buy?[i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:"",Math.abs(i.bq-i.d)>1e-6?`prévu ${esc(fmt(i.d,i.u))} · j'en ai déjà ${esc(fmt(Math.max(0,i.d-i.bq),i.u))||"un peu"}`:""].filter(Boolean).join(" · "):"j'ai déjà · pas acheté"}</small></span></button>
       ${i.buy?`<span class="lk-q"><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="-1" aria-label="Moins de ${esc(i.n)}">−</button><b>${i.was?"+":""}${esc(fmt(i.bq,i.u))||"?"}</b><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="1" aria-label="Plus de ${esc(i.n)}">+</button></span>`:`<b class="muted">${esc(fmt(i.d,i.u))}</b>`}</div>`).join("")}</div>`).join("")}`;
-  $("#lockYesBtn").textContent=lockEdit?`✓ Enregistrer · ${nb} en liste de courses`:nb?`✓ Valider · ${nb} en liste de courses`:"✓ Valider (rien à acheter)";
+  $("#lockYesBtn").textContent=lockEdit?`✓ Enregistrer · ${nb} en liste de courses`:nb?`🛒 Ajouter · ${nb} en liste de courses`:"✓ Ajouter (rien à acheter)";
 }
 function lockConfirm(){if(lockDays.length){menu.shopDays=[...new Set([...selectedShopDates().map(x=>x.key),...lockDays])].sort();lockDays=[];}
   const n0=shopping().length,until=haveUntil(),today=ymd(new Date());let n=0;
@@ -1722,7 +1722,7 @@ function lockConfirm(){if(lockDays.length){menu.shopDays=[...new Set([...selecte
       if(Math.abs(q1)<1e-6)delete menu.bought[i.key];else menu.bought[i.key]={q:q1,until:b&&b.until>until?b.until:until};}
   }
   const ed=lockEdit;lockPend=[];lockItems=[];lockEdit=false;lockOrigN=[];$("#lockSheet").hidden=true;render();saveMenu();
-  const n1=shopping().length;toast(ed?`Liste à jour : ${n1} article${n1>1?"s":""}`:`${n} repas validé${n>1?"s":""} · liste à jour : ${n1} article${n1>1?"s":""}${n1>n0?` (+${n1-n0})`:""}`);}
+  const n1=shopping().length;toast(ed?`Liste à jour : ${n1} article${n1>1?"s":""}`:`${n} repas ajouté${n>1?"s":""} aux courses · liste à jour : ${n1} article${n1>1?"s":""}${n1>n0?` (+${n1-n0})`:""}`);}
 // what is planned on the chosen shopping days, with the lock of each meal (only locked meals go into the list)
 function shopPlanHtml(sel){
   if(!sel.length)return"";
@@ -1732,10 +1732,10 @@ function shopPlanHtml(sel){
       const sub=[s.entree&&recipes[s.entree]?"Entrée : "+nm(s.entree):"",s.dessert&&recipes[s.dessert]?"Dessert : "+nm(s.dessert):""].filter(Boolean).join(" · ");
       return`<div class="sp-meal${s.lock?" ok":""}"><span class="sp-m">${lab}</span><button type="button" class="sp-n" data-act="viewRec" data-id="${esc(s.id)}">${esc(nm(s.id))}${sub?`<small>${esc(sub)}</small>`:""}<small>${s.n} pers.</small></button>
         <button type="button" class="sp-swap" data-act="shopSwap" data-w="${w}" data-k="${k}" aria-label="Changer de plat">↻</button>
-        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"🔒 Validé":"🔓 Valider"}</button></div>`;}).join("");
+        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"✓ Dans les courses":"🛒 Ajouter"}</button></div>`;}).join("");
     return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
-  return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· 🔓 ${unl} repas à valider`:"· 🔒 tout est validé"}</span></summary>${days}
-    ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🔒 Tout valider (${unl} repas)</button><span class="muted" style="font-size:12px">Seuls les repas validés (verrouillés) mettent leurs ingrédients dans la liste.</span>`:""}</details>`;
+  return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas pas encore dans les courses`:"· tout est dans les courses ✓"}</span></summary>${days}
+    ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🛒 Tout ajouter aux courses (${unl} repas)</button><span class="muted" style="font-size:12px">Les repas avec ✓ sont dans la liste de courses. Touchez un jour ci-dessus pour ajouter ou retirer tous ses repas.</span>`:""}</details>`;
 }
 /* clearing the list, all at once or line by line: what is erased counts as already bought until the last shopping day (the menus stay as they are) */
 let shopClearAsk=false;
@@ -1745,18 +1745,18 @@ function eraseItem(i){const until=haveUntil(),today=ymd(new Date());menu.bought=
 function renderShop(items,extras,ids){
   const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
-  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🔒":" 🔓";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
+  $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key),st=x.locked===x.n?" 🛒":x.locked?" ◐":"";return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ ":""}${esc(dayShort(x))}${st}</button></span>`;}).join("")}</div>
     <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>${shopPlanHtml(sel)}`
     :`<span class="muted" style="font-size:13px">Aucun repas prévu dans les 3 prochaines semaines.</span>`;
   const range=sel.length?(sel.length===1?dayShort(sel[0]):`Du ${dayShort(sel[0])} au ${dayShort(sel[sel.length-1])}`):"Aucun jour choisi";
-  $("#shopSum").textContent=`${range} · `+(meals?`${meals} repas verrouillé${meals>1?"s":""} · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
+  $("#shopSum").textContent=`${range} · `+(meals?`${meals} repas dans les courses · `:"")+`${items.length+extras.length} article${items.length+extras.length>1?"s":""}`;
   const el=$("#shopList");
   const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]);
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="xr-item"><button type="button" class="nm" data-act="viewRec" data-id="${esc(id)}">${esc(recipes[id].name)}${validatedUses(id).length?`<small class="muted" style="display:block;font-size:12px">déjà au menu validé : pas compté deux fois</small>`:""}</button><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
   const hint=false&&unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
   const hv=shopping(true).filter(isHave).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
   const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
-  if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"La liste se remplit dès que vous verrouillez des repas de ces jours.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
+  if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"Touchez un jour ci-dessus : ses repas et leurs ingrédients arrivent dans la liste.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   const drive=(n,ref)=>!curDrive()?"":`<a class="drive" href="${driveUrl(n)}" target="_blank" rel="noopener" data-act="driveGo" data-ref="${esc(ref)}" aria-label="Chercher ${esc(n)} sur ${esc((curDrive()||{n:""}).n)}">Drive ↗</a>`;
   const cartBtn=ref=>`<button type="button" class="have on" data-act="cartUndo" data-ref="${esc(ref)}" aria-label="Retirer du panier">Au panier ✓</button>`;
@@ -1767,7 +1767,7 @@ function renderShop(items,extras,ids){
 
   if(extras.length)h+=`<div class="rayon"><h4>En plus</h4>${extras.map((x,ix)=>`<div class="item${x.done?" done":""}" style="cursor:default"><span class="dot"></span>
       <span class="nm">${esc(x.t)} ${x.done?"":drive(x.t,"x:"+ix)}${missTag(x.missed)}</span><span></span>${x.done?cartBtn("x:"+ix):`<button type="button" class="x" data-act="rmX" data-i="${ix}" aria-label="Retirer ${esc(x.t)}">✕</button>`}</div>`).join("")}</div>`;
-  const clr=`<div class="shop-clear">${shopClearAsk?`<span>Vider toute la liste ? Les repas restent au menu, à revalider.</span><button type="button" class="btn danger" data-act="shopClearYes">Oui, vider</button><button type="button" class="btn ghost" data-act="shopClearNo">Non</button>`:`<button type="button" class="btn ghost" data-act="shopClear">🗑️ Vider la liste</button>`}</div>`;
+  const clr=`<div class="shop-clear">${shopClearAsk?`<span>Vider toute la liste ? Les repas restent au menu, à rajouter aux courses.</span><button type="button" class="btn danger" data-act="shopClearYes">Oui, vider</button><button type="button" class="btn ghost" data-act="shopClearNo">Non</button>`:`<button type="button" class="btn ghost" data-act="shopClear">🗑️ Vider la liste</button>`}</div>`;
   el.innerHTML=hint+clr+xrHtml+h+hvHtml;
 }
 
@@ -1784,7 +1784,7 @@ function renderStore(){
   const row=r=>`<button type="button" class="srow${r.on?" on":""}" data-act="storeTick" data-s="${esc(r.id)}" aria-pressed="${r.on}"><span class="box">${r.on?"✓":""}</span><span class="nm">${esc(r.n)}${r.from.length?`<span class="from">${esc(r.from.join(" · "))}</span>`:""}</span><span class="q">${esc(r.q)}</span></button>`;
   const order=[...RAYONS,"En plus"];
   let h=order.map(g=>{const its=todo.filter(r=>r.r===g).sort((a,b)=>a.n.localeCompare(b.n,"fr"));return its.length?`<h4 class="store-h">${esc(g)}</h4>${its.map(row).join("")}`:"";}).join("");
-  if(!rows.length)h='<p class="muted">La liste est vide : verrouillez des repas ou ajoutez des produits.</p>';
+  if(!rows.length)h='<p class="muted">La liste est vide : ajoutez des repas aux courses ou des produits.</p>';
   else if(!todo.length)h='<p class="note" style="margin-top:12px">Tout est dans le caddie !</p>';
   if(done.length)h+=`<h4 class="store-h" style="color:var(--muted)">Dans le caddie (${done.length})</h4>${done.sort((a,b)=>a.n.localeCompare(b.n,"fr")).map(row).join("")}`;
   $("#storeList").innerHTML=h;
@@ -2423,7 +2423,7 @@ function renderWeek(){
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
     const side=!r&&hasSide(s), ed=weekEdit&&!past&&(r||side), x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
     const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
-    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="validé">🔒</span>':' <span class="wl" aria-label="à valider">🔓</span>'),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
+    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="dans les courses">🛒</span>':''),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
       +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
       +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
       +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
@@ -2440,14 +2440,14 @@ function renderSlotSheet(){
   let h="";
   if(r||hasSide(s)){
     const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
-    h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · verrouillé":""}</span></button>${s.lock?"":rx("main")}</div>`
+    h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · dans les courses":""}</span></button>${s.lock?"":rx("main")}</div>`
       :`<div class="sl-line"><span class="muted">Plat à choisir</span>${past?"":btn("pick","+ Choisir un plat","","btn primary")}</div>`;
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
     (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
     if(r&&!past){const nut=slotNut(s);const info=[showOn("nut")&&nut?fmtNut(nut,true):"",showOn("wine")?drinkLine(r):""].filter(Boolean).join(" · ");if(info)h+=`<span class="muted" style="font-size:13px">${esc(info)}</span>`;}
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
-      (r?btn("slotValidate",s.lock?"🔒 Validé · ingrédients":"🔓 Valider (ingrédients)","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
+      (r?btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
   }else h+=past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:`<div class="slot-acts2">${btn("pick","+ Choisir un plat")}</div>`;
@@ -2499,21 +2499,21 @@ function renderAdd(){
   const wk=(menu.weeks||{})[addWeek]||{}, ws=parseYmd(addWeek), today=ymd(new Date());
   const nm=id=>recipes[id]?recipes[id].name:"";
   const cell=(d,i,m)=>{const k=slotKey(d,m),key=addWeek+"#"+k,s=wk[k],past=ymd(addDays(ws,i))<today,role=addSel.get(key);
-    let note=past?"passé":!slotUsed(s)?"Libre":recipes[s.id]?nm(s.id)+(s.lock?" 🔒":" 🔓"):"plat à choisir";
+    let note=past?"passé":!slotUsed(s)?"Libre":recipes[s.id]?nm(s.id)+(s.lock?" 🛒":""):"plat à choisir";
     if(role)note=ROLE_AS[role]+(role==="main"&&s&&recipes[s.id]&&s.id!==addId?" · remplace "+nm(s.id):"");
     else if(!past&&slotUsed(s))note+=" · toucher pour choisir";
     return`<button type="button" class="as${role?" on":""}${past?" dis":""}${addAsk===key?" ask":""}" data-act="addCell" data-key="${key}" ${past?"disabled":""}>${role?"✓ ":""}${m==="midi"?"Midi":"Soir"}<small>${esc(note)}</small></button>`;};
   const ask=()=>{if(!addAsk||!addAsk.startsWith(addWeek+"#"))return"";const k=addAsk.split("#")[1],s=wk[k]||{};
     const opt=(role,title,sub,dis)=>`<button type="button" class="btn" data-act="addAs" data-role="${role}" ${dis?"disabled":""}><span>${title}${sub?`<small>${esc(sub)}</small>`:""}</span></button>`;
     return`<div class="aask"><b>${esc(slotLabel(k))} : que faire de « ${esc(r.name)} » ?</b>
-      ${opt("main",recipes[s.id]?"Remplacer le plat":"Mettre en plat",recipes[s.id]?(s.lock?"repas verrouillé":"à la place de "+nm(s.id)):"",s.lock&&recipes[s.id])}
+      ${opt("main",recipes[s.id]?"Remplacer le plat":"Mettre en plat",recipes[s.id]?(s.lock?"repas dans les courses":"à la place de "+nm(s.id)):"",s.lock&&recipes[s.id])}
       ${opt("entree","Mettre en entrée",s.entree&&recipes[s.entree]?"à la place de "+nm(s.entree):recipes[s.id]?"avant "+nm(s.id):"")}
       ${opt("dessert","Mettre en dessert",s.dessert&&recipes[s.dessert]?"à la place de "+nm(s.dessert):recipes[s.id]?"après "+nm(s.id):"")}
       <button type="button" class="btn ghost" data-act="addAskNo">Annuler</button></div>`;};
   $("#addGrid").innerHTML=DAYS.map((d,i)=>{const row=`<span class="ad">${d.slice(0,3)} ${addDays(ws,i).getDate()}</span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;
     return row+(addAsk&&addAsk.startsWith(addWeek+"#"+d+"|")?ask():"");}).join("");
   const[add,rem]=addChanges();
-  $("#addOk").textContent=add||rem?[add?`Valider ${add} repas`:"",rem?`retirer de ${rem}`:""].filter(Boolean).join(", "):"Touchez un ou plusieurs repas";
+  $("#addOk").textContent=add||rem?[add?`Ajouter ${add} repas aux courses`:"",rem?`retirer de ${rem}`:""].filter(Boolean).join(", "):"Touchez un ou plusieurs repas";
   $("#addOk").disabled=!(add||rem);
 }
 function addCellTap(key){
@@ -2552,7 +2552,7 @@ function undoRemove(){const u=undoStack.pop();if(!u)return;
   else $("#undoBar").hidden=true;toast("Remis comme avant");}
 // remove part of a meal: main dish (whole meal), starter, dessert or one "en plus"
 function removePart(k,part,i){
-  const s=W()[k];if(!s||isPast(k))return;if(part==="main"&&s.lock){toast("Repas verrouillé : déverrouillez-le d'abord");return;}
+  const s=W()[k];if(!s||isPast(k))return;if(part==="main"&&s.lock){toast("Ce repas est dans les courses : retirez-le d'abord des courses");return;}
   const snap=snapshotSlot(k);let label="";
   if(part==="main"){label=(recipes[s.id]||{}).name||"le plat";if(hasSide(s)){delete s.id;delete s.lock;}else delete W()[k];} // the starter and dessert stay
   else if(part==="entree"||part==="dessert"){label=(recipes[s[part]]||{}).name||part;delete s[part];}
@@ -2854,7 +2854,7 @@ document.addEventListener("click",e=>{
   else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
   else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
   else if(a==="moreFav"){favLimit+=50;renderSugg();}
-  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock){delete sl.lock;toast("Déverrouillé : ingrédients retirés des courses");}else{sl.lock=true;toast("Verrouillé : ingrédients ajoutés aux courses");}render();saveMenu();}}
+  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock){delete sl.lock;toast("Retiré des courses : ses ingrédients sortent de la liste");}else{sl.lock=true;toast("Ajouté aux courses : ses ingrédients sont dans la liste");}render();saveMenu();}}
   else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
     const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
   else if(a==="vplat"){const r=recipes[id];if(!r)return;const sl=slotsOf(id),S=r.serves||4,cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people),k=Math.max(1,platsFor(r,cur)+Number(b.dataset.d));viewServ[id]=Math.min(50,k*S);render();}
@@ -2937,7 +2937,7 @@ document.addEventListener("click",e=>{
     for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s)delete s.lock;}
     menu.extras=[];menu.shopExtra={};menu.checked={};shopClearAsk=false;render();saveMenu();showUndo("toute la liste de courses",snap);}
   else if(a==="shopAdd"){const r=recipes[id];if(!r)return;
-    const v=validatedUses(id);if(v.length){toast(`Déjà dans la liste avec le menu validé (${v.join(", ")}) : pour changer les quantités, touchez « Validé » dans Courses`);return;}const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
+    const v=validatedUses(id);if(v.length){toast(`Déjà dans la liste avec le menu validé (${v.join(", ")}) : pour changer les quantités, touchez « Dans les courses » dans Courses`);return;}const sl=slotsOf(id);const n=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);
     menu.shopExtra=Object.assign({},menu.shopExtra,{[id]:n});render();saveMenu();toast(`${r.name} (${n} pers.) ajoutée aux courses`);}
   else if(a==="shopRm"){if(menu.shopExtra){delete menu.shopExtra[b.dataset.id];render();saveMenu();}}
   else if(a==="closePick"){$("#pickSheet").hidden=true;shopSwapCtx=null;}
@@ -3003,7 +3003,9 @@ document.addEventListener("click",e=>{
   else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
   else if(a==="rmSide"){removePart(b.dataset.k,"extra",b.dataset.i);}
   else if(a==="shopDay"){const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(x=>x.key===k)):defaultShopKeys(all);
-    const d=b.dataset.d;keys=keys.includes(d)?keys.filter(k=>k!==d):[...keys,d].sort();menu.shopDays=keys;render();saveMenu(300);}
+    const d=b.dataset.d,add=!keys.includes(d);keys=add?[...keys,d].sort():keys.filter(k=>k!==d);menu.shopDays=keys;
+    {const x=all.find(y=>y.key===d);if(x)for(const[m]of MEALS){const sl=x.wk[slotKey(x.dn,m)];if(sl&&recipes[sl.id]){if(add)sl.lock=true;else delete sl.lock;}}}
+    render();saveMenu(300);if(typeof toast==="function")toast(add?"Repas du jour ajoutés aux courses":"Repas du jour retirés des courses");}
   else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
   else if(a==="shopSwap"&&!b.dataset.go&&mealBought(b.dataset.w,b.dataset.k)){bumpCtx={w:b.dataset.w,k:b.dataset.k};const s=menu.weeks[bumpCtx.w][bumpCtx.k];
     $("#bumpTxt").textContent=`« ${recipes[s.id].name} » (${slotLabel(bumpCtx.k)}) : ses ingrédients ont déjà été achetés. Que voulez-vous en faire ?`;$("#bumpSheet").hidden=false;}
@@ -3018,8 +3020,8 @@ document.addEventListener("click",e=>{
   else if(a==="lockAll"){lockItems.forEach(i=>i.buy=b.dataset.v==="1");renderLock();}
   else if(a==="lockNo"){lockOrigN.forEach(({t,n})=>{const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)s.n=n;});lockOrigN=[];lockPend=[];lockEdit=false;$("#lockSheet").hidden=true;render();}
   else if(a==="lockN"){const t=lockPend[Number(b.dataset.i)],s=t&&((menu.weeks||{})[t.w]||{})[t.k];if(s){s.n=Math.max(1,Math.min(50,s.n+Number(b.dataset.d)));lockPreview(lockPend,lockEdit,true);}}
-  else if(a==="lockUndo"){for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)delete s.lock;}lockPend=[];lockItems=[];lockEdit=false;lockOrigN=[];$("#lockSheet").hidden=true;render();saveMenu();toast("Repas dévalidé : ses ingrédients sortent de la liste");}
-  else if(a==="shopDaysAll"){menu.shopDays=shopDates().map(x=>x.key);render();saveMenu();}
+  else if(a==="lockUndo"){for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)delete s.lock;}lockPend=[];lockItems=[];lockEdit=false;lockOrigN=[];$("#lockSheet").hidden=true;render();saveMenu();toast("Retiré des courses : ses ingrédients sortent de la liste");}
+  else if(a==="shopDaysAll"){const all=shopDates();menu.shopDays=all.map(x=>x.key);for(const x of all)for(const[m]of MEALS){const sl=x.wk[slotKey(x.dn,m)];if(sl&&recipes[sl.id])sl.lock=true;}render();saveMenu();toast("Tous les repas prévus sont dans les courses");}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
   else if(a==="haveRayon"){const ry=b.dataset.r,u=haveUntil();menu.have=Object.assign({},menu.have);
     shopping().filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).forEach(i=>{menu.have[i.key]=u;});
