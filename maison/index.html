@@ -223,10 +223,14 @@ textarea.input{min-height:84px;resize:vertical}
 /* ---------- sheet ---------- */
 dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:640px;max-height:92vh;max-height:92dvh;
   border-radius:var(--r-lg) var(--r-lg) 0 0;background:var(--bg);color:var(--ink);overflow:auto;overscroll-behavior:contain}
-dialog.sheet:focus-within{max-height:min(92dvh,calc(var(--maison-vh, 100dvh) - 8px));scroll-padding-bottom:100px}
+dialog.sheet:focus-within{scroll-padding-bottom:100px}
 dialog.sheet input,dialog.sheet textarea{scroll-margin-bottom:110px}
+dialog.sheet{height:auto;max-height:calc(100dvh - env(safe-area-inset-top) - 12px);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;scroll-behavior:auto;overflow-anchor:none}
+dialog.sheet .sheet-in{min-width:0;overflow-x:clip}
+dialog.sheet .sheet-sticky{z-index:2}
+@supports(height:100svh){dialog.sheet{max-height:calc(100svh - env(safe-area-inset-top) - 12px)}}
 dialog.sheet::backdrop{background:rgba(10,20,18,.45)}
-dialog.sheet[open]{animation:up .22s ease-out}
+dialog.sheet[open]{animation:none}
 @keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion: reduce){dialog.sheet[open]{animation:none}}
 .sheet-in{padding:10px 18px calc(env(safe-area-inset-bottom) + 22px)}

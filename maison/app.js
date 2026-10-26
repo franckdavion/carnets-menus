@@ -1169,6 +1169,7 @@ document.addEventListener("submit", async e => {
         row.reminders = reminders;
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
+      if (!row.title || !row.day) { toast("Indique le titre et la date du rendez-vous."); return; }
       const destination = fd.google_destination || "local";
       if (destination !== "local" && !sheetCtx?.id) {
         btn.disabled = true;
@@ -1184,8 +1185,10 @@ document.addEventListener("submit", async e => {
       }
       LS.set("mz_last_google_destination", "local");
       const id = sheetCtx && sheetCtx.id; closeSheet();
-      if (id) await patch("events", id, row);
-      else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }
+      try {
+        if (id) await patch("events", id, row);
+        else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }
+      } catch (err) { console.error("Enregistrement rendez-vous", err); toast("Échec de l'enregistrement : " + (err?.message || "vérifie la connexion")); }
       break;
     }
     case "meal": {
@@ -1319,5 +1322,26 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
 // Maintenir le champ actif visible au-dessus du clavier iOS.
 document.addEventListener("focusin", event => {
   if (!event.target.matches("dialog.sheet input, dialog.sheet textarea, dialog.sheet select")) return;
-  setTimeout(() => event.target.scrollIntoView({block:"center",behavior:"smooth"}), 250);
+  // Ne pas déplacer tout le document : seul le contenu de la fenêtre défile.
+  setTimeout(() => {
+    const sheet = document.getElementById("sheet");
+    if (!sheet?.open || document.activeElement !== event.target) return;
+    const field = event.target.getBoundingClientRect();
+    const bounds = sheet.getBoundingClientRect();
+    if (field.bottom > bounds.bottom - 95) sheet.scrollTop += field.bottom - bounds.bottom + 110;
+    else if (field.top < bounds.top + 65) sheet.scrollTop -= bounds.top + 75 - field.top;
+  }, 350);
 });
+
+// Afficher les erreurs de validation au lieu de laisser « Enregistrer » sans réaction.
+document.addEventListener("invalid", event => {
+  if (!event.target.closest('form[data-form="event"]')) return;
+  const field = event.target;
+  setTimeout(() => {
+    const sheet = document.getElementById("sheet");
+    if (!sheet?.open) return;
+    const rect = field.getBoundingClientRect(), bounds = sheet.getBoundingClientRect();
+    sheet.scrollTop += rect.top - bounds.top - 100;
+    if (typeof toast === "function") toast("Complète le champ obligatoire : " + (field.closest("label")?.querySelector(".label")?.textContent || "titre ou date") + ".");
+  }, 30);
+}, true);
