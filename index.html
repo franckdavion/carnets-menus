@@ -4189,7 +4189,9 @@ function applyRemoteState(remote){
   const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched||!cloudBase?null:{menu:noMz(cloudBase.menu),priv:cloudBase.priv||{}};
   let m;
   if(switched){
-    if(sharedCarnet()||LS.get("cm_state_owner","")){ // joining another carnet: take it as it is, keep a copy of this phone's
+    // joining another carnet, or this copy connects for the first time while the account already has a carnet:
+    // take it as it is (a copy left offline must not replace the household's week), keep a copy of this phone's
+    if(sharedCarnet()||LS.get("cm_state_owner","")||Object.keys((remote.menu||{}).weeks||{}).length){
       try{localStorage.setItem("cm_menu_backup",J({at:Date.now(),menu,priv:local.priv}));}catch(e){}
       m=R0;}
     else m=(remote.at||0)>LS.get("cm_menu_at",0)?R0:local; // own carnet, first time: the newest copy, as before
