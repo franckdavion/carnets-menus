@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Maisonnée</title>
 <meta name="description" content="Les tâches, l'agenda et les repas de la maison, partagés entre vous.">
-<meta name="theme-color" content="#071323">
-
+<meta name="theme-color" content="#F1F4F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121926" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Maisonnée">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -34,7 +34,9 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 /* the page never slides sideways: nothing may stick out, and horizontal swipes only scroll the rows made for it */
-html,body{overflow-x:clip;overscroll-behavior-x:none;max-width:100%}
+html,body{width:100%;overflow-x:clip;overscroll-behavior-x:none;max-width:100%}
+#app,main,.wrap{min-width:0;max-width:100%}
+.inline>*{min-width:0}
 body{touch-action:pan-y pinch-zoom}
 .who,.rec-list{touch-action:pan-x pan-y pinch-zoom;overscroll-behavior-x:contain}
 .map,.lb-img{touch-action:none}
@@ -221,6 +223,8 @@ textarea.input{min-height:84px;resize:vertical}
 /* ---------- sheet ---------- */
 dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:640px;max-height:92vh;max-height:92dvh;
   border-radius:var(--r-lg) var(--r-lg) 0 0;background:var(--bg);color:var(--ink);overflow:auto;overscroll-behavior:contain}
+dialog.sheet:focus-within{max-height:min(92dvh,calc(var(--maison-vh, 100dvh) - 8px));scroll-padding-bottom:100px}
+dialog.sheet input,dialog.sheet textarea{scroll-margin-bottom:110px}
 dialog.sheet::backdrop{background:rgba(10,20,18,.45)}
 dialog.sheet[open]{animation:up .22s ease-out}
 @keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
@@ -388,69 +392,6 @@ a.btn.primary{color:var(--on-accent)}
 .dots{display:flex;gap:6px;margin-bottom:22px}
 .dots i{width:30px;height:12px;border-radius:4px}
 .err{color:var(--danger);font-weight:700;margin-top:12px}
-
-/* === Maisonnée : thème C, verre 3D (visuel uniquement) === */
-.tiles{gap:14px;margin-top:24px}
-.tile{
-  border-radius:25px;
-  border:1px solid color-mix(in srgb,var(--mc,#71baff) 55%,#c7dcff 45%);
-  background:linear-gradient(150deg,rgba(255,255,255,.17) 0%,rgba(255,255,255,.055) 22%,transparent 44%),linear-gradient(155deg,#263c5a 0%,#192638 47%,#101b30 100%);
-  box-shadow:inset 0 2px 1px rgba(255,255,255,.36),inset 0 -3px 8px color-mix(in srgb,var(--mc,#71baff) 28%,transparent),0 9px 19px rgba(0,0,0,.35),0 0 13px color-mix(in srgb,var(--mc,#71baff) 29%,transparent);
-  transition:transform .17s ease,box-shadow .17s ease;
-  isolation:isolate;
-}
-.tile::before{content:"";position:absolute;inset:0 0 auto;height:45%;border-radius:inherit;pointer-events:none;background:linear-gradient(165deg,rgba(255,255,255,.19),transparent 70%);opacity:.7}
-.tile::after{content:"";position:absolute;inset:auto 8% 0;height:2px;border-radius:50%;pointer-events:none;background:var(--mc,#6ab5ff);filter:blur(3px);opacity:.8}
-.tile .mi{filter:drop-shadow(0 5px 3px rgba(0,0,0,.5)) drop-shadow(0 0 8px var(--mc,#71baff));transform:translateZ(0)}
-.tile .mi svg{stroke-width:2.7;filter:drop-shadow(1px 2px 0 rgba(255,255,255,.19))}
-.tile-t,.tile-s{position:relative;z-index:1;text-shadow:0 1px 2px rgba(0,0,0,.28)}
-.tile-t{color:#f7fbff}
-.tile-s{color:#b8c6da}
-.tile:active{transform:scale(.972);box-shadow:inset 0 4px 12px rgba(0,0,0,.4),0 0 16px color-mix(in srgb,var(--mc,#71baff) 44%,transparent)}
-.pill{background:linear-gradient(160deg,rgba(45,70,102,.96),rgba(11,25,45,.96));border:1px solid rgba(118,187,255,.55);box-shadow:inset 0 2px 1px rgba(255,255,255,.22),0 12px 32px rgba(0,0,0,.5),0 0 16px rgba(35,140,255,.19)}
-.pill button[aria-current="page"]{background:linear-gradient(160deg,rgba(35,120,215,.38),rgba(11,59,130,.24));box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 0 15px rgba(47,139,255,.28)}
-.fab{background:linear-gradient(155deg,#65bbff,#327cf1 56%,#1163d8);border:1px solid rgba(181,224,255,.78);box-shadow:inset 0 2px 1px rgba(255,255,255,.4),inset 0 -3px 5px rgba(0,41,133,.35),0 8px 23px rgba(0,55,148,.4),0 0 14px rgba(47,139,255,.25)}
-@media (prefers-reduced-motion:reduce){.tile{transition:none}}
-
-.tiles>.tile:nth-child(1){--mc:#f5b743}
-.tiles>.tile:nth-child(2){--mc:#9f83ff}
-.tiles>.tile:nth-child(3){--mc:#f2a93b}
-.tiles>.tile:nth-child(4){--mc:#42bfe9}
-.tiles>.tile:nth-child(5){--mc:#648dff}
-.tiles>.tile:nth-child(6){--mc:#f6a64c}
-.tiles>.tile:nth-child(7){--mc:#f4729c}
-.tiles>.tile:nth-child(8){--mc:#8ad6a6}
-.tiles>.tile:nth-child(9){--mc:#f2917b}
-.tiles>.tile:nth-child(10){--mc:#3db972}
-.tiles>.tile:nth-child(11){--mc:#6a86f0}
-.tiles>.tile:nth-child(12){--mc:#e46ca6}
-.tiles>.tile:nth-child(13){--mc:#6cc4f2}
-
-
-/* === Maisonnée C v2 — thème nuit forcé, esthétique uniquement === */
-:root, :root:not([data-theme]) {
-  --bg:#071323; --surface:#13243b; --soft:#1b304a; --line:#365274;
-  --ink:#f3f8ff; --muted:#a8bbd6; --accent:#57a5ff; --on-accent:#fff;
-  --danger:#ff887d; --late:#ff887d; --hot:#ffb073;
-  color-scheme:dark;
-}
-@media (prefers-color-scheme:light){:root{--bg:#071323;--surface:#13243b;--soft:#1b304a;--line:#365274;--ink:#f3f8ff;--muted:#a8bbd6;--accent:#57a5ff;--on-accent:#fff;--danger:#ff887d;--late:#ff887d;--hot:#ffb073;color-scheme:dark}}
-html{background:#071323}
-body{background:radial-gradient(ellipse 90% 28% at 50% 6%,rgba(21,89,164,.26),transparent 75%),radial-gradient(ellipse 90% 35% at 50% 88%,rgba(11,71,144,.19),transparent 80%),#071323;background-attachment:fixed;color:#f3f8ff}
-.top{background:linear-gradient(180deg,rgba(7,19,35,.98),rgba(7,19,35,.90));-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border-bottom:1px solid rgba(93,163,244,.11)}
-.tile{border:1.5px solid var(--mc,#67b8ff);background:linear-gradient(148deg,rgba(255,255,255,.22),rgba(255,255,255,.06) 24%,transparent 47%),linear-gradient(160deg,#263e62 0%,#162b48 48%,#09182c 100%);box-shadow:inset 0 2px 2px rgba(255,255,255,.52),inset 0 -3px 8px color-mix(in srgb,var(--mc,#67b8ff) 32%,transparent),0 12px 22px rgba(0,0,0,.48),0 0 9px color-mix(in srgb,var(--mc,#67b8ff) 82%,transparent),0 0 25px color-mix(in srgb,var(--mc,#67b8ff) 53%,transparent);}
-.tile::before{height:56%;background:linear-gradient(155deg,rgba(255,255,255,.27),rgba(255,255,255,.055) 40%,transparent 76%);opacity:1}
-.tile::after{height:3px;filter:blur(4px);opacity:1}
-.tile .mi{filter:drop-shadow(0 4px 2px rgba(0,0,0,.7)) drop-shadow(0 0 6px var(--mc,#67b8ff)) drop-shadow(0 0 14px var(--mc,#67b8ff))}
-.tile .mi svg{stroke-width:2.9;filter:drop-shadow(1px 2px 1px rgba(255,255,255,.35))}
-.tile-t{color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.45)}
-.tile-s{color:#c1d0e5}
-.pill{background:linear-gradient(160deg,rgba(43,79,128,.98),rgba(8,25,48,.98));border:1.5px solid rgba(109,185,255,.88);box-shadow:inset 0 2px 2px rgba(255,255,255,.35),0 12px 32px rgba(0,0,0,.6),0 0 22px rgba(34,139,255,.46)}
-.pill button[aria-current="page"]{color:#8cc6ff;background:linear-gradient(160deg,rgba(43,143,255,.55),rgba(8,66,153,.32));box-shadow:inset 0 1px 2px rgba(255,255,255,.24),0 0 20px rgba(47,139,255,.62)}
-.fab{background:linear-gradient(155deg,#8dd6ff,#348bff 52%,#0859d5);border:1.5px solid #b4e4ff;box-shadow:inset 0 2px 2px rgba(255,255,255,.62),inset 0 -4px 7px rgba(0,36,130,.48),0 9px 25px rgba(0,42,130,.58),0 0 25px rgba(48,147,255,.66)}
-.card,.list,.cal,.day-card,.sq-ic{box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 6px 20px rgba(0,0,0,.17)}
-@media (prefers-reduced-motion:reduce){.tile{transition:none}}
-
 </style>
 </head>
 <body>
@@ -459,5 +400,13 @@ body{background:radial-gradient(ellipse 90% 28% at 50% 6%,rgba(21,89,164,.26),tr
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="app.js"></script>
 <script src="modules.js"></script>
+<script>
+// Le viewport visuel se réduit quand le clavier iOS apparaît.
+if (window.visualViewport) {
+  const updateKeyboardViewport = () => document.documentElement.style.setProperty('--maison-vh', window.visualViewport.height + 'px');
+  visualViewport.addEventListener('resize', updateKeyboardViewport);
+  updateKeyboardViewport();
+}
+</script>
 </body>
 </html>

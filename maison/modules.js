@@ -728,7 +728,7 @@ async function gFetch() {
   G.busy = true;
   try {
     const cl = await gApi("users/me/calendarList?minAccessRole=reader&maxResults=250");
-    G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, on: !!c.selected || !!c.primary }));
+    G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, accessRole: c.accessRole || "reader", on: !!c.selected || !!c.primary }));
     LS.set("mz_gcallist", G.list);
     if (!G.cals) { G.cals = G.list.filter(c => c.on).map(c => c.id); LS.set("mz_gcals", G.cals); }
     const tMin = new Date(parse(addDays(today(), -40))).toISOString(), tMax = new Date(parse(addDays(today(), 150))).toISOString(), items = [];

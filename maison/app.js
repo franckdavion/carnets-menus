@@ -850,6 +850,7 @@ function openSheet(title, body, ctx = {}) {
   sheetCtx = ctx;
   $("#sheetIn").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div>${body}`;
   const d = $("#sheet"); if (!d.open) d.showModal();
+  d.scrollTop = 0;
   const first = d.querySelector("[autofocus]"); if (first) setTimeout(() => first.focus(), 60);
 }
 function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
@@ -921,6 +922,35 @@ function reminderVisibility(form) {
   const box = form.querySelector("#appointmentReminderList");
   if (box) box.hidden = form.querySelector('[name="reminder_mode"]:checked')?.value !== "custom";
 }
+function googleDestinationOptions() {
+  const available = (typeof G !== "undefined" && G.connected ? G.list : []).filter(c => c.accessRole !== "reader" && c.accessRole !== "freeBusyReader");
+  const preferred = LS.get("mz_last_google_destination", "local");
+  return `<label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${available.map(c => `<option value="${esc(c.id)}" ${preferred === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>`;
+}
+function googleEventPayload(row) {
+  const start = row.start_time ? `${row.day}T${row.start_time}:00` : null;
+  const end = row.end_time ? `${row.day}T${row.end_time}:00` : null;
+  const nextDay = addDays(row.day, 1);
+  const payload = { summary: row.title, location: row.place || "", description: row.notes || "", start: start ? {dateTime: start, timeZone: "Europe/Paris"} : {date: row.day}, end: end && start ? {dateTime: end, timeZone: "Europe/Paris"} : {date: nextDay} };
+  if (row.repeat && row.repeat !== "none") {
+    const freq = { weekly: "WEEKLY", monthly: "MONTHLY", yearly: "YEARLY" }[row.repeat];
+    if (freq) payload.recurrence = [`RRULE:FREQ=${freq}`];
+  }
+  if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.slice(0,5).map(minutes => ({method:"popup",minutes}))};
+  return payload;
+}
+async function saveGoogleEvent(calendarId, row) {
+  if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
+  const response = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(calendarId) + "/events", {
+    method:"POST", headers:{Authorization:"Bearer " + G.tok.t,"Content-Type":"application/json"}, body:JSON.stringify(googleEventPayload(row))
+  });
+  if (!response.ok) {
+    const info = await response.json().catch(() => ({}));
+    if (response.status === 403) throw new Error("Google refuse l'écriture. Il faut autoriser la création d'événements lors de la connexion Google.");
+    throw new Error(info.error?.message || `Erreur Google (${response.status})`);
+  }
+  return response.json();
+}
 function eventSheet(e, day, appointment = false) {
   const isNew = !e;
   const isAppointment = appointment || !!(e && e.kind === "appointment");
@@ -935,6 +965,7 @@ function eventSheet(e, day, appointment = false) {
         <label class="field" style="flex:1"><span class="label">Fin</span><input class="input" name="end" type="time" value="${esc(String(e.end_time || "").slice(0, 5))}"></label>
       </div>
       <div class="field"><span class="label">Qui est concerné</span>${chipsHtml("members", memberOpts(), e.members, true)}</div>
+      ${isNew ? googleDestinationOptions() : ""}
       <label class="field"><span class="label">Où</span><input class="input" name="place" value="${esc(e.place)}" maxlength="120" placeholder="Facultatif"></label>
       <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, e.repeat || "none")}</div>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(e.notes)}</textarea></label>
@@ -1138,6 +1169,20 @@ document.addEventListener("submit", async e => {
         row.reminders = reminders;
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
+      const destination = fd.google_destination || "local";
+      if (destination !== "local" && !sheetCtx?.id) {
+        btn.disabled = true;
+        try {
+          await saveGoogleEvent(destination, row);
+          LS.set("mz_last_google_destination", destination);
+          closeSheet();
+          if (typeof gFetch === "function") gFetch();
+          toast("Rendez-vous enregistré dans Google Agenda.");
+        } catch (err) { toast(err.message || "Enregistrement Google impossible."); }
+        finally { btn.disabled = false; }
+        break;
+      }
+      LS.set("mz_last_google_destination", "local");
       const id = sheetCtx && sheetCtx.id; closeSheet();
       if (id) await patch("events", id, row);
       else { await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }); weekA = mondayOf(row.day); calSel = row.day; calMonth = row.day.slice(0, 7) + "-01"; render(); toast("Événement ajouté."); }
@@ -1270,3 +1315,9 @@ function demoUpgrade(d) {
 /* ---------- go ---------- */
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 // init() is called at the end of modules.js, once every module is registered
+
+// Maintenir le champ actif visible au-dessus du clavier iOS.
+document.addEventListener("focusin", event => {
+  if (!event.target.matches("dialog.sheet input, dialog.sheet textarea, dialog.sheet select")) return;
+  setTimeout(() => event.target.scrollIntoView({block:"center",behavior:"smooth"}), 250);
+});
