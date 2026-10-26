@@ -146,6 +146,7 @@ async function syncTasks(today: string) {
       const token = await googleToken(cfg.user_id);
       const g = async (method: string, path: string, body?: unknown) => {
         const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+        if (method === "POST" && r.status === 409) return { conflict: true }; // this event id exists already (perhaps deleted)
         if (!r.ok && !(method === "DELETE" && [404, 410].includes(r.status))) throw new Error("Google " + r.status);
         return method === "DELETE" ? null : r.json();
       };
@@ -168,26 +169,27 @@ async function syncTasks(today: string) {
         }
       }
       for (const l of lg.data || []) { want[`log|${l.id}`] = { day: l.done_on, title: `✓ ${l.title}${who(l.member_id)}`, room: "" }; delete want[`${l.task_id}|${l.done_on}`]; }
-      const base = "calendars/" + encodeURIComponent(cfg.cal) + "/events", have: Record<string, { id: string; summary: string; start: { date?: string } }> = {};
+      // fixed event id from the household and the task/day (same as the app): no double, even when two write at once
+      const evId = async (k: string) => { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(h.id + "|" + k)); return "mz" + [...new Uint8Array(d)].slice(0, 20).map(x => x.toString(16).padStart(2, "0")).join(""); };
+      const base = "calendars/" + encodeURIComponent(cfg.cal) + "/events", have: Record<string, { id: string; summary: string; start: { date?: string } }[]> = {};
       let page = "";
       do {
         const q = new URLSearchParams({ sharedExtendedProperty: "mzhh=" + h.id, timeMin: from + "T00:00:00Z", timeMax: addDays(to, 2) + "T00:00:00Z", singleEvents: "true", maxResults: "2500" });
         if (page) q.set("pageToken", page);
         const r = await g("GET", base + "?" + q);
-        for (const e of r.items || []) {
-          const k = e.extendedProperties?.shared?.mzk; if (!k) continue;
-          if (have[k]) await g("DELETE", base + "/" + encodeURIComponent(e.id)); else have[k] = e;
-        }
+        for (const e of r.items || []) { const k = e.extendedProperties?.shared?.mzk; if (k) (have[k] = have[k] || []).push(e); }
         page = r.nextPageToken || "";
       } while (page);
       for (const [k, w] of Object.entries(want)) {
+        const id = await evId(k), list = have[k] || [];
         const body = { summary: w.title, description: "Tâche Maisonnée" + (w.room ? " · " + w.room : ""), start: { date: w.day }, end: { date: addDays(w.day, 1) }, transparency: "transparent", extendedProperties: { shared: { mzhh: h.id, mzk: k } } };
-        const e = have[k];
-        if (!e) { await g("POST", base, body); n++; }
-        else if (e.summary !== w.title || e.start?.date !== w.day) { await g("PATCH", base + "/" + encodeURIComponent(e.id), body); n++; }
+        for (const e of list) if (e.id !== id) { await g("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
+        const e = list.find(x => x.id === id);
+        if (e) { if (e.summary !== w.title || e.start?.date !== w.day) { await g("PATCH", base + "/" + id, body); n++; } }
+        else { const r = await g("POST", base, { ...body, id }); if (r?.conflict) await g("PUT", base + "/" + id, { ...body, status: "confirmed" }); n++; }
         delete have[k];
       }
-      for (const e of Object.values(have)) { await g("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
+      for (const list of Object.values(have)) for (const e of list) { await g("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
     } catch (e) { err = (e as Error).message || "Erreur Google Agenda"; console.error("Tâches → Google", h.id, err); }
     await supabase.from("households").update({ google_tasks: { ...cfg, at: new Date().toISOString(), err, changed: n } }).eq("id", h.id);
   }

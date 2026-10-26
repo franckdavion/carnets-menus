@@ -47,6 +47,7 @@ function gtWanted() {
 async function gReq(method, path, body) {
   const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { method, headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { G.tok = null; throw new Error("expired"); }
+  if (method === "POST" && r.status === 409) return { conflict: true }; // this event id exists already (perhaps deleted)
   if (!r.ok && !(method === "DELETE" && (r.status === 404 || r.status === 410))) throw new Error("Google " + r.status);
   return method === "DELETE" ? null : r.json();
 }
@@ -60,6 +61,9 @@ async function gtSync(force) {
     if (!(await gEnsure())) throw new Error("Google Agenda n'est pas connecté sur ce téléphone.");
     const cal = gtCal(); if (!cal) throw new Error("Aucun agenda Google où écrire.");
     const base = "calendars/" + encodeURIComponent(cal) + "/events";
+    // every event has a fixed id made from the household and the task/day: two phones (or the server) writing
+    // at the same moment, or Google listing new events late, can no longer create the same task twice
+    const evId = async k => { const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(S.hh.id + "|" + k)); return "mz" + [...new Uint8Array(h)].slice(0, 20).map(x => x.toString(16).padStart(2, "0")).join(""); };
     const have = {};
     let page = "";
     do {
@@ -68,23 +72,22 @@ async function gtSync(force) {
       const r = await gReq("GET", base + "?" + q);
       for (const e of r.items || []) {
         const k = e.extendedProperties && e.extendedProperties.shared && e.extendedProperties.shared.mzk;
-        if (!k) continue;
-        if (have[k]) await gReq("DELETE", base + "/" + encodeURIComponent(e.id)); // duplicate made by two phones at once
-        else have[k] = e;
+        if (k) (have[k] = have[k] || []).push(e);
       }
       page = r.nextPageToken || "";
     } while (page);
     let n = 0;
     for (const [k, w] of Object.entries(out)) {
-      const body = { summary: w.title, description: "Tâche Maisonnée" + (w.room ? " · " + w.room : ""), start: { date: w.day }, end: { date: addDays(w.day, 1) }, transparency: "transparent",
+      const id = await evId(k), list = have[k] || [], body = { summary: w.title, description: "Tâche Maisonnée" + (w.room ? " · " + w.room : ""), start: { date: w.day }, end: { date: addDays(w.day, 1) }, transparency: "transparent",
         extendedProperties: { shared: { mzhh: S.hh.id, mzk: k } } };
-      const e = have[k];
-      if (!e) { await gReq("POST", base, body); n++; }
-      else if (e.summary !== w.title || (e.start && e.start.date) !== w.day) { await gReq("PATCH", base + "/" + encodeURIComponent(e.id), body); n++; }
+      for (const e of list) if (e.id !== id) { await gReq("DELETE", base + "/" + encodeURIComponent(e.id)); n++; } // doubles from before
+      const e = list.find(x => x.id === id);
+      if (e) { if (e.summary !== w.title || (e.start && e.start.date) !== w.day) { await gReq("PATCH", base + "/" + id, body); n++; } }
+      else { const r = await gReq("POST", base, { ...body, id }); if (r && r.conflict) await gReq("PUT", base + "/" + id, { ...body, status: "confirmed" }); n++; }
       delete have[k];
     }
     // tasks deleted or moved, planned days that passed without being done: only what was really done stays
-    for (const e of Object.values(have)) { await gReq("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
+    for (const list of Object.values(have)) for (const e of list) { await gReq("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
     GT.sig = sig; GT.at = Date.now(); GT.err = ""; GT.n = n;
   } catch (e) { GT.err = e.message || "Erreur Google Agenda"; console.warn("Tâches → Google", e); }
   finally { GT.busy = false; if (view === "foyer") softRender(); }
