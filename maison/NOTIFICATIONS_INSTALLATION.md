@@ -5,7 +5,7 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 ## À faire AVANT de tester
 
 1. Dans Supabase > SQL Editor, exécuter `maison/notifications-supabase.sql`.
-2. Vérifier que la colonne `events.reminders` (JSONB) existe dans votre base : elle provient des modifications précédentes de l'agenda.
+2. Exécuter `maison/supabase-foyer-6.sql` : il crée les colonnes `events.kind` et `events.reminders` (et la table des jetons Google) s'ils n'existent pas encore.
 3. Générer une paire de clés VAPID avec `npx web-push generate-vapid-keys` (Node.js requis). Conserver la clé privée secrète.
 4. Coller UNIQUEMENT la clé PUBLIQUE dans `maison/push-config.js`.
 5. Dans Supabase Edge Functions, déployer `maison/supabase/functions/maison-push-dispatch/index.ts` sous le nom `maison-push-dispatch`. Désactiver la vérification JWT pour CETTE fonction : elle contrôle elle-même un secret fort via `x-cron-secret`.
@@ -17,7 +17,7 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 ## Périmètre réellement opérationnel après configuration
 
 - Abonnement Web Push individuel, désabonnement, réception en arrière-plan.
-- Envoi automatique des rappels des **rendez-vous internes non récurrents** avec délai de 0 à 1440 minutes, à partir de leur heure de début.
+- Envoi automatique des rappels des **rendez-vous internes non récurrents** avec délai de 0 minute à 4 semaines, à partir de leur heure de début.
 - Si l'événement est « toute la journée », l'heure de référence est 9 h (heure de Paris).
 - Envoi aux membres du foyer concernés par l'événement.
 - Les rendez-vous Google, répétitions, tâches, anniversaires, messages, courses, cloche d'historique, préférences individuelles et heures silencieuses ne sont **pas encore reliés à l'envoi**. Ils demandent une deuxième phase. Le bouton cloche ouvre actuellement les paramètres, pas un historique.

@@ -167,12 +167,13 @@ async function upsert(key, row) {
   return true;
 }
 async function patch(key, id, p) {
-  const r = S[key].find(x => x.id === id); if (!r) return;
+  const r = S[key].find(x => x.id === id); if (!r) return false;
   const before = { ...r }; Object.assign(r, p); saveLocal(); render();
   if (mode === "cloud") {
     const { error } = await sb.from(TABLES[key]).update(p).eq("id", id);
-    if (error) { Object.assign(r, before); saveLocal(); render(); fail(error); }
+    if (error) { Object.assign(r, before); saveLocal(); render(); fail(error); return false; }
   }
+  return true;
 }
 async function remove(key, id) {
   const r = S[key].find(x => x.id === id); if (!r) return;
@@ -1028,7 +1029,7 @@ function appointmentReminderValues(form) {
   const values = rows.map(r => {
     const value = Number(r.querySelector("[data-reminder-value]").value);
     const unit = Number(r.querySelector("[data-reminder-unit]").value);
-    return Number.isInteger(value) && value >= 0 && Number.isInteger(value * unit) && value * unit <= 525600 ? value * unit : NaN;
+    return Number.isInteger(value) && value >= 0 && Number.isInteger(value * unit) && value * unit <= 40320 ? value * unit : NaN;
   });
   return values.every(Number.isFinite) ? [...new Set(values)] : null;
 }
@@ -1056,7 +1057,10 @@ function eventFormFeedback(form, message) {
 }
 function googleEventPayload(row) {
   const start = row.start_time ? `${row.day}T${row.start_time}:00` : null;
-  const end = row.end_time ? `${row.day}T${row.end_time}:00` : null;
+  // Google needs an end of the same kind as the start: without an end time, the appointment lasts one hour
+  const plus1h = t => { const [h, m] = t.split(":").map(Number), x = Math.min(23 * 60 + 59, h * 60 + m + 60); return pad(Math.floor(x / 60)) + ":" + pad(x % 60); };
+  const endTime = row.start_time ? (row.end_time && row.end_time > row.start_time ? row.end_time : plus1h(row.start_time)) : null;
+  const end = endTime ? `${row.day}T${endTime}:00` : null;
   const nextDay = addDays(row.day, 1);
   const payload = { summary: row.title, location: row.place || "", description: row.notes || "", start: start ? {dateTime: start, timeZone: "Europe/Paris"} : {date: row.day}, end: end && start ? {dateTime: end, timeZone: "Europe/Paris"} : {date: nextDay} };
   if (row.repeat && row.repeat !== "none") {
@@ -1064,7 +1068,7 @@ function googleEventPayload(row) {
     const freq = custom ? {days:"DAILY",weeks:"WEEKLY",months:"MONTHLY",years:"YEARLY"}[custom.unit] : { weekly: "WEEKLY", monthly: "MONTHLY", yearly: "YEARLY" }[row.repeat];
     if (freq) payload.recurrence = [`RRULE:FREQ=${freq}${custom ? ";INTERVAL=" + custom.interval : ""}`];
   }
-  if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.slice(0,5).map(minutes => ({method:"popup",minutes}))};
+  if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.filter(m => m <= 40320).slice(0,5).map(minutes => ({method:"popup",minutes}))};
   return payload;
 }
 async function saveGoogleEvent(calendarId, row) {
@@ -1309,7 +1313,7 @@ document.addEventListener("submit", async e => {
         const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "default";
         const reminders = choice === "none" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
         if (!reminders || (choice === "custom" && !reminders.length)) {
-          eventFormFeedback(f, "Ajoute un rappel valide ou choisis « Aucun rappel ».");
+          eventFormFeedback(f, "Ajoute un rappel valide (4 semaines au plus) ou choisis « Aucun rappel ».");
           return;
         }
         row.kind = "appointment";
@@ -1334,8 +1338,8 @@ document.addEventListener("submit", async e => {
       const id = sheetCtx && sheetCtx.id;
       btn.disabled = true;
       try {
-        if (id) await patch("events", id, row);
-        else await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() });
+        const ok = id ? await patch("events", id, row) : !!(await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }));
+        if (!ok) { eventFormFeedback(f, row.kind ? "Le rendez-vous n'a pas été enregistré. Si le message persiste, collez le script supabase-foyer-6.sql dans Supabase (colonnes des rappels)." : "L'événement n'a pas été enregistré. Vérifiez la connexion et réessayez."); return; }
         closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.");
       } catch (err) { console.error("Enregistrement rendez-vous", err); eventFormFeedback(f, "Échec de l’enregistrement : " + (err?.message || "vérifie la connexion")); }
       finally { btn.disabled = false; }
