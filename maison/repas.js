@@ -12,6 +12,7 @@ let rWeek = mondayOf(today()), rPick = null;                     // semaine affi
 Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && (view === "repas" || view === "courses") });
 
 function carnetBoot() {
+  carnetLive();
   if (CK.frame || mode !== "cloud") return;
   const f = document.createElement("iframe");
   f.src = CARNET_URL + "?arriere-plan=maisonnee";
@@ -53,6 +54,21 @@ setInterval(() => {
 }, 3000);
 // the others' changes: refresh from the shared carnet when the page comes back
 async function carnetRefresh() { if (!CK.ready) return; try { await cev("cloudSync()"); } catch (_) {} if (view === "repas" || view === "courses") softRender(); }
+// Mise à jour en direct (Supabase Realtime) : quand le carnet commun change (table user_state, ligne du
+// propriétaire du carnet), on relance le chargement existant carnetRefresh() pour Repas et Courses.
+let ckLive = null, ckLiveT = null;
+function carnetLive() {
+  const owner = S.hh && S.hh.carnet_user;
+  if (mode !== "cloud" || !sb || !owner || (ckLive && ckLive.owner === owner)) return;
+  if (ckLive) sb.removeChannel(ckLive.ch);            // autre foyer : on quitte l'ancien canal
+  const ch = sb.channel("carnet-" + owner)
+    .on("postgres_changes", { event: "*", schema: "public", table: "user_state", filter: "user_id=eq." + owner }, () => {
+      clearTimeout(ckLiveT);                          // plusieurs changements d'affilée : un seul rechargement
+      ckLiveT = setTimeout(() => { if (view === "repas" || view === "courses") carnetRefresh(); }, 800);
+    })
+    .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
+  ckLive = { owner, ch };
+}
 function carnetSave(msg) { cev("saveMenu()"); render(); if (msg) toast(msg); }
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {
