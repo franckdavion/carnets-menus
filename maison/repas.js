@@ -134,6 +134,8 @@ function mealSlotSheet(k) {
   const title = `${dn} ${m} · ${fmtShort(day)}`;
   if (!s || !x.name) { rPick = { k, role: "main", q: "" }; return rPickSheet(title); }
   const ro = x.past;
+  // the same meal redrawn after a tap (ingredient, people…): stay where you were in the window
+  const dlg = $("#sheet"), same = dlg.open && ($("#sheetTitle") || {}).textContent === title, st = dlg.scrollTop, si = $("#sheetIn").scrollTop;
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
     <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "🔒 dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
@@ -148,6 +150,7 @@ function mealSlotSheet(k) {
     <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
     ${ingBlock(k, s)}
     <div class="sheet-sticky btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>`}`);
+  if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
 }
 // the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
 function slotIngredients(k) {
