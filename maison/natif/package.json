@@ -1,0 +1,19 @@
+{
+  "name": "maisonnee-natif",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Maisonnée en appli native (Capacitor) : position partagée en arrière-plan",
+  "scripts": {
+    "preparer-ios": "cap add ios && node configurer-ios.mjs && cap sync ios",
+    "maj": "node configurer-ios.mjs && cap sync ios",
+    "ouvrir": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

@@ -44,6 +44,7 @@ Les modifications apparaissent en direct sur les téléphones des autres membres
 - `supabase-foyer-4.sql` : galerie photo (stockage privé « household-photos »)
 - `supabase-foyer-3.sql` : anniversaires, budget, documents (stockage privé), emploi du temps
 - `modules.js` : accueil en modules, Explorer, calendrier du mois et nouveaux modules
+- `natif.js`, `natif/` : appli iPhone (Capacitor) qui partage la position en arrière-plan, envoyée seulement après un déplacement de plus de 50 m (voir `natif/LISEZMOI.md`)
 
 ## Carnet de menus relié
 

@@ -556,6 +556,7 @@ async function sendMsg(body) {
 let map = null, mapMarkers = [], mapView = null, geoLast = 0;
 const geoKey = () => "mz_geo_" + (S.hh ? S.hh.id : "");
 const geoOn = () => !!LS.get(geoKey(), false);
+const geoNatif = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); // appli native (natif.js)
 function geoTick(force) {
   if (!S.hh || !S.me || !S.v2 || !geoOn() || !navigator.geolocation) return;
   if (!force && Date.now() - geoLast < 4 * 60 * 1000) return;
@@ -808,9 +809,9 @@ const VIEWS = {
   carte() {
     if (!S.v2) return v2Notice();
     return `<div id="map" class="map" role="img" aria-label="Carte des positions partagées"></div>
-      <div class="card" style="margin-top:12px"><label class="switch" style="margin:0"><span><strong>Partager ma position</strong><br><span class="muted small">${geoOn() ? "Mise à jour à chaque ouverture de l'appli." : "Seuls les membres du foyer la voient. Vous pouvez arrêter à tout moment."}</span></span><input type="checkbox" data-geo ${geoOn() ? "checked" : ""} ${S.me ? "" : "disabled"}></label></div>
+      <div class="card" style="margin-top:12px"><label class="switch" style="margin:0"><span><strong>Partager ma position</strong><br><span class="muted small">${geoOn() ? (geoNatif() ? "Mise à jour dès que vous vous déplacez de plus de 50 m, même appli fermée." : "Mise à jour à chaque ouverture de l'appli.") : "Seuls les membres du foyer la voient. Vous pouvez arrêter à tout moment."}</span></span><input type="checkbox" data-geo ${geoOn() ? "checked" : ""} ${S.me ? "" : "disabled"}></label></div>
       <div class="list" id="locList" style="margin-top:12px">${locListHtml()}</div>
-      <p class="muted small" style="margin-top:10px">Sur iPhone, une appli web ne lit la position que lorsqu'elle est ouverte : la carte montre la dernière position connue.</p>`;
+      ${geoNatif() ? "" : `<p class="muted small" style="margin-top:10px">Sur iPhone, une appli web ne lit la position que lorsqu'elle est ouverte : la carte montre la dernière position connue.</p>`}`;
   },
 
   foyer() {

@@ -1,0 +1,16 @@
+{
+  "appId": "fr.franckdavion.maisonnee",
+  "appName": "Maisonnée",
+  "webDir": "www",
+  "server": {
+    "url": "https://franckdavion.github.io/carnets-menus/maison/",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#121926"
+  },
+  "android": {
+    "useLegacyBridge": true
+  }
+}
