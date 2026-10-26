@@ -23,6 +23,15 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 - Chacun choisit ce qu'il reçoit dans la cloche 🔔 (table `maison_push_prefs`, script `supabase-foyer-10.sql`).
 - Les rendez-vous enregistrés dans **Google Agenda** sont rappelés par Google Agenda lui-même.
 
+## Tâches dans Google Agenda, appli fermée (même fonction)
+
+Toutes les 5 minutes, `maison-push-dispatch` recopie les tâches des foyers qui l'ont activé (Ma famille › « Tâches dans Google Agenda ») dans l'agenda choisi, avec le compte Google de la personne qui l'a activé.
+
+1. Coller `maison/supabase-foyer-11.sql` dans le SQL Editor (colonne `households.google_tasks`).
+2. Redéployer `maison-push-dispatch` avec le nouveau `index.ts`.
+3. Les secrets `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` (déjà créés pour la fonction `google-calendar`) servent aussi ici : rien à ajouter.
+4. Dans Ma famille, désactiver puis réactiver « Mettre les tâches dans Google Agenda » une fois. La ligne « Appli fermée » indique le dernier passage du serveur.
+
 ## Sécurité
 
 Ne jamais publier la clé VAPID privée, le secret cron ou la clé service_role sur GitHub.

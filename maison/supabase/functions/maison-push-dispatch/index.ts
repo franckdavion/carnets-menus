@@ -7,6 +7,8 @@
 //  3. Résumé du matin, à l'heure choisie par chacun : tâches du jour, agenda Maisonnée du jour,
 //     repas du soir, anniversaires du jour, documents qui expirent.
 //  4. Anniversaires : la veille à 19 h (et dans le résumé du matin le jour même).
+//  5. Toutes les 5 minutes : les tâches des foyers qui l'ont demandé sont recopiées dans Google Agenda
+//     (households.google_tasks, script supabase-foyer-11.sql ; secrets GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).
 // Chaque personne choisit ce qu'elle reçoit (table maison_push_prefs, réglée depuis la cloche).
 // Les rendez-vous enregistrés dans Google Agenda sont rappelés par Google Agenda lui-même.
 
@@ -101,6 +103,96 @@ async function pushOnce(claim: string, userId: string, payload: { title: string;
   }
 }
 
+/* ---------- 5. tâches → Google Agenda (même règle que l'appli, maison/gtaches.js) ---------- */
+type Task = { id: string; title: string; room: string; assignee: string | null; rotate: boolean; freq: string; every_n: number; weekdays: number[]; next_due: string };
+const isoDay = (d: string) => ((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+function nextDue(t: Task, base: string): string | null {
+  switch (t.freq) {
+    case "daily": return addDays(base, 1);
+    case "every": return addDays(base, Math.max(1, t.every_n || 1));
+    case "weekly": {
+      const days = t.weekdays?.length ? t.weekdays : [isoDay(t.next_due)];
+      for (let i = 1; i <= 7; i++) { const d = addDays(base, i); if (days.includes(isoDay(d))) return d; }
+      return addDays(base, 7);
+    }
+    case "monthly": {
+      const want = Number(t.next_due.slice(8, 10)), b = new Date(`${base}T12:00:00Z`);
+      let y = b.getUTCFullYear(), m = b.getUTCMonth() + 1; if (m > 11) { m = 0; y++; }
+      const last = new Date(Date.UTC(y, m + 1, 0, 12)).getUTCDate();
+      return new Date(Date.UTC(y, m, Math.min(want, last), 12)).toISOString().slice(0, 10);
+    }
+    default: return null;
+  }
+}
+async function googleToken(userId: string) {
+  const { data } = await supabase.from("google_calendar_tokens").select("*").eq("user_id", userId).maybeSingle();
+  if (!data) throw new Error("Google Agenda n'est plus connecté pour ce compte.");
+  if (data.access_token && Date.parse(data.expires_at) > Date.now() + 2 * MINUTE) return data.access_token as string;
+  const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ refresh_token: data.refresh_token, client_id: env("GOOGLE_CLIENT_ID"), client_secret: env("GOOGLE_CLIENT_SECRET"), grant_type: "refresh_token" }) });
+  const t = await r.json();
+  if (!r.ok) throw new Error("Google refuse la connexion (" + (t.error || r.status) + ") : reconnectez Google dans Ma famille.");
+  await supabase.from("google_calendar_tokens").update({ access_token: t.access_token, expires_at: new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString(), updated_at: new Date().toISOString() }).eq("user_id", userId);
+  return t.access_token as string;
+}
+async function syncTasks(today: string) {
+  const { data: hhs, error } = await supabase.from("households").select("id,google_tasks").not("google_tasks", "is", null);
+  if (error) return; // script 11 pas encore collé
+  for (const h of hhs || []) {
+    const cfg = h.google_tasks || {};
+    if (!cfg.on || !cfg.cal || !cfg.user_id) continue;
+    let err = "", n = 0;
+    try {
+      const token = await googleToken(cfg.user_id);
+      const g = async (method: string, path: string, body?: unknown) => {
+        const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+        if (!r.ok && !(method === "DELETE" && [404, 410].includes(r.status))) throw new Error("Google " + r.status);
+        return method === "DELETE" ? null : r.json();
+      };
+      const from = addDays(today, -7), to = addDays(today, 14);
+      const [tk, lg, mb] = await Promise.all([
+        supabase.from("tasks").select("id,title,room,assignee,rotate,freq,every_n,weekdays,next_due").eq("household_id", h.id).eq("archived", false),
+        supabase.from("task_log").select("id,task_id,member_id,title,done_on").eq("household_id", h.id).gte("done_on", from).lte("done_on", today),
+        supabase.from("household_members").select("id,name,position").eq("household_id", h.id)
+      ]);
+      const ms = (mb.data || []).sort((a, b) => a.position - b.position || String(a.name).localeCompare(String(b.name)));
+      const who = (id: string | null) => { const m = ms.find(x => x.id === id); return m ? " · " + m.name : ""; };
+      const turn = (id: string) => { const i = ms.findIndex(x => x.id === id); return ms.length && i >= 0 ? ms[(i + 1) % ms.length].id : id; };
+      const want: Record<string, { day: string; title: string; room: string }> = {};
+      for (const t of (tk.data || []) as Task[]) {
+        let d: string | null = t.next_due, a = t.assignee, guard = 0;
+        while (d && d <= to && guard++ < 60) {
+          const day = d < today ? today : d, k = `${t.id}|${day}`;
+          if (!want[k]) want[k] = { day, title: `🧹 ${t.title}${who(a)}`, room: t.room || "" };
+          d = nextDue(t, d); if (t.rotate && a) a = turn(a);
+        }
+      }
+      for (const l of lg.data || []) { want[`log|${l.id}`] = { day: l.done_on, title: `✓ ${l.title}${who(l.member_id)}`, room: "" }; delete want[`${l.task_id}|${l.done_on}`]; }
+      const base = "calendars/" + encodeURIComponent(cfg.cal) + "/events", have: Record<string, { id: string; summary: string; start: { date?: string } }> = {};
+      let page = "";
+      do {
+        const q = new URLSearchParams({ sharedExtendedProperty: "mzhh=" + h.id, timeMin: from + "T00:00:00Z", timeMax: addDays(to, 2) + "T00:00:00Z", singleEvents: "true", maxResults: "2500" });
+        if (page) q.set("pageToken", page);
+        const r = await g("GET", base + "?" + q);
+        for (const e of r.items || []) {
+          const k = e.extendedProperties?.shared?.mzk; if (!k) continue;
+          if (have[k]) await g("DELETE", base + "/" + encodeURIComponent(e.id)); else have[k] = e;
+        }
+        page = r.nextPageToken || "";
+      } while (page);
+      for (const [k, w] of Object.entries(want)) {
+        const body = { summary: w.title, description: "Tâche Maisonnée" + (w.room ? " · " + w.room : ""), start: { date: w.day }, end: { date: addDays(w.day, 1) }, transparency: "transparent", extendedProperties: { shared: { mzhh: h.id, mzk: k } } };
+        const e = have[k];
+        if (!e) { await g("POST", base, body); n++; }
+        else if (e.summary !== w.title || e.start?.date !== w.day) { await g("PATCH", base + "/" + encodeURIComponent(e.id), body); n++; }
+        delete have[k];
+      }
+      for (const e of Object.values(have)) { await g("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
+    } catch (e) { err = (e as Error).message || "Erreur Google Agenda"; console.error("Tâches → Google", h.id, err); }
+    await supabase.from("households").update({ google_tasks: { ...cfg, at: new Date().toISOString(), err, changed: n } }).eq("id", h.id);
+  }
+}
+
 Deno.serve(async req => {
   if (!env("CRON_SECRET") || req.headers.get("x-cron-secret") !== env("CRON_SECRET")) return new Response("Unauthorized", { status: 401 });
   if (![env("VAPID_SUBJECT"), env("VAPID_PUBLIC_KEY"), env("VAPID_PRIVATE_KEY")].every(Boolean)) return new Response("VAPID secrets missing", { status: 500 });
@@ -108,6 +200,11 @@ Deno.serve(async req => {
   sent = 0; failed = 0; subsCache.clear();
   const now = Date.now(), { day: today, time: nowTime } = parisDateParts(new Date(now));
   const yesterday = addDays(today, -1), tomorrow = addDays(today, 1);
+
+  // tâches → Google Agenda, toutes les 5 minutes (sans gêner les notifications si Google répond mal)
+  if (new Date(now).getUTCMinutes() % 5 === 0 && env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET")) {
+    try { await syncTasks(today); } catch (e) { console.error("Tâches → Google", e); }
+  }
 
   // qui reçoit des notifications, et avec quelles préférences
   const { data: allSubs } = await supabase.from("maison_push_subscriptions").select("user_id");

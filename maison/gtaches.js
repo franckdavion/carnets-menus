@@ -7,7 +7,19 @@
    même si un autre téléphone du foyer le fait aussi. Une tâche supprimée ou déplacée disparaît de l'agenda. */
 
 const GT = { busy: false, sig: "", at: 0, err: "", n: 0 };
-const gtConf = () => LS.get("mz_gtasks", { on: false, cal: "" });
+// the choice is kept with the household (the server copies the tasks even when the app is closed, script 11);
+// without that column yet, only on this phone
+const gtConf = () => (S.hh && S.hh.google_tasks) || LS.get("mz_gtasks", { on: false, cal: "" });
+let gtNoServer = false;
+async function gtSave(c) {
+  LS.set("mz_gtasks", c);
+  if (mode !== "cloud" || !S.hh) return;
+  const v = { on: !!c.on, cal: c.cal || "", user_id: user ? user.id : null };
+  if (S.hh.google_tasks) S.hh.google_tasks = v;
+  const { error } = await sb.from("households").update({ google_tasks: v }).eq("id", S.hh.id);
+  if (error) { gtNoServer = true; return; }
+  gtNoServer = false; S.hh.google_tasks = v; saveLocal();
+}
 const gtWritable = () => ((typeof G !== "undefined" && G.list) || []).filter(c => c.accessRole === "owner" || c.accessRole === "writer");
 const gtCal = () => { const c = gtConf().cal; return gtWritable().some(x => x.id === c) ? c : (defaultDest() !== "local" ? defaultDest() : ""); };
 
@@ -79,7 +91,12 @@ async function gtSync(force) {
 }
 // after each change of the tasks (here or on another phone), and every half hour
 setInterval(() => { if (screen === "app" && document.visibilityState === "visible") gtSync(false); }, 20e3);
-setTimeout(() => gtSync(false), 6000);
+setTimeout(() => {
+  // turned on here before the server could do it: hand the choice to the household
+  const loc = LS.get("mz_gtasks", null);
+  if (mode === "cloud" && S.hh && "google_tasks" in S.hh && !S.hh.google_tasks && loc && loc.on) gtSave(loc);
+  gtSync(false);
+}, 6000);
 
 // switched off, or another calendar chosen: the tasks still to come leave the old calendar
 async function gtClear(cal) {
@@ -101,13 +118,16 @@ VIEWS.foyer = function () {
     <label class="switch" style="margin:0"><span><strong>Mettre les tâches dans Google Agenda</strong><br><span class="muted small">Toute la journée, des 2 prochaines semaines ; les tâches faites passent en « ✓ ».</span></span><input type="checkbox" data-gtasks ${c.on ? "checked" : ""}></label>
     ${c.on ? `<label class="field"><span class="label">Agenda</span><select class="input" data-gtcal>${cals.map(x => `<option value="${esc(x.id)}" ${x.id === cur ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
       <p class="muted small" style="margin:6px 0 0">${GT.busy ? "Mise à jour de l'agenda…" : GT.err ? "⚠️ " + esc(GT.err) : GT.at ? "À jour · " + new Date(GT.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "Première mise à jour dans quelques secondes."} Il suffit de l'activer sur un seul téléphone.</p>
+      ${(() => { const sv = S.hh && S.hh.google_tasks;
+        if (gtNoServer || !sv) return `<p class="muted small" style="margin:6px 0 0">Appli fermée : pas encore de mise à jour par le serveur (script supabase-foyer-11.sql à coller, puis fonction maison-push-dispatch à redéployer).</p>`;
+        return `<p class="muted small" style="margin:6px 0 0">Appli fermée : le serveur met l'agenda à jour toutes les 5 minutes${sv.at ? ` · dernier passage ${esc(new Date(sv.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }))}${sv.err ? " · ⚠️ " + esc(sv.err) : ""}` : " (pas encore passé)"}.</p>`; })()}
       <div class="btns"><button class="btn" data-act="gtNow">Mettre à jour maintenant</button></div>` : ""}</div>`;
 };
 document.addEventListener("change", e => {
   if (e.target.matches("[data-gtasks]")) {
-    const c = gtConf(), old = gtCal(); c.on = e.target.checked; if (!c.cal) c.cal = old; LS.set("mz_gtasks", c); GT.sig = ""; render();
+    const c = { ...gtConf() }, old = gtCal(); c.on = e.target.checked; if (!c.cal) c.cal = old; GT.sig = ""; gtSave(c).then(render); render();
     if (c.on) { toast("Les tâches vont apparaître dans Google Agenda."); gtSync(true); } else { toast("Les tâches à venir sont retirées de Google Agenda."); gtClear(old); }
   }
-  if (e.target.matches("[data-gtcal]")) { const c = gtConf(), old = gtCal(); c.cal = e.target.value; LS.set("mz_gtasks", c); GT.sig = ""; gtClear(old).then(() => gtSync(true)); }
+  if (e.target.matches("[data-gtcal]")) { const c = { ...gtConf() }, old = gtCal(); c.cal = e.target.value; GT.sig = ""; gtSave(c).then(() => gtClear(old)).then(() => gtSync(true)); }
 });
 document.addEventListener("click", e => { if (e.target.closest("[data-act=gtNow]")) { gtSync(true); render(); } });
