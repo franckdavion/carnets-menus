@@ -419,10 +419,14 @@ function returnToTodayAgenda() {
   weekA = mondayOf(d); calSel = d; calMonth = d.slice(0, 7) + "-01";
   render(); window.scrollTo(0, 0);
 }
+const spanOf = e => Math.max(0, e.end_day && e.end_day > e.day ? diffDays(e.day, e.end_day) : 0);
 function occurrences(from, to) {
   const out = [];
+  // one entry per day covered: k = day index (0 = first day), n = number of days
+  const push = (e, start) => { const n = spanOf(e) + 1; for (let k = 0; k < n; k++) { const d = addDays(start, k); if (d >= from && d <= to) out.push({ ...e, on: d, start_on: start, k, n }); } };
   for (const e of S.events) {
-    if (e.repeat === "none" || !e.repeat) { if (e.day >= from && e.day <= to) out.push({ ...e, on: e.day }); continue; }
+    const len = spanOf(e);
+    if (e.repeat === "none" || !e.repeat) { if (e.day <= to && addDays(e.day, len) >= from) push(e, e.day); continue; }
     if (e.day > to) continue;
     const custom = recurrenceInfo(e.repeat);
     const unit = custom?.unit || ({weekly:"weeks",monthly:"months",yearly:"years"}[e.repeat]);
@@ -431,10 +435,12 @@ function occurrences(from, to) {
     for (let i = 0; i < 800; i++) {
       const d = recurrenceDate(e.day, i, unit, interval);
       if (d > to) break;
-      if (d >= from) out.push({ ...e, on: d });
+      if (addDays(d, len) >= from) push(e, d);
     }
   }
-  return out.sort((a, b) => a.on.localeCompare(b.on) || String(a.start_time || "").localeCompare(String(b.start_time || "")));
+  // on a given day: what lasts the whole day first, then by time
+  const t = o => o.n > 1 && o.k > 0 && o.k < o.n - 1 ? "" : o.n > 1 && o.k === o.n - 1 ? "" : String(o.start_time || "");
+  return out.sort((a, b) => a.on.localeCompare(b.on) || t(a).localeCompare(t(b)));
 }
 
 /* ---------- meals and shopping ---------- */
@@ -819,10 +825,15 @@ const VIEWS = {
 
 function eventRow(e, withDay, withDate) {
   const ms = (e.members || []).map(member).filter(Boolean);
-  const when = e.start_time ? `<span class="ev-time">${esc(hm(e.start_time))}</span>` : `<span class="ev-time allday">Journée</span>`;
+  const multi = (e.n || 1) > 1, first = !multi || e.k === 0, last = multi && e.k === e.n - 1;
+  const when = multi && !first ? (last && e.end_time ? `<span class="ev-time">→ ${esc(hm(e.end_time))}</span>` : `<span class="ev-time allday">Journée</span>`)
+    : e.start_time ? `<span class="ev-time">${esc(hm(e.start_time))}</span>` : `<span class="ev-time allday">Journée</span>`;
   const meta = [];
   if (withDay || withDate) meta.push(esc(withDate ? dayLabel(e.on) : (e.on === today() ? "Aujourd'hui" : "Demain")));
-  if (e.end_time && e.start_time) meta.push("jusqu'à " + esc(hm(e.end_time)));
+  if (multi && first) meta.push("jusqu'au " + esc(parse(addDays(e.on, e.n - 1)).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })) + (e.end_time ? " à " + esc(hm(e.end_time)) : ""));
+  else if (multi && last) meta.push(`dernier jour · ${e.n}/${e.n}`);
+  else if (multi) meta.push(`jour ${e.k + 1}/${e.n}`);
+  else if (e.end_time && e.start_time) meta.push("jusqu'à " + esc(hm(e.end_time)));
   if (e.place) meta.push(esc(e.place));
   if (e.repeat && e.repeat !== "none") { const custom = recurrenceInfo(e.repeat); meta.push(esc(custom ? `tous les ${custom.interval} ${ {days:"jours",weeks:"semaines",months:"mois",years:"ans"}[custom.unit]}` : (REPEATS.find(r => r[0] === e.repeat) || [, ""])[1].toLowerCase())); }
   return `<button class="row" data-act="editEvent" data-v="${e.id}">${when}<span class="main"><span class="t">${esc(e.title)}</span>${meta.length ? `<span class="m">${meta.join(" · ")}</span>` : ""}</span><span class="stack" style="padding:0">${ms.slice(0, 3).map(m => av(m, "sm")).join("")}</span></button>`;
@@ -1059,10 +1070,13 @@ function googleDestinationOptions() {
   // every Google calendar is listed; the ones this account may only read are shown greyed out, with the reason
   const all = (typeof G !== "undefined" && G.connected ? G.list : []);
   const canWrite = c => c.accessRole === "owner" || c.accessRole === "writer";
-  const preferred = LS.get("mz_last_google_destination", "local");
+  let preferred = LS.get("mz_last_google_destination", "local");
+  if (preferred !== "local" && !all.some(c => c.id === preferred && canWrite(c))) preferred = "local";
   const ro = all.filter(c => !canWrite(c));
-  return `<label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${all.map(c => `<option value="${esc(c.id)}" ${canWrite(c) ? (preferred === c.id ? "selected" : "") : "disabled"}>${esc(c.name)}${canWrite(c) ? "" : " (lecture seule)"}</option>`).join("")}</select></label>
-    ${ro.length ? `<p class="muted small" style="margin:6px 0 0">${ro.map(c => esc(c.name)).join(", ")} : ${ro.length > 1 ? "agendas partagés" : "agenda partagé"} avec vous en lecture seule. Pour y ajouter des rendez-vous, son propriétaire doit vous donner le droit « Apporter des modifications aux événements » dans Google Agenda.</p>` : ""}`;
+  const label = preferred === "local" ? "Maisonnée (agenda familial)" : (all.find(c => c.id === preferred) || {}).name;
+  return `<p class="small" id="destLine" style="margin:14px 0 0">Enregistré dans <strong>${esc(label)}</strong>${all.some(canWrite) ? ` · <button type="button" class="linkbtn small" data-act="destChange">Changer</button>` : ""}</p>
+    <div id="destBox" hidden><label class="field"><span class="label">Enregistrer dans</span><select class="input" name="google_destination"><option value="local">Maisonnée (agenda familial)</option>${all.map(c => `<option value="${esc(c.id)}" ${canWrite(c) ? (preferred === c.id ? "selected" : "") : "disabled"}>${esc(c.name)}${canWrite(c) ? "" : " (lecture seule)"}</option>`).join("")}</select></label>
+    ${ro.length ? `<p class="muted small" style="margin:6px 0 0">${ro.map(c => esc(c.name)).join(", ")} : ${ro.length > 1 ? "agendas partagés" : "agenda partagé"} avec vous en lecture seule. Pour y ajouter des rendez-vous, son propriétaire doit vous donner le droit « Apporter des modifications aux événements » dans Google Agenda.</p>` : ""}</div>`;
 }
 // Erreurs visibles dans la fenêtre modale (un toast derrière <dialog> est invisible sur iOS).
 function eventFormFeedback(form, message) {
@@ -1082,8 +1096,11 @@ function googleEventPayload(row) {
   // Google needs an end of the same kind as the start: without an end time, the appointment lasts one hour
   const plus1h = t => { const [h, m] = t.split(":").map(Number), x = Math.min(23 * 60 + 59, h * 60 + m + 60); return pad(Math.floor(x / 60)) + ":" + pad(x % 60); };
   const endTime = row.start_time ? (row.end_time && row.end_time > row.start_time ? row.end_time : plus1h(row.start_time)) : null;
-  const end = endTime ? `${row.day}T${endTime}:00` : null;
-  const nextDay = addDays(row.day, 1);
+  const lastDay = row.end_day && row.end_day > row.day ? row.end_day : row.day;
+  // several days with times: the end time is on the last day (without one, the event ends at the same hour)
+  const endT = row.start_time && lastDay !== row.day ? (row.end_time || row.start_time) : endTime;
+  const end = endT ? `${lastDay}T${endT}:00` : null;
+  const nextDay = addDays(lastDay, 1);
   const payload = { summary: row.title, location: row.place || "", description: row.notes || "", start: start ? {dateTime: start, timeZone: "Europe/Paris"} : {date: row.day}, end: end && start ? {dateTime: end, timeZone: "Europe/Paris"} : {date: nextDay} };
   if (row.repeat && row.repeat !== "none") {
     const custom = recurrenceInfo(row.repeat);
@@ -1122,7 +1139,11 @@ function eventSheet(e, day, appointment = false) {
   openSheet(isNew ? (isAppointment ? "Nouveau rendez-vous" : "Nouvel événement") : (isAppointment ? "Rendez-vous" : "Événement"), `
     <form data-form="event">
       <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(e.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="${isAppointment ? "Ex. Médecin, dentiste…" : "Ex. Dentiste de Léa"}"></label>
-      <label class="field"><span class="label">Date</span><input class="input" name="day" type="date" value="${esc(e.day)}" required></label>
+      <div class="inline" style="gap:12px">
+        <label class="field" style="flex:1"><span class="label">Du</span><input class="input" name="day" type="date" value="${esc(e.day)}" required></label>
+        <label class="field" style="flex:1"><span class="label">Au</span><input class="input" name="end_day" type="date" value="${esc(e.end_day && e.end_day > e.day ? e.end_day : e.day)}" required></label>
+      </div>
+      <div class="chips" style="margin-top:8px"><button type="button" class="chip" data-act="spanQuick" data-v="0">1 jour</button><button type="button" class="chip" data-act="spanQuick" data-v="1">+1 jour</button><button type="button" class="chip" data-act="spanQuick" data-v="we">Week-end</button><button type="button" class="chip" data-act="spanQuick" data-v="7">1 semaine</button></div>
       <label class="switch"><strong>Toute la journée</strong><input type="checkbox" name="allday" ${e.start_time ? "" : "checked"}></label>
       <div class="inline" data-times style="gap:12px">
         <label class="field" style="flex:1"><span class="label">Début</span><input class="input" name="start" type="time" value="${esc(String(e.start_time || "").slice(0, 5))}"></label>
@@ -1241,6 +1262,19 @@ document.addEventListener("click", async e => {
     }
     case "removeReminder": b.closest(".reminder-row")?.remove(); break;
     case "newAppointment": eventSheet(null, null, true); break;
+    case "destChange": { const bx = $("#destBox"), ln = $("#destLine"); if (bx) bx.hidden = false; if (ln) ln.hidden = true; break; }
+    case "spanQuick": {
+      const f = b.closest("form"), st = f.querySelector("[name=day]"), en = f.querySelector("[name=end_day]"); if (!st || !en || !st.value) break;
+      if (v === "we") {
+        // the coming weekend: Friday → Sunday (from a Saturday or Sunday: that weekend)
+        const wd = isoDay(st.value), fri = wd <= 5 ? addDays(st.value, 5 - wd) : addDays(st.value, 5 - wd);
+        st.value = fri; en.value = addDays(fri, 2);
+        // a weekend away: Friday 18 h → Sunday 20 h (times can be changed afterwards)
+        const ad = f.querySelector("[name=allday]"); if (ad) ad.checked = false; syncShow();
+        const s1 = f.querySelector("[name=start]"), e1 = f.querySelector("[name=end]"); if (s1) s1.value = "18:00"; if (e1) e1.value = "20:00";
+      } else en.value = addDays(st.value, +v);
+      break;
+    }
     case "editEvent": eventSheet(S.events.find(x => x.id === v)); break;
     case "delEvent": closeSheet(); { const ev = S.events.find(x => x.id === v); await remove("events", v); if (ev) toast("Événement supprimé.", "Annuler", () => add("events", ev)); } break;
     case "weekA": weekA = addDays(weekA, +v); render(); break;
@@ -1334,7 +1368,8 @@ document.addEventListener("submit", async e => {
     }
     case "event": {
       const allday = !!fd.allday;
-      const row = { title: fd.title.trim(), day: fd.day, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
+      if (fd.end_day && fd.end_day < fd.day) { eventFormFeedback(f, "La date de fin doit être le même jour ou après la date de début."); return; }
+      const row = { title: fd.title.trim(), day: fd.day, end_day: fd.end_day && fd.end_day > fd.day ? fd.end_day : null, start_time: allday || !fd.start ? null : fd.start, end_time: allday || !fd.end ? null : fd.end, members: chipVals(f, "members"), place: fd.place.trim(), notes: fd.notes.trim(), repeat: chipVal(f, "repeat") || "none" };
       if (row.repeat === "custom") {
         const n = Number(fd.repeat_interval);
         if (!Number.isInteger(n) || n < 1 || n > 365) { eventFormFeedback(f, "Choisis un intervalle entre 1 et 365."); return; }
@@ -1358,7 +1393,6 @@ document.addEventListener("submit", async e => {
         btn.disabled = true;
         try {
           await saveGoogleEvent(destination, { ...row, colorId: chipVal(f, "gcolor") || null });
-          LS.set("mz_last_google_destination", destination);
           closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
           toast("Rendez-vous enregistré dans Google Agenda.");
@@ -1366,7 +1400,6 @@ document.addEventListener("submit", async e => {
         finally { btn.disabled = false; }
         break;
       }
-      LS.set("mz_last_google_destination", "local");
       const id = sheetCtx && sheetCtx.id;
       btn.disabled = true;
       try {

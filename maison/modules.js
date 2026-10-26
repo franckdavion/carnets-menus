@@ -101,11 +101,6 @@ VIEWS.agenda = function () {
       ${evs.length || bs.length || gs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
-      ${G.list.length ? `<div class="card" style="margin-bottom:14px">
-        <strong>Agendas Google à afficher</strong>
-        <p class="muted small" style="margin:6px 0 10px">Touchez un agenda pour l’afficher ou le masquer.</p>
-        <div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>
-      </div>` : ""}
       <div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="calMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button>
         <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
         <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
@@ -744,10 +739,14 @@ async function gFetch() {
           const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
           if (e.start && e.start.date) {
             const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
-            for (let d = e.start.date, n = 0; d < end && n < 31; d = addDays(d, 1), n++) items.push({ ...base, day: d, start_time: null, end_time: null });
+            const nd = Math.min(31, Math.max(1, diffDays(e.start.date, end)));
+            for (let d = e.start.date, k = 0; d < end && k < 31; d = addDays(d, 1), k++) items.push({ ...base, day: d, start_time: null, end_time: null, k, n: nd, endDay: addDays(end, -1) });
           } else if (e.start && e.start.dateTime) {
             const st = new Date(e.start.dateTime), en = e.end && e.end.dateTime ? new Date(e.end.dateTime) : null, day = ymd(st);
-            items.push({ ...base, day, start_time: pad(st.getHours()) + ":" + pad(st.getMinutes()), end_time: en && ymd(en) === day ? pad(en.getHours()) + ":" + pad(en.getMinutes()) : null });
+            const hhmm = x => pad(x.getHours()) + ":" + pad(x.getMinutes());
+            const lastDay = en ? (hhmm(en) === "00:00" ? addDays(ymd(en), -1) : ymd(en)) : day, n = Math.min(31, Math.max(1, diffDays(day, lastDay) + 1));
+            if (n === 1) items.push({ ...base, day, start_time: hhmm(st), end_time: en && ymd(en) === day ? hhmm(en) : null });
+            else for (let k = 0; k < n; k++) items.push({ ...base, day: addDays(day, k), start_time: k === 0 ? hhmm(st) : null, end_time: k === n - 1 && hhmm(en) !== "00:00" ? hhmm(en) : null, k, n, endDay: lastDay });
           }
         }
         page = j.nextPageToken || "";
@@ -760,7 +759,11 @@ async function gFetch() {
 async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
 const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
 function gRow(e) {
-  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${e.start_time ? "" : "allday"}">${e.start_time ? esc(hm(e.start_time)) : "Journée"}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.colorId && gColorNames()[e.colorId] ? `<span class="who-tag" style="--c:${esc(e.color)}">${esc(gColorNames()[e.colorId])}</span> · ` : ""}${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
+  const multi = (e.n || 1) > 1, last = multi && e.k === e.n - 1;
+  const span = !multi ? "" : e.k === 0 ? "jusqu'au " + esc(parse(e.endDay).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })) + " · " : last ? `dernier jour · ${e.n}/${e.n} · ` : `jour ${e.k + 1}/${e.n} · `;
+  const t = last && e.end_time ? "→ " + esc(hm(e.end_time)) : e.start_time ? esc(hm(e.start_time)) : "Journée";
+  if (multi) e = { ...e, end_time: null };
+  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${t === "Journée" ? "allday" : ""}">${t}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.colorId && gColorNames()[e.colorId] ? `<span class="who-tag" style="--c:${esc(e.color)}">${esc(gColorNames()[e.colorId])}</span> · ` : ""}${span}${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
 }
 function gColorsSheet() {
   const names = gColorNames();
@@ -813,6 +816,7 @@ function gCard() {
   return `<h2>Agenda Google</h2><div class="card">
     <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
     ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
+    ${G.list.some(c => c.accessRole === "owner" || c.accessRole === "writer") ? `<label class="field"><span class="label">Agenda par défaut des nouveaux rendez-vous</span><select class="input" data-defdest><option value="local">Maisonnée (agenda familial)</option>${G.list.filter(c => c.accessRole === "owner" || c.accessRole === "writer").map(c => `<option value="${esc(c.id)}" ${LS.get("mz_last_google_destination", "local") === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>` : ""}
     <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn" data-act="gColors">Couleurs des enfants</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
 }
 const foyerViewG = VIEWS.foyer;
@@ -889,6 +893,12 @@ document.addEventListener("click", async e => {
   if (error) { b.disabled = false; toast("Refusé : " + error.message); return; }
   toast(b.dataset.s === "active" ? "Compte validé." : "Compte bloqué.");
   ADM.list = null; admLoad();
+});
+
+document.addEventListener("change", e => {
+  if (!e.target.matches("[data-defdest]")) return;
+  LS.set("mz_last_google_destination", e.target.value);
+  toast("Agenda par défaut : " + e.target.options[e.target.selectedIndex].text + ".");
 });
 
 init();
