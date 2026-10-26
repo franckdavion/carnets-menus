@@ -388,6 +388,44 @@ a.btn.primary{color:var(--on-accent)}
 .dots{display:flex;gap:6px;margin-bottom:22px}
 .dots i{width:30px;height:12px;border-radius:4px}
 .err{color:var(--danger);font-weight:700;margin-top:12px}
+
+/* === Maisonnée : thème C, verre 3D (visuel uniquement) === */
+.tiles{gap:14px;margin-top:24px}
+.tile{
+  border-radius:25px;
+  border:1px solid color-mix(in srgb,var(--mc,#71baff) 55%,#c7dcff 45%);
+  background:linear-gradient(150deg,rgba(255,255,255,.17) 0%,rgba(255,255,255,.055) 22%,transparent 44%),linear-gradient(155deg,#263c5a 0%,#192638 47%,#101b30 100%);
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.36),inset 0 -3px 8px color-mix(in srgb,var(--mc,#71baff) 28%,transparent),0 9px 19px rgba(0,0,0,.35),0 0 13px color-mix(in srgb,var(--mc,#71baff) 29%,transparent);
+  transition:transform .17s ease,box-shadow .17s ease;
+  isolation:isolate;
+}
+.tile::before{content:"";position:absolute;inset:0 0 auto;height:45%;border-radius:inherit;pointer-events:none;background:linear-gradient(165deg,rgba(255,255,255,.19),transparent 70%);opacity:.7}
+.tile::after{content:"";position:absolute;inset:auto 8% 0;height:2px;border-radius:50%;pointer-events:none;background:var(--mc,#6ab5ff);filter:blur(3px);opacity:.8}
+.tile .mi{filter:drop-shadow(0 5px 3px rgba(0,0,0,.5)) drop-shadow(0 0 8px var(--mc,#71baff));transform:translateZ(0)}
+.tile .mi svg{stroke-width:2.7;filter:drop-shadow(1px 2px 0 rgba(255,255,255,.19))}
+.tile-t,.tile-s{position:relative;z-index:1;text-shadow:0 1px 2px rgba(0,0,0,.28)}
+.tile-t{color:#f7fbff}
+.tile-s{color:#b8c6da}
+.tile:active{transform:scale(.972);box-shadow:inset 0 4px 12px rgba(0,0,0,.4),0 0 16px color-mix(in srgb,var(--mc,#71baff) 44%,transparent)}
+.pill{background:linear-gradient(160deg,rgba(45,70,102,.96),rgba(11,25,45,.96));border:1px solid rgba(118,187,255,.55);box-shadow:inset 0 2px 1px rgba(255,255,255,.22),0 12px 32px rgba(0,0,0,.5),0 0 16px rgba(35,140,255,.19)}
+.pill button[aria-current="page"]{background:linear-gradient(160deg,rgba(35,120,215,.38),rgba(11,59,130,.24));box-shadow:inset 0 1px 1px rgba(255,255,255,.16),0 0 15px rgba(47,139,255,.28)}
+.fab{background:linear-gradient(155deg,#65bbff,#327cf1 56%,#1163d8);border:1px solid rgba(181,224,255,.78);box-shadow:inset 0 2px 1px rgba(255,255,255,.4),inset 0 -3px 5px rgba(0,41,133,.35),0 8px 23px rgba(0,55,148,.4),0 0 14px rgba(47,139,255,.25)}
+@media (prefers-reduced-motion:reduce){.tile{transition:none}}
+
+.tiles>.tile:nth-child(1){--mc:#f5b743}
+.tiles>.tile:nth-child(2){--mc:#9f83ff}
+.tiles>.tile:nth-child(3){--mc:#f2a93b}
+.tiles>.tile:nth-child(4){--mc:#42bfe9}
+.tiles>.tile:nth-child(5){--mc:#648dff}
+.tiles>.tile:nth-child(6){--mc:#f6a64c}
+.tiles>.tile:nth-child(7){--mc:#f4729c}
+.tiles>.tile:nth-child(8){--mc:#8ad6a6}
+.tiles>.tile:nth-child(9){--mc:#f2917b}
+.tiles>.tile:nth-child(10){--mc:#3db972}
+.tiles>.tile:nth-child(11){--mc:#6a86f0}
+.tiles>.tile:nth-child(12){--mc:#e46ca6}
+.tiles>.tile:nth-child(13){--mc:#6cc4f2}
+
 </style>
 </head>
 <body>
