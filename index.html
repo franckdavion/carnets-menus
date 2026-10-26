@@ -1306,7 +1306,11 @@ function shopping(all){
 }
 
 /* ---------- storage (on this phone) ---------- */
-function saveMenu(){LS.set("cm_menu",menu);LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();}
+function saveMenu(){
+  try{localStorage.setItem("cm_menu",JSON.stringify(menu));}
+  catch(e){ // phone storage full: drop what can be rebuilt, then try again
+    try{["cm_base","cm_rph_orig"].forEach(k=>localStorage.removeItem(k));localStorage.setItem("cm_menu",JSON.stringify(menu));}
+    catch(x){toast("Mémoire du téléphone pleine : la semaine n'est pas enregistrée sur ce téléphone");}}LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();}
 function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();cloudSoon();}
 function removeRecipe(id){cloudDeleted(id);for(const wk of Object.values(menu.weeks||{}))for(const[k,sl]of Object.entries(wk||{})){if(!sl)continue;if(sl.id===id)delete wk[k];else{if(sl.entree===id)delete sl.entree;if(sl.dessert===id)delete sl.dessert;}}saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
 
@@ -1352,6 +1356,7 @@ function setStatus(k,e){
   chip.textContent=t; chip.dataset.state=k; if(line)line.textContent=t;
 }
 function scheduleSync(ms=800){if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
+function cloudCarnet(){try{return !!((typeof cloud!=="undefined"&&cloud.owner)||LS.get("cm_state_owner",""));}catch(e){return false;}}
 async function runSync(){
   if(!sync)return;
   if(syncBusy){syncAgain=true;return;}
@@ -1366,9 +1371,13 @@ async function runSync(){
         try{remote=JSON.parse(b64d(d.content));}catch(x){throw{bad:true};}
         if(!remote||typeof remote.recipes!=="object")throw{bad:true};}
       else if(g.status!==404)throw{status:g.status};
-      const base=LS.get("cm_base",null);
+      // Carnet shared through the household account (Supabase): that is where the week comes from.
+      // The GitHub file is then only written (planning, agenda), never read back: reading it brought back old weeks.
+      const viaCloud=cloudCarnet();
+      if(viaCloud)try{localStorage.removeItem("cm_base");}catch(x){}
+      const base=viaCloud?null:LS.get("cm_base",null);
       let merged;
-      if(!remote)merged=L0;
+      if(!remote||viaCloud)merged=L0;
       else if(!base){merged=clone(remote);
         for(const[id,r]of Object.entries(L0.recipes))if(!merged.recipes[id]&&!SEED[id])merged.recipes[id]=r;}
       else merged=merge3(base,L0,remote)||{};
@@ -1383,8 +1392,8 @@ async function runSync(){
         if(p.status===409||p.status===422)continue;
         if(!p.ok)throw{status:p.status};
       }
-      LS.set("cm_base",merged);
-      setState(merge3(L0,getState(),merged)); // keep edits made while the request was running
+      if(!viaCloud){LS.set("cm_base",merged);
+        setState(merge3(L0,getState(),merged));} // keep edits made while the request was running
       lastOk=new Date(); setStatus("ok"); done=true;
       publishIcs(merged.calendar); publishAgenda(merged.calendar); publishShare();
     }
