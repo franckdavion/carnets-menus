@@ -19,7 +19,41 @@ function cxData() {
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
     const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
-    return {days,items,extras,xr,have,rayons:RAYONS};})()`);
+    return {days,items,extras,xr,have,learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
+}
+/* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
+   An item typed by hand finds its aisle by its name; moved once by hand, it stays there next time (menu.rayonLearn,
+   shared with the household like the rest of the carnet). The order of the aisles is menu.rayonOrder. */
+const CX_RAYONS = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
+const CX_GUESS = [
+  [/(?:^|[^a-zà-ÿœ])(?:pile|ampoule|lessive|adoucissant|liquide vaisselle|pastille|éponge|eponge|essuie|sopalin|papier toilette|pq|mouchoir|sac poubelle|sacs poubelle|javel|nettoyant|détergent|detergent|savon|gel douche|shampo|dentifrice|brosse à dents|rasoir|déodorant|deodorant|coton|couche|lingette|serviette|tampon|aluminium|film|allumette|bougie|insecticide|croquette|litière|litiere)/i, "Hygiène & maison"],
+  [/(?:^|[^a-zà-ÿœ])(?:eau|jus|soda|coca|limonade|sirop|bière|biere|vin|champagne|cidre|café|cafe|thé|the |tisane|infusion|lait d'avoine|lait de soja)/i, "Boissons"],
+  [/(?:^|[^a-zà-ÿœ])(?:pain|baguette|brioche|croissant|pain de mie|biscotte|tortilla|wrap)/i, "Boulangerie"],
+  [/(?:^|[^a-zà-ÿœ])(?:surgel|glace|frites|poêlée|poelee|pizza surg)/i, "Surgelés"],
+  [/(?:^|[^a-zà-ÿœ])(?:fromage râpé|fromage rape|râpé|rape)/i, "Crémerie"],
+  [/(?:^|[^a-zà-ÿœ])(?:riz|pâtes|pates|farine|sucre|sel|poivre|huile|vinaigre|moutarde|ketchup|mayonnaise|conserve|boîte|boite|biscuit|gâteau|gateau|chocolat|céréale|cereale|confiture|miel|levure|bouillon|épice|epice|lentille|pois chiche|haricot|semoule|quinoa|chips|compote|sauce|olive|thon en boîte)/i, "Épicerie"]
+];
+function cxGuess(name, learn) {
+  const k = String(name || "").trim().toLowerCase();
+  if (learn && learn[k]) return learn[k];
+  const g = CX_GUESS.find(([re]) => re.test(" " + k));
+  if (g) return g[1];
+  try { const r = cev(`(()=>{const n=${JSON.stringify(k)};const g=GUESS.find(([re])=>re.test(n));return g?g[1]:""})()`); if (r) return r; } catch (_) {}
+  return "Divers";
+}
+const cxOrder = order => [...(order || []).filter(r => CX_RAYONS.includes(r)), ...CX_RAYONS.filter(r => !(order || []).includes(r))];
+let cxOrderDraft = null;
+function cxOrderSheet() {
+  const l = cxOrderDraft;
+  openSheet("Ordre des rayons", `<p class="muted small" style="margin:6px 0 10px">Rangez les rayons dans l'ordre où vous les traversez dans votre magasin : la liste suivra cet ordre.</p>
+    <div class="list">${l.map((r, i) => `<div class="cx-item"><span class="nm"><strong>${i + 1}.</strong> ${esc(r)}</span>
+      <button type="button" class="cx-x" data-act="cxOrdMove" data-v="${i}" data-d="-1" ${i ? "" : "disabled"} aria-label="Monter ${esc(r)}">▲</button>
+      <button type="button" class="cx-x" data-act="cxOrdMove" data-v="${i}" data-d="1" ${i < l.length - 1 ? "" : "disabled"} aria-label="Descendre ${esc(r)}">▼</button></div>`).join("")}</div>
+    <div class="sheet-sticky btns"><button class="btn primary" data-act="cxOrdSave" style="flex:1">Enregistrer</button><button class="btn" data-act="cxOrdReset">Ordre habituel</button></div>`);
+}
+function cxMoveSheet(name, cur) {
+  openSheet("Ranger dans quel rayon ?", `<p style="margin:6px 0 10px"><strong>${esc(name)}</strong><br><span class="muted small">Retenu pour la prochaine fois, pour tout le foyer.</span></p>
+    <div class="chips">${CX_RAYONS.map(r => `<button type="button" class="chip" data-act="cxMoveTo" data-n="${esc(name)}" data-v="${esc(r)}" aria-pressed="${r === cur}">${esc(r)}</button>`).join("")}</div>`);
 }
 const cxShort = d => { try { return new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); } catch (_) { return d; } };
 
@@ -33,10 +67,12 @@ VIEWS.courses = function () {
   const tick = i => `<span class="box">${I.tick}</span>`;
   const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}">
       <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
-      <span class="nm">${esc(i.n || i.t)}${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
+      <span class="nm"><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
       ${i.on ? "" : ref.startsWith("k:") ? `<button type="button" class="cx-have" data-act="cxHave" data-v="${esc(i.key)}">J'ai déjà</button>` : `<button type="button" class="cx-x" data-act="cxRmX" data-v="${i.ix}" aria-label="Retirer ${esc(i.t)}">✕</button>`}
     </div>`;
+  for (const i of D.items) i.r = D.learn[String(i.n).trim().toLowerCase()] || i.r;
+  for (const x of D.extras) x.r = cxGuess(x.t, D.learn);
   const todo = D.items.filter(i => !i.on), todoX = D.extras.filter(x => !x.on);
   const done = [...D.items.filter(i => i.on).map(i => row(i, "k:" + i.key)), ...D.extras.filter(x => x.on).map(x => row(x, "x:" + x.ix))];
   const total = D.items.length + D.extras.length;
@@ -52,11 +88,12 @@ VIEWS.courses = function () {
   if (cxUndo) out += `<div class="card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Courses terminées.</span><button class="btn" data-act="cxFinishUndo">Annuler</button></div>`;
   if (D.xr.length) out += `<p class="group-h">Recettes ajoutées hors menu</p><div class="list">${D.xr.map(x => `<div class="cx-item"><span class="nm">${esc(x.name)}${x.dup ? `<span class="cx-from">déjà au menu validé : pas compté deux fois</span>` : ""}</span><span class="q">${x.n} pers.</span><button type="button" class="cx-x" data-act="cxRmR" data-v="${esc(x.id)}" aria-label="Retirer ${esc(x.name)}">✕</button></div>`).join("")}</div>`;
   if (!total) out += `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>${sel.length ? "Envoyez des repas de ces jours aux courses depuis Repas, ou ajoutez des articles ci-dessus." : "Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;
-  for (const ry of D.rayons) {
-    const l = todo.filter(i => i.r === ry).sort((a, b) => a.n.localeCompare(b.n, "fr"));
-    if (l.length) out += `<div class="cx-rayon"><p class="group-h">${esc(ry)}</p><button type="button" class="linkbtn small" data-act="cxHaveRayon" data-v="${esc(ry)}">J'ai tout ce rayon</button></div><div class="list">${l.map(i => row(i, "k:" + i.key)).join("")}</div>`;
+  if (todo.length + todoX.length) out += `<div class="btns" style="margin-top:14px;justify-content:space-between"><span class="muted small" style="align-self:center">Rangée par rayon · touchez un article pour changer son rayon</span><button class="linkbtn small" data-act="cxOrder">Ordre des rayons</button></div>`;
+  for (const ry of cxOrder(D.order)) {
+    const l = todo.filter(i => i.r === ry).sort((a, b) => a.n.localeCompare(b.n, "fr")), lx = todoX.filter(x => x.r === ry).sort((a, b) => a.t.localeCompare(b.t, "fr"));
+    if (!l.length && !lx.length) continue;
+    out += `<div class="cx-rayon"><p class="group-h">${esc(ry)}</p>${l.length ? `<button type="button" class="linkbtn small" data-act="cxHaveRayon" data-v="${esc(ry)}">J'ai tout ce rayon</button>` : ""}</div><div class="list">${l.map(i => row(i, "k:" + i.key)).join("")}${lx.map(x => row(x, "x:" + x.ix)).join("")}</div>`;
   }
-  if (todoX.length) out += `<p class="group-h">En plus</p><div class="list">${todoX.map(x => row(x, "x:" + x.ix)).join("")}</div>`;
   if (total && !todo.length && !todoX.length) out += `<div class="empty" style="margin-top:16px"><strong>Tout est dans le caddie !</strong></div>`;
   if (done.length) {
     out += `<p class="group-h">Dans le caddie (${done.length})</p><div class="list">${done.join("")}</div>`;
@@ -74,16 +111,22 @@ VIEWS.courses = function () {
   return out;
 };
 
-const CX_ACTS = ["cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
   switch (a) {
+    case "cxMove": cxMoveSheet(b.dataset.n, b.dataset.r); return;
+    case "cxMoveTo": cev(`(()=>{menu.rayonLearn=Object.assign({},menu.rayonLearn,{[${JSON.stringify(String(b.dataset.n).trim().toLowerCase())}]:${JSON.stringify(v)}});saveMenu();})()`); closeSheet(); msg = `Rangé dans « ${v} ».`; break;
+    case "cxOrder": cxOrderDraft = cxOrder(cxData().order); cxOrderSheet(); return;
+    case "cxOrdMove": { const i = +v, j = i + +b.dataset.d, l = cxOrderDraft; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; const sc = $("#sheet").scrollTop; cxOrderSheet(); $("#sheet").scrollTop = sc; return; }
+    case "cxOrdSave": cev(`menu.rayonOrder=${JSON.stringify(cxOrderDraft)};saveMenu()`); closeSheet(); msg = "Ordre des rayons enregistré."; break;
+    case "cxOrdReset": cev(`delete menu.rayonOrder;saveMenu()`); closeSheet(); msg = "Ordre habituel des rayons."; break;
     case "cxTick": cclick({ act: "storeTick", s: v }); break;
     case "cxHave": cclick({ act: "haveIt", k: v }); msg = "Retiré de la liste : vous l'avez déjà."; break;
     case "cxHaveRayon": cev(`(()=>{const ry=${JSON.stringify(v)},u=haveUntil();menu.have=Object.assign({},menu.have);
-      shopping().filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry&&!menu.checked[i.key]).forEach(i=>{menu.have[i.key]=u;});saveMenu();})()`); msg = `Rayon « ${v} » retiré : vous avez déjà tout.`; break;
+      shopping().filter(i=>((menu.rayonLearn||{})[norm(i.n)]||(RAYONS.includes(i.r)?i.r:"Divers"))===ry&&!menu.checked[i.key]).forEach(i=>{menu.have[i.key]=u;});saveMenu();})()`); msg = `Rayon « ${v} » retiré : vous avez déjà tout.`; break;
     case "cxHaveUndo": cclick({ act: "haveUndo", k: v }); break;
     case "cxRmX": cclick({ act: "rmX", i: v }); break;
     case "cxRmR": cclick({ act: "shopRm", id: v }); break;
