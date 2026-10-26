@@ -9,7 +9,7 @@ const cev = code => CK.frame.contentWindow.eval(code);          // lire / appele
 const cj = code => JSON.parse(cev(`JSON.stringify(${code})`));  // copie simple de ses données
 let rWeek = mondayOf(today()), rPick = null;                     // semaine affichée, recherche de recette
 // read by the hidden Carnet: it only syncs on its own while this page is open
-Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && view === "repas" });
+Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && (view === "repas" || view === "courses") });
 
 function carnetBoot() {
   if (CK.frame || mode !== "cloud") return;
@@ -26,7 +26,7 @@ function carnetBoot() {
     if (ok) {
       try { await cev("cloudSync()"); } catch (_) {}
       CK.ready = true; CK.waiters.splice(0).forEach(w => w());
-      if (view === "repas") softRender();
+      if (view === "repas" || view === "courses") softRender();
       return;
     }
     if (Date.now() - t0 > 45000) {
@@ -36,7 +36,7 @@ function carnetBoot() {
         : why === "nouser" ? "Connectez-vous une fois au Carnet de menus avec votre compte."
         : why === "empty" ? "Le livre de recettes du Carnet est vide."
         : "Le Carnet de menus ne répond pas (réseau ?).";
-      if (view === "repas") softRender();
+      if (view === "repas" || view === "courses") softRender();
       return;
     }
     setTimeout(tick, 600);
@@ -44,7 +44,7 @@ function carnetBoot() {
   f.addEventListener("load", () => { CK.ready = false; setTimeout(tick, 400); });
 }
 // the others' changes: refresh from the shared carnet when the page comes back
-async function carnetRefresh() { if (!CK.ready) return; try { await cev("cloudSync()"); } catch (_) {} if (view === "repas") softRender(); }
+async function carnetRefresh() { if (!CK.ready) return; try { await cev("cloudSync()"); } catch (_) {} if (view === "repas" || view === "courses") softRender(); }
 function carnetSave(msg) { cev("saveMenu()"); render(); if (msg) toast(msg); }
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {

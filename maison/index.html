@@ -195,6 +195,20 @@ textarea.input{min-height:84px;resize:vertical}
 .box svg{width:15px;height:15px;stroke:var(--on-accent);stroke-width:3;fill:none;opacity:0}
 .shop-item.done .box svg{opacity:1}
 .shop-item.done .nm{text-decoration:line-through;color:var(--muted)}
+.cx-item{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:9px 12px;min-height:52px}
+.cx-item:first-child{border-top:0}
+.cx-item .nm{flex:1;min-width:0}
+.cx-item .q{color:var(--muted);font-size:15px;white-space:nowrap}
+.cx-tick{flex:none;background:none;border:0;padding:6px;margin:-6px}
+.cx-item.done .box{background:var(--accent);border-color:var(--accent)}
+.cx-item.done .box svg{opacity:1}
+.cx-item.done .nm{text-decoration:line-through;color:var(--muted)}
+.cx-from,.cx-miss{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.cx-miss{color:var(--warn,#e8a33d)}
+.cx-have{flex:none;border:1px solid var(--line);background:none;color:var(--muted);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+.cx-x{flex:none;border:0;background:none;color:var(--muted);font-size:16px;padding:6px}
+.cx-rayon{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.cx-rayon .linkbtn{margin-right:4px}
 .ing-item.on .box{background:var(--accent);border-color:var(--accent)}
 .ing-item.on .box svg{opacity:1}
 .ing-item:not(.on) .nm{text-decoration:line-through;color:var(--muted)}
@@ -515,6 +529,7 @@ input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-web
 <script src="app.js"></script>
 <script src="modules.js"></script>
 <script src="repas.js"></script>
+<script src="courses.js"></script>
 <script>
 // iOS : garder chaque champ des formulaires au-dessus du clavier.
 // visualViewport décrit la zone réellement visible, même dans une PWA installée.
