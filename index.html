@@ -4181,9 +4181,11 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
     // my own photos (dish, page of the book) go to the shared photo storage
     const PH=LS.get("cm_cloud_photos",{}),pages=LS.get(PAGES,{}),loc=rPhotos();let nUp=0;
     for(const id of Object.keys(recipes)){const r=recipes[id];if(!myCloudRecipe(id)||!H[id])continue;
-      const want={p:r.photo&&loc[id]?String(r.photo):"",g:pages[id]?stepHash(pages[id]):""},had=PH[id]||{};if(want.p===(had.p||"")&&want.g===(had.g||""))continue;
+      // a photo already sent from this phone may no longer be kept here (room saved): it stays as it is online
+      const had=PH[id]||{},want={p:r.photo?(loc[id]?String(r.photo):had.p===String(r.photo)?had.p:""):"",g:pages[id]?stepHash(pages[id]):(had.g||"")};if(want.p===(had.p||"")&&want.g===(had.g||""))continue;
       const pp={};const up=async(key,data)=>{const bl=await(await fetch(data)).blob();const path=`${uid}/${id}-${key}.jpg`;const{error}=await sb.storage.from("recipe-photos").upload(path,bl,{upsert:true,contentType:"image/jpeg",cacheControl:"3600"});if(error)throw error;return path;};
-      if(want.p)pp.p=await up("photo-"+want.p,loc[id]);if(want.g)pp.g=await up("page",pages[id]);
+      if(want.p)pp.p=want.p!==(had.p||"")&&loc[id]?await up("photo-"+want.p,loc[id]):`${uid}/${id}-photo-${want.p}.jpg`;
+      if(want.g)pp.g=want.g!==(had.g||"")&&pages[id]?await up("page",pages[id]):`${uid}/${id}-page.jpg`;
       const{error}=await sb.from("recipes").update({photo_path:Object.keys(pp).length?J(pp):null,updated_at:new Date().toISOString()}).eq("legacy_id",id);if(error)throw error;PH[id]=want;nUp++;if(nUp%20===0)LS.set("cm_cloud_photos",PH);}
     LS.set("cm_cloud_photos",PH);
     const del=LS.get("cm_cloud_del",[]);if(del.length){await sb.from("recipes").delete().in("legacy_id",del);del.forEach(k=>delete H[k]);LS.set("cm_cloud_del",[]);}
@@ -4246,6 +4248,10 @@ async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
   // recipes removed from the common book by their author
   const{data:ids}=await sb.from("recipes").select("legacy_id");if(ids){const live=new Set(ids.map(x=>x.legacy_id));for(const[id,r]of Object.entries(recipes))if(r.cloudAuthor&&r.cloudAuthor!==uid&&!live.has(id))delete recipes[id];}
   {const po=LS.get("cm_priv_other",{});let n=0;for(const id in po)if(recipes[id]){PRIV_F.forEach(k=>delete recipes[id][k]);Object.assign(recipes[id],po[id]);delete po[id];n++;}if(n)LS.set("cm_priv_other",po);}
+  // my photos already online: the phone no longer keeps its own copy (they are shown from the household's storage)
+  {const m=rPhotos(),PH=LS.get("cm_cloud_photos",{});let n=0;for(const id of Object.keys(m)){const r=recipes[id];
+    if(r&&r.photo&&r.cloudPhoto&&(PH[id]||{}).p===String(r.photo)&&r.cloudPhoto.includes("-photo-"+r.photo+".jpg")){delete m[id];n++;}}
+   if(n)try{localStorage.setItem(RPH,JSON.stringify(m));}catch(e){}}
   LS.set("cm_cloudhash",H);LS.set("cm_recipes",recipes);return added;}
 function confirmNewer(){return true;}
 async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m)m.textContent="⏳ Synchronisation…";
