@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maisonnée · 3 thèmes</title>
+<style>
+/* ---------- the page around the three phones ---------- */
+*{box-sizing:border-box}
+body{margin:0;background:#E9ECF1;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;color:#1A2230}
+.intro{max-width:1240px;margin:0 auto;padding:24px 16px 6px}
+.intro h1{margin:0 0 4px;font-size:24px}
+.intro p{margin:0;color:#5B6576;font-size:15px}
+.row{display:flex;gap:28px;justify-content:center;padding:18px 16px 40px;overflow-x:auto;scroll-snap-type:x mandatory}
+.col{flex:none;scroll-snap-align:center}
+.col h2{margin:0 0 10px;text-align:center;font-size:17px}
+.col h2 small{display:block;font-weight:500;color:#6B7686;font-size:13px;margin-top:2px}
+
+/* ---------- one phone ---------- */
+.phone{width:360px;height:760px;border-radius:44px;background:var(--bg);box-shadow:0 0 0 10px #15181f,0 24px 60px rgba(0,0,0,.25);position:relative;overflow:hidden;color:var(--ink)}
+.screen{position:absolute;inset:0;overflow-y:auto;padding:46px 16px 110px;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.top h3{margin:0;font-size:26px;letter-spacing:-.02em}
+.avs{display:flex}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;border:2px solid var(--bg)}
+.av+.av{margin-left:-8px}
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:20px 2px 10px}
+.sec h4{margin:0;font-size:18px}
+.sec span{font-size:13px;color:var(--muted)}
+
+/* meal cards */
+.cards{display:flex;flex-direction:column;gap:12px}
+.meal{position:relative;border-radius:var(--r-lg);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.meal img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover}
+.meal .tag{position:absolute;top:10px;left:10px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px}
+.meal .cap{padding:10px 14px 12px}
+.meal .cap b{display:block;font-size:17px}
+.meal .cap small{color:var(--muted);font-size:13px}
+
+/* shopping list */
+.aisle{margin:16px 2px 6px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.list{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow);overflow:hidden}
+.it{display:flex;align-items:center;gap:14px;padding:0 16px;min-height:60px;border-top:1px solid var(--line);cursor:pointer;user-select:none;font-size:18px}
+.it:first-child{border-top:0}
+.it .q{margin-left:auto;color:var(--muted);font-size:15px}
+.box{flex:none;width:28px;height:28px;display:grid;place-items:center;transition:transform .15s,background .15s,border-color .15s}
+.box svg{width:16px;height:16px;stroke:#fff;stroke-width:3.2;fill:none;opacity:0;transition:opacity .12s}
+.it.on .box svg{opacity:1}
+.it.on .nm{text-decoration:line-through;color:var(--muted)}
+.it.on .box{transform:scale(1.08)}
+
+/* bottom bar: 4 tabs */
+.tabbar{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:8px 10px 22px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:0;padding:6px 0;position:relative;font-family:inherit}
+.tab svg{width:24px;height:24px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tab .badge{position:absolute;top:2px;right:calc(50% - 20px);background:var(--danger);color:#fff;font-size:10px;border-radius:999px;padding:1px 5px}
+
+/* ===================== 1 · Minimaliste lumineux ===================== */
+.t1{--bg:#F7F9FC;--surface:#FFFFFF;--soft:#EEF2F7;--line:#E3E8EF;--ink:#1A2230;--muted:#6B7686;--accent:#3B6FD8;--accent-soft:#E6EEFB;--danger:#D64545;
+  --r-md:16px;--r-lg:20px;--shadow:0 1px 2px rgba(20,30,50,.04),0 6px 18px rgba(20,30,50,.06)}
+.t1 .tag{background:rgba(255,255,255,.92);color:var(--ink)}
+.t1 .box{border:2px solid #C5CEDB;border-radius:50%}
+.t1 .it.on .box{background:var(--accent);border-color:var(--accent)}
+.t1 .tabbar{background:rgba(255,255,255,.94);border-top:1px solid var(--line);backdrop-filter:blur(12px)}
+.t1 .tab.on{color:var(--accent)}
+.t1 .tab.on::after{content:"";position:absolute;bottom:-4px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+
+/* ===================== 2 · Cocon chaleureux ===================== */
+.t2{--bg:#FBF6EE;--surface:#FFFDF9;--soft:#F3EADC;--line:#EFE5D6;--ink:#3A2E26;--muted:#8A7A6B;--accent:#C8643B;--accent-soft:#F6E1D6;--ok:#7E9F7A;--danger:#B9473A;
+  --r-md:24px;--r-lg:30px;--shadow:0 2px 6px rgba(90,60,30,.06),0 10px 24px rgba(90,60,30,.07);font-family:"Avenir Next","Nunito","Segoe UI",system-ui,sans-serif}
+.t2 .meal img{aspect-ratio:4/3}
+.t2 .meal .cap{position:absolute;left:0;right:0;bottom:0;padding:40px 16px 14px;background:linear-gradient(transparent,rgba(40,25,15,.78));color:#fff}
+.t2 .meal .cap small{color:rgba(255,255,255,.85)}
+.t2 .tag{background:var(--accent);color:#fff}
+.t2 .box{border:2px solid #D8CBB8;border-radius:10px}
+.t2 .it.on .box{background:var(--ok);border-color:var(--ok);animation:pop .25s}
+.t2 .tabbar{left:14px;right:14px;bottom:16px;padding:8px;border-radius:999px;background:var(--surface);box-shadow:0 8px 26px rgba(90,60,30,.16)}
+.t2 .tab{border-radius:999px}
+.t2 .tab.on{color:var(--accent);background:var(--accent-soft)}
+@keyframes pop{50%{transform:scale(1.25)}}
+
+/* ===================== 3 · Frais & dynamique ===================== */
+.t3{--bg:#FAFCFB;--surface:#FFFFFF;--soft:#EFF8F4;--line:#E1EEE8;--ink:#1E2B2A;--muted:#62706E;--accent:#1FB58F;--accent-soft:#D9F5EC;--sun:#FFD95A;--sun-soft:#FFF4C7;--danger:#F05D5E;
+  --r-md:20px;--r-lg:26px;--shadow:0 4px 14px rgba(30,60,50,.08)}
+.t3 .top h3{font-weight:900}
+.t3 .tag{color:#1E2B2A}
+.t3 .tag.midi{background:var(--sun)}
+.t3 .tag.soir{background:#8EE6CC}
+.t3 .meal .cap b{font-weight:800}
+.t3 .aisle{background:var(--sun-soft);color:#7A5C00;display:inline-block;padding:4px 12px;border-radius:999px;margin-left:0}
+.t3 .box{border:3px solid var(--accent);border-radius:8px}
+.t3 .it.on .box{background:var(--accent)}
+.t3 .tabbar{background:#fff;border-top:1px solid var(--line)}
+.t3 .tab.on{color:#1E2B2A}
+.t3 .tab.on svg{background:var(--sun);border-radius:12px;padding:3px;width:30px;height:30px;stroke:#1E2B2A;margin:-3px 0}
+.t3 .tab:nth-child(1) svg{stroke:#F2A93B}.t3 .tab:nth-child(2) svg{stroke:#1FB58F}.t3 .tab:nth-child(3) svg{stroke:#5B8DEF}.t3 .tab:nth-child(4) svg{stroke:#E46CA6}
+.t3 .tab.on:nth-child(n) svg{stroke:#1E2B2A}
+
+@media (max-width:760px){.row{justify-content:flex-start}.phone{width:330px;height:700px}}
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Maisonnée : 3 thèmes à comparer</h1>
+  <p>Cochez les articles de courses pour voir les cases réagir. Sur téléphone, faites glisser de côté pour passer d'un thème à l'autre.</p>
+</div>
+<div class="row" id="row"></div>
+
+<script>
+// same content in the three phones: only the theme changes
+const P = "https://franckdavion.github.io/carnets-menus/partage-photos/325g6qor11/";
+const MEALS = [
+  { slot: "Midi", day: "Mercredi", name: "Bouddha bowl au tofu", meta: "végé · 25 min", img: "r3-bouddha-bowl-au-tofu-1792786709927.jpg" },
+  { slot: "Soir", day: "Mercredi", name: "Bœuf carottes", meta: "mijoté · 5 pers.", img: "r-buf-carottes-1792754818174.jpg" },
+  { slot: "Midi", day: "Jeudi", name: "Arroz con pollo", meta: "volaille · 45 min", img: "r2-arroz-con-pollo-1792755633629.jpg" },
+  { slot: "Soir", day: "Jeudi", name: "Velouté de brocoli", meta: "soupe · léger", img: "r-veloute-de-brocoli-1792777512773.jpg" }
+];
+const SHOP = [
+  ["Fruits & légumes", [["Carottes", "1 kg"], ["Brocoli", "2"], ["Citrons", "3", true]]],
+  ["Crémerie", [["Lait", "1 L"], ["Fromage râpé", "200 g", true], ["Œufs", "6"]]],
+  ["Hygiène & maison", [["Piles", ""], ["Lessive", ""]]]
+];
+const I = {
+  repas: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 21V3c-2 1-3 4-3 7s1 4 3 4"/>',
+  courses: '<path d="M3 4h2l2.4 11h10.2L20 7H6.2"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/>',
+  taches: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',
+  espace: '<path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/>'
+};
+const tick = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></svg>';
+const THEMES = [["t1", "1 · Minimaliste lumineux", "blanc, ombres douces, bleu"], ["t2", "2 · Cocon chaleureux", "crème, terracotta, sauge"], ["t3", "3 · Frais & dynamique", "jaune pastel, menthe"]];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+document.getElementById("row").innerHTML = THEMES.map(([cls, title, sub]) => `
+  <div class="col"><h2>${title}<small>${sub}</small></h2>
+  <div class="phone ${cls}"><div class="screen">
+    <div class="top"><h3>Repas</h3><div class="avs"><span class="av" style="background:#E0533D">F</span><span class="av" style="background:#2F8FA6">C</span></div></div>
+    <div class="sec"><h4>Cette semaine</h4><span>mer. 28 – jeu. 29 oct.</span></div>
+    <div class="cards">${MEALS.map(m => `<div class="meal"><img src="${P + m.img}" alt="${esc(m.name)}" loading="lazy"><span class="tag ${m.slot.toLowerCase()}">${m.day} · ${m.slot}</span>
+      <div class="cap"><b>${esc(m.name)}</b><small>${esc(m.meta)}</small></div></div>`).join("")}</div>
+    <div class="sec" style="margin-top:28px"><h4>Courses</h4><span>8 articles</span></div>
+    ${SHOP.map(([a, items]) => `<div class="aisle">${a}</div><div class="list">${items.map(([n, q, on]) => `<div class="it ${on ? "on" : ""}" role="checkbox" aria-checked="${!!on}" tabindex="0"><span class="box">${tick}</span><span class="nm">${n}</span>${q ? `<span class="q">${q}</span>` : ""}</div>`).join("")}</div>`).join("")}
+  </div>
+  <nav class="tabbar">${[["repas", "Repas"], ["courses", "Courses"], ["taches", "Tâches"], ["espace", "Espace"]].map(([k, l], i) => `<button class="tab ${i === 0 ? "on" : ""}"><svg viewBox="0 0 24 24">${I[k]}</svg>${l}${k === "espace" ? '<span class="badge">2</span>' : ""}</button>`).join("")}</nav>
+  </div></div>`).join("");
+
+// shopping: tap to tick, as in the shop
+document.addEventListener("click", e => { const it = e.target.closest(".it"); if (!it) return; it.classList.toggle("on"); it.setAttribute("aria-checked", it.classList.contains("on")); });
+document.addEventListener("keydown", e => { if ((e.key === " " || e.key === "Enter") && e.target.classList.contains("it")) { e.preventDefault(); e.target.click(); } });
+// bottom bar: the tapped tab becomes the active one
+document.addEventListener("click", e => { const t = e.target.closest(".tab"); if (!t) return; t.parentNode.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t)); });
+</script>
+</body>
+</html>
