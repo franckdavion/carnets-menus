@@ -851,4 +851,44 @@ document.addEventListener("submit", async e => {
   await setHh({ google_client_id: cid }); toast("Identifiant Google enregistré.");
 });
 
+/* ---------- administration of the Carnet de menus accounts (administrator only) ---------- */
+// Same list as Carnet › Mon compte › Gérer les membres: everyone who has a Carnet account,
+// family or friends. Validating gives access to the common recipe book; it does NOT add anyone to this household.
+const ADM = { me: null, list: null, busy: false };
+async function admLoad() {
+  if (mode !== "cloud" || !user || ADM.busy) return;
+  ADM.busy = true;
+  try {
+    if (!ADM.me) { const { data } = await sb.from("profiles").select("role,status").eq("id", user.id).maybeSingle(); ADM.me = data || { role: "member" }; }
+    if (ADM.me.role === "admin") { const { data, error } = await sb.rpc("admin_members"); ADM.list = error ? [] : data || []; }
+  } catch (e) { ADM.list = []; }
+  finally { ADM.busy = false; if (view === "foyer") softRender(); }
+}
+const foyerViewAdm = VIEWS.foyer;
+VIEWS.foyer = function () {
+  const base = foyerViewAdm();
+  if (mode !== "cloud") return base;
+  if (!ADM.me || (ADM.me.role === "admin" && !ADM.list)) { admLoad(); return base; }
+  if (ADM.me.role !== "admin") return base;
+  const ST = { pending: "en attente", active: "actif", blocked: "bloqué" };
+  const inHh = new Set(S.members.map(m => m.user_id).filter(Boolean));
+  const list = [...ADM.list].sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || String(a.pseudo).localeCompare(String(b.pseudo)));
+  const waiting = list.filter(m => m.status === "pending").length;
+  return base + `<h2>Comptes du Carnet de menus</h2>
+    <p class="muted small" style="margin-top:-4px">Tous les comptes du Carnet, famille ou amis. « Valider » donne accès au livre de recettes commun ; seuls les membres de ce foyer partagent votre carnet, vos menus et Maisonnée.</p>
+    ${waiting ? `<div class="card warn" style="margin-bottom:10px"><strong>${waiting} compte${waiting > 1 ? "s" : ""} en attente de validation</strong></div>` : ""}
+    <div class="list">${list.map(m => `<div class="row"><span class="main"><span class="t">${esc(m.pseudo)}${m.role === "admin" ? " 👑" : ""}${inHh.has(m.id) ? ` <span class="muted small">· ${esc(S.hh.name)}</span>` : ""}</span>
+      <span class="m">${esc(m.email || "")} · <span class="${m.status === "pending" ? "hot" : ""}">${ST[m.status] || esc(m.status)}</span></span></span>
+      ${m.id === user.id ? "" : m.status !== "active" ? `<button class="btn primary" data-act="admSet" data-v="${m.id}" data-s="active">Valider</button>` : `<button class="btn ghost danger" data-act="admSet" data-v="${m.id}" data-s="blocked">Bloquer</button>`}</div>`).join("")}</div>`;
+};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act=admSet]"); if (!b) return;
+  if (b.dataset.s === "blocked" && !confirm("Bloquer ce compte ? Il n'aura plus accès au Carnet de menus.")) return;
+  b.disabled = true;
+  const { error } = await sb.rpc("admin_set_member", { member: b.dataset.v, new_status: b.dataset.s, new_role: null });
+  if (error) { b.disabled = false; toast("Refusé : " + error.message); return; }
+  toast(b.dataset.s === "active" ? "Compte validé." : "Compte bloqué.");
+  ADM.list = null; admLoad();
+});
+
 init();
