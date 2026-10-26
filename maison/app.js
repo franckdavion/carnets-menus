@@ -1156,6 +1156,7 @@ async function saveGoogleEvent(calendarId, row) {
   }
   return response.json();
 }
+let sheetRemMode = "none";
 function eventSheet(e, day, appointment = false, g = null) {
   const isNew = !e;
   const isAppointment = appointment || !!(e && e.kind === "appointment");
@@ -1185,18 +1186,22 @@ function eventSheet(e, day, appointment = false, g = null) {
         </div>
       </div>
       <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(e.notes)}</textarea></label>
-      ${isAppointment ? `<div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px">
-        <span class="label">Rappels du rendez-vous</span>
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="none" ${Array.isArray(e.reminders) && e.reminders.length === 0 ? "checked" : ""}> Aucun rappel</label>
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="default" ${!Array.isArray(e.reminders) ? "checked" : ""}> Mes rappels par défaut</label>
-        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="custom" ${Array.isArray(e.reminders) && e.reminders.length > 0 ? "checked" : ""}> Personnaliser les rappels</label>
+      ${(() => { // which choice is ticked: Google events keep Google's usual reminders unless changed; a plain event has none
+        const R = e.reminders, mode0 = g && e.gDefault ? "google" : Array.isArray(R) ? (R.length ? "custom" : "none") : isAppointment ? "default" : "none";
+        sheetRemMode = mode0; return ""; })()}
+      <div class="field" style="padding:12px;border:1px solid var(--border, #d9e0e7);border-radius:12px" data-appt="${isAppointment ? 1 : 0}">
+        <span class="label">Rappels${isAppointment ? " du rendez-vous" : ""}</span>
+        ${g ? `<label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="google" ${sheetRemMode === "google" ? "checked" : ""}> Rappels habituels de Google Agenda</label>` : ""}
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="none" ${sheetRemMode === "none" ? "checked" : ""}> Aucun rappel</label>
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="default" ${sheetRemMode === "default" ? "checked" : ""}> Mes rappels par défaut</label>
+        <label class="field" style="display:flex;flex-direction:row;gap:8px;align-items:center"><input type="radio" name="reminder_mode" value="custom" ${sheetRemMode === "custom" ? "checked" : ""}> Personnaliser les rappels</label>
         <div id="appointmentReminderList" hidden>
           <div id="appointmentReminderRows">${reminderRows(Array.isArray(e.reminders) && e.reminders.length ? e.reminders : reminderDefaults())}</div>
           <button class="btn ghost" type="button" data-act="addReminder">+ Ajouter un rappel</button>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" name="save_reminder_defaults"> Enregistrer ces délais comme rappels par défaut</label>
-          <p class="muted small">Durées réglables à la minute près. Les notifications sur téléphone nécessitent une configuration push supplémentaire.</p>
+          <p class="muted small">Durées réglables à la minute près.${g ? " Google Agenda envoie ces rappels sur les téléphones où il est installé." : ""}</p>
         </div>
-      </div>` : ""}
+      </div>
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
         ${isNew ? "" : g ? `<button class="btn danger" type="button" data-act="gDel">Supprimer</button>` : `<button class="btn danger" type="button" data-act="delEvent" data-v="${e.id}">Supprimer</button>`}
@@ -1423,19 +1428,21 @@ document.addEventListener("submit", async e => {
       }
       if (f.querySelector('[name="reminder_mode"]')) {
         const choice = f.querySelector('[name="reminder_mode"]:checked')?.value || "default";
-        const reminders = choice === "none" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
+        const reminders = choice === "none" || choice === "google" ? [] : choice === "default" ? reminderDefaults() : appointmentReminderValues(f);
         if (!reminders || (choice === "custom" && !reminders.length)) {
           eventFormFeedback(f, "Ajoute un rappel valide (4 semaines au plus) ou choisis « Aucun rappel ».");
           return;
         }
-        row.kind = "appointment";
-        row.reminders = reminders;
+        row.kind = reminders.length || f.querySelector("[data-appt='1']") ? "appointment" : "event";
+        row.reminders = reminders; row.gDefault = choice === "google";
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
       if (!row.title || !row.day) { eventFormFeedback(f, "Indique le titre et la date du rendez-vous."); return; }
+      const gDefault = !!row.gDefault; delete row.gDefault;
       if (sheetCtx?.g) {
         const g = sheetCtx.g, payload = googleEventPayload(row);
-        delete payload.recurrence; delete payload.reminders;
+        delete payload.recurrence;
+        payload.reminders = gDefault ? { useDefault: true } : { useDefault: false, overrides: row.reminders.filter(m => m <= 40320).slice(0, 5).map(minutes => ({ method: "popup", minutes })) };
         payload.colorId = chipVal(f, "gcolor") || null;
         btn.disabled = true;
         try {

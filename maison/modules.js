@@ -930,15 +930,17 @@ document.addEventListener("click", async e => {
       // calendars this account may write to: edit right here, in Maisonnée
       const cal = G.list.find(c => c.id === ev.cal);
       if (cal && (!cal.accessRole || cal.accessRole === "owner" || cal.accessRole === "writer")) {
-        // events saved on this phone before this version lack the details: fetch this one from Google
-        if (!ev.gs) {
-          try {
-            if (!(await gEnsure())) throw 0;
-            const full = await gApi(`calendars/${encodeURIComponent(ev.cal)}/events/${encodeURIComponent(ev.id)}`);
-            Object.assign(ev, { gs: full.start, ge: full.end, desc: full.description || "", rec: !!full.recurringEventId });
-          } catch (_) {}
+        // always the event as it is in Google now (times, reminders), then edit it right here
+        let full = null;
+        try { if (await gEnsure()) full = await gApi(`calendars/${encodeURIComponent(ev.cal)}/events/${encodeURIComponent(ev.id)}`); } catch (_) {}
+        if (full) Object.assign(ev, { gs: full.start, ge: full.end, desc: full.description || "", rec: !!full.recurringEventId });
+        if (ev.gs) {
+          const form = gToForm(ev), rm = full && full.reminders;
+          if (!rm || rm.useDefault) form.gDefault = true; else form.reminders = (rm.overrides || []).map(o => o.minutes);
+          eventSheet(form, null, !!form.start_time, { cal: ev.cal, id: ev.id, rec: ev.rec, colorId: ev.colorId });
+          break;
         }
-        if (ev.gs) { eventSheet(gToForm(ev), null, false, { cal: ev.cal, id: ev.id, rec: ev.rec, colorId: ev.colorId }); break; }
+        toast("Google Agenda ne répond pas : reconnectez Google dans Ma famille pour modifier ce rendez-vous.");
       }
       openSheet(ev.title, `<p style="margin-top:8px"><strong>${esc(dayLabel(ev.day))}</strong>${ev.start_time ? " · " + esc(hm(ev.start_time)) + (ev.end_time ? " – " + esc(hm(ev.end_time)) : "") : " · toute la journée"}</p>
         ${ev.place ? `<p>${esc(ev.place)}</p>` : ""}<p class="muted small">Agenda Google « ${esc(ev.calName)} ». Pour le modifier, passez par Google Agenda.</p>
