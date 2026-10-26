@@ -740,7 +740,7 @@ async function gFetch() {
         const j = await gApi(`calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page ? "&pageToken=" + page : ""}`);
         for (const e of j.items || []) {
           if (e.status === "cancelled" || e.eventType === "birthday") continue;
-          const base = { id: e.id, cal: c.id, calName: c.name, color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
+          const base = { id: e.id, cal: c.id, calName: c.name, colorId: e.colorId || "", color: (e.colorId && G.palette[e.colorId]) || c.color, title: e.summary || "(Sans titre)", place: e.location || "", link: e.htmlLink || "" };
           if (e.start && e.start.date) {
             const end = e.end && e.end.date ? e.end.date : addDays(e.start.date, 1);
             for (let d = e.start.date, n = 0; d < end && n < 31; d = addDays(d, 1), n++) items.push({ ...base, day: d, start_time: null, end_time: null });
@@ -759,8 +759,28 @@ async function gFetch() {
 async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
 const gEventsOn = day => G.ev.items.filter(e => e.day === day && (!G.cals || G.cals.includes(e.cal))).sort((a, b) => String(a.start_time || "").localeCompare(String(b.start_time || "")));
 function gRow(e) {
-  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${e.start_time ? "" : "allday"}">${e.start_time ? esc(hm(e.start_time)) : "Journée"}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
+  return `<button class="row" data-act="gEvent" data-v="${esc(e.id)}" data-day="${e.day}"><span class="ev-time ${e.start_time ? "" : "allday"}">${e.start_time ? esc(hm(e.start_time)) : "Journée"}</span><span class="gbar" style="background:${esc(e.color)}"></span><span class="main"><span class="t">${esc(e.title)}</span><span class="m">${e.colorId && gColorNames()[e.colorId] ? `<span class="who-tag" style="--c:${esc(e.color)}">${esc(gColorNames()[e.colorId])}</span> · ` : ""}${e.end_time ? "jusqu'à " + esc(hm(e.end_time)) + " · " : ""}${e.place ? esc(e.place) + " · " : ""}Google · ${esc(e.calName)}</span></span></button>`;
 }
+function gColorsSheet() {
+  const names = gColorNames();
+  const used = new Set(G.ev.items.map(e => e.colorId).filter(Boolean));
+  openSheet("Couleurs des enfants", `<p class="muted small" style="margin-top:6px">Donnez un prénom aux couleurs utilisées dans Google Agenda. Les rendez-vous de cette couleur afficheront ce prénom, et vous pourrez choisir la personne en créant un rendez-vous.${used.size ? " Les couleurs déjà utilisées dans vos agendas sont en premier." : ""}</p>
+    <form data-form="gColors">${[...G_COLORS].sort((a, b) => used.has(b[0]) - used.has(a[0])).map(([id, n]) => `<label class="field inline" style="gap:12px;align-items:center;margin-top:10px">
+      <span class="cat-dot" style="--c:${esc(gColorHex(id))};width:22px;height:22px"></span><span style="width:86px;flex:none" class="small">${n}${used.has(id) ? " ●" : ""}</span>
+      <input class="input" name="c${id}" value="${esc(names[id] || "")}" maxlength="30" placeholder="Prénom (facultatif)"></label>`).join("")}
+      <div class="sheet-sticky btns"><button class="btn primary block" type="submit">Enregistrer</button></div></form>`);
+}
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("form[data-form=gColors]"); if (!f) return;
+  e.preventDefault();
+  const fd = new FormData(f), out = {};
+  for (const [id] of G_COLORS) { const v = String(fd.get("c" + id) || "").trim(); if (v) out[id] = v; }
+  closeSheet();
+  LS.set("mz_gcolor_names", out);
+  if (mode === "cloud" && S.hh && "google_colors" in S.hh) await setHh({ google_colors: out });
+  else render();
+  toast("Couleurs enregistrées.");
+});
 // Google birthdays → the household's Anniversaires (shared with everyone)
 async function gImportBdays() {
   if (!S.v3) { toast("Le module Anniversaires n'est pas encore installé."); return; }
@@ -792,7 +812,7 @@ function gCard() {
   return `<h2>Agenda Google</h2><div class="card">
     <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
     ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
-    <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
+    <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn" data-act="gColors">Couleurs des enfants</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
 }
 const foyerViewG = VIEWS.foyer;
 VIEWS.foyer = function () { return foyerViewG() + gCard(); };
@@ -811,6 +831,7 @@ document.addEventListener("click", async e => {
     case "gConnect": gConnect(false, "foyer"); break;
     case "gRefresh": gRefresh(view); break;
     case "gBdays": gImportBdays(); break;
+    case "gColors": gColorsSheet(); break;
     case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
     case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); gFetch(); break; }
     case "gEvent": {

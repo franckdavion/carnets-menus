@@ -1037,6 +1037,24 @@ function reminderVisibility(form) {
   const box = form.querySelector("#appointmentReminderList");
   if (box) box.hidden = form.querySelector('[name="reminder_mode"]:checked')?.value !== "custom";
 }
+/* Couleurs Google par personne : la couleur d'un rendez-vous dit pour quel enfant il est */
+const G_COLORS = [["1", "Lavande", "#a4bdfc"], ["2", "Sauge", "#7ae7bf"], ["3", "Raisin", "#dbadff"], ["4", "Flamant", "#ff887c"], ["5", "Banane", "#fbd75b"], ["6", "Mandarine", "#ffb878"], ["7", "Paon", "#46d6db"], ["8", "Graphite", "#e1e1e1"], ["9", "Myrtille", "#5484ed"], ["10", "Basilic", "#51b749"], ["11", "Tomate", "#dc2127"]];
+// who each colour stands for, shared by the household (falls back to this phone if the column is missing)
+const gColorNames = () => (S.hh && S.hh.google_colors) || LS.get("mz_gcolor_names", {});
+const gColorHex = id => (typeof G !== "undefined" && G.palette && G.palette[id]) || (G_COLORS.find(c => c[0] === id) || [])[2] || "";
+const gColorLabel = id => gColorNames()[id] || (G_COLORS.find(c => c[0] === id) || [, ""])[1];
+function gColorChooser() {
+  const names = gColorNames(), named = G_COLORS.filter(([id]) => names[id]), rest = G_COLORS.filter(([id]) => !names[id]);
+  const chip = ([id, n]) => `<button type="button" class="chip" data-chip="gcolor" data-v="${id}" aria-pressed="false"><span class="cat-dot" style="--c:${esc(gColorHex(id))}"></span>${esc(names[id] || n)}</button>`;
+  return `<div class="field" id="gColorBox" hidden><span class="label">Pour qui (couleur dans Google)</span>
+    <div class="chips" role="group"><button type="button" class="chip" data-chip="gcolor" data-v="" aria-pressed="true">Couleur de l'agenda</button>${named.map(chip).join("")}</div>
+    ${rest.length ? `<details style="margin-top:8px"><summary class="muted small">Autres couleurs</summary><div class="chips" style="margin-top:8px">${rest.map(chip).join("")}</div></details>` : ""}
+    ${named.length ? "" : `<p class="muted small" style="margin:6px 0 0">Astuce : dans Ma famille › Agenda Google › « Couleurs des enfants », donnez un prénom à chaque couleur.</p>`}</div>`;
+}
+function syncGColorBox(form) {
+  const box = form && form.querySelector("#gColorBox"), sel = form && form.querySelector('[name="google_destination"]');
+  if (box && sel) box.hidden = sel.value === "local";
+}
 function googleDestinationOptions() {
   // every Google calendar is listed; the ones this account may only read are shown greyed out, with the reason
   const all = (typeof G !== "undefined" && G.connected ? G.list : []);
@@ -1072,6 +1090,7 @@ function googleEventPayload(row) {
     const freq = custom ? {days:"DAILY",weeks:"WEEKLY",months:"MONTHLY",years:"YEARLY"}[custom.unit] : { weekly: "WEEKLY", monthly: "MONTHLY", yearly: "YEARLY" }[row.repeat];
     if (freq) payload.recurrence = [`RRULE:FREQ=${freq}${custom ? ";INTERVAL=" + custom.interval : ""}`];
   }
+  if (row.colorId) payload.colorId = String(row.colorId);
   if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.filter(m => m <= 40320).slice(0,5).map(minutes => ({method:"popup",minutes}))};
   return payload;
 }
@@ -1110,7 +1129,7 @@ function eventSheet(e, day, appointment = false) {
         <label class="field" style="flex:1"><span class="label">Fin</span><input class="input" name="end" type="time" value="${esc(String(e.end_time || "").slice(0, 5))}"></label>
       </div>
       <div class="field"><span class="label">Qui est concerné</span>${chipsHtml("members", memberOpts(), e.members, true)}</div>
-      ${isNew ? googleDestinationOptions() : ""}
+      ${isNew ? googleDestinationOptions() + gColorChooser() : ""}
       <label class="field"><span class="label">Où</span><input class="input" name="place" value="${esc(e.place)}" maxlength="120" placeholder="Facultatif"></label>
       <div class="field"><span class="label">Répéter</span>${chipsHtml("repeat", REPEATS, recurrenceInfo(e.repeat) ? "custom" : e.repeat || "none")}
         <div id="customRepeatOptions" ${recurrenceInfo(e.repeat) ? "" : "hidden"} style="margin-top:12px">
@@ -1140,6 +1159,7 @@ function eventSheet(e, day, appointment = false) {
     </form>`, { id: isNew ? null : e.id });
   syncShow();
   reminderVisibility($("#sheetIn form"));
+  syncGColorBox($("#sheetIn form"));
 }
 
 async function mealSheet(day, slot) {
@@ -1275,7 +1295,7 @@ document.addEventListener("click", async e => {
   }
 });
 
-document.addEventListener("change", e => { if (e.target.name === "allday") syncShow(); if (e.target.matches("[data-geo]")) geoToggle(e.target.checked); });
+document.addEventListener("change", e => { if (e.target.name === "google_destination") syncGColorBox(e.target.form); if (e.target.name === "allday") syncShow(); if (e.target.matches("[data-geo]")) geoToggle(e.target.checked); });
 // message box grows with its text; Entrée envoie sur un clavier physique
 document.addEventListener("input", e => { if (e.target.name === "body" && e.target.closest(".composer")) { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; } });
 document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); } });
@@ -1337,7 +1357,7 @@ document.addEventListener("submit", async e => {
       if (destination !== "local" && !sheetCtx?.id) {
         btn.disabled = true;
         try {
-          await saveGoogleEvent(destination, row);
+          await saveGoogleEvent(destination, { ...row, colorId: chipVal(f, "gcolor") || null });
           LS.set("mz_last_google_destination", destination);
           closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
