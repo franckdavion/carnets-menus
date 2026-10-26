@@ -4091,12 +4091,14 @@ async function cloudInit(){if(!LS.get("cm_sb_auth",null)&&!localStorage.getItem(
   try{const sb=await sbc();const{data}=await sb.auth.getSession();await cloudSession(data.session);sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT"||ev==="SIGNED_IN")cloudSession(ses);});}catch(e){}}
 async function cloudSession(ses){cloud.user=ses&&ses.user||null;cloud.profile=null;cloud.admin=false;
   if(cloud.user){try{const{data}=await cloud.sb.from("profiles").select("*").eq("id",cloud.user.id).single();cloud.profile=data||null;cloud.admin=!!(data&&data.role==="admin"&&data.status==="active");
-      cloud.sb.from("profiles").update({last_seen:new Date().toISOString()}).eq("id",cloud.user.id).then(()=>{});}catch(e){}}
+      cloud.sb.from("profiles").update({last_seen:new Date().toISOString()}).eq("id",cloud.user.id).then(()=>{});}catch(e){}
+    // Maisonnée: every member of the household works on the same carnet (the one linked to the household)
+    cloud.owner=null;try{const{data:o,error:oe}=await cloud.sb.rpc("shared_carnet_owner");if(!oe&&o)cloud.owner=o;}catch(e){}}
   setAcctLine();if(!$("#acctSheet").hidden)renderAcct();if(cloudOn())cloudSync();}
 // tools only for the administrator's own setup (GitHub sync, Google Agenda): hidden for the other members
 function applyRoleUi(){const isAdmin=!!cloud.admin||(!cloud.user&&!!sync),showSync=!!sync||!!cloud.admin;
   const r=$("#rowSync");if(r)r.hidden=!showSync;document.querySelectorAll(".admin-only").forEach(el=>el.hidden=!isAdmin);}
-function setAcctLine(){applyRoleUi();const el=$("#setAcct");if(el)el.textContent=cloud.user?(cloud.profile?`${cloud.profile.pseudo}${cloud.admin?" · 👑 admin":""}${cloud.profile.status==="pending"?" · en attente de validation":cloud.profile.status==="blocked"?" · bloqué":" · synchronisé"}`:"connecté"):"connexion, base de recettes commune";}
+function setAcctLine(){applyRoleUi();const el=$("#setAcct");if(el)el.textContent=cloud.user?(cloud.profile?`${cloud.profile.pseudo}${cloud.admin?" · 👑 admin":""}${cloud.profile.status==="pending"?" · en attente de validation":cloud.profile.status==="blocked"?" · bloqué":" · synchronisé"}${sharedCarnet()?" · carnet commun du foyer":""}`:"connecté"):"connexion, base de recettes commune";}
 function renderAcct(){const b=$("#acctBody");const u=cloud.user,p=cloud.profile;
   if(cloudOn())cloud.sb.from("recipes").select("id",{count:"exact",head:true}).then(({count})=>{const el=$("#ac-count");if(el&&count!=null)el.textContent=`📚 Base commune : ${count} recettes · sur ce téléphone : ${Object.keys(recipes).length}`;});
   if(!u){b.innerHTML=`<p class="muted" style="margin:0;font-size:14px">Avec un compte, vous retrouvez vos menus, courses, cave et favoris sur n'importe quel téléphone, et vous partagez la base de recettes commune avec les membres. Vos menus et courses restent privés : personne d'autre ne peut les voir.</p>
@@ -4134,9 +4136,15 @@ function cloudSoon(){if(!cloudOn())return;clearTimeout(cloudT);cloudT=setTimeout
 function cloudDeleted(id){const r=recipes[id];if(!r||!cloud.user||!(r.cloudAuthor||LS.get("cm_cloudhash",{})[id]))return;const d=LS.get("cm_cloud_del",[]);d.push(id);LS.set("cm_cloud_del",d);cloudSoon();}
 async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
   try{// private space: the whole menu + the private part of every recipe
-    const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}
-    const payload={menu,priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
-    if(LS.get("cm_cloud_ph","")!==ph){const{error}=await sb.from("user_state").upsert({user_id:uid,menu:payload,updated_at:new Date().toISOString()});if(!error)LS.set("cm_cloud_ph",ph);}
+    let priv=privNow();
+    if(LS.get("cm_cloud_ph","")!==hashOf(menu)+hashOf(priv)){
+      // someone else may have changed the shared carnet since our last look: merge before writing
+      const{data:cur}=await sb.from("user_state").select("menu").eq("user_id",stateUid()).maybeSingle();
+      if(cur&&cur.menu&&cur.menu.menu)applyRemoteState(cur.menu);
+      priv=privNow();
+      const payload={menu,priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
+      const{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:new Date().toISOString()});
+      if(!error){LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",{menu:JSON.parse(J(menu)),priv});}}
     // my recipes in the common book
     const rows=[];for(const[id,r]of Object.entries(recipes)){if(!myCloudRecipe(id)||!H.__all&&!r.cloudAuthor&&!H[id]&&!r.createdAt)continue;const sh=sharedOf(r),h=hashOf(sh);if(H[id]===h)continue;
       const arr=v=>Array.isArray(v)?v.filter(x=>typeof x==="string"):[];
@@ -4162,11 +4170,36 @@ async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;cons
     const del=LS.get("cm_cloud_del",[]);if(del.length){await sb.from("recipes").delete().in("legacy_id",del);del.forEach(k=>delete H[k]);LS.set("cm_cloud_del",[]);}
     LS.set("cm_cloudhash",H);if(rows.length)LS.set("cm_recipes",recipes);LS.set("cm_cloud_at",Date.now());}
   catch(e){cloud.msg="Synchro en attente (réseau ?)";}finally{cloud.busy=false;}}
+/* ---------- carnet partagé du foyer (Maisonnée) ---------- */
+const stateUid=()=>cloud.owner||cloud.user.id;
+const sharedCarnet=()=>!!(cloud.owner&&cloud.user&&cloud.owner!==cloud.user.id);
+function privNow(){const priv={};for(const[id,r]of Object.entries(recipes)){const o={};PRIV_F.forEach(k=>{if(r[k]!==undefined&&r[k]!==false)o[k]=r[k];});if(Object.keys(o).length)priv[id]=o;}return priv;}
+// remote = {menu, priv, at}: three-way merge with the last copy both sides agreed on (cm_cloud_base)
+function applyRemoteState(remote){
+  const R0={menu:remote.menu||{},priv:remote.priv||{}},local={menu,priv:privNow()};
+  const switched=LS.get("cm_state_owner","")!==stateUid(),base=switched?null:LS.get("cm_cloud_base",null);
+  let m;
+  if(switched){
+    if(sharedCarnet()||LS.get("cm_state_owner","")){ // joining another carnet: take it as it is, keep a copy of this phone's
+      try{localStorage.setItem("cm_menu_backup",J({at:Date.now(),menu,priv:local.priv}));}catch(e){}
+      m=R0;}
+    else m=(remote.at||0)>LS.get("cm_menu_at",0)?R0:local; // own carnet, first time: the newest copy, as before
+    LS.set("cm_state_owner",stateUid());}
+  else if(!base)m=(remote.at||0)>LS.get("cm_menu_at",0)?R0:local;
+  else m=merge3(base,local,R0);
+  LS.set("cm_cloud_base",JSON.parse(J(R0)));
+  if(J(m.menu)!==J(menu)){menu=normMenu(m.menu);LS.set("cm_menu",menu);LS.set("cm_menu_at",Math.max(remote.at||0,LS.get("cm_menu_at",0)));}
+  let chg=false;const mp=m.priv||{};
+  for(const id of new Set([...Object.keys(local.priv),...Object.keys(mp)])){if(!recipes[id]||J(local.priv[id])===J(mp[id]))continue;
+    PRIV_F.forEach(k=>delete recipes[id][k]);Object.assign(recipes[id],mp[id]||{});chg=true;}
+  if(chg)LS.set("cm_recipes",recipes);
+}
+// the others' changes arrive every minute while the carnet is open
+setInterval(()=>{if(document.visibilityState==="visible"&&cloudOn()&&cloud.owner&&!cloud.busy)cloudSync();},60e3);
 async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
-  // 1. private space (menus, courses, cave, favourites…): the most recent copy wins
-  const{data:st}=await sb.from("user_state").select("menu,updated_at").eq("user_id",uid).maybeSingle();
-  if(st&&st.menu&&st.menu.menu&&(st.menu.at||0)>LS.get("cm_menu_at",0)&&(!LS.get("cm_cloud_ph","")||confirmNewer(st.menu.at))){menu=Object.assign(menu||{},st.menu.menu);LS.set("cm_menu",menu);LS.set("cm_menu_at",st.menu.at);
-    for(const[id,o]of Object.entries(st.menu.priv||{}))if(recipes[id])Object.assign(recipes[id],o);}
+  // 1. the carnet (menus, courses, cave, favourites…): shared by the household, merged with what changed here
+  const{data:st}=await sb.from("user_state").select("menu,updated_at").eq("user_id",stateUid()).maybeSingle();
+  if(st&&st.menu&&st.menu.menu)applyRemoteState(st.menu);
   // 2. the common book (only what changed since last time)
   const since=LS.get("cm_cloud_since","1970-01-01T00:00:00Z");let rows=[],from=0;
   for(;;){const{data,error}=await sb.from("recipes_with_author").select("*").gt("updated_at",since).order("updated_at").range(from,from+999);if(error)throw error;rows=rows.concat(data||[]);if(!data||data.length<1000)break;from+=1000;}

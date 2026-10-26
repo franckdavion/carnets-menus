@@ -44,7 +44,7 @@
     P.busy = true;
     try {
       const sb = cloud.sb, uid = cloud.user.id;
-      const { data: hs, error: he } = await sb.from("households").select("id,carnet_user").eq("carnet_user", uid).limit(1);
+      const { data: hs, error: he } = await sb.from("households").select("id,carnet_user").eq("carnet_user", cloud.owner || uid).limit(1);
       if (he || !hs || !hs.length) { P.hid = null; return; }
       const hid = P.hid = hs[0].id;
       await loadMap(sb);

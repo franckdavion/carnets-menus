@@ -124,7 +124,8 @@ let recQ = "", recTab = null;
 // favourites come from this account's Carnet de menus (its private space in Supabase)
 async function loadFavs() {
   if (mode !== "cloud" || !user || !S.recipes || !S.recipes.length) return;
-  const { data, error } = await sb.from("user_state").select("menu").eq("user_id", user.id).maybeSingle();
+  // the household's shared carnet if there is one, otherwise this account's own
+  const { data, error } = await sb.from("user_state").select("menu").eq("user_id", (S.hh && S.hh.carnet_user) || user.id).maybeSingle();
   if (error || !data || !data.menu) { S.favs = new Set(); return; }
   const priv = data.menu.priv || {}, byKey = {};
   for (const r of S.recipes) byKey[r.legacy_id || "c-" + r.id] = r.id;
@@ -658,8 +659,8 @@ VIEWS.foyer = function () {
   if (mode === "cloud" && S.v5) {
     const owner = S.members.find(m => m.user_id === S.hh.carnet_user);
     card = `<h2>Carnet de menus</h2><div class="card">${
-      (user && S.hh.carnet_user === user.id) ? `<p style="margin:0 0 6px"><strong>Relié à votre Carnet.</strong></p><p class="muted small">Le menu et les courses du foyer sont synchronisés avec votre Carnet chaque fois qu'il est ouvert.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a><button class="btn ghost danger" data-act="linkCarnet" data-v="0">Délier</button></div>`
-      : S.hh.carnet_user ? `<p style="margin:0"><strong>Relié au Carnet de ${esc(owner ? owner.name : "un membre")}.</strong></p><p class="muted small" style="margin-top:6px">Le menu et les courses sont synchronisés avec son Carnet.</p>`
+      (user && S.hh.carnet_user === user.id) ? `<p style="margin:0 0 6px"><strong>Votre Carnet est le carnet commun du foyer.</strong></p><p class="muted small">Chaque membre qui a un compte retrouve dans son Carnet de menus les mêmes menus, courses, cave, favoris et notes. Le menu et les courses sont aussi synchronisés avec Maisonnée.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a><button class="btn ghost danger" data-act="linkCarnet" data-v="0">Délier</button></div>`
+      : S.hh.carnet_user ? `<p style="margin:0"><strong>Carnet commun du foyer : celui de ${esc(owner ? owner.name : "un membre")}.</strong></p><p class="muted small" style="margin-top:6px">Ouvrez le Carnet de menus avec votre propre compte : vous y retrouvez les mêmes menus, courses, cave, favoris et notes que tout le foyer.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`
       : `<p class="muted small" style="margin:0">Reliez votre Carnet de menus : le menu de la semaine et la liste de courses seront les mêmes dans les deux applis, dans les deux sens.</p><div class="btns"><button class="btn primary" data-act="linkCarnet" data-v="1">Relier mon Carnet</button></div>`}</div>`;
   } else if (mode === "cloud" && !S.v5) card = `<h2>Carnet de menus</h2><div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-5.sql</b> dans Supabase pour relier votre Carnet, Google Agenda et les adresses.</div>`;
   return foyerViewCarnet() + card;
