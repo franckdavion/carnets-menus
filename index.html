@@ -1356,6 +1356,8 @@ function setStatus(k,e){
   chip.textContent=t; chip.dataset.state=k; if(line)line.textContent=t;
 }
 function scheduleSync(ms=800){if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
+// household carnet: the old GitHub sync copy is not used any more, it only filled the phone's storage
+try{if(localStorage.getItem("cm_state_owner"))localStorage.removeItem("cm_base");}catch(e){}
 function cloudCarnet(){try{return !!((typeof cloud!=="undefined"&&cloud.owner)||LS.get("cm_state_owner",""));}catch(e){return false;}}
 async function runSync(){
   if(!sync)return;

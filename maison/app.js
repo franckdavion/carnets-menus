@@ -14,6 +14,17 @@ const LS = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
+// The Carnet and Maisonnée share this phone's small web storage (about 5 MB on iPhone). When it is full, the
+// login can no longer be kept (reconnect at each opening) and changes are lost: free what can be rebuilt.
+const lsSize = () => { let n = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += k.length + (localStorage.getItem(k) || "").length; } } catch (e) {} return n; };
+function freeSpace(all) {
+  try {
+    if (localStorage.getItem("cm_state_owner")) localStorage.removeItem("cm_base"); // old GitHub sync copy, unused with the household carnet
+    if (all || lsSize() > 3.2e6) ["cm_rph_orig", "cm_menu_backup"].forEach(k => localStorage.removeItem(k)); // originals kept for re-cropping, old backup
+    if (all || lsSize() > 3.8e6) localStorage.removeItem("cm_autoph5"); // automatic photo searches: found again when needed
+  } catch (e) {}
+}
+freeSpace();
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
 
 const pad = n => String(n).padStart(2, "0");

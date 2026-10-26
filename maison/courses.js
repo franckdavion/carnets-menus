@@ -109,3 +109,17 @@ document.addEventListener("submit", e => {
 });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && view === "courses") carnetRefresh(); });
 if (view === "courses") render();
+
+// Ma famille: how full this phone's storage is, with a button to make room
+const foyerViewMem = VIEWS.foyer;
+VIEWS.foyer = function () {
+  const mo = lsSize() * 2 / 1e6; // characters are stored on 2 bytes
+  return foyerViewMem() + `<h2>Mémoire sur ce téléphone</h2><div class="card"><span>${mo.toFixed(1).replace(".", ",")} Mo utilisés par le Carnet et Maisonnée${mo > 8 ? " : c'est presque plein." : "."}</span>
+    <div class="btns"><button class="btn" data-act="memFree">Libérer de la place</button></div>
+    <p class="muted small" style="margin:6px 0 0">Retire seulement ce qui se retrouve tout seul (anciennes copies, photos d'origine gardées pour recadrer, recherches de photos). Si la mémoire est pleine, l'appli ne peut plus garder votre connexion.</p></div>`;
+};
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-act=memFree]")) return;
+  const before = lsSize(); freeSpace(true); render();
+  toast(`${((before - lsSize()) * 2 / 1e6).toFixed(1).replace(".", ",")} Mo libérés.`);
+});
