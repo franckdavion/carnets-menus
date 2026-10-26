@@ -4,6 +4,7 @@
    cocher au fil du magasin, courses terminées, vider la liste).
    Tout passe par le Carnet chargé en arrière-plan (repas.js) : mêmes calculs, mêmes données, même liste pour tout le foyer. */
 
+let cxHaveOpen = false; // « Déjà à la maison » stays open while you put items back, until you close it
 let cxClearAsk = false, cxFinishAsk = false, cxUndo = false;
 // run one of the Carnet's own buttons (same code as a tap in the Carnet)
 function cclick(d) {
@@ -104,19 +105,22 @@ VIEWS.courses = function () {
       : `<div class="btns"><button class="btn primary block" data-act="cxFinish">Courses terminées</button></div>
          <p class="muted small" style="margin-top:6px">Ce qui est coché sort de la liste. Le reste est gardé pour la prochaine fois.</p>`;
   }
-  if (D.have.length) out += `<details class="card" style="margin-top:16px"><summary class="muted">Déjà à la maison (${D.have.length})</summary><div class="list" style="margin-top:8px">${D.have.map(i => `<div class="cx-item"><span class="nm muted">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span><button type="button" class="cx-have" data-act="cxHaveUndo" data-v="${esc(i.key)}">Remettre</button></div>`).join("")}</div></details>`;
+  if (D.have.length) out += `<details class="card" id="cxHave" style="margin-top:16px" ${cxHaveOpen ? "open" : ""}><summary class="muted">Déjà à la maison (${D.have.length})</summary>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px"><button type="button" class="btn ghost" data-act="cxHaveClose" aria-label="Refermer la liste">✕ Refermer</button></div><div class="list" style="margin-top:8px">${D.have.map(i => `<div class="cx-item"><span class="nm muted">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span><button type="button" class="cx-have" data-act="cxHaveUndo" data-v="${esc(i.key)}">Remettre</button></div>`).join("")}</div></details>`;
   if (total || D.xr.length) out += cxClearAsk
     ? `<div class="card warn" style="margin-top:16px"><span>Vider toute la liste ? Les repas restent au menu, à renvoyer aux courses.</span><div class="btns"><button class="btn danger" data-act="cxClearYes">Oui, vider</button><button class="btn" data-act="cxClearNo">Non</button></div></div>`
     : `<div class="btns" style="margin-top:16px"><button class="btn" data-act="cxClear">🗑️ Vider la liste</button></div>`;
   return out;
 };
 
-const CX_ACTS = ["cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+document.addEventListener("toggle", e => { if (e.target.id === "cxHave") cxHaveOpen = e.target.open; }, true);
+const CX_ACTS = ["cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
   switch (a) {
+    case "cxHaveClose": cxHaveOpen = false; break;
     case "cxMove": cxMoveSheet(b.dataset.n, b.dataset.r); return;
     case "cxMoveTo": cev(`(()=>{menu.rayonLearn=Object.assign({},menu.rayonLearn,{[${JSON.stringify(String(b.dataset.n).trim().toLowerCase())}]:${JSON.stringify(v)}});saveMenu();})()`); closeSheet(); msg = `Rangé dans « ${v} ».`; break;
     case "cxOrder": cxOrderDraft = cxOrder(cxData().order); cxOrderSheet(); return;
