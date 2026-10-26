@@ -833,6 +833,7 @@ function gCard() {
 }
 const foyerViewG = VIEWS.foyer;
 VIEWS.foyer = function () { return foyerViewG() + gCard(); };
+if (G.ev.items.length && !G.ev.items[0].gs) G.ev.at = 0;
 const gBoot = setInterval(() => {
   if (screen !== "app") return;
   clearInterval(gBoot);
@@ -855,7 +856,17 @@ document.addEventListener("click", async e => {
       const ev = G.ev.items.find(x => x.id === v && x.day === b.dataset.day); if (!ev) break;
       // calendars this account may write to: edit right here, in Maisonnée
       const cal = G.list.find(c => c.id === ev.cal);
-      if (cal && (cal.accessRole === "owner" || cal.accessRole === "writer") && ev.gs) { eventSheet(gToForm(ev), null, false, { cal: ev.cal, id: ev.id, rec: ev.rec, colorId: ev.colorId }); break; }
+      if (cal && (!cal.accessRole || cal.accessRole === "owner" || cal.accessRole === "writer")) {
+        // events saved on this phone before this version lack the details: fetch this one from Google
+        if (!ev.gs) {
+          try {
+            if (!(await gEnsure())) throw 0;
+            const full = await gApi(`calendars/${encodeURIComponent(ev.cal)}/events/${encodeURIComponent(ev.id)}`);
+            Object.assign(ev, { gs: full.start, ge: full.end, desc: full.description || "", rec: !!full.recurringEventId });
+          } catch (_) {}
+        }
+        if (ev.gs) { eventSheet(gToForm(ev), null, false, { cal: ev.cal, id: ev.id, rec: ev.rec, colorId: ev.colorId }); break; }
+      }
       openSheet(ev.title, `<p style="margin-top:8px"><strong>${esc(dayLabel(ev.day))}</strong>${ev.start_time ? " · " + esc(hm(ev.start_time)) + (ev.end_time ? " – " + esc(hm(ev.end_time)) : "") : " · toute la journée"}</p>
         ${ev.place ? `<p>${esc(ev.place)}</p>` : ""}<p class="muted small">Agenda Google « ${esc(ev.calName)} ». Pour le modifier, passez par Google Agenda.</p>
         ${ev.link ? `<div class="btns"><a class="btn" href="${esc(ev.link)}" target="_blank" rel="noopener">Ouvrir dans Google Agenda</a></div>` : ""}`);
