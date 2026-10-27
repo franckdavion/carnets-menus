@@ -2427,12 +2427,12 @@ function renderWeek(){
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
     const side=!r&&hasSide(s), ed=weekEdit&&!past&&(r||side), x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
     const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
-    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="dans les courses">🛒</span>':''),"main"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
+    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="dans les courses">🛒</span>':''),"main"):s.left?line("wn","🥡 Restes : "+esc(s.left),"left"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
       +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
       +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
       +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
       +(s.n!==menu.people?`<span class="ws">${s.n} pers.</span>`:""):(past?"—":"+ Choisir");
-    return`<div role="button" tabindex="0" class="wc${isT?" today":""}${past?" past":""}${r?"":" empty"}${ed?" editing":""}" data-act="wcell" data-k="${k}" data-wslot="${k}">${inner}</div>`;};
+    return`<div role="button" tabindex="0" class="wc${isT?" today":""}${past?" past":""}${r||(s&&s.left)?"":" empty"}${ed?" editing":""}" data-act="wcell" data-k="${k}" data-wslot="${k}">${inner}</div>`;};
   el.innerHTML=`<span class="wh"></span><span class="wh">MIDI</span><span class="wh">SOIR</span>`+DAYS.map((d,i)=>{const date=addDays(ws,i),isT=ymd(date)===today;
     return`<span class="wd${isT?" today":""}">${d.slice(0,3)}<small>${date.getDate()}</small></span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;}).join("");
 }
@@ -2445,6 +2445,7 @@ function renderSlotSheet(){
   if(r||hasSide(s)){
     const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
     h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · dans les courses":""}</span></button>${s.lock?"":rx("main")}</div>`
+      :s.left?`<div class="sl-line"><strong>🥡 Restes : ${esc(s.left)}</strong>${rx("left")}</div>${past?"":`<div class="slot-acts2">${btn("pick","Choisir un plat à la place")}</div>`}`
       :`<div class="sl-line"><span class="muted">Plat à choisir</span>${past?"":btn("pick","+ Choisir un plat","","btn primary")}</div>`;
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
     (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
@@ -2459,7 +2460,7 @@ function renderSlotSheet(){
 }
 function weekText(){
   const ws=weekStartDate(),lines=["Menus de la semaine du "+shortDate(ws),""];
-  DAYS.forEach((d,i)=>{const part=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return"";
+  DAYS.forEach((d,i)=>{const part=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&s.left?(m==="midi"?"midi ":"soir ")+"restes ("+s.left+")":"";
       const x=[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:""].filter(Boolean);
       return(m==="midi"?"midi ":"soir ")+r.name+(x.length?" ("+x.join(", ")+")":"");};
     const p=[part("midi"),part("soir")].filter(Boolean);if(p.length)lines.push(d+" "+addDays(ws,i).getDate()+" : "+p.join(" · "));});
@@ -2470,7 +2471,7 @@ async function shareWeek(){const t=weekText();
   try{await navigator.clipboard.writeText(t);toast("Menus copiés : collez-les où vous voulez");}catch(e){toast("Partage impossible ici");}}
 function printWeek(){
   const ws=weekStartDate();
-  $("#printArea").innerHTML=`<h1>Menus · semaine du ${esc(shortDate(ws))}</h1><table><thead><tr><th></th><th>Midi</th><th>Soir</th></tr></thead><tbody>${DAYS.map((d,i)=>{const c=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return"<td></td>";
+  $("#printArea").innerHTML=`<h1>Menus · semaine du ${esc(shortDate(ws))}</h1><table><thead><tr><th></th><th>Midi</th><th>Soir</th></tr></thead><tbody>${DAYS.map((d,i)=>{const c=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&s.left?`<td><b>Restes</b><br><small>${esc(s.left)}</small></td>`:"<td></td>";
       return`<td><b>${esc(r.name)}</b>${s.entree&&recipes[s.entree]?`<br><small>Entrée : ${esc(recipes[s.entree].name)}</small>`:""}${s.dessert&&recipes[s.dessert]?`<br><small>Dessert : ${esc(recipes[s.dessert].name)}</small>`:""}</td>`;};
     return`<tr><th>${d}<br><small>${addDays(ws,i).getDate()}</small></th>${c("midi")}${c("soir")}</tr>`;}).join("")}</tbody></table>`;
   setTimeout(()=>window.print(),60);
@@ -2482,7 +2483,7 @@ let addId=null, addRole="main", addWeek=null, addSel=new Map(), addInit=new Map(
 const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
 const ROLE_AS={main:"en plat",entree:"en entrée",dessert:"en dessert"};
 // a meal can hold a starter or dessert while its main dish is still to choose
-const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length);
+const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length||!!s.left); // s.left = « 🥡 Restes » choisis dans Maisonnée
 const slotUsed=s=>!!s&&(!!recipes[s.id]||hasSide(s));
 function openAdd(id){
   const r=recipes[id];if(!r)return;addId=id;
@@ -2535,7 +2536,7 @@ function applyAdd(){
       if(was==="main"){if(!s.lock){if(hasSide(s))delete s.id;else delete wk[k];}}
       else{delete s[ROLE_FIELD[was]];if(!slotUsed(s))delete wk[k];}}
     if(now){const s=wk[k]||{};
-      wk[k]=Object.assign({n:addN},s,{[ROLE_FIELD[now]]:addId});if(now==="main"||!slotUsed(s))wk[k].n=addN;n++;} // a starter or dessert joins the meal's own number of people
+      wk[k]=Object.assign({n:addN},s,{[ROLE_FIELD[now]]:addId});if(now==="main"&&wk[k].left){delete wk[k].left;delete wk[k].keep;}if(now==="main"||!slotUsed(s))wk[k].n=addN;n++;} // a starter or dessert joins the meal's own number of people
   }
   $("#addSheet").hidden=true;addAsk=null;if(addId===ideaId)ideaId=null;render();saveMenu();
   document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
@@ -2561,6 +2562,7 @@ function removePart(k,part,i){
   if(part==="main"){label=(recipes[s.id]||{}).name||"le plat";if(hasSide(s)){delete s.id;delete s.lock;}else delete W()[k];} // the starter and dessert stay
   else if(part==="entree"||part==="dessert"){label=(recipes[s[part]]||{}).name||part;delete s[part];}
   else if(part==="extra"){const xs=s.extra||[];label=xs[Number(i)]||"";xs.splice(Number(i),1);if(!xs.length)delete s.extra;}
+  else if(part==="left"){label="les restes";delete s.left;delete s.keep;}
   if(W()[k]&&!slotUsed(W()[k]))delete W()[k];
   render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
 }
@@ -3831,7 +3833,7 @@ function setPicked(id){
     W()[k]=Object.assign({},old,{id});delete W()[k].lock;$("#pickSheet").hidden=true;render();saveMenu();
     toast(`« ${was} » retiré de la liste (${gone} ingrédient${gone>1?"s":""})`);
     setTimeout(()=>lockPreview([{w:sw.w,k}]),120);return;}
-  if(pickRole==="main")W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});
+  if(pickRole==="main"){W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});if(W()[k].left){delete W()[k].left;delete W()[k].keep;}}
   else{if(!old)return;old[pickRole]=id;}
   $("#pickSheet").hidden=true;render();saveMenu();flashSlot(k);
   toast(slotLabel(k)+(pickRole==="entree"?" · entrée : ":pickRole==="dessert"?" · dessert : ":" : ")+recipes[id].name);

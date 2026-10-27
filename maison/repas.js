@@ -83,7 +83,7 @@ function weekSlots(wk) {
   cev(`curWeek=${JSON.stringify(wk)}`);
   return cj(`(()=>{const w=(menu.weeks||{})[curWeek]||{},o={};for(const k of SLOT_ORDER){const s=w[k];o[k]={s:s||null,past:isPast(k),skip:skipped(k),
     name:s&&recipes[s.id]?recipes[s.id].name:"",kind:s&&recipes[s.id]?KIND_LABEL[kindOf(recipes[s.id])]||"":"",
-    ent:s&&s.entree&&recipes[s.entree]?recipes[s.entree].name:"",des:s&&s.dessert&&recipes[s.dessert]?recipes[s.dessert].name:""};}return o;})()`);
+    left:s&&!recipes[s.id]&&s.left?String(s.left):"",ent:s&&s.entree&&recipes[s.entree]?recipes[s.entree].name:"",des:s&&s.dessert&&recipes[s.dessert]?recipes[s.dessert].name:""};}return o;})()`);
 }
 
 VIEWS.repas = function () {
@@ -107,6 +107,10 @@ VIEWS.repas = function () {
       const k = dn + "|" + m, x = sl[k];
       const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Dans la liste de courses">🛒 Courses</span>`
         : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
+      if (x.left && !x.name) {
+        out += `<div class="slot ${x.past ? "past" : ""}" role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"><b>${m === "midi" ? "Midi" : "Soir"}</b><span class="what">🥡 Restes<br><span class="muted small">${esc(x.left)}</span></span><span class="keep left">🥡</span></div>`;
+        continue;
+      }
       const dis = x.past && !x.name;
       out += `<div class="slot ${x.past ? "past" : ""}" ${dis ? "" : `role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"`}>
         <b>${m === "midi" ? "Midi" : "Soir"}</b>
@@ -151,6 +155,7 @@ function mealSlotSheet(k) {
   cev(`curWeek=${JSON.stringify(rWeek)}`);
   const x = weekSlots(rWeek)[k], s = x.s, [dn, m] = k.split("|"), day = addDays(rWeek, RDAYS.indexOf(dn));
   const title = `${dn} ${m} · ${fmtShort(day)}`;
+  if (s && !x.name && x.left) return rLeftShow(k, title, x);
   if (!s || !x.name) { rPick = { k, role: "main", q: "" }; return rPickSheet(title); }
   const ro = x.past;
   // the same meal redrawn after a tap (ingredient, people…): stay where you were in the window
@@ -232,7 +237,7 @@ function rRecipeOpen(k, id) {
 function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
   openSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
-    ${p.role === "main" ? `<div class="btns" style="margin-top:4px"><button class="btn primary" data-act="rReroll" data-v="${esc(p.k)}">✨ Laisser le Carnet choisir</button></div>` : ""}
+    ${p.role === "main" ? `<div class="btns" style="margin-top:4px"><button class="btn primary" data-act="rReroll" data-v="${esc(p.k)}">✨ Laisser le Carnet choisir</button><button class="btn" data-act="rLeft" data-v="${esc(p.k)}">🥡 Restes</button></div>` : ""}
     <input class="input" id="rPickQ" type="search" placeholder="Chercher une recette" autocomplete="off" style="margin-top:12px">
     <div class="list" id="rPickList" style="margin-top:10px">${rPickList("")}</div>`);
 }
@@ -247,12 +252,45 @@ function rPickList(q) {
   return list.map(r => `<button class="row" data-act="rPut" data-v="${esc(r.id)}"><span class="main"><span class="t">${r.f ? "★ " : ""}${esc(r.n)}</span><span class="m">${esc(r.c)}${r.t ? " · " + r.t + " min" : ""}</span></span></button>`).join("") || `<p class="muted" style="padding:14px">Aucune recette ne correspond.</p>`;
 }
 
+// 🥡 Restes : un repas fait avec ce qui reste (plats des jours précédents, ou le frigo). Rien à acheter, jamais changé par « Proposer ma semaine ».
+function rLeftRecent(k) {
+  const [dn, m] = k.split("|"), day = addDays(rWeek, RDAYS.indexOf(dn)), list = [];
+  // les repas des 3 jours précédents (et le midi du même jour pour un soir), du plus récent au plus ancien
+  for (let i = 0; i <= 3; i++) {
+    const d = addDays(day, -i), w = mondayOf(d), dname = RDAYS[(parse(d).getDay() + 6) % 7];
+    for (const mm of ["soir", "midi"]) {
+      if (i === 0 && (m === "midi" || mm === "soir")) continue;
+      list.push({ w, sk: dname + "|" + mm, d, mm });
+    }
+  }
+  const names = cj(`(()=>{const L=${JSON.stringify(list.map(x => [x.w, x.sk]))};return L.map(([w,k])=>{const s=((menu.weeks||{})[w]||{})[k];return s&&recipes[s.id]?recipes[s.id].name:"";});})()`);
+  const seen = new Set();
+  return list.map((x, i) => ({ ...x, name: names[i] })).filter(x => x.name && !seen.has(x.name) && seen.add(x.name));
+}
+function rLeftSheet(k) {
+  const [dn, m] = k.split("|"), rec = rLeftRecent(k), day = addDays(rWeek, RDAYS.indexOf(dn));
+  const when = x => { const n = diffDays(x.d, day); return (n === 0 ? "ce midi" : n === 1 ? (x.mm === "soir" ? "hier soir" : "hier midi") : `${RDAYS[(parse(x.d).getDay() + 6) % 7].toLowerCase()} ${x.mm}`); };
+  openSheet(`🥡 Restes · ${dn} ${m}`, `<p class="muted small" style="margin-top:6px">Un repas fait avec ce qui reste : rien ne part aux courses, et « Proposer ma semaine » ne le changera pas.</p>
+    ${rec.length ? `<p class="group-h">Les plats des derniers jours</p><div class="list">${rec.map(x => `<button class="row" data-act="rLeftPut" data-v="${esc(k)}" data-t="${esc(x.name)}"><span class="main"><span class="t">${esc(x.name)}</span><span class="m">${esc(when(x))}</span></span></button>`).join("")}</div>` : `<p class="muted small">Pas de plat noté ces 3 derniers jours.</p>`}
+    <p class="group-h">Ou autre chose</p>
+    <div class="inline"><input class="input" id="rLeftQ" maxlength="80" placeholder="ex. lasagnes de dimanche" autocomplete="off"><button class="btn primary" data-act="rLeftPut" data-v="${esc(k)}">OK</button></div>
+    <div class="btns"><button class="btn" data-act="rLeftPut" data-v="${esc(k)}" data-t="du frigo">🥡 Restes du frigo</button></div>
+    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
+}
+function rLeftShow(k, title, x) {
+  openSheet(title, `<p style="margin:8px 0 2px"><strong style="font-size:19px">🥡 Restes</strong></p><p style="margin:0">${esc(x.left)}</p>
+    ${x.past ? "" : `<div class="r-status kept"><b>Rien à acheter</b><span>« Proposer ma semaine » ne changera pas ce repas.</span></div>
+    <div class="btns"><button class="btn" data-act="rLeft" data-v="${esc(k)}">🥡 Autres restes</button><button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button></div>
+    <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>`}
+    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
+}
+
 /* ---------- actions ---------- */
 const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rRecipe", "rRecipeOpen", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum"].includes(act)) return;
+  if (!["rRecipe", "rRecipeOpen", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -267,14 +305,14 @@ document.addEventListener("click", async e => {
       carnetSave(`${n} repas validé${n > 1 ? "s" : ""} : les ingrédients partent dans les courses.`); break;
     }
     case "rReroll": {
-      const id = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k];const nb=bestFor(k,s&&s.id?[s.id]:[]);if(!nb)return "";W()[k]=Object.assign({},s||{},{id:nb,n:s&&s.n?s.n:menu.people});return nb;})()`);
+      const id = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k];const nb=bestFor(k,s&&s.id?[s.id]:[]);if(!nb)return "";W()[k]=Object.assign({},s||{},{id:nb,n:s&&s.n?s.n:menu.people});if(W()[k].left){delete W()[k].left;delete W()[k].keep;}return nb;})()`);
       closeSheet(); if (!id) { toast("Pas d'autre recette possible avec ces réglages."); break; }
       carnetSave(); mealSlotSheet(v); break;
     }
     case "rChoose": rPick = { k: v, role: b.dataset.r, q: "" }; rPickSheet(); break;
     case "rPut": {
       const { k, role } = rPick;
-      if (role === "main") cev(`(()=>{const k=${JSON.stringify(k)},s=W()[k];W()[k]=Object.assign({},s||{},{id:${JSON.stringify(v)},n:s&&s.n?s.n:menu.people});})()`);
+      if (role === "main") cev(`(()=>{const k=${JSON.stringify(k)},s=W()[k];W()[k]=Object.assign({},s||{},{id:${JSON.stringify(v)},n:s&&s.n?s.n:menu.people});if(W()[k].left){delete W()[k].left;delete W()[k].keep;}})()`);
       else cev(`(()=>{const s=W()[${JSON.stringify(k)}];if(s)s[${JSON.stringify(role)}]=${JSON.stringify(v)};})()`);
       carnetSave(); mealSlotSheet(k); break;
     }
@@ -288,6 +326,14 @@ document.addEventListener("click", async e => {
     case "rServ": cev(`(()=>{const s=${slotJs(v)};if(s)s.n=Math.max(1,Math.min(20,(s.n||menu.people||4)+(${+b.dataset.d})));})()`); carnetSave(); mealSlotSheet(v); break;
     case "rSide": cev(`(()=>{const s=${slotJs(v)};if(s)delete s[${JSON.stringify(b.dataset.r)}];})()`); carnetSave(); mealSlotSheet(v); break;
     case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré."); break;
+    case "rLeft": rLeftSheet(v); break;
+    case "rLeftPut": {
+      const f = b.closest("#sheet"), inp = f && f.querySelector("#rLeftQ");
+      const t = String(b.dataset.t != null ? b.dataset.t : (inp && inp.value.trim()) || "du frigo").slice(0, 80);
+      const was = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k]||{},was=!!s.lock;W()[k]=Object.assign({},s,{left:${JSON.stringify(t)},keep:true,n:s.n||menu.people});delete W()[k].id;delete W()[k].lock;delete W()[k].noIng;return was;})()`);
+      if (was) shopIncludeWeek();
+      closeSheet(); carnetSave(`🥡 Restes (${t}) : rien à acheter pour ce repas.`); break;
+    }
     case "rNum": {
       const [k, d] = v.split(":"), el = $("#rp-" + k); if (!el || !sheetCtx) break;
       sheetCtx[k] = Math.max(0, Math.min(14, (sheetCtx[k] || 0) + +d)); el.textContent = sheetCtx[k]; break;

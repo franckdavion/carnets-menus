@@ -96,7 +96,7 @@
           if (cNew !== cSig) {
             menu.weeks = menu.weeks || {};
             if (!menu.weeks[wk]) menu.weeks[wk] = {};
-            if (!cNew) delete menu.weeks[wk][sk];
+            if (!cNew) { if (!(sl && sl.left)) delete menu.weeks[wk][sk]; } // des « restes » ne sont pas effacés par la synchro des repas
             else {
               const key = cNew.slice(2);
               if (recipes[key]) menu.weeks[wk][sk] = Object.assign({}, sl && sl.id === key ? sl : {}, { id: key, n: (sl && sl.n) || menu.people || 4, lock: true });
