@@ -60,11 +60,11 @@ VIEWS.home = function () {
   const ribbon = total ? `<div class="ribbon" aria-hidden="true">${done.map(l => { const m = member(l.member_id); return `<i class="done" style="background:${m ? esc(m.color) : "var(--muted)"}"></i>`; }).join("")}${due.map(() => "<i></i>").join("")}</div>
     <p class="ribbon-cap">${done.length} sur ${total} ${total > 1 ? "tâches faites" : "tâche faite"} aujourd'hui${done.length === total ? ". Tout est fait !" : ""}</p>` : "";
   const pins = homePins();
-  return `${meName ? `<p class="hello">Bonjour ${esc(meName)}</p>` : ""}<h1 class="day">${esc(fmtLong(d))}</h1>
+  return `<div class="home-main">${meName ? `<p class="hello">Bonjour ${esc(meName)}</p>` : ""}<h1 class="day">${esc(fmtLong(d))}</h1>
     ${ribbon}
-    ${due.length ? `<div class="list" style="margin-top:12px">${due.slice(0, 3).map(t => taskRow(t)).join("")}${due.length > 3 ? `<button class="row more" data-act="go" data-v="tasks">Voir les ${due.length} tâches du jour</button>` : ""}</div>` : ""}
-    <div class="tiles">${pins.map(k => { const m = modOf(k); const badge = k === "messages" ? unread() : 0; return `<button class="tile" data-act="go" data-v="${k}"><span class="tile-t">${esc(m.t)}</span><span class="tile-s">${esc(m.sub())}</span>${mi(k)}${badge ? `<i class="badge tile-badge">${badge > 9 ? "9+" : badge}</i>` : ""}</button>`; }).join("")}</div>
-    ${pins.length ? "" : `<div class="empty"><strong>L'accueil est vide.</strong>Choisissez les modules à afficher dans Explorer.</div>`}`;
+    ${due.length ? `<div class="list" style="margin-top:12px">${due.slice(0, 3).map(t => taskRow(t)).join("")}${due.length > 3 ? `<button class="row more" data-act="go" data-v="tasks">Voir les ${due.length} tâches du jour</button>` : ""}</div>` : ""}</div>
+    <div class="home-side"><div class="tiles">${pins.map(k => { const m = modOf(k); const badge = k === "messages" ? unread() : 0; return `<button class="tile" data-act="go" data-v="${k}"><span class="tile-t">${esc(m.t)}</span><span class="tile-s">${esc(m.sub())}</span>${mi(k)}${badge ? `<i class="badge tile-badge">${badge > 9 ? "9+" : badge}</i>` : ""}</button>`; }).join("")}</div>
+    ${pins.length ? "" : `<div class="empty"><strong>L'accueil est vide.</strong>Choisissez les modules à afficher dans Explorer.</div>`}</div>`;
 };
 VIEWS.today = VIEWS.home;
 VIEWS.explore = function () {

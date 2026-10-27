@@ -536,6 +536,20 @@ dialog.sheet.maison-keyboard{position:fixed;bottom:auto!important;margin:0 auto!
 input[type=date].input,input[type=time].input{display:block;min-width:0;width:100%;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
 input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-webkit-date-and-time-value{text-align:left}
 .inline>.field{min-width:0}
+
+/* ---------- tablette en paysage / grand écran : on profite de toute la largeur ---------- */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 480px){
+  .wrap{max-width:1180px;padding:0 28px}
+  .fab{right:max(28px,calc(50% - 562px))}
+  dialog.sheet{max-width:720px}
+  /* accueil : la journée à gauche, les modules à droite */
+  main.view-home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:0 32px;align-items:start}
+  main.view-home .home-side .tiles{margin-top:14px}
+  .tiles{grid-template-columns:repeat(3,1fr)}
+  .tile{min-height:140px}
+  .sq-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+  .msg{max-width:min(70%,620px)}
+}
 </style>
 <link rel="stylesheet" href="presences.css">
 </head>
