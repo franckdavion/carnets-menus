@@ -579,6 +579,27 @@ input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-web
 .cx-up{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 92px);z-index:6;padding:8px 16px;border-radius:999px;font:800 15px var(--body);color:#06172c;
   border:1px solid #a7e9ff;background:linear-gradient(145deg,#9be1ff,#4ba7ff 60%);box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 14px rgba(53,158,255,.7)}
 .cx-up[hidden]{display:none}
+/* Catalogue : lignes compactes, filtres, fiche produit */
+.cat-top{position:sticky;top:-1px;z-index:2;margin:0 -2px;padding:6px 2px 8px;background:var(--surface)}
+dialog.sheet .cat-top{background:rgba(21,38,66,.97);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:0 0 14px 14px}
+.cat-filters{flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x pan-y;margin-top:8px;padding-bottom:4px}
+.cat-filters .chip{white-space:nowrap;flex:none}
+.cat-list{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.cat-row{display:flex;align-items:center;border-top:1px solid var(--line);min-height:52px}
+.cat-row:first-child{border-top:0}
+.cat-rmain{all:unset;box-sizing:border-box;cursor:pointer;flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:8px 6px 8px 12px}
+.cat-rem{font-size:24px;width:30px;text-align:center;flex:none}
+.cat-rnm{flex:1;min-width:0;font-size:16px;font-weight:600;line-height:1.25}
+.cat-rnm small{display:block;font-weight:500;font-size:12.5px;color:var(--muted)}
+.cat-rfav{color:#F5B400;font-size:13px}
+.cat-rchk{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:17px;border:2px solid var(--line);color:var(--muted)}
+.cat-row.on{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.cat-row.on .cat-rchk{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.cat-rmore{flex:none;width:44px;height:44px;border:0;background:none;color:var(--muted);font-size:20px;font-weight:800}
+.cat-hidden{margin-top:16px}.cat-hidden summary{cursor:pointer;padding:6px 2px}
+.cat-empick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cat-empick button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:none;font-size:22px;padding:0}
+.cat-empick button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 </style>
 <link rel="stylesheet" href="presences.css">
 </head>
