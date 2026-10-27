@@ -80,8 +80,10 @@ VIEWS.courses = function () {
   const done = [...D.items.filter(i => i.on).map(i => row(i, "k:" + i.key)), ...D.extras.filter(x => x.on).map(x => row(x, "x:" + x.ix))];
   const total = D.items.length + D.extras.length;
   const sel = D.days.filter(x => x.on);
-  let out = `<div class="card linkcard"><span>La même liste que le Carnet de menus, pour tout le foyer.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
-  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? "✓ " + esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
+  const nLeft = todo.length + todoX.length;
+  let out = `<button type="button" class="cx-jump" data-act="cxJump">🛒 Ma liste de courses<span>${total ? (nLeft ? `${nLeft} article${nLeft > 1 ? "s" : ""} à prendre` : "tout est dans le caddie ✓") : "liste vide"}</span><i aria-hidden="true">↓</i></button>`;
+  out += `<div class="card linkcard"><span>La même liste que le Carnet de menus, pour tout le foyer.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
+  out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
     <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour voir ses repas et choisir ce qui part dans les courses.</p>
@@ -95,6 +97,7 @@ VIEWS.courses = function () {
     <div class="btns" style="margin-top:8px"><button class="btn block" data-act="catOpen">🛍️ Catalogue · favoris, produits réguliers</button></div>`;
   if (cxUndo) out += `<div class="card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Courses terminées.</span><button class="btn" data-act="cxFinishUndo">Annuler</button></div>`;
   if (D.xr.length) out += `<p class="group-h">Recettes ajoutées hors menu</p><div class="list">${D.xr.map(x => `<div class="cx-item"><span class="nm">${esc(x.name)}${x.dup ? `<span class="cx-from">déjà au menu validé : pas compté deux fois</span>` : ""}</span><span class="q">${x.n} pers.</span><button type="button" class="cx-x" data-act="cxRmR" data-v="${esc(x.id)}" aria-label="Retirer ${esc(x.name)}">✕</button></div>`).join("")}</div>`;
+  out += `<h2 class="cx-list-h" id="cxList">🛒 Liste de courses${total ? `<span>${nLeft ? nLeft + " à prendre" : "tout est pris"}${done.length ? " · " + done.length + " dans le caddie" : ""}</span>` : ""}</h2>`;
   if (!total) out += `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>${sel.length ? "Envoyez des repas de ces jours aux courses depuis Repas, ou ajoutez des articles ci-dessus." : "Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;
   if (todo.length + todoX.length) out += `<div class="btns" style="margin-top:14px;justify-content:space-between"><span class="muted small" style="align-self:center">Rangée par rayon · touchez un article pour changer son rayon</span><button class="linkbtn small" data-act="cxOrder">Ordre des rayons</button></div>`;
   for (const ry of cxOrder(D.order)) {
@@ -205,4 +208,30 @@ document.addEventListener("click", e => {
   if (!e.target.closest("[data-act=memFree]")) return;
   const before = lsSize(); freeSpace(true); render();
   toast(`${((before - lsSize()) * 2 / 1e6).toFixed(1).replace(".", ",")} Mo libérés.`);
+});
+
+/* ---------- aller directement à la liste (au magasin) ---------- */
+// ↓ bouton du haut, « ↑ Menus » pour remonter, et retour direct sur la liste si on l'avait quittée en étant dedans
+let cxInList = null, cxJumpPending = view === "courses" && LS.get("mz_cx_inlist", false), cxPrevView = null;
+const cxGoList = smooth => { const h = $("#cxList"); if (h) h.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" }); };
+function cxUpBtn() {
+  let b = $("#cxUp");
+  const h = view === "courses" && $("#cxList"), inList = !!h && h.getBoundingClientRect().top < 120;
+  if (!b) { b = document.createElement("button"); b.id = "cxUp"; b.type = "button"; b.className = "cx-up"; b.dataset.act = "cxUp"; b.textContent = "↑ Menus"; document.body.appendChild(b); }
+  b.hidden = !inList;
+  if (view === "courses" && h && !cxJumpPending && cxInList !== inList) { cxInList = inList; LS.set("mz_cx_inlist", inList); }
+}
+afterRender = (orig => function () {
+  orig();
+  if (view === "courses" && cxPrevView !== "courses") cxJumpPending = LS.get("mz_cx_inlist", false);
+  if (view !== "courses") cxJumpPending = false;
+  cxPrevView = view;
+  if (cxJumpPending && $("#cxList")) { cxJumpPending = false; setTimeout(() => { cxGoList(false); cxUpBtn(); }, 30); }
+  cxUpBtn();
+})(afterRender);
+window.addEventListener("scroll", () => cxUpBtn(), { passive: true });
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act=cxJump],[data-act=cxUp]"); if (!b) return;
+  if (b.dataset.act === "cxJump") cxGoList(true);
+  else { window.scrollTo({ top: 0, behavior: "smooth" }); LS.set("mz_cx_inlist", false); }
 });

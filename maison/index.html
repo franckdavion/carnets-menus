@@ -569,6 +569,16 @@ input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-web
 .r-status.kept{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .r-status.shop{border-color:#57d68b;background:rgba(31,122,69,.25)}
 .r-status.prop{border-style:dashed}
+/* Courses : accès direct à la liste */
+.cx-jump{display:flex;align-items:center;gap:10px;width:100%;margin:4px 0 14px;padding:14px 16px;border-radius:18px;text-align:left;font:800 18px/1.2 var(--body);color:#06172c;
+  border:1px solid #a7e9ff;background:linear-gradient(145deg,#9be1ff,#4ba7ff 48%,#2268d2);box-shadow:inset 0 2px 1px rgba(255,255,255,.55),0 6px 18px rgba(0,0,0,.36),0 0 18px rgba(53,158,255,.6)}
+.cx-jump span{flex:1;font-weight:600;font-size:14.5px;opacity:.85;margin-left:4px}
+.cx-jump i{font-style:normal;font-size:22px}
+.cx-list-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:26px 2px 6px;padding-top:14px;border-top:2px solid rgba(109,178,255,.45);font:800 22px/1.2 var(--display);scroll-margin-top:84px}
+.cx-list-h span{font:600 14px var(--body);color:var(--muted)}
+.cx-up{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 92px);z-index:6;padding:8px 16px;border-radius:999px;font:800 15px var(--body);color:#06172c;
+  border:1px solid #a7e9ff;background:linear-gradient(145deg,#9be1ff,#4ba7ff 60%);box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 14px rgba(53,158,255,.7)}
+.cx-up[hidden]{display:none}
 </style>
 <link rel="stylesheet" href="presences.css">
 </head>
