@@ -68,3 +68,11 @@ Le Carnet a un bouton « 🏠 Maisonnée » en haut pour revenir.
 
 Chacun connecte ensuite son propre agenda sur son téléphone (lecture seule) : les événements Google ne sont visibles que sur ce téléphone.
 « Importer mes anniversaires » copie les anniversaires Google dans le module Anniversaires, partagé avec le foyer.
+
+## Présences des enfants (étape 14)
+
+1. Coller `supabase-foyer-14.sql` dans Supabase › SQL Editor › Run (crée 5 tables réservées aux membres du foyer).
+2. Ouvrir la tuile **Présences**, onglet **Enfants** : ajouter les enfants (permanent / relais, périodes), choisir les agendas Google à analyser.
+3. Les présences se calculent depuis Google Agenda (lecture seule) ; une case touchée se corrige à la main.
+4. Tests : ouvrir `tests/presences.test.html` ou lancer `node maison/tests/presences.test.js`.
+Les relevés PDF et Excel sont fabriqués sur le téléphone, sans bibliothèque ni service externe.
