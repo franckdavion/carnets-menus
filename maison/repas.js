@@ -172,7 +172,8 @@ function mealSlotSheet(k) {
     <div class="field"><span class="label">Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
     <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
     ${ingBlock(k, s)}
-    <div class="sheet-sticky btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>`}`);
+    <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>
+    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`}`);
   if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
 }
 // the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
