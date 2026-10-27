@@ -98,13 +98,14 @@ VIEWS.repas = function () {
       <strong>${rWeek === cur ? "Cette semaine" : rWeek === addDays(cur, 7) ? "Semaine prochaine" : "Semaine du " + esc(fmtShort(rWeek))}</strong>
       <button class="icon-btn plain" data-act="rWeek" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>
     <div class="btns" style="margin-top:6px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">Réglages</button></div>
-    ${open.length ? `<p class="muted small" style="margin:12px 2px 0">🛒 ${open.length} repas pas encore dans les courses : touchez un repas pour voir ses ingrédients et l'y envoyer.</p>` : ""}`;
+    <div class="r-legend" aria-label="Légende"><span><i class="r-st prop">Proposé</i>peut encore changer</span><span><i class="r-st kept">✓ Gardé</i>ne change plus</span><span><i class="r-st shop">🛒 Courses</i>dans la liste</span></div>
+    ${open.length ? `<p class="muted small" style="margin:10px 2px 0">${open.length} repas pas encore dans les courses : touchez un repas pour le garder ou l'ajouter aux courses.</p>` : ""}`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
     for (const m of ["midi", "soir"]) {
       const k = dn + "|" + m, x = sl[k];
-      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Gardé et dans les courses">🛒</span>`
+      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Dans la liste de courses">🛒 Courses</span>`
         : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
       const dis = x.past && !x.name;
       out += `<div class="slot ${x.past ? "past" : ""}" ${dis ? "" : `role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"`}>
@@ -115,7 +116,7 @@ VIEWS.repas = function () {
     }
     out += `</section>`;
   }
-  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas (il ne part pas aux courses). 🛒 : dans les courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
+  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas, sans l'envoyer aux courses. « 🛒 Courses » : ses ingrédients sont dans la liste de courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
   return out;
 };
 
@@ -124,9 +125,11 @@ function rProposeSheet() {
   openSheet("Proposer ma semaine", `
     <p class="muted small" style="margin-top:6px">Le Carnet choisit selon vos réglages : favoris, nombre de repas végé et poisson, soirs légers, sans répéter les recettes des dernières semaines.</p>
     <form data-form="rPropose">
-      <div class="field"><span class="label">Que remplir</span>${chipsHtml("rfill", [["empty", "Seulement les cases vides"], ["all", "Tout refaire (sauf les repas validés)"]], "empty")}</div>
-      <div class="field"><span class="label">Ensuite</span>${chipsHtml("rmode", [["draft", "Je valide repas par repas"], ["lock", "Tout envoyer aux courses"]], "draft")}</div>
-      <p class="muted small">Validé = verrouillé et envoyé dans la liste de courses.</p>
+      <div class="field"><span class="label">1. Quels repas remplir ?</span>${chipsHtml("rfill", [["empty", "Seulement les cases vides"], ["all", "Tout refaire"]], "empty")}
+        <p class="muted small" style="margin:6px 2px 0">« Tout refaire » ne touche jamais aux repas <b>✓ Gardés</b> ni à ceux déjà <b>🛒 dans les courses</b>.</p></div>
+      <div class="field"><span class="label">2. Et la liste de courses ?</span>${chipsHtml("rmode", [["draft", "Je choisirai repas par repas"], ["lock", "Tout mettre dans les courses"]], "draft")}
+        <p class="muted small" style="margin:6px 2px 0">« Repas par repas » : rien ne part aux courses maintenant ; vous touchez ensuite chaque repas pour l'ajouter.</p></div>
+      <p class="muted small">Le choix en <b>bleu avec ✓</b> est celui qui sera appliqué.</p>
       <div class="sheet-sticky btns"><button class="btn primary block" type="submit">Proposer</button></div>
     </form>`);
 }
@@ -155,13 +158,16 @@ function mealSlotSheet(k) {
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
     <button class="linkbtn" data-act="rRecipe" data-v="${esc(k)}" style="margin:2px 0 4px">📖 Voir la recette</button>
-    <p class="muted small" style="margin:0">${esc(x.kind || "")}${s.lock ? (x.kind ? " · " : "") + "✓ dans les courses" : s.keep ? (x.kind ? " · " : "") + "✓ gardé" : ""}</p>
-    ${ro ? "" : `<div class="btns">
+    ${x.kind ? `<p class="muted small" style="margin:0">${esc(x.kind)}</p>` : ""}
+    ${ro ? "" : `<div class="r-status ${s.lock ? "shop" : s.keep ? "kept" : "prop"}">${s.lock
+        ? `<b>🛒 Dans la liste de courses</b><span>Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus.</span>`
+        : s.keep ? `<b>✓ Gardé</b><span>« Proposer ma semaine » ne le changera plus. Il n'est <u>pas encore</u> dans les courses : bouton « Ajouter aux courses » en bas.</span>`
+        : `<b>Proposé</b><span>Ce repas peut encore changer si vous relancez « Proposer ma semaine ». Il n'est pas dans les courses.</span>`}</div>
+    <p class="group-h" style="margin-top:16px">Changer le plat</p>
+    <div class="btns" style="margin-top:0">
       <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
-      <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>
-      ${s.lock ? "" : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder ce choix"}</button>`}
-      </div>
-    ${s.lock ? "" : `<p class="muted small" style="margin:6px 0 0">${s.keep ? "« Proposer ma semaine » ne changera pas ce repas. Il n'est pas encore dans les courses." : "« Garder ce choix » : « Proposer ma semaine » ne le changera plus, sans l'envoyer aux courses."}</p>`}
+      <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button></div>
+    ${s.lock ? "" : `<p class="group-h" style="margin-top:16px">Le garder ?</p><div class="btns" style="margin-top:0"><button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé · toucher pour ne plus le garder" : "Garder ce choix"}</button></div>`}
     <div class="inline" style="justify-content:space-between;margin-top:16px"><span>Personnes</span><span class="inline"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong style="min-width:2ch;text-align:center">${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></span></div>
     <div class="field"><span class="label">Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
     <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
@@ -183,8 +189,8 @@ function ingBlock(k, s) {
   try { list = slotIngredients(k); } catch (_) {}
   if (!list.length) return `<p class="muted small" style="margin-top:16px">Pas d'ingrédients notés pour cette recette.</p>`;
   const n = list.filter(i => i.on).length;
-  return `<div class="field" style="margin-top:16px"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} pour les courses</span>
-    <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà.</p>
+  return `<p class="group-h" style="margin-top:20px">Les courses</p><div class="field" style="margin-top:0"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} cochés</span>
+    <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà à la maison : seuls les ingrédients cochés partiront dans la liste.</p>
     <div class="card" style="padding:0">${list.map(i => `<button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span><span class="nm">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></button>`).join("")}</div></div>
     <div class="btns" style="margin-top:10px">${s.lock
       ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
@@ -300,7 +306,9 @@ document.addEventListener("submit", e => {
     if (lock) { cev(`(()=>{for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!isPast(k))s.lock=true;}})()`); shopIncludeWeek(); }
     const after = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]).length`);
     closeSheet();
-    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée et validée : les ingrédients partent dans les courses.` : `${n} repas proposés. Touchez un repas pour voir ses ingrédients et l'envoyer aux courses.`);
+    const held = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]&&!isPast(k)&&(W()[k].lock||W()[k].keep)).length`);
+    const kept = all && held && !lock ? ` (${held} repas gardés ou déjà dans les courses n'ont pas été changés)` : "";
+    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée : tous les repas sont dans les courses 🛒.` : `${n} repas proposés${kept}. Touchez un repas pour le garder ou l'ajouter aux courses.`);
   } else {
     const fd = Object.fromEntries(new FormData(f).entries()), days = {};
     for (const d of RDAYS) if (fd["st-" + d]) days[d] = fd["st-" + d];

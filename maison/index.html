@@ -550,6 +550,24 @@ input[type=date].input::-webkit-date-and-time-value,input[type=time].input::-web
   .sq-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
   .msg{max-width:min(70%,620px)}
 }
+/* choix sélectionné bien visible : bleu vif avec ✓ (toutes les puces de Maisonnée) */
+.chip[aria-pressed="true"]{background:linear-gradient(145deg,#9be1ff,#4ba7ff 48%,#2268d2)!important;color:#06172c!important;border-color:#c4efff!important;font-weight:800;
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.6),0 0 0 2px rgba(120,200,255,.35),0 0 16px rgba(53,158,255,.8)!important}
+.chip[aria-pressed="true"]::before{content:"✓ ";font-weight:900}
+.chip[aria-pressed="false"]{opacity:.82}
+/* Repas : état de chaque repas (proposé, gardé, dans les courses) */
+.r-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 2px 0;font-size:13px;color:var(--muted)}
+.r-legend span{display:inline-flex;align-items:center;gap:6px}
+.r-st{font-style:normal;font-weight:800;font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink)}
+.r-st.kept{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.r-st.shop{background:#1f7a45;border-color:#57d68b;color:#fff}
+.slot .keep.shop{background:#1f7a45;border-color:#57d68b;color:#fff}
+.r-status{display:flex;flex-direction:column;gap:3px;margin-top:12px;padding:12px 14px;border-radius:16px;border:1px solid var(--line);font-size:14.5px}
+.r-status b{font-size:16.5px}
+.r-status span{color:var(--muted)}
+.r-status.kept{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.r-status.shop{border-color:#57d68b;background:rgba(31,122,69,.25)}
+.r-status.prop{border-style:dashed}
 </style>
 <link rel="stylesheet" href="presences.css">
 </head>
