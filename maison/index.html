@@ -600,8 +600,57 @@ dialog.sheet .cat-top{background:rgba(21,38,66,.97);-webkit-backdrop-filter:blur
 .cat-empick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .cat-empick button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:none;font-size:22px;padding:0}
 .cat-empick button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+
+/* V3 — Harmonisation des boutons Explorer et Ajouter avec Notre maison.
+   Purement visuel : les attributs data-act/data-v et les handlers restent inchangés. */
+main:has(.group-h) .sq-grid,
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{
+ display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;
+ margin-block:12px 20px!important;align-items:stretch;
+}
+main:has(.group-h) .sq,
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ min-width:0;min-height:106px;padding:12px 7px;gap:9px;
+ border:1px solid rgba(120,213,255,.85);border-radius:17px;
+ background:linear-gradient(145deg,#245b94,#102c51 75%);
+ box-shadow:inset 0 2px 2px #e2f7ff66,inset 0 -8px 18px #04132c88,0 0 10px #43b8ff9c,0 0 24px #167bdb55;
+ color:#f4faff;transition:transform .15s ease,box-shadow .15s ease;
+}
+main:has(.group-h) .sq-ic,
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-ic{
+ width:52px;height:52px;flex:0 0 52px;border-radius:14px;
+ border:1px solid #72c9ff99;background:linear-gradient(145deg,#315c92,#172c51);
+ box-shadow:inset 0 2px 2px #d3efff44,0 0 13px #399dff80;
+}
+main:has(.group-h) .sq-ic .mi svg,
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-ic .mi svg{width:30px;height:30px}
+main:has(.group-h) .sq-t,
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-t{
+ color:#f5fbff;font-size:12px;font-weight:700;line-height:1.25;
+ white-space:normal;overflow-wrap:anywhere;text-align:center;
+ max-width:100%;overflow:visible;text-overflow:clip;
+}
+dialog.sheet:has(.sq[data-act="pickPhotos"]){max-width:min(850px,calc(100vw - 20px));}
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sheet-in{padding-bottom:22px}
+dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:750px){
+ main:has(.group-h) .sq-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+ main:has(.group-h) .sq,dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq{min-height:92px;padding:9px 4px}
+ main:has(.group-h) .sq-ic,dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-ic{width:44px;height:44px;flex-basis:44px}
+ main:has(.group-h) .sq-t,dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-t{font-size:11px}
+}
+@media(max-width:365px){
+ main:has(.group-h) .sq-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
 </style>
 <link rel="stylesheet" href="presences.css">
+<link rel="stylesheet" href="ultimate.css?v=iphone-portrait-2cols-hero-fixed-20261027">
+<link rel="stylesheet" href="design-stable.css?v=stable-3col-20261027-1">
+<link rel="stylesheet" href="responsive-final.css?v=20261027-final-1">
+<link rel="stylesheet" href="grille-remplie.css?v=20261027-fill-1">
 </head>
 <body>
 <div id="app"></div>
@@ -610,7 +659,7 @@ dialog.sheet .cat-top{background:rgba(21,38,66,.97);-webkit-backdrop-filter:blur
 <script src="espace.js"></script>
 <script src="push-config.js"></script>
 <script src="app.js"></script>
-<script src="modules.js"></script>
+<script src="modules.js?v=explorer-sync-20261027"></script>
 <script src="repas.js"></script>
 <script src="courses.js"></script>
 <script src="gtaches.js"></script>
@@ -660,5 +709,8 @@ dialog.sheet .cat-top{background:rgba(21,38,66,.97);-webkit-backdrop-filter:blur
   adjust();
 })();
 </script>
+<script src="ultimate-modules.js?v=explorer-sync-20261027"></script>
+<script src="ultimate.js"></script>
+<script src="v3-icons-and-add-position.js"></script>
 </body>
 </html>

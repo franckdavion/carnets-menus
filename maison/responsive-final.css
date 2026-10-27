@@ -1,0 +1,40 @@
+/* MAISONNÉE — finition responsive, chargé en dernier. */
+:root { --mn-card-h: 82px; --mn-grid-gap: 8px; --mn-nav-reserve: 155px; }
+/* Grille : dimensions constantes pour tous les boutons, quel que soit leur nombre. */
+body:has(main.view-home) #ultimate-module-grid .umod-grid,
+main.view-home #ultimate-module-grid .umod-grid,
+#ultimate-module-grid > .umod-grid {
+ display:grid!important; grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr))!important;
+ grid-template-rows:none!important;grid-auto-rows:var(--mn-card-h)!important;
+ gap:var(--mn-grid-gap)!important;align-content:start!important;
+ height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;
+}
+body:has(main.view-home) #ultimate-module-grid .umod-slot,
+body:has(main.view-home) #ultimate-module-grid .umod-link {
+ box-sizing:border-box!important;height:var(--mn-card-h)!important;
+ min-height:var(--mn-card-h)!important;max-height:var(--mn-card-h)!important;
+ min-width:0!important;max-width:none!important;
+}
+body:has(main.view-home) #ultimate-module-grid .umod-heading {margin-bottom:13px!important;}
+/* La barre reste fixe; la fin du document reste atteignable. */
+html:has(main.view-home),body:has(main.view-home) {height:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}
+body:has(main.view-home) main.view-home {height:auto!important;max-height:none!important;overflow:visible!important;padding-bottom:calc(var(--mn-nav-reserve) + env(safe-area-inset-bottom,0px))!important;}
+body:has(main.view-home) #ultimate-dashboard {height:auto!important;max-height:none!important;overflow:visible!important;}
+body:has(main.view-home) #ultimate-module-grid {height:auto!important;max-height:none!important;overflow:visible!important;padding-bottom:var(--mn-nav-reserve)!important;}
+.pill {position:fixed!important;bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;z-index:9999!important;}
+.pill button[aria-current="page"],.pill button.active,.pill button.is-active {
+ color:#fff!important;background:linear-gradient(145deg,#278fe6,#0752a9)!important;
+ box-shadow:0 0 0 1px rgba(134,227,255,.8),0 0 16px rgba(42,177,255,.75),inset 0 1px 8px rgba(185,239,255,.35)!important;
+ text-shadow:0 0 8px rgba(255,255,255,.75)!important;
+}
+.pill button[aria-current="page"] svg,.pill button.active svg,.pill button.is-active svg {filter:drop-shadow(0 0 5px rgba(210,245,255,.95));}
+@media(max-width:768px) {
+ :root {--mn-card-h:76px;--mn-grid-gap:7px;--mn-nav-reserve:165px;}
+ body:has(main.view-home) #ultimate-module-grid .umod-grid,
+ main.view-home #ultimate-module-grid .umod-grid,
+ #ultimate-module-grid > .umod-grid {grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+ body:has(main.view-home) #ultimate-module-grid .umod-heading {margin-bottom:11px!important;}
+}
+@media(max-width:340px) {
+ :root {--mn-grid-gap:5px;}
+}

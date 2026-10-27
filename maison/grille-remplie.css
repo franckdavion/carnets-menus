@@ -1,0 +1,92 @@
+/* MAISONNÉE V3 — Grille qui remplit sa zone, espacements validés.
+   Chargée en dernier. Aucun changement de logique JavaScript. */
+:root { --mn-module-gap: 9px; --mn-module-min-row: 76px; }
+/* Titre plus éloigné de la première rangée. */
+body:has(main.view-home) #ultimate-module-grid .umod-heading,
+main.view-home #ultimate-module-grid .umod-heading {
+  margin-bottom: 20px !important;
+  padding-bottom: 3px !important;
+}
+/* Les rangées se partagent toute la hauteur disponible : 4, 8 ou 14 cartes
+   ont toujours des dimensions identiques à l'intérieur d'une même grille. */
+body:has(main.view-home) #ultimate-module-grid .umod-grid,
+main.view-home #ultimate-module-grid .umod-grid,
+#ultimate-module-grid > .umod-grid {
+  display: grid !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: minmax(var(--mn-module-min-row), 1fr) !important;
+  align-content: stretch !important;
+  align-items: stretch !important;
+  gap: var(--mn-module-gap) !important;
+  height: clamp(370px, calc(100dvh - 440px), 660px) !important;
+  min-height: 370px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body:has(main.view-home) #ultimate-module-grid .umod-slot,
+body:has(main.view-home) #ultimate-module-grid .umod-link,
+main.view-home #ultimate-module-grid .umod-slot,
+main.view-home #ultimate-module-grid .umod-link {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  box-sizing: border-box !important;
+}
+/* Les cartes remplissent la zone, sans créer une case vide pour les modules masqués. */
+body:has(main.view-home) #ultimate-module-grid {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+/* Réserver l'espace de la barre fixe APRÈS le panneau. */
+body:has(main.view-home) main.view-home {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)) !important;
+}
+html:has(main.view-home), body:has(main.view-home) {
+  height: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+body:has(main.view-home) #ultimate-dashboard {height:auto!important;max-height:none!important;overflow:visible!important;}
+/* Espacer le soleil et la tasse, tout en gardant leur ancrage commun à gauche. */
+body:has(main.view-home) .ultimate-hero .ultimate-scene {
+  gap: 11px !important;
+  height: auto !important;
+  min-height: 110px !important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-sun,
+body:has(main.view-home) .ultimate-hero .ultimate-cup {
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+@media (max-width: 768px) {
+  :root { --mn-module-gap: 8px; --mn-module-min-row: 70px; }
+  body:has(main.view-home) #ultimate-module-grid .umod-grid,
+  main.view-home #ultimate-module-grid .umod-grid,
+  #ultimate-module-grid > .umod-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    height: clamp(380px, calc(100dvh - 440px), 680px) !important;
+    min-height: 380px !important;
+  }
+  /* À 9 boutons ou plus, les rangées supplémentaires doivent rester accessibles. */
+  body:has(main.view-home) #ultimate-module-grid .umod-grid:has(> :nth-child(9)),
+  main.view-home #ultimate-module-grid .umod-grid:has(> :nth-child(9)) {
+    height: auto !important;
+    min-height: 0 !important;
+    grid-auto-rows: minmax(70px, auto) !important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-grid:has(> :nth-child(9)) .umod-slot,
+  body:has(main.view-home) #ultimate-module-grid .umod-grid:has(> :nth-child(9)) .umod-link {
+    min-height: 70px !important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-heading {margin-bottom:18px!important;}
+  body:has(main.view-home) .ultimate-hero .ultimate-scene {gap: 10px!important;min-height: 100px!important;}
+}
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Même disposition du bandeau, sans déplacement des deux pictogrammes. */
+  body:has(main.view-home) .ultimate-hero .ultimate-scene {gap: 10px!important;}
+}

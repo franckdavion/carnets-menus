@@ -1,0 +1,179 @@
+/* MAISONNÉE V3 — couche de cohérence responsive.
+   Chargée APRÈS ultimate.css. Aucune logique JavaScript modifiée.
+   La structure interne des cartes est stable; seul le nombre de colonnes varie. */
+:root { --mn-safe-nav: calc(120px + env(safe-area-inset-bottom, 0px)); }
+*, *::before, *::after { box-sizing: border-box; }
+.ultimate-hero, .ultimate-card, #ultimate-module-grid { min-width:0; }
+/* Bandeau identique dans les trois modes : scène à gauche, texte à droite. */
+body:has(main.view-home) .ultimate-hero {
+  display:grid!important;
+  grid-template-columns: 100px minmax(0,1fr)!important;
+  grid-template-rows: minmax(0,1fr)!important;
+  align-items:center!important;
+  justify-items:stretch!important;
+  gap:14px!important;
+  min-height:132px!important;
+  height:auto!important;
+  max-height:none!important;
+  padding:14px 18px!important;
+  position:relative!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-scene {
+  grid-column:1!important;grid-row:1!important;
+  display:flex!important;flex-direction:column!important;
+  justify-content:center!important;align-items:center!important;
+  width:100px!important;height:102px!important;
+  min-height:0!important;margin:0!important;
+  position:relative!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-sun {
+  display:block!important;font-size:53px!important;line-height:1!important;
+  margin:0!important;flex:none!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-cup {
+  display:block!important;font-size:39px!important;line-height:1!important;
+  margin:-7px 0 0!important;flex:none!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-greeting {
+  grid-column:2!important;grid-row:1!important;
+  min-width:0!important;align-self:center!important;
+  text-align:left!important;margin:0!important;padding:0!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-greeting h1 {
+  font-size:clamp(19px,2.6vw,34px)!important;line-height:1.15!important;
+  margin:0 0 7px!important;overflow-wrap:break-word!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-greeting p {
+  font-size:clamp(11px,1.2vw,14px)!important;line-height:1.3!important;
+  margin:0!important;
+}
+body:has(main.view-home) .ultimate-hero .ultimate-window {display:none!important;}
+/* Toutes les pages : composants stables et colonnes adaptatives. */
+#ultimate-module-grid .umod-grid {display:grid!important;grid-template-rows:none!important;align-content:start!important;}
+#ultimate-module-grid .umod-slot {min-width:0!important;}
+#ultimate-module-grid .umod-link {
+  display:flex!important;flex-direction:column!important;
+  align-items:center!important;justify-content:center!important;
+  text-align:center!important;box-sizing:border-box!important;
+}
+/* Garder la navigation fixe sans cacher la fin de la page. */
+body:has(main.view-home) main.view-home {
+  height:auto!important;max-height:none!important;
+  overflow:visible!important;
+  padding-bottom:var(--mn-safe-nav)!important;
+}
+body:has(main.view-home) #ultimate-dashboard,
+body:has(main.view-home) #ultimate-module-grid {
+  height:auto!important;max-height:none!important;overflow:visible!important;
+}
+body:has(main.view-home) #ultimate-module-grid {
+  margin-bottom:0!important;
+  padding-bottom:var(--mn-safe-nav)!important;
+}
+body:has(main.view-home) .pill {
+  position:fixed!important;top:auto!important;
+  bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+  z-index:9999!important;
+}
+@media screen and (max-width:768px) {
+  html:has(main.view-home),body:has(main.view-home) {
+    height:auto!important;min-height:100%!important;
+    overflow-x:hidden!important;overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  body:has(main.view-home) .ultimate-hero {
+    grid-template-columns:76px minmax(0,1fr)!important;
+    gap:10px!important;min-height:116px!important;
+    padding:11px 12px!important;margin-bottom:9px!important;
+  }
+  body:has(main.view-home) .ultimate-hero .ultimate-scene {
+    width:76px!important;height:90px!important;
+  }
+  body:has(main.view-home) .ultimate-hero .ultimate-sun {font-size:45px!important;}
+  body:has(main.view-home) .ultimate-hero .ultimate-cup {font-size:34px!important;}
+  body:has(main.view-home) .ultimate-hero .ultimate-greeting h1 {
+    font-size:clamp(17px,4.3vw,24px)!important;
+  }
+  body:has(main.view-home) .ultimate-hero .ultimate-greeting p {font-size:11px!important;}
+  body:has(main.view-home) #ultimate-module-grid .umod-grid,
+  main.view-home #ultimate-module-grid .umod-grid,
+  #ultimate-module-grid > .umod-grid {
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-template-rows:none!important;
+    grid-auto-rows:76px!important;
+    gap:7px!important;height:auto!important;
+    max-height:none!important;overflow:visible!important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-slot,
+  body:has(main.view-home) #ultimate-module-grid .umod-link {
+    height:76px!important;min-height:76px!important;max-height:76px!important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-link {
+    padding:5px 3px!important;gap:3px!important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-ico {
+    width:27px!important;height:27px!important;
+    min-width:27px!important;min-height:27px!important;flex:0 0 27px!important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-link > span:last-child {
+    font-size:11px!important;line-height:1.15!important;
+  }
+  body:has(main.view-home) #ultimate-module-grid {
+    padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))!important;
+  }
+}
+/* Paysage mobile : la même scène à gauche, la même grille de 3 colonnes.
+   Le contenu peut défiler si la hauteur disponible est faible. */
+@media screen and (max-width:768px) and (orientation:landscape) {
+  body:has(main.view-home) .ultimate-hero {min-height:112px!important;}
+}
+
+/* MAISONNÉE V3 — Grille dynamique, sans changement de JavaScript. */
+/* Dernière feuille chargée : surcharge les anciennes grilles fixes. */
+:root { --mn-module-min: 145px; --mn-module-gap: 9px; --mn-nav-clearance: 140px; }
+body:has(main.view-home) #ultimate-module-grid .umod-grid,
+main.view-home #ultimate-module-grid .umod-grid,
+#ultimate-module-grid > .umod-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--mn-module-min)), 1fr)) !important;
+  grid-template-rows: none !important;
+  grid-auto-rows: 88px !important;
+  gap: var(--mn-module-gap) !important;
+  align-content: start !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body:has(main.view-home) #ultimate-module-grid .umod-slot,
+body:has(main.view-home) #ultimate-module-grid .umod-link {
+  height: 88px !important;
+  min-height: 88px !important;
+  max-height: 88px !important;
+  min-width: 0 !important;
+}
+body:has(main.view-home) #ultimate-module-grid {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-bottom: calc(var(--mn-nav-clearance) + env(safe-area-inset-bottom, 0px)) !important;
+}
+@media screen and (max-width: 768px) {
+  :root { --mn-module-min: 108px; --mn-module-gap: 7px; }
+  body:has(main.view-home) #ultimate-module-grid .umod-grid,
+  main.view-home #ultimate-module-grid .umod-grid,
+  #ultimate-module-grid > .umod-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--mn-module-min)), 1fr)) !important;
+    grid-template-rows: none !important;
+    grid-auto-rows: 76px !important;
+    gap: var(--mn-module-gap) !important;
+  }
+  body:has(main.view-home) #ultimate-module-grid .umod-slot,
+  body:has(main.view-home) #ultimate-module-grid .umod-link {
+    height: 76px !important;
+    min-height: 76px !important;
+    max-height: 76px !important;
+  }
+}
+/* En paysage, les cartes restent à hauteur fixe, sans déformation. */

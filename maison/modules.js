@@ -47,7 +47,14 @@ const MODS = [
   { k: "carte", t: "Localisation", g: "Organisation", sub() { const n = S.locs.length; return n ? plural(n, "position partagée", "positions partagées") : "Où sont-ils ?"; } }
 ];
 const modOf = k => MODS.find(m => m.k === k);
-const homePins = () => { const p = LS.get("mz_home", null); return Array.isArray(p) ? p.filter(modOf) : MODS.map(m => m.k); };
+const homePins = () => {
+  try {
+    const grid = JSON.parse(localStorage.getItem("maisonnee_ultimate_v3_grid_v1"));
+    if (grid && Array.isArray(grid.hidden)) return MODS.map(m => m.k).filter(k => !grid.hidden.includes(k));
+  } catch (_) {}
+  const p = LS.get("mz_home", null);
+  return Array.isArray(p) ? p.filter(modOf) : MODS.map(m => m.k);
+};
 let exploreEdit = false;
 function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-3.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
 
@@ -369,7 +376,7 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const v = b.dataset.v;
   switch (b.dataset.act) {
-    case "pin": { const p = homePins(), i = p.indexOf(v); if (i >= 0) p.splice(i, 1); else p.push(v); LS.set("mz_home", MODS.map(m => m.k).filter(k => p.includes(k))); render(); break; }
+    case "pin": { const p = homePins(), i = p.indexOf(v); if (i >= 0) p.splice(i, 1); else p.push(v); LS.set("mz_home", MODS.map(m => m.k).filter(k => p.includes(k))); window.maisonneeModuleGrid?.setVisible(v, p.includes(v)); render(); break; }
     case "exploreEdit": exploreEdit = !exploreEdit; render(); break;
     case "quickAdd": quickAdd(); break;
     case "goShop": closeSheet(); view = "courses"; render(); setTimeout(() => { const i = $("#shopIn"); if (i) i.focus(); }, 50); break;
