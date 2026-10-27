@@ -821,6 +821,7 @@ code{font-family:var(--f-mono);font-size:.92em}
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between"><h2 id="pickTitle">Choisir</h2><button type="button" class="btn ghost" data-act="closePick">Fermer</button></div>
     <div class="row"><button class="btn" data-act="pickRandom" id="pickRandomBtn">Au hasard</button><button class="btn" data-act="pickFavMode" id="pickFavBtn" aria-pressed="false">★ Favoris</button><button class="btn ghost" data-act="pickClear" id="pickClear">Vider la case</button></div>
+    <div class="row" id="pickFree"><button class="btn" data-act="freeNote">✏️ Noter un repas</button><button class="btn" data-act="freeLeft">🥡 Restes</button></div>
     <input class="search" id="pickQ" type="search" placeholder="Cherchez : poisson, poulet, gratin, risotto…">
     <div class="chips" id="pickKinds"></div>
     <details id="pickWeb" class="pick-web" hidden>
@@ -1573,7 +1574,8 @@ function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return
   const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","✓ dans les courses"]:["p3","✓ courses faites"];}
 function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
   const side=s?[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"en plus : "+s.extra.join(", "):""].filter(Boolean):[];
-  if(!r&&!side.length)return past?""
+  if(!r&&s&&(s.note||s.left))return`<button type="button" class="mc${past?" past":""}" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-ph mc-noph">${s.note?"✏️":"🥡"}</span><span class="mc-t"><span class="mc-m">${lab}</span><b>${s.note?esc(s.note):"Restes : "+esc(s.left)}</b><small>Sans recette · rien à acheter</small></span></button>`;
+  if(!r&&!side.length)return past?`<button type="button" class="mc mc-empty dim" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-m">${lab}</span><span class="mc-t">✏️ Noter ce qu'on a mangé</span></button>`
     :`<button type="button" class="mc mc-empty${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}" data-slot="${k}"><span class="mc-m">${lab}</span><span class="mc-t">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir un plat"}</span></button>`;
   const ph=r?rPhotoSrc(s.id):"",st=past?null:mealState(k,s,date),nut=slotNut(s);
   return`<button type="button" class="mc${past?" past":""}${s&&s.lock?" locked":""}" data-act="wcell" data-k="${k}" data-slot="${k}">
@@ -1604,7 +1606,7 @@ function renderMenu(){
   const t=todayInWeek(), ws=weekStartDate();
   const diff=filled.some(k=>!isPast(k)&&W()[k].n!==menu.people);
   el.innerHTML=`<div class="week">${DAYS.map((d,i)=>{const pastDay=ymd(addDays(ws,i))<ymd(new Date()),empty=MEALS.every(([m])=>{const s=W()[slotKey(d,m)];return!s||!slotUsed(s);});
-    if(pastDay&&empty)return`<div class="day-past">${d} ${addDays(ws,i).getDate()} · aucun repas noté</div>`; // a past day with nothing: one short line
+    if(pastDay&&empty)return`<div class="day-past">${d} ${addDays(ws,i).getDate()} · aucun repas noté · <button type="button" class="btn ghost" style="padding:2px 10px;font-size:13px" data-act="wcell" data-k="${slotKey(d,"midi")}">✏️ midi</button> <button type="button" class="btn ghost" style="padding:2px 10px;font-size:13px" data-act="wcell" data-k="${slotKey(d,"soir")}">✏️ soir</button></div>`; // a past day with nothing: one short line
     return`<div class="day-card${i===t?" today":""}${ymd(addDays(ws,i))<ymd(new Date())?" past":""}"><div class="day-h">${d} <span class="muted" style="font-family:var(--f-body);font-size:13px">${shortDate(addDays(ws,i))}</span>${i===t?' <span class="tag">Aujourd\'hui</span>':""}${(menu.prefs.days||{})[d]?` <span class="muted" style="font-family:var(--f-body);font-size:12px">· ${esc((DAY_STYLES.find(x=>x[0]===menu.prefs.days[d])||["",""])[1])}</span>`:""}</div>${(()=>{const n=sumNut(MEALS.map(([m])=>slotNut(W()[slotKey(d,m)])));return n?`<div class="day-nut">Journée : ${esc(fmtNut(n))} / pers.</div>`:"";})()}
     ${MEALS.map(([m,lab])=>mealCard(d,i,m,lab)).join("")}</div>`;}).join("")}</div>`
     +(diff?`<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="applyAll">Mettre tous les repas à ${menu.people} pers.</button></div>`:"");
@@ -2427,17 +2429,18 @@ function renderWeek(){
   const cell=(d,i,m)=>{const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(ws,i)),past=date<today,isT=date===today;
     const side=!r&&hasSide(s), ed=weekEdit&&!past&&(r||side), x=(part,i2)=>ed&&!(part==="main"&&s.lock)?`<button type="button" class="wx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""} aria-label="Retirer">✕</button>`:"";
     const line=(cls,txt,part,i2)=>`<span class="${cls}"><span>${txt}</span>${x(part,i2)}</span>`;
-    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="dans les courses">🛒</span>':''),"main"):s.left?line("wn","🥡 Restes : "+esc(s.left),"left"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
+    let inner=r||side?(r?line("wn",esc(r.name)+(s.lock?' <span class="wl" aria-label="dans les courses">🛒</span>':''),"main"):s.note?line("wn","✏️ "+esc(s.note),"note"):s.left?line("wn","🥡 Restes : "+esc(s.left),"left"):`<span class="wn"><span class="muted">Plat à choisir</span></span>`)
       +(s.entree&&recipes[s.entree]?line("ws","Entrée : "+esc(recipes[s.entree].name),"entree"):"")
       +(s.dessert&&recipes[s.dessert]?line("ws","Dessert : "+esc(recipes[s.dessert].name),"dessert"):"")
       +(s.extra||[]).map((t,j)=>line("ws","+ "+esc(t),"extra",j)).join("")
       +(s.n!==menu.people?`<span class="ws">${s.n} pers.</span>`:""):(past?"—":"+ Choisir");
-    return`<div role="button" tabindex="0" class="wc${isT?" today":""}${past?" past":""}${r||(s&&s.left)?"":" empty"}${ed?" editing":""}" data-act="wcell" data-k="${k}" data-wslot="${k}">${inner}</div>`;};
+    return`<div role="button" tabindex="0" class="wc${isT?" today":""}${past?" past":""}${r||(s&&(s.left||s.note))?"":" empty"}${ed?" editing":""}" data-act="wcell" data-k="${k}" data-wslot="${k}">${inner}</div>`;};
   el.innerHTML=`<span class="wh"></span><span class="wh">MIDI</span><span class="wh">SOIR</span>`+DAYS.map((d,i)=>{const date=addDays(ws,i),isT=ymd(date)===today;
     return`<span class="wd${isT?" today":""}">${d.slice(0,3)}<small>${date.getDate()}</small></span>${cell(d,i,"midi")}${cell(d,i,"soir")}`;}).join("");
 }
 function renderSlotSheet(){
   const k=slotK,s=W()[k],r=s&&recipes[s.id];if(!k){$("#slotSheet").hidden=true;return;}
+  if(slotFree)return renderSlotFree();
   const past=isPast(k);
   $("#slotTitle").textContent=slotLabel(k)+" · "+shortDate(addDays(weekStartDate(),DAYS.indexOf(k.split("|")[0])));
   const btn=(act,label,extra="",cls="btn")=>`<button type="button" class="${cls}" data-act="${act}" data-k="${k}" ${extra}>${label}</button>`;
@@ -2445,7 +2448,7 @@ function renderSlotSheet(){
   if(r||hasSide(s)){
     const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
     h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · dans les courses":""}</span></button>${s.lock?"":rx("main")}</div>`
-      :s.left?`<div class="sl-line"><strong>🥡 Restes : ${esc(s.left)}</strong>${rx("left")}</div>${past?"":`<div class="slot-acts2">${btn("pick","Choisir un plat à la place")}</div>`}`
+      :s.note||s.left?`<div class="sl-line"><strong>${s.note?"✏️ "+esc(s.note):"🥡 Restes : "+esc(s.left)}</strong>${rx(s.note?"note":"left")}</div><span class="muted" style="font-size:13px">Sans recette : rien à acheter, « Proposer ma semaine » ne le change pas.</span><div class="slot-acts2">${btn("freeNote","✏️ Noter autre chose")+btn("freeLeft","🥡 Restes")}${past?"":btn("pick","Choisir un plat à la place")}</div>`
       :`<div class="sl-line"><span class="muted">Plat à choisir</span>${past?"":btn("pick","+ Choisir un plat","","btn primary")}</div>`;
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
     (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
@@ -2455,12 +2458,12 @@ function renderSlotSheet(){
       (r?btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
-  }else h+=past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:`<div class="slot-acts2">${btn("pick","+ Choisir un plat")}</div>`;
+  }else h+=(past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:"")+`<div class="slot-acts2">${past?"":btn("pick","+ Choisir un plat")}${btn("freeNote","✏️ Noter un repas")}${btn("freeLeft","🥡 Restes")}</div>`;
   $("#slotBody").innerHTML=h;
 }
 function weekText(){
   const ws=weekStartDate(),lines=["Menus de la semaine du "+shortDate(ws),""];
-  DAYS.forEach((d,i)=>{const part=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&s.left?(m==="midi"?"midi ":"soir ")+"restes ("+s.left+")":"";
+  DAYS.forEach((d,i)=>{const part=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&(s.left||s.note)?(m==="midi"?"midi ":"soir ")+(s.note||"restes ("+s.left+")"):"";
       const x=[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:""].filter(Boolean);
       return(m==="midi"?"midi ":"soir ")+r.name+(x.length?" ("+x.join(", ")+")":"");};
     const p=[part("midi"),part("soir")].filter(Boolean);if(p.length)lines.push(d+" "+addDays(ws,i).getDate()+" : "+p.join(" · "));});
@@ -2471,7 +2474,7 @@ async function shareWeek(){const t=weekText();
   try{await navigator.clipboard.writeText(t);toast("Menus copiés : collez-les où vous voulez");}catch(e){toast("Partage impossible ici");}}
 function printWeek(){
   const ws=weekStartDate();
-  $("#printArea").innerHTML=`<h1>Menus · semaine du ${esc(shortDate(ws))}</h1><table><thead><tr><th></th><th>Midi</th><th>Soir</th></tr></thead><tbody>${DAYS.map((d,i)=>{const c=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&s.left?`<td><b>Restes</b><br><small>${esc(s.left)}</small></td>`:"<td></td>";
+  $("#printArea").innerHTML=`<h1>Menus · semaine du ${esc(shortDate(ws))}</h1><table><thead><tr><th></th><th>Midi</th><th>Soir</th></tr></thead><tbody>${DAYS.map((d,i)=>{const c=m=>{const s=W()[slotKey(d,m)],r=s&&recipes[s.id];if(!r)return s&&s.note?`<td><b>${esc(s.note)}</b></td>`:s&&s.left?`<td><b>Restes</b><br><small>${esc(s.left)}</small></td>`:"<td></td>";
       return`<td><b>${esc(r.name)}</b>${s.entree&&recipes[s.entree]?`<br><small>Entrée : ${esc(recipes[s.entree].name)}</small>`:""}${s.dessert&&recipes[s.dessert]?`<br><small>Dessert : ${esc(recipes[s.dessert].name)}</small>`:""}</td>`;};
     return`<tr><th>${d}<br><small>${addDays(ws,i).getDate()}</small></th>${c("midi")}${c("soir")}</tr>`;}).join("")}</tbody></table>`;
   setTimeout(()=>window.print(),60);
@@ -2483,7 +2486,7 @@ let addId=null, addRole="main", addWeek=null, addSel=new Map(), addInit=new Map(
 const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
 const ROLE_AS={main:"en plat",entree:"en entrée",dessert:"en dessert"};
 // a meal can hold a starter or dessert while its main dish is still to choose
-const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length||!!s.left); // s.left = « 🥡 Restes » choisis dans Maisonnée
+const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length||!!s.left||!!s.note); // s.left = « 🥡 Restes », s.note = « ✏️ repas noté » (sans recette)
 const slotUsed=s=>!!s&&(!!recipes[s.id]||hasSide(s));
 function openAdd(id){
   const r=recipes[id];if(!r)return;addId=id;
@@ -2536,7 +2539,7 @@ function applyAdd(){
       if(was==="main"){if(!s.lock){if(hasSide(s))delete s.id;else delete wk[k];}}
       else{delete s[ROLE_FIELD[was]];if(!slotUsed(s))delete wk[k];}}
     if(now){const s=wk[k]||{};
-      wk[k]=Object.assign({n:addN},s,{[ROLE_FIELD[now]]:addId});if(now==="main"&&wk[k].left){delete wk[k].left;delete wk[k].keep;}if(now==="main"||!slotUsed(s))wk[k].n=addN;n++;} // a starter or dessert joins the meal's own number of people
+      wk[k]=Object.assign({n:addN},s,{[ROLE_FIELD[now]]:addId});if(now==="main"&&(wk[k].left||wk[k].note)){delete wk[k].left;delete wk[k].note;delete wk[k].keep;}if(now==="main"||!slotUsed(s))wk[k].n=addN;n++;} // a starter or dessert joins the meal's own number of people
   }
   $("#addSheet").hidden=true;addAsk=null;if(addId===ideaId)ideaId=null;render();saveMenu();
   document.querySelectorAll(`#frOut [data-act=toggle][data-id="${addId}"]`).forEach(x=>{const on=onMenu(addId);x.classList.toggle("on",on);x.textContent=on?"✓ Au menu":"+ Menu";});
@@ -2563,6 +2566,7 @@ function removePart(k,part,i){
   else if(part==="entree"||part==="dessert"){label=(recipes[s[part]]||{}).name||part;delete s[part];}
   else if(part==="extra"){const xs=s.extra||[];label=xs[Number(i)]||"";xs.splice(Number(i),1);if(!xs.length)delete s.extra;}
   else if(part==="left"){label="les restes";delete s.left;delete s.keep;}
+  else if(part==="note"){label=s.note||"le repas noté";delete s.note;delete s.keep;}
   if(W()[k]&&!slotUsed(W()[k]))delete W()[k];
   render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
 }
@@ -3080,7 +3084,7 @@ document.addEventListener("click",e=>{
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
-  else if(a==="wcell"){const k=b.dataset.k;slotK=k;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
+  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
   else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
   else if(a==="weekMode"){LS.set("cm_wmode",b.dataset.v);render();}
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
@@ -3833,7 +3837,7 @@ function setPicked(id){
     W()[k]=Object.assign({},old,{id});delete W()[k].lock;$("#pickSheet").hidden=true;render();saveMenu();
     toast(`« ${was} » retiré de la liste (${gone} ingrédient${gone>1?"s":""})`);
     setTimeout(()=>lockPreview([{w:sw.w,k}]),120);return;}
-  if(pickRole==="main"){W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});if(W()[k].left){delete W()[k].left;delete W()[k].keep;}}
+  if(pickRole==="main"){W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}}
   else{if(!old)return;old[pickRole]=id;}
   $("#pickSheet").hidden=true;render();saveMenu();flashSlot(k);
   toast(slotLabel(k)+(pickRole==="entree"?" · entrée : ":pickRole==="dessert"?" · dessert : ":" : ")+recipes[id].name);
@@ -3893,6 +3897,7 @@ function openPick(k,role,withSugg){
   $("#pickQ").value=""; $("#pickClear").hidden=!(pickRole==="main"?W()[k]:W()[k]&&W()[k][pickRole]);
   syncFavMode();
   $("#pickRandomBtn").textContent=(role||"main")==="main"?"Choix automatique":"Au hasard";
+  {const pf=$("#pickFree");if(pf)pf.hidden=pickRole!=="main";}
   renderSugg(); renderPick(); $("#pickSheet").hidden=false; $("#pickSheet .sheet-in").scrollTop=0;
 }
 $("#pickQ").addEventListener("input",renderPick);
@@ -4440,6 +4445,38 @@ if("serviceWorker" in navigator){
     reloading=true;location.reload();
   });
 }
+
+/* ---------- ✏️ Noter un repas et 🥡 Restes (sans recette) : mêmes données que Maisonnée ---------- */
+let slotFree=null;
+const FREE_NOTES=["Pizza","Restaurant","Sandwichs","Chez des amis","Croque-monsieur","Plateau-repas","Pâtes vite faites","Omelette","Raclette","Fast-food"];
+function freeRecent(k){
+  const[dn,m]=k.split("|"),day=addDays(weekStartDate(),DAYS.indexOf(dn)),out=[],seen=new Set();
+  for(let i=0;i<=3;i++){const d=addDays(day,-i),w=ymd(mondayOf(d)),dname=DAYS[(d.getDay()+6)%7];
+    for(const mm of["soir","midi"]){if(i===0&&(m==="midi"||mm==="soir"))continue;const s=((menu.weeks||{})[w]||{})[slotKey(dname,mm)],r=s&&recipes[s.id];
+      if(r&&!seen.has(r.name)){seen.add(r.name);out.push({name:r.name,when:i===0?"ce midi":i===1?"hier "+mm:dname.toLowerCase()+" "+mm});}}}
+  return out;}
+function renderSlotFree(){
+  const k=slotK,note=slotFree==="note",bt=(t,lab)=>`<button type="button" class="btn" data-act="freePut" data-t="${esc(t)}">${esc(lab||t)}</button>`;
+  let h=`<p class="muted" style="font-size:14px;margin:0 0 10px">${note?(isPast(k)?"Qu'avez-vous mangé ? ":"Notez simplement le repas. ")+"Aucune recette n'est créée, rien ne part aux courses.":"Un repas fait avec ce qui reste : rien ne part aux courses."}</p>`;
+  if(note)h+=`<div class="chips" style="flex-wrap:wrap;overflow:visible">${FREE_NOTES.map(t=>`<button type="button" class="chip" data-act="freePut" data-t="${esc(t)}">${esc(t)}</button>`).join("")}</div>`;
+  else{const rec=freeRecent(k);h+=rec.length?`<div class="slot-acts2" style="flex-direction:column;align-items:stretch">${rec.map(x=>bt(x.name,x.name+" · "+x.when)).join("")}</div>`:`<p class="muted" style="font-size:14px">Pas de plat noté ces 3 derniers jours.</p>`;}
+  h+=`<div class="row" style="margin-top:12px;flex-wrap:nowrap"><input class="search" id="freeQ" maxlength="80" placeholder="${note?"ex. crêpes avec les enfants":"ex. lasagnes de dimanche"}" style="flex:1;margin:0;min-width:0"><button type="button" class="btn primary" data-act="freePut">OK</button></div>`;
+  h+=`<div class="slot-acts2" style="margin-top:12px">${note?`<button type="button" class="btn" data-act="freeLeft">🥡 C'était des restes</button>`:bt("du frigo","🥡 Restes du frigo")}<button type="button" class="btn ghost" data-act="freeBack">← Retour</button></div>`;
+  $("#slotTitle").textContent=(note?"✏️ ":"🥡 Restes · ")+slotLabel(k);
+  $("#slotBody").innerHTML=h;
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act=freeNote],[data-act=freeLeft],[data-act=freePut],[data-act=freeBack]");if(!b)return;
+  const a=b.dataset.act;
+  if(a==="freeNote"||a==="freeLeft"){if(!$("#pickSheet").hidden){slotK=pickKey;$("#pickSheet").hidden=true;}if(!slotK)return;slotFree=a==="freeNote"?"note":"left";renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;return;}
+  if(a==="freeBack"){slotFree=null;if(W()[slotK]||isPast(slotK))renderSlotSheet();else{$("#slotSheet").hidden=true;openPick(slotK,"main",true);}return;}
+  const k=slotK;if(!k)return;
+  const t=String(b.dataset.t!=null?b.dataset.t:(($("#freeQ")||{}).value||"").trim()||(slotFree==="left"?"du frigo":"")).slice(0,80);
+  if(!t){toast("Écrivez ce que vous avez mangé, ou touchez un choix");return;}
+  const f=slotFree==="note"?"note":"left",o=W()[k]||{};
+  W()[k]=Object.assign({},o,{[f]:t,keep:true,n:o.n||menu.people});["id","lock","noIng",f==="note"?"left":"note"].forEach(x=>delete W()[k][x]);
+  slotFree=null;if(typeof clearSheetBack==="function")clearSheetBack();$("#slotSheet").hidden=true;slotK=null;render();saveMenu();toast(f==="note"?"✏️ "+t+" : noté":"🥡 Restes ("+t+") : rien à acheter");
+});
 </script>
 <!-- Pont avec Maisonnée (repas et courses synchronisés, bouton de retour) -->
 <script src="maison/pont.js"></script>
