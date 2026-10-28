@@ -27,3 +27,33 @@
     overscroll-behavior-y: none;
   }
 }
+
+/* Navigation basse iPhone : descendre les trois boutons sur toutes les vues.
+   Position proche du bord inferieur sur iPhone ; conserver le correctif anti-rebond. */
+@media screen and (max-width: 768px) {
+  body .pill {
+    bottom: 2px !important;
+  }
+}
+
+/* V3 - iPhone installe (PWA) uniquement : positionnement distinct de Safari.
+   La barre reste fixe sur toutes les vues. */
+@media screen and (max-width: 768px) and (display-mode: standalone) {
+  html body .pill,
+  html body:has(main.view-home) .pill {
+    bottom: 0px !important;
+    transform: translate(-50%, 4px) !important;
+  }
+}
+
+/* V5 : PWA iOS uniquement. Safari conserve sa position V4.
+   Décalage vertical de -10px par rapport à V3, sans transformer la mise en page. */
+@media screen and (max-width: 768px) and (display-mode: standalone) {
+  html body .pill,
+  html body:has(main.view-home) .pill {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 10px !important;
+    transform: translate3d(-50%, 0, 0) !important;
+  }
+}
