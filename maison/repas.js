@@ -80,6 +80,8 @@ function shopIncludeWeek() {
 /* ---------- reading the carnet ---------- */
 const MEAL_STATES = ["Proposé", "Gardé", "En courses", "Courses faites", "Terminé"];
 function mealState(s) { return s && MEAL_STATES.includes(s.mealState) ? s.mealState : s && s.lock ? "En courses" : s && s.keep ? "Gardé" : "Proposé"; }
+function mealBadgeClass(st) { return ({"Proposé":"proposed","Gardé":"saved","En courses":"shopping","Courses faites":"purchased","Terminé":"completed"})[st] || "proposed"; }
+function mealBadgeLabel(st) { return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Courses faites","Terminé":"⚑ Terminé"})[st] || "Proposé"; }
 const RDAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 function weekSlots(wk) {
   cev(`curWeek=${JSON.stringify(wk)}`);
@@ -99,16 +101,18 @@ VIEWS.repas = function () {
   let out = `<div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="rWeek" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
       <strong>${rWeek === cur ? "Cette semaine" : rWeek === addDays(cur, 7) ? "Semaine prochaine" : "Semaine du " + esc(fmtShort(rWeek))}</strong>
       <button class="icon-btn plain" data-act="rWeek" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>
-    <div class="btns" style="margin-top:6px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">Réglages</button></div>
-    <div class="r-legend" aria-label="Légende"><span><i class="r-st prop">Proposé</i>peut encore changer</span><span><i class="r-st kept">✓ Gardé</i>ne change plus</span><span><i class="r-st shop">🛒 Courses</i>dans la liste</span></div>
-    ${open.length ? `<p class="muted small" style="margin:10px 2px 0">${open.length} repas pas encore dans les courses : touchez un repas pour le garder ou l'ajouter aux courses.</p>` : ""}`;
+    <div class="r-intro"><span aria-hidden="true">🗓️</span><div><strong>Préparez vos repas de la semaine</strong><small>Proposez des repas, confirmez vos choix et suivez les courses.</small></div></div>
+    <div class="btns" style="margin-top:10px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">⚙️ Réglages</button></div>
+    <div class="r-legend" aria-label="Légende des états des repas">
+      ${MEAL_STATES.map(st=>`<span class="r-legend-item"><i class="r-meal-badge ${mealBadgeClass(st)}">${mealBadgeLabel(st)}</i><small>${({"Proposé":"À valider","Gardé":"Confirmé","En courses":"À acheter","Courses faites":"Achetés","Terminé":"Réalisé"})[st]}</small></span>`).join("")}
+    </div>`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
     for (const m of ["midi", "soir"]) {
       const k = dn + "|" + m, x = sl[k];
-      const pin = !x.s || !x.name ? "" : ["Courses faites", "Terminé"].includes(mealState(x.s)) ? `<span class="keep shop">${esc(mealState(x.s))}</span>` : x.s.lock ? `<span class="keep shop" title="Dans la liste de courses">🛒 Courses</span>`
-        : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
+      const state = mealState(x.s);
+      const pin = !x.s || !x.name ? "" : `<span class="keep r-meal-badge ${mealBadgeClass(state)}" aria-label="État : ${esc(state)}">${mealBadgeLabel(state)}</span>`;
       if ((x.left || x.note) && !x.name) {
         out += `<div class="slot ${x.past ? "past" : ""}" role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"><b>${m === "midi" ? "Midi" : "Soir"}</b><span class="what">${x.note ? `✏️ ${esc(x.note)}` : `🥡 Restes<br><span class="muted small">${esc(x.left)}</span>`}</span><span class="keep left">${x.note ? "✏️" : "🥡"}</span></div>`;
         continue;
@@ -122,7 +126,6 @@ VIEWS.repas = function () {
     }
     out += `</section>`;
   }
-  out += `<p class="muted small" style="margin-top:14px">« Garder » : « Proposer ma semaine » ne change plus ce repas, sans l'envoyer aux courses. « 🛒 Courses » : ses ingrédients sont dans la liste de courses. Même semaine que dans le <a href="${CARNET_URL}" style="color:var(--accent);font-weight:700">Carnet de menus</a>.</p>`;
   return out;
 };
 

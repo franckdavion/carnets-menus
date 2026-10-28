@@ -191,6 +191,9 @@ textarea.input{min-height:84px;resize:vertical}
 .slot .keep.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .slot .keep.shop{border-color:transparent}
 
+/* Bandeau de présentation des repas (styles des états dans meal-status.css). */
+.r-intro{display:flex;gap:12px;align-items:center;padding:12px 14px;margin-top:10px;border:1px solid #3eacff;border-radius:18px;background:linear-gradient(135deg,rgba(30,109,184,.28),rgba(7,31,68,.3))}
+.r-intro>span{font-size:29px;flex:none}.r-intro strong{display:block;font-size:15px}.r-intro small{display:block;font-size:12px;line-height:1.4;color:var(--muted);margin-top:3px}
 /* ---------- shopping ---------- */
 .shop-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:11px 14px;min-height:52px}
 .shop-item:first-child{border-top:0}
@@ -702,6 +705,7 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 <link rel="stylesheet" href="responsive-final.css?v=20261027-final-1">
 <link rel="stylesheet" href="grille-remplie.css?v=20261027-fill-1">
 <link rel="stylesheet" href="fullscreen-fix.css?v=20261028-pwa-nav-v5">
+<link rel="stylesheet" href="meal-status.css?v=20261028-unified-2">
 
 <style id="mz-cook-styles">
 .meal-cook-launch{background:linear-gradient(135deg,#06764f,#00a36d)!important;color:white!important;border-color:#52e7ac!important}

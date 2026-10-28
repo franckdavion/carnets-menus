@@ -7,6 +7,8 @@
 let cxHaveOpen = false; // « Déjà à la maison » stays open while you put items back, until you close it
 let cxClearAsk = false, cxFinishAsk = false, cxUndo = false;
 // run one of the Carnet's own buttons (same code as a tap in the Carnet)
+function cxStateClass(st){return ({"Proposé":"proposed","Gardé":"saved","En courses":"shopping","Courses faites":"purchased","Terminé":"completed"})[st]||"proposed";}
+function cxStateLabel(st){return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Courses faites","Terminé":"⚑ Terminé"})[st]||"👨‍🍳 Proposé";}
 function cclick(d) {
   const doc = CK.frame.contentDocument, b = doc.createElement("button");
   b.type = "button"; b.style.display = "none";
@@ -17,7 +19,7 @@ function cxData() {
   return cj(`(()=>{const all=shopDates(),selK=selectedShopDates().map(x=>x.key);
     const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0,n:x.n}));
     const plan=selectedShopDates().map(x=>({key:x.key,lab:x.dn+" "+x.d.getDate(),w:ymd(mondayOf(x.d)),meals:MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];
-      return s&&recipes[s.id]?{k,m:lab,name:recipes[s.id].name,n:s.n||menu.people||4,lock:!!s.lock,state:["Proposé","Gardé","En courses","Courses faites","Terminé"].includes(s.mealState)?s.mealState:(s.lock?"En courses":s.keep?"Gardé":"Proposé")}:null;}).filter(Boolean)})).filter(d=>d.meals.length);
+      return s&&recipes[s.id]?{k,id:s.id,m:lab,name:recipes[s.id].name,n:s.n||menu.people||4,lock:!!s.lock,state:["Proposé","Gardé","En courses","Courses faites","Terminé"].includes(s.mealState)?s.mealState:(s.lock?"En courses":s.keep?"Gardé":"Proposé")}:null;}).filter(Boolean)})).filter(d=>d.meals.length);
     const items=shopping().map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",r:RAYONS.includes(i.r)?i.r:"Divers",from:i.from||[],on:!!menu.checked[i.key],miss:(menu.missed||{})[i.key]||""}));
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
@@ -82,14 +84,15 @@ VIEWS.courses = function () {
   const sel = D.days.filter(x => x.on);
   const nLeft = todo.length + todoX.length;
   let out = `<button type="button" class="cx-jump" data-act="cxJump">🛒 Ma liste de courses<span>${total ? (nLeft ? `${nLeft} article${nLeft > 1 ? "s" : ""} à prendre` : "tout est dans le caddie ✓") : "liste vide"}</span><i aria-hidden="true">↓</i></button>`;
-  out += `<div class="card linkcard"><span>La même liste que le Carnet de menus, pour tout le foyer.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
+  out += `<div class="card linkcard"><span>Préparez vos courses à partir des repas prévus. Touchez un plat pour consulter ou modifier sa recette ; touchez son état pour ouvrir sa fiche.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
+  out += `<div class="card" style="margin-top:10px;padding:12px"><strong style="display:block;margin-bottom:8px">États des repas <span class="muted small" style="font-weight:400">· légende</span></strong><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></div>`;
   out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
     <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour voir ses repas et choisir ce qui part dans les courses.</p>
     ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="list">${D.plan.map(d => d.meals.map((m, i) => `<div class="cx-item">
-        <span class="nm"><button type="button" class="cx-name" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez pour voir ses ingrédients</span></span>
-        <button type="button" class="${m.lock ? "cx-have on" : "btn primary"}" style="padding:6px 12px;font-size:14px;min-width:124px;white-space:nowrap;border-radius:999px;${({"Proposé":"background:#293f68;border-color:#8ba6d6;color:#fff;","Gardé":"background:#49316d;border-color:#dc91fa;color:#fff;","En courses":"background:#064d88;border-color:#29bfff;color:#fff;","Courses faites":"background:#08692d;border-color:#50ef79;color:#fff;","Terminé":"background:#245e50;border-color:#77e0bd;color:#fff;"})[m.state] || ""}" data-act="cxMealLock" data-w="${esc(d.w)}" data-v="${esc(m.k)}" title="${m.lock ? "Retirer ce repas des courses" : "Ajouter ce repas aux courses"}" aria-label="${esc(m.state)} — ${m.lock ? "retirer des courses" : "ajouter aux courses"}">${({"Proposé":"💡 ","Gardé":"✓ ","En courses":"🛒 ","Courses faites":"✓ ","Terminé":"✓ "})[m.state] || ""}${esc(m.state)}</button></div>`).join("")).join("")}</div>` : ""}
+        <span class="nm"><button type="button" class="cx-name" data-act="cxRecipe" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez le plat pour ouvrir sa recette</span></span>
+        <button type="button" class="r-meal-badge ${cxStateClass(m.state)}" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}" title="Voir le repas et modifier son état" aria-label="${esc(m.state)} — ouvrir la fiche du repas">${cxStateLabel(m.state)}</button></div>`).join("")).join("")}</div>` : ""}
     ${typeof catDueHtml === "function" ? catDueHtml() : ""}
     <form data-form="cxAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="cxIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
@@ -144,7 +147,7 @@ function cxDaySheet(d, fresh) {
       ${x.inList ? `<button class="btn ghost" data-act="cxDsRemove">Retirer ce jour des courses</button>` : ""}</div>`);
   if (!fresh) $("#sheet").scrollTop = sc;
 }
-const CX_ACTS = ["cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
@@ -154,6 +157,7 @@ document.addEventListener("click", e => {
     case "cxMealLock": { const on = cev(`(()=>{const s=((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}];if(!s)return false;if(s.lock)delete s.lock;else s.lock=true;saveMenu();return !!s.lock;})()`);
       msg = on ? "Ajouté aux courses." : "Retiré des courses."; break; }
     case "cxMeal": rWeek = b.dataset.w; mealSlotSheet(v); return;
+    case "cxRecipe": rWeek = b.dataset.w; rRecipeSheet(v); return;
     case "cxMove": cxMoveSheet(b.dataset.n, b.dataset.r); return;
     case "cxMoveTo": cev(`(()=>{menu.rayonLearn=Object.assign({},menu.rayonLearn,{[${JSON.stringify(String(b.dataset.n).trim().toLowerCase())}]:${JSON.stringify(v)}});saveMenu();})()`); closeSheet(); msg = `Rangé dans « ${v} ».`; break;
     case "cxOrder": cxOrderDraft = cxOrder(cxData().order); cxOrderSheet(); return;
