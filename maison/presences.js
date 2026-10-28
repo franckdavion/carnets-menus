@@ -30,7 +30,7 @@ const PR = {
 };
 const prOn = () => mode === "cloud" && !!S.hh && !!S.hh.id;
 const prSet = () => (S.hh && S.hh.presence_settings) || {};
-const prWords = () => ({ abs: prSet().abs || PRC.DEFAULT_WORDS.abs, rel: prSet().rel || PRC.DEFAULT_WORDS.rel });
+const prWords = () => ({ abs: [...new Set([...(prSet().abs || PRC.DEFAULT_WORDS.abs), "abs"])], rel: prSet().rel || PRC.DEFAULT_WORDS.rel });
 const prD = s => s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "";
 const prDL = s => new Date(s + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const prChild = id => (PR.data && PR.data.children.find(c => c.id === id)) || null;
@@ -301,9 +301,28 @@ function prKidsTab() {
     </section>`;
 }
 
-// au premier affichage d'un mois, le tableau défile jusqu'à aujourd'hui
-let prScrolled = "";
-afterRender = (orig => function () { orig(); if (view !== "presences") return; const sc = $("#prScroll"), k = PR.wide + PR.y + PR.m; if (!sc || prScrolled === k) return; prScrolled = k; const t = sc.querySelector("thead th.td"); if (t) sc.scrollLeft = Math.max(0, t.offsetLeft - sc.querySelector(".pr-name").offsetWidth - 70); })(afterRender);
+// Chaque render() recrée le tableau. On repositionne donc le NOUVEL élément,
+// sans indicateur global périmé. Une navigation volontaire garde sa position.
+let prScrollState = null;
+function prPositionCalendar() {
+  if (view !== "presences" || PR.tab !== "cal") return;
+  const sc = $("#prScroll"); if (!sc) return;
+  const key = `${PR.wide}:${PR.y}:${PR.m}:${PR.wk}`;
+  const todayCell = sc.querySelector("thead th.td");
+  const nameCell = sc.querySelector("thead th.pr-name");
+  const initial = todayCell ? Math.max(0, todayCell.offsetLeft - (nameCell?.offsetWidth || 0) - 35) : 0;
+  const target = prScrollState?.key === key ? prScrollState.left : initial;
+  sc.style.scrollBehavior = "auto";
+  sc.scrollLeft = target;
+  // Safari peut finaliser le layout après render : réappliquer une seule fois.
+  requestAnimationFrame(() => {
+    if (!sc.isConnected || $("#prScroll") !== sc) return;
+    sc.scrollLeft = target;
+  });
+  sc.addEventListener("scroll", () => { if (sc.isConnected) prScrollState = { key, left: sc.scrollLeft }; }, { passive: true });
+  if (!prScrollState || prScrollState.key !== key) prScrollState = { key, left: target };
+}
+afterRender = (orig => function () { orig(); prPositionCalendar(); })(afterRender);
 
 /* ---------- feuilles ---------- */
 function prDaySheet(cid, d) {

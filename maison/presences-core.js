@@ -53,7 +53,7 @@
   const toks = s => norm(s).split(" ").filter(Boolean).map(stem);
 
   const DEFAULT_WORDS = {
-    abs: ["absent", "absence", "visite", "DVH", "droit de visite", "week-end", "WE", "vacances", "séjour", "chez papa", "chez maman", "chez sa mère", "chez son père", "chez ses parents", "chez sa famille", "hospitalisation", "hôpital", "colo", "colonie", "camp"],
+    abs: ["abs", "absent", "absence", "visite", "DVH", "droit de visite", "week-end", "WE", "vacances", "séjour", "chez papa", "chez maman", "chez sa mère", "chez son père", "chez ses parents", "chez sa famille", "hospitalisation", "hôpital", "colo", "colonie", "camp"],
     rel: ["relais", "accueil relais", "accueil", "arrivée", "arrive"]
   };
   // mots « neutres » : dates, liaisons, moments de la journée
@@ -66,6 +66,17 @@
     return out;
   }
   const childNames = c => [c.first_name, ...(c.aliases || [])].map(toks).filter(t => t.length);
+  // Une initiale ne désigne un enfant que si elle est unique dans le foyer.
+  function childPatterns(c, children) {
+    const names = childNames(c);
+    const first = toks(c.first_name)[0];
+    if (first && children.filter(x => toks(x.first_name)[0]?.[0] === first[0]).length === 1)
+      names.push([first[0]]);
+    return names;
+  }
+  const isDvh = title => /\bdvh\b/.test(norm(title));
+  const isDeparture = title => /\b(dep|depart)\b/.test(norm(title));
+  const isReturn = title => /\b(retour|ret)\b/.test(norm(title));
 
   // Quels enfants enregistrés sont nommés, et ce que dit le reste du titre.
   // sig : abs (mot d'absence) · rel (mot de relais) · only (prénom seul, avec des dates au plus)
@@ -74,15 +85,18 @@
     const W = words || DEFAULT_WORDS, T = toks(title), used = new Array(T.length).fill(false), found = [];
     for (const c of children) {
       let hit = false;
-      for (const P of childNames(c)) for (const i of findAll(T, P)) { hit = true; for (let k = 0; k < P.length; k++) used[i + k] = true; }
+      for (const P of childPatterns(c, children)) for (const i of findAll(T, P)) { hit = true; for (let k = 0; k < P.length; k++) used[i + k] = true; }
       if (hit) found.push(c);
     }
     if (!found.length) return [];
     const mark = list => { let hit = false; for (const w of list || []) { const P = toks(w); for (const i of findAll(T, P)) if (P.every((_, k) => !used[i + k] || used[i + k] === "w")) { hit = true; for (let k = 0; k < P.length; k++) used[i + k] = "w"; } } return hit; };
-    const abs = mark(W.abs), rel = mark(W.rel);
+    // Ces expressions ont une signification métier fixe, même si les anciens
+    // réglages personnalisés les classent dans les absences.
+    const special = isDvh(title) ? "dvh" : isDeparture(title) ? "departure" : isReturn(title) ? "return" : null;
+    const abs = mark([...(W.abs || []), "abs"]), rel = mark(W.rel);
     const other = T.some((t, i) => !used[i] && !NEUTRAL.has(t) && !/^\d+$/.test(t));
     const m = /\bdu (\d{1,2})(?: er)?(?: [a-z]+)? au (\d{1,2})\b/.exec(norm(title));
-    const sig = abs && rel ? "both" : abs ? "abs" : rel ? "rel" : other ? "other" : "only";
+    const sig = special || (abs && rel ? "both" : abs ? "abs" : rel ? "rel" : other ? "other" : "only");
     return found.map(c => ({ child_id: c.id, sig, dates: m ? [+m[1], +m[2]] : null }));
   }
 
@@ -112,6 +126,14 @@
   /* ---------- règles de calcul ---------- */
   const ruleKeys = ev => ["s:" + (ev.series || ev.gid), "t:" + norm(ev.title)];
   function interpret(ev, kind, rules) {
+    // Relecture du titre à chaque calcul : les lignes déjà synchronisées
+    // et les anciennes décisions Supabase ne doivent pas inverser DVH/Abs.
+    if (kind === "permanent") {
+      if (isDvh(ev.title)) return "presence";
+      if (isDeparture(ev.title)) return "departure";
+      if (isReturn(ev.title)) return "return";
+      if (/\babs\b/.test(norm(ev.title))) return "absence";
+    }
     for (const k of ruleKeys(ev)) { const r = rules && rules.get(k + "|" + ev.child_id); if (r) return r; }
     const s = ev.sig;
     if (kind === "permanent") return s === "abs" ? "absence" : s === "other" ? "ignore" : "ambig";
@@ -142,7 +164,11 @@
     const unsure = evs.some(x => x.it === "ambig");
     let st, auto;
     if (!kind) auto = "none";
-    else if (kind === "permanent") auto = evs.some(x => x.it === "absence") ? "absent" : "present";
+    else if (kind === "permanent") {
+      const absent = evs.some(x => x.it === "absence" || (x.it === "departure" && day > x.ev.start_day));
+      const present = evs.some(x => x.it === "presence" || (x.it === "departure" && day === x.ev.start_day) || (x.it === "return" && day === x.ev.end_day));
+      auto = present ? "present" : absent ? "absent" : "present";
+    }
     else auto = evs.some(x => x.it === "presence") ? "present" : "none";
     const o = ix.overrides.get(childId + "|" + day);
     st = o ? o.status : auto;
