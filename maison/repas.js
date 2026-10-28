@@ -78,6 +78,8 @@ function shopIncludeWeek() {
 }
 
 /* ---------- reading the carnet ---------- */
+const MEAL_STATES = ["Proposé", "Gardé", "En courses", "Courses faites", "Terminé"];
+function mealState(s) { return s && MEAL_STATES.includes(s.mealState) ? s.mealState : s && s.lock ? "En courses" : s && s.keep ? "Gardé" : "Proposé"; }
 const RDAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 function weekSlots(wk) {
   cev(`curWeek=${JSON.stringify(wk)}`);
@@ -105,7 +107,7 @@ VIEWS.repas = function () {
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
     for (const m of ["midi", "soir"]) {
       const k = dn + "|" + m, x = sl[k];
-      const pin = !x.s || !x.name || x.past ? "" : x.s.lock ? `<span class="keep shop" title="Dans la liste de courses">🛒 Courses</span>`
+      const pin = !x.s || !x.name ? "" : ["Courses faites", "Terminé"].includes(mealState(x.s)) ? `<span class="keep shop">${esc(mealState(x.s))}</span>` : x.s.lock ? `<span class="keep shop" title="Dans la liste de courses">🛒 Courses</span>`
         : `<button type="button" class="keep ${x.s.keep ? "on" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!x.s.keep}">${x.s.keep ? "✓ Gardé" : "Garder"}</button>`;
       if ((x.left || x.note) && !x.name) {
         out += `<div class="slot ${x.past ? "past" : ""}" role="button" tabindex="0" data-act="rSlot" data-v="${esc(k)}"><b>${m === "midi" ? "Midi" : "Soir"}</b><span class="what">${x.note ? `✏️ ${esc(x.note)}` : `🥡 Restes<br><span class="muted small">${esc(x.left)}</span>`}</span><span class="keep left">${x.note ? "✏️" : "🥡"}</span></div>`;
@@ -164,8 +166,14 @@ function mealSlotSheet(k) {
   openSheet(title, `
     <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
     <button class="linkbtn" data-act="rRecipe" data-v="${esc(k)}" style="margin:2px 0 4px">📖 Voir la recette</button>
+    <div class="btns" style="margin:10px 0;align-items:center;flex-wrap:wrap">
+      <button class="btn" data-act="rFav" data-v="${esc(k)}" aria-label="Ajouter ou retirer des favoris" aria-pressed="${!!cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`)}" style="color:#e6a900;font-weight:800">${cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`)?"★ Favorite":"☆ Ajouter aux favoris"}</button>
+      <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
+      <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
+    </div>
+    <label class="field"><span class="label">État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
     ${x.kind ? `<p class="muted small" style="margin:0">${esc(x.kind)}</p>` : ""}
-    ${ro ? "" : `<div class="r-status ${s.lock ? "shop" : s.keep ? "kept" : "prop"}">${s.lock
+    ${false ? "" : `<div class="r-status ${s.lock ? "shop" : s.keep ? "kept" : "prop"}">${s.lock
         ? `<b>🛒 Dans la liste de courses</b><span>Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus.</span>`
         : s.keep ? `<b>✓ Gardé</b><span>« Proposer ma semaine » ne le changera plus. Il n'est <u>pas encore</u> dans les courses : bouton « Ajouter aux courses » en bas.</span>`
         : `<b>Proposé</b><span>Ce repas peut encore changer si vous relancez « Proposer ma semaine ». Il n'est pas dans les courses.</span>`}</div>
@@ -304,7 +312,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rRecipe", "rRecipeOpen", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -312,6 +320,25 @@ document.addEventListener("click", async e => {
     case "rPrefs": rPrefsSheet(); break;
     case "rSlot": mealSlotSheet(v); break;
     case "rRecipe": rRecipeSheet(v); break;
+    case "rFav": {
+      const changed=cev(`(()=>{const s=${slotJs(v)};const r=s&&recipes[s.id];if(!r)return null;r.fav=!r.fav;return {id:s.id,recipe:r,fav:r.fav};})()`);
+      if(changed){
+        // Persist recipe favourites through the Carnet's recipe store, not only menu state.
+        try { await cev(`saveRecipe(${JSON.stringify(changed.id)},recipes[${JSON.stringify(changed.id)}])`); } catch(err) { console.warn("Favori",err); }
+        carnetSave(changed.fav?"Recette ajoutée aux favoris.":"Recette retirée des favoris."); mealSlotSheet(v);
+      }
+      break;
+    }
+    case "rEditIngredients": {
+      // Editing a planned meal starts with a copy, preserving the source recipe.
+      const x=weekSlots(rWeek)[v];if(!x||!x.s||!x.s.id)break;
+      location.assign(CARNET_URL+"?variante="+encodeURIComponent(x.s.id)+"&repasSemaine="+encodeURIComponent(rWeek)+"&repasCase="+encodeURIComponent(v));break;
+    }
+    case "rVariant": {
+      const x=weekSlots(rWeek)[v]; if(!x || !x.s || !x.s.id) break;
+      const url=CARNET_URL+"?variante="+encodeURIComponent(x.s.id)+"&repasSemaine="+encodeURIComponent(rWeek)+"&repasCase="+encodeURIComponent(v);
+      window.location.assign(url); break;
+    }
     case "rRecipeOpen": rRecipeOpen(v, b.dataset.id); return;
     case "rLockAll": {
       const n = cev(`(()=>{let n=0;for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k)){s.lock=true;n++;}}return n;})()`);
@@ -390,3 +417,12 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // start loading the carnet early, so Repas opens quickly
 setTimeout(() => { if (mode === "cloud" && screen === "app") carnetBoot(); }, 2500);
 if (view === "repas") render();
+
+// États explicites conservés dans le carnet commun et synchronisés par le pont existant.
+document.addEventListener("change", e => {
+  const el=e.target.closest("select[data-meal-state]"); if(!el || !CK.ready) return;
+  const k=el.dataset.mealState, state=el.value;
+  if(!MEAL_STATES.includes(state)) return;
+  cev(`(()=>{const s=${slotJs(k)};if(!s)return;s.mealState=${JSON.stringify(state)};s.keep=${JSON.stringify(state!=="Proposé")};s.lock=${JSON.stringify(["En courses","Courses faites","Terminé"].includes(state))};})()`);
+  shopIncludeWeek(); carnetSave("État : "+state); mealSlotSheet(k);
+});
