@@ -64,9 +64,44 @@ const additional=[
 ['🪥','dentifrice|brosse à dents'],['🧺','lessive|adoucissant'],['🗑️','sac poubelle|sacs poubelle'],
 ['🔋','piles|pile|batteries'],['🐾','croquettes|croquettes chien|croquettes chat'],['📦','papier cuisson|film alimentaire|papier aluminium']
 ];
+
+// Correspondances complémentaires précises, sans modifier les choix personnalisés.
+const extraNames=[
+  ['🧂','sel fin|sel marin|sel rose|sel de guerande|poivre gris|poivre vert|poivre cinq baies|baies roses'],
+  ['🌶️','piment espelette|piment oiseau|piment doux|paprika fume|paprika doux|piment chili|flocons de piment|cayenne|sriracha'],
+  ['🌿','thym frais|thym seche|romarin frais|romarin seche|persil plat|persil frise|basilic frais|basilic seche|origan seche|herbes aromatiques|bouquet garni|feuilles de laurier|feuille de laurier|ciboulette fraiche|aneth frais|sauge fraiche|estragon frais|marjolaine|sarriette|cerfeuil|melisse|menthe fraiche'],
+  ['🫗','huile de noix|huile de noisette|huile de pepins de raisin|huile de coco|huile d arachide|huile de lin|huile de sesame|huile de colza|huile de tournesol|vinaigre de vin blanc|vinaigre de vin rouge|vinaigre de riz|vinaigre de cidre|vinaigre de xeres|vinaigre blanc|vinaigre de framboise'],
+  ['🫒','huile olive vierge|huile olive extra vierge|huile d olive extra vierge|olives noires|olives vertes'],
+  ['🥫','sauce worcestershire|sauce huitre|sauce poisson|sauce teriyaki|sauce soja salee|sauce soja sucree|sauce nuoc mam|sauce pimentee|sauce barbecue|sauce aigre douce|sauce curry|fond de veau|fond de volaille|bouillon cube|bouillon de legumes|bouillon de poulet|concentre de tomates|puree de tomates|tomates sechees'],
+  ['🍯','sirop agave|melasse|miel acacia|miel fleurs|miel lavande'],
+  ['🧄','ail semoule|ail en poudre|ail frais|ail noir'],
+  ['🫚','gingembre frais|gingembre moulu|gingembre en poudre|galanga'],
+  ['🍋','citronnelle|zeste citron vert|jus citron vert'],
+  ['🥜','graines de sesame|sesame blanc|sesame noir|graines de tournesol|graines de courge|graines de chia|graines de lin|pignons de pin'],
+  ['🌰','noix de muscade|muscade moulue|noix pecan|noix de macadamia|noix du bresil'],
+  ['🍚','riz jasmin|riz sauvage|riz venere|riz rouge|riz gluant'],
+  ['🌾','farine epeautre|farine chataigne|farine pois chiche|farine sarrasin|farine avoine|farine seigle|farine t45|farine t55|farine t65|farine t80|farine t110|farine t150|fleur de mais|son avoine'],
+  ['🥦','chou kale|chou pointu|chou rave|chou pak choi|chou brocoli|chou fleur violet'],
+  ['🥬','cresson|scarole|frisee|batavia|sucrine|pousses epinards|pousses de salade|bette a carde|chicoree'],
+  ['🥕','topinambour|rutabaga|radis noir|radis rose|celeri rave|persil tubereux'],
+  ['🍄','champignon portobello|champignon brun|trompettes de la mort|bolets|enoki'],
+  ['🍎','pomme granny smith|pomme golden|pomme gala|pomme pink lady'],
+  ['🍊','kumquat|pomelo|orange sanguine|bergamote'],
+  ['🍓','fraise gariguette|fraises des bois|framboise jaune'],
+  ['🥩','bavette|rumsteck|paleron|joue de boeuf|bourguignon|jarret|tendron|cote de boeuf|cote de porc|escalope de veau|gigot agneau|souris agneau'],
+  ['🐟','dorade|bar|sole|limande|rouget|espadon|haddock|hareng|lotte|merlan|perche|tilapia'],
+  ['🦐','bouquet de crevettes|crevettes roses|crevettes grises'],
+  ['🧀','gorgonzola|roquefort|bleu auvergne|saint nectaire|cantal|tomme|pecorino|burrata|halloumi|provolone|edam|gouda|munster'],
+  ['🥛','lait ribot|lait concentre|lait concentre sucre|lait fermente|creme soja|creme avoine'],
+  ['🍫','chocolat patissier|chocolat couverture|cacao amer|cacao non sucre'],
+  ['🧃','nectar abricot|jus multifruits|jus cranberry|jus grenade'],
+  ['🧴','gel hydroalcoolique|savon mains|shampoing sec|apres shampoing|masque cheveux|gel coiffant|lotion corporelle'],
+  ['🧽','pastilles lave vaisselle|tablettes lave vaisselle|nettoyant multi usage|produit vitres|detartrant|degraissant']
+];
 const exact=new Map();
 for(const [em,names] of groups){for(const a of names.split(' | '))exact.set(norm(a),em)}
 for(const [em,names] of additional){for(const a of names.split('|'))exact.set(norm(a),em)}
+for(const [em,names] of extraNames){for(const a of names.split('|'))exact.set(norm(a),em)}
 const rules=[
 [/\boeufs?\b|\bjaunes? d oeuf\b|\bblancs? d oeuf\b/,'🥚'],
 [/chou fleur|brocoli|romanesco/,'🥦'],[/bouillon/,'🥫'],[/creme fraiche|creme liquide|creme epaisse/,'🥛'],
@@ -84,13 +119,17 @@ function saved(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(_)
 function get(name){const n=norm(name);const custom=saved();if(custom[n])return custom[n];if(exact.has(n))return exact.get(n);for(const [re,e] of rules)if(re.test(n))return e;return '🛒'}
 // Palette enrichie : tous les emojis disponibles dans le sélecteur sont de vrais caractères Unicode.
 const categories={
-'Aliments et légumes':['🛒','🥔','🍠','🧅','🧄','🥦','🥕','🥒','🫑','🍆','🥬','🍄','🌽','🫛','🫘','🎃','🍅','🥑','🫒','🌶️','🌿'],
-'Fruits':['🍎','🍏','🍐','🍊','🍋','🍋‍🟩','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🍍','🥝','🥭','🥥'],
-'Viandes, poissons et œufs':['🥚','🍳','🥓','🥩','🍖','🍗','🌭','🐟','🦐','🦀','🦑','🦪','🍤','🍣'],
-'Pain, céréales et plats':['🥖','🍞','🥐','🥯','🥨','🧇','🥞','🌾','🍚','🍝','🍜','🍲','🥣','🥫','🍕','🥪','🌮','🌯','🥙','🫔','🍔','🍟','🍛','🥟','🍱','🍙','🍘'],
-'Laitages et desserts':['🥛','🧀','🧈','🍶','🍦','🍨','🍧','🍰','🎂','🧁','🍮','🍪','🍩','🍫','🍬','🍭','🍯','🍿'],
-'Boissons et condiments':['💧','🫗','🧂','☕','🍵','🫖','🧃','🥤','🧋','🍷','🍾','🍺','🥂','🍹','🧊','🍶'],
-'Maison et hygiène':['🧴','🧼','🧽','🧹','🧺','🧻','🪥','🪒','🪣','🗑️','🧤','🧷','🩹','🧯','🕯️','🔋','💡','📦','🛍️','🧸','👶','🐾','🐶','🐱','🌸','☁️','📜']
+ 'Légumes et aromates':['🛒','🥔','🍠','🧅','🧄','🥦','🥕','🥒','🫑','🍆','🥬','🍄','🌽','🫛','🫘','🎃','🍅','🥑','🫒','🌶️','🌿','🫚','🥗','🪴','🌱','🥜'],
+ 'Fruits':['🍎','🍏','🍐','🍊','🍋','🍋\u200d🟩','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🍍','🥝','🥭','🥥','🫒','🥑','🍈','🍅'],
+ 'Viandes et charcuteries':['🥩','🍖','🍗','🥓','🌭','🍔','🥪','🥙','🥟','🍲','🍛'],
+ 'Poissons et fruits de mer':['🐟','🐠','🐡','🦈','🦐','🦀','🦞','🦑','🐙','🦪','🍤','🍣','🍥','🍙'],
+ 'Œufs et produits laitiers':['🥚','🍳','🥛','🧀','🧈','🍶','🥣','🍦','🍨','🍮','🍼'],
+ 'Féculents, céréales et pains':['🌾','🍚','🍙','🍘','🍝','🍜','🍞','🥖','🥐','🥯','🥨','🥞','🧇','🥪','🍕','🫓','🫔','🥟','🥠','🍿'],
+ 'Épicerie salée':['🥫','🫘','🫛','🫒','🍅','🍄','🥒','🥣','🍲','🍛','🥜','🌰','🧄','🧅','🍙','🫙'],
+ 'Épicerie sucrée et desserts':['🍯','🍬','🍭','🍫','🍪','🍩','🧁','🍰','🎂','🍮','🍨','🍧','🍦','🥧','🥞','🧇','🥐','🥜','🌰','🍡','🍥'],
+ 'Épices et condiments':['🧂','🌶️','🌶','🌿','🪴','🌱','🍃','🫚','🧄','🧅','🍋','🍋\u200d🟩','🫒','🫗','🫙','🥫','🍯','🥄','🍶','🥜','🌰','🍅','🥒','🧈','🥣'],
+ 'Boissons':['💧','🫗','🧊','🥛','🧃','🥤','🧋','☕','🍵','🫖','🍶','🍷','🍾','🥂','🍺','🍻','🍹','🍸','🥃','🍼'],
+ 'Maison, hygiène et animaux':['🧴','🧼','🧽','🧹','🧺','🧻','🪥','🪒','🪣','🗑️','🧤','🧷','🩹','🧯','🕯️','🔋','💡','📦','🛍️','🧸','👶','🐾','🐶','🐱','🌸','☁️','📜','🧵','🧶','🧪','🧫','🧲','🪤','🧦','👕','👟','🧢','🪮','🪞','🪠','🧰']
 };
 const choices=[...new Set(Object.values(categories).flat())];
 function pick(name,onChange){
@@ -102,7 +141,7 @@ function pick(name,onChange){
  const content=document.createElement('div');d.append(content);
  function draw(){const query=norm(input.value);content.replaceChildren();let found=0;
  for(const [label,ems] of Object.entries(categories)){
-  if(query&&!norm(label).includes(query))continue;
+  if(query&&!norm(label).includes(query)&&!((query.includes('epice')||query.includes('sel')||query.includes('poivre')||query.includes('huile')||query.includes('vinaigre')||query.includes('herbe')||query.includes('sauce'))&&label==='Épices et condiments'))continue;
   found++;const h=document.createElement('h4');h.textContent=label;h.style.cssText='margin:12px 0 7px';content.append(h);
   const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(43px,1fr));gap:7px';
   for(const em of ems){const b=document.createElement('button');b.type='button';b.textContent=em;b.setAttribute('aria-label','Choisir '+em);b.style.cssText='font-size:25px;background:#173c69;border:1px solid #397fc4;border-radius:10px;padding:7px;cursor:pointer;min-height:45px';b.addEventListener('click',()=>{const all=saved();all[norm(name)]=em;localStorage.setItem(KEY,JSON.stringify(all));d.close();if(onChange)onChange();});grid.append(b)}content.append(grid);
