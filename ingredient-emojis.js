@@ -116,7 +116,7 @@ const rules=[
 [/\bpommes?\b/,'🍎'],[/citrons?/,'🍋'],[/yaourts?/,'🥣']
 ];
 function saved(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(_){return {}}}
-function get(name){const n=norm(name);const custom=saved();if(custom[n])return custom[n];if(exact.has(n))return exact.get(n);for(const [re,e] of rules)if(re.test(n))return e;return '🛒'}
+function get(name){const n=norm(name);const custom=saved();if(custom[n])return custom[n];try{if(typeof catData==='function'){const C=catData();const key=Object.keys(C.emoji||{}).find(k=>norm(k)===n);if(key&&C.emoji[key])return C.emoji[key];}}catch(_){}if(exact.has(n))return exact.get(n);for(const [re,e] of rules)if(re.test(n))return e;return '🛒'}
 // Palette enrichie : tous les emojis disponibles dans le sélecteur sont de vrais caractères Unicode.
 const categories={
  'Légumes et aromates':['🛒','🥔','🍠','🧅','🧄','🥦','🥕','🥒','🫑','🍆','🥬','🍄','🌽','🫛','🫘','🎃','🍅','🥑','🫒','🌶️','🌿','🫚','🥗','🪴','🌱','🥜'],
@@ -144,7 +144,7 @@ function pick(name,onChange){
   if(query&&!norm(label).includes(query)&&!((query.includes('epice')||query.includes('sel')||query.includes('poivre')||query.includes('huile')||query.includes('vinaigre')||query.includes('herbe')||query.includes('sauce'))&&label==='Épices et condiments'))continue;
   found++;const h=document.createElement('h4');h.textContent=label;h.style.cssText='margin:12px 0 7px';content.append(h);
   const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(43px,1fr));gap:7px';
-  for(const em of ems){const b=document.createElement('button');b.type='button';b.textContent=em;b.setAttribute('aria-label','Choisir '+em);b.style.cssText='font-size:25px;background:#173c69;border:1px solid #397fc4;border-radius:10px;padding:7px;cursor:pointer;min-height:45px';b.addEventListener('click',()=>{const all=saved();all[norm(name)]=em;localStorage.setItem(KEY,JSON.stringify(all));d.close();if(onChange)onChange();});grid.append(b)}content.append(grid);
+  for(const em of ems){const b=document.createElement('button');b.type='button';b.textContent=em;b.setAttribute('aria-label','Choisir '+em);b.style.cssText='font-size:25px;background:#173c69;border:1px solid #397fc4;border-radius:10px;padding:7px;cursor:pointer;min-height:45px';b.addEventListener('click',()=>{const all=saved();all[norm(name)]=em;localStorage.setItem(KEY,JSON.stringify(all));try{if(typeof catSet==='function'&&typeof catData==='function'){const C=catData();const key=[...C.own,...C.builtin].find(k=>norm(k)===norm(name));if(key)catSet('dailyEmoji',key,em);}}catch(_){}d.close();if(onChange)onChange();});grid.append(b)}content.append(grid);
  }if(!found){const p=document.createElement('p');p.textContent='Aucune catégorie trouvée. Effacez la recherche pour voir tous les emojis.';content.append(p)}
  }
  input.addEventListener('input',draw);draw();
