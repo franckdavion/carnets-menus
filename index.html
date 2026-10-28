@@ -4389,7 +4389,7 @@ async function setMember(id,st,role){const{error}=await cloud.sb.rpc("admin_set_
 var fromMz=false;
 (function(){const u=new URL(location.href),id=u.searchParams.get("recette");if(!id||u.searchParams.get("arriere-plan"))return;fromMz=true;
   u.searchParams.delete("recette");history.replaceState(null,"",u.pathname+u.search+u.hash);
-  let n=0;const t=setInterval(()=>{n++;if(typeof recipes!=="undefined"&&recipes[id]){clearInterval(t);openRecSheet(id);}else if(n>60)clearInterval(t);},250);})();
+  let n=0;const t=setInterval(()=>{n++;if(typeof recipes!=="undefined"&&recipes[id]){clearInterval(t);openRecSheet(id);if(u.searchParams.get("photoDirecte")==="1")setTimeout(()=>openPhotoPick(id),120);}else if(n>60)clearInterval(t);},250);})();
 // hidden copy inside Maisonnée: no password field, so the iPhone never offers to save a password for it
 if(new URLSearchParams(location.search).get("arriere-plan")){const strip=()=>document.querySelectorAll('input[type=password]').forEach(i=>{i.type="text";i.autocomplete="off";i.value="";});
   strip();new MutationObserver(strip).observe(document.body,{childList:true,subtree:true});}
