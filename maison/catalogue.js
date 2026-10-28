@@ -115,7 +115,7 @@ function catSheet(keepScroll) {
 function catProdSheet(t, g) {
   const C = catData(), f = C.freq[t] || 0, fav = C.fav.includes(t), em = catEmoji(C, t, g), on = C.inList.includes(catNk(t)), own = C.own.includes(t);
   const cats = ["Mes produits", ...C.cats.map(c => c[0]).filter(x => x !== "Mes produits")];
-  const sugg = [...new Set([em, ...CAT_EMOJI_PICK])];
+  const sugg = [...new Set([em, ...CAT_EMOJI_PICK, ...(window.IngredientEmoji?.choices || [])])];
   openSheet(t, `<form data-form="catProd" autocomplete="off">
     <label class="field" style="margin-top:6px"><span class="label">Nom</span><input class="input" name="name" value="${esc(t)}" maxlength="60" required></label>
     <div class="field"><span class="label">Emoji</span><div class="inline" style="gap:10px"><input class="input" name="emoji" id="catEm" value="${esc(em)}" maxlength="4" style="width:70px;text-align:center;font-size:24px;flex:none"><span class="muted small">ou touchez-en un :</span></div>

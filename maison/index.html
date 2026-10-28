@@ -722,6 +722,7 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 <script src="push-config.js"></script>
 <script src="app.js"></script>
 <script src="modules.js?v=explorer-sync-20261027"></script>
+<script src="../ingredient-emojis.js"></script>
 <script src="repas.js"></script>
 <script src="courses.js"></script>
 <script src="gtaches.js"></script>
@@ -775,5 +776,8 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 <script src="ultimate.js"></script>
 <script src="v3-icons-and-add-position.js"></script>
 <script defer src="../navigation-retour.js?v=1"></script>
+<style>.ing-emoji-row{display:flex;align-items:center;min-width:0;border-bottom:1px solid #355b80}.ing-emoji-row .shop-item{flex:1;min-width:0;border-bottom:0!important}.ing-emoji-change{flex:0 0 42px;font-size:23px;border:0;background:transparent;color:inherit;cursor:pointer;padding:7px 2px}.ing-emoji-change:focus-visible{outline:2px solid #4ce1ff;border-radius:8px}.ing-emoji-row .shop-item{flex:0 0 44px!important;width:44px!important;min-width:44px!important;padding:8px!important;display:flex;justify-content:center}.ing-emoji-row .ing-emoji-change{flex:0 0 40px}.ing-emoji-label{flex:1;min-width:0;overflow-wrap:anywhere}.ing-emoji-label:not(.on){text-decoration:line-through;opacity:.7}.ing-emoji-qty{margin-left:auto;padding:0 12px;white-space:nowrap}.ing-emoji-row{gap:4px;min-height:48px}.ing-emoji-row:last-child{border-bottom:0}
+</style>
+<script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
 </body>
 </html>

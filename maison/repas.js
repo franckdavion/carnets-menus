@@ -225,7 +225,7 @@ function ingBlock(k, s) {
   const n = list.filter(i => i.on).length;
   return `<p class="group-h" style="margin-top:20px">Les courses</p><div class="field" style="margin-top:0"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} cochés</span>
     <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà à la maison : seuls les ingrédients cochés partiront dans la liste.</p>
-    <div class="card" style="padding:0">${list.map(i => `<button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span><span class="nm">${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></button>`).join("")}</div></div>
+    <div class="card" style="padding:0">${list.map(i => `<div class="ing-emoji-row"><button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span></button><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji de ${esc(i.n)}">${IngredientEmoji.get(i.n)}</button><span class="ing-emoji-label ${i.on ? 'on' : ''}">${esc(i.n)}</span><span class="ing-emoji-qty">${esc(i.qt)}</span></div>`).join("")}</div></div>
     <div class="btns" style="margin-top:10px">${s.lock
       ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
       : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}</div>`;
@@ -244,7 +244,7 @@ function rRecipeSheet(k) {
   openSheet(R.name, `
     ${R.ph ? `<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">` : ""}
     <p class="muted small" style="margin:8px 0 0">${esc(dn)} ${esc(m)}${R.time ? ` · ⏱ ${R.time} min` : ""} · pour ${R.n} pers.</p>
-    ${R.ing.length ? `<p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm">${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
+    ${R.ing.length ? `<p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.get(i.n)}</button> ${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${R.steps.length ? `<p class="group-h">Préparation</p><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
     ${R.src ? `<p class="small" style="margin-top:14px"><a href="${esc(R.src)}" target="_blank" rel="noopener" style="color:var(--accent)">Recette d'origine ↗</a></p>` : ""}
     <div class="btns" style="margin-top:16px"><button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Ouvrir dans le Carnet</button></div>
