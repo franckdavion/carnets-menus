@@ -168,7 +168,7 @@ UID:20261028-midi@carnet-menus
 DTSTAMP:20261028T000000Z
 DTSTART;TZID=Europe/Paris:20261028T120000
 DTEND;TZID=Europe/Paris:20261028T133000
-SUMMARY:Midi : Hachis de légumes à la poêle et œufs
+SUMMARY:Midi : Poêle de p de t et œufs — variante
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
@@ -184,7 +184,7 @@ UID:20261029-midi@carnet-menus
 DTSTAMP:20261029T000000Z
 DTSTART;TZID=Europe/Paris:20261029T120000
 DTEND;TZID=Europe/Paris:20261029T133000
-SUMMARY:Midi : Wok de poulet aux légumes
+SUMMARY:Midi : Dinde aux champignons et pâtes complètes
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
@@ -208,7 +208,7 @@ UID:20261030-soir@carnet-menus
 DTSTAMP:20261030T000000Z
 DTSTART;TZID=Europe/Paris:20261030T193000
 DTEND;TZID=Europe/Paris:20261030T210000
-SUMMARY:Soir : Artichauts vinaigrette
+SUMMARY:Soir : Croque-monsieur au four béchamel
 TRANSP:TRANSPARENT
 END:VEVENT
 BEGIN:VEVENT
