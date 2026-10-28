@@ -1326,7 +1326,19 @@ function shopping(all){
     const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id])continue;
     const when=x.dn+" "+x.d.getDate()+" "+m;
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
-    add(sl.id,sl.n,when,"main",sk); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk);
+    if(Array.isArray(sl.ingCustom)){
+      for(const i of sl.ingCustom){if(!i.n||sk&&sk.includes(i.key))continue;
+        const match=String(i.qt||"").trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+        const raw=match?match[1].trim():"",unit=match?match[2].trim():"";
+        const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u;
+        if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:"Divers",from:[]};
+        acc[key].q+=q;
+        const lab=recipes[sl.id].name+" ("+when+")";
+        if(!acc[key].from.includes(lab))acc[key].from.push(lab);
+      }
+    }else{
+      add(sl.id,sl.n,when,"main",sk); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk);
+    }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
   const today=ymd(new Date()), bt=menu.bought||{};
@@ -3110,7 +3122,7 @@ document.addEventListener("click",e=>{
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
-  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){openRecSheet(planned.id);}}
+  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){$("#slotSheet").hidden=true;openRecSheet(planned.id);}}
   else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
   else if(a==="weekMode"){LS.set("cm_wmode",b.dataset.v);render();}
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
@@ -3572,7 +3584,7 @@ function renderToday(){
   const tr=mealsToRate();const rateCards=tr.map(x=>`<div class="rate-card"><span>C'était comment, <b>${esc(recipes[x.id].name)}</b> <span class="muted">(${x.dn.toLowerCase()} ${x.m})</span> ?</span><div class="row"><button type="button" class="btn primary" data-act="rateMeal" data-key="${x.w}#${x.k}">★ Noter</button><button type="button" class="btn ghost" data-act="rateSkip" data-key="${x.w}#${x.k}">Passer</button></div></div>`).join("");
   const next=(()=>{for(const[m]of MEALS){const k=slotKey(day,m),s=sl[k];if(s&&recipes[s.id]&&!(m==="midi"?hr>=15:hr>=22)&&stepsFor(s.id).steps.length)return s;}return null;})();
   el.innerHTML=rateCards+(nn?`<button type="button" class="news-bar" data-act="seeNews">🆕 <span><b>${nn} nouveauté${nn>1?"s":""}</b> dans le carnet de ${esc(who)}</span><span aria-hidden="true">›</span></button>`:"")+`<div class="today-card">${line("midi","Midi")}${line("soir","Soir")}</div>
-    ${next?`<button type="button" class="btn primary today-cook" data-act="cook" data-id="${esc(next.id)}">👨‍🍳 Cuisiner : ${esc(recipes[next.id].name)}</button>`:""}
+    
     <div class="today-acts"><button type="button" class="pill" data-act="tab" data-v="shop">🛒 Courses${left?` · <b>${left}</b>`:""}</button><button type="button" class="pill" data-act="tab" data-v="week">📅 Ma semaine</button><button type="button" class="pill" data-act="openWines">🍷 Ma cave</button><button type="button" class="pill" data-act="goFridge">Qu'est-ce que je fais avec…</button></div>`;
 }
 function openPrefs(){
@@ -4535,4 +4547,5 @@ document.addEventListener("click",e=>{
 <!-- Pont avec Maisonnée (repas et courses synchronisés, bouton de retour) -->
 <script src="maison/pont.js"></script>
 
+<script defer src="navigation-retour.js?v=1"></script>
 </body></html>
