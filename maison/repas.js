@@ -169,8 +169,8 @@ function mealSlotSheet(k) {
     <section class="meal-compact meal-redesign">
       <div class="meal-top-card">
         <div class="meal-hero">
-          ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="Photo du plat" loading="lazy">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo disponible">🍽️</div>`}
-          <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong>
+          ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="Photo du plat" loading="lazy" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer" title="Changer la photo">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo disponible" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer">🍽️</div>`}
+          <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong><button class="btn" data-act="rRename" data-v="${esc(k)}" aria-label="Renommer la recette">✏️ Renommer</button>
             <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button>
             <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
           </div>
@@ -186,7 +186,7 @@ function mealSlotSheet(k) {
         <div class="meal-compose-item"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
         <div class="meal-compose-item"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
       </div></div>
-      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3>
+      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="btns"><button class="btn primary" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button></div>
         ${ingBlock(k, s)}
       </div>
       <details class="meal-section-card meal-options"><summary>⚙️ Options pratiques</summary><div class="meal-actions">
@@ -244,12 +244,61 @@ function rRecipeSheet(k) {
   openSheet(R.name, `
     ${R.ph ? `<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">` : ""}
     <p class="muted small" style="margin:8px 0 0">${esc(dn)} ${esc(m)}${R.time ? ` · ⏱ ${R.time} min` : ""} · pour ${R.n} pers.</p>
-    ${R.ing.length ? `<p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.get(i.n)}</button> ${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
+    ${R.ing.length ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button></div><p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.get(i.n)}</button> ${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${R.steps.length ? `<p class="group-h">Préparation</p><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
     ${R.src ? `<p class="small" style="margin-top:14px"><a href="${esc(R.src)}" target="_blank" rel="noopener" style="color:var(--accent)">Recette d'origine ↗</a></p>` : ""}
     <div class="btns" style="margin-top:16px"><button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Ouvrir dans le Carnet</button></div>
     <div class="sheet-sticky btns"><button class="btn" data-act="rSlot" data-v="${esc(k)}">← Retour au repas</button><button class="btn primary" data-act="rChoose" data-v="${esc(k)}" data-r="main" style="flex:1">Changer de recette</button></div>`);
 }
+
+// Édition ciblée des quantités de la recette, sans changer les emojis existants.
+function rQuantitiesSheet(k) {
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  const data=cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];return r?{id:s.id,name:r.name,ing:r.ing||[]}:null})()`);
+  if(!data)return;
+  const rows=data.ing.map((i,j)=>`<label class="field" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:24px">${IngredientEmoji.get(i.n||"")}</span><span style="flex:1;min-width:110px">${esc(i.n||"")}</span>
+    <input class="input" type="number" min="0" step="any" inputmode="decimal" name="q${j}" value="${esc(i.q??"")}" style="width:92px" aria-label="Quantité ${esc(i.n||"")}">
+    <span>${esc(i.u||"")}</span></label>`).join("");
+  openSheet("Quantités · "+data.name,`<p class="muted small">Modifiez les quantités de référence de la recette. Les emojis, ingrédients et étapes sont conservés.</p>
+    <form id="rQuantityForm" data-k="${esc(k)}" data-id="${esc(data.id)}">
+      ${rows}<div class="sheet-sticky btns" style="display:flex;flex-wrap:wrap">
+      <button type="button" class="btn" data-act="rRecipe" data-v="${esc(k)}">Annuler</button>
+      <button type="submit" class="btn primary" name="mode" value="original">Enregistrer sur cette recette</button>
+      <button type="submit" class="btn" name="mode" value="variant">Créer une variante</button>
+      </div></form>`);
+}
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest("#rQuantityForm");if(!f||!CK.ready)return;
+  e.preventDefault();
+  const submitter=e.submitter,mode=submitter?.value==="variant"?"variant":"original";
+  const id=f.dataset.id,k=f.dataset.k;
+  const values=[...f.querySelectorAll('input[type="number"]')].map(x=>x.value.trim());
+  if(values.some(x=>x!==""&&(!Number.isFinite(Number(x))||Number(x)<0))){alert("Quantité invalide.");return;}
+  let newName="";
+  if(mode==="variant"){
+    newName=prompt("Nom de la nouvelle variante :");
+    if(newName===null)return;
+    newName=newName.trim();
+    if(!newName){alert("Donnez un nom à la variante.");return;}
+  } else if(!confirm("Modifier les quantités de cette recette pour tous ses usages ?"))return;
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  const newId=mode==="variant"?"variante-"+Math.random().toString(36).slice(2,11):id;
+  const result=cev(`(()=>{const id=${JSON.stringify(id)},nid=${JSON.stringify(newId)},r=recipes[id];if(!r)return null;
+    const v=${JSON.stringify(values)},n=JSON.parse(JSON.stringify(r));
+    n.ing=(n.ing||[]).map((i,j)=>({...i,q:v[j]===""?i.q:Number(v[j])}));
+    if(nid!==id){n.name=${JSON.stringify(newName)};n.variantOf=id;delete n.shared;delete n.sharedBy;delete n.cloudAuthor;}
+    return {id:nid,recipe:n};})()`);
+  if(!result)return;
+  try{
+    await cev(`saveRecipe(${JSON.stringify(result.id)},${JSON.stringify(result.recipe)})`);
+    if(mode==="variant"){
+      cev(`(()=>{const s=${slotJs(k)};if(s)s.id=${JSON.stringify(newId)};})()`);
+      carnetSave("Variante créée et placée dans le repas.");
+    }else carnetSave("Quantités de la recette enregistrées.");
+    rRecipeSheet(k);
+  }catch(err){console.error(err);alert("Enregistrement impossible. Aucune modification confirmée.");}
+});
 // leaving for the Carnet: remember where we are, to come back to the same week with the same meal open
 function rRecipeOpen(k, id) {
   LS.set("mz_return", { view: "repas", week: rWeek, slot: k, at: Date.now() });
@@ -331,7 +380,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -355,6 +404,21 @@ document.addEventListener("click", async e => {
       break;
     }
     case "rEditIngredients": rEditIngredientsSheet(v); break;
+    case "rQuantities": rQuantitiesSheet(v); break;
+    case "rPhotoEdit": {
+      const id=cj(`(()=>{const s=${slotJs(v)};return s?s.id:""})()`);
+      if(id){ LS.set("mz_return", {view:"repas",week:rWeek,slot:v,at:Date.now()}); location.assign(CARNET_URL+"?recette="+encodeURIComponent(id)+"&photoDirecte=1"); }
+      break;
+    }
+    case "rRename": {
+      const data=cj(`(()=>{const s=${slotJs(v)},r=s&&recipes[s.id];return r?{id:s.id,name:r.name}:null})()`);
+      if(!data)break;
+      const name=prompt("Nouveau nom de la recette :",data.name);
+      if(name===null||!name.trim()||name.trim()===data.name)break;
+      const updated=cev(`(()=>{const r=recipes[${JSON.stringify(data.id)}];if(!r)return null;return {...r,name:${JSON.stringify(name.trim())}}})()`);
+      if(updated)try{await cev(`saveRecipe(${JSON.stringify(data.id)},${JSON.stringify(updated)})`);carnetSave("Recette renommée");mealSlotSheet(v);}catch(err){console.error(err);alert("Enregistrement impossible.");}
+      break;
+    }
     case "rIngAdd": {
       const rows=document.querySelector("#rIngEditRows");if(!rows)break;
       const row=document.createElement("div");row.className="field";row.style.cssText="display:flex;gap:8px;align-items:center;margin:8px 0";
