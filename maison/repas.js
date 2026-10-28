@@ -166,33 +166,37 @@ function mealSlotSheet(k) {
   const favorite = !!cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`);
   const photo = cj(`rPhotoSrc(${JSON.stringify(s.id)})||""`);
   openSheet(title, `
-    <section class="meal-compact">
-      <div class="meal-hero">
-        ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="">` : ""}
-        <strong class="meal-name">${esc(x.name)}</strong>
-        <button type="button" class="meal-star" data-act="rFav" data-v="${esc(k)}" aria-label="${favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${favorite}">${favorite ? "★" : "☆"}</button>
+    <section class="meal-compact meal-redesign">
+      <div class="meal-top-card">
+        <div class="meal-hero">
+          ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="Photo du plat" loading="lazy">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo disponible">🍽️</div>`}
+          <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong>
+            <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button>
+            <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
+          </div>
+        </div>
+        <div class="meal-essentials">
+          <div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
+          <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
+          <div class="meal-keep-area"><span>Garder ce choix</span>${s.lock ? `<span class="meal-keep-label">✓ Dans les courses</span>` : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder"}</button>`}</div>
+        </div>
       </div>
-      <div class="meal-actions">
-        <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button>
-        <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">✎ Modifier les ingrédients</button>
-        <button class="btn" data-act="rVariant" data-v="${esc(k)}">↻ Créer une variante</button>
-        <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">⇄ Changer le plat</button>
+      <div class="meal-section-card"><h3>🍴 Composer mon repas</h3><div class="meal-compose-grid">
+        <div class="meal-compose-item"><b>Plat principal</b><span>${esc(x.name)}</span></div>
+        <div class="meal-compose-item"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
+        <div class="meal-compose-item"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
+      </div></div>
+      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3>
+        ${ingBlock(k, s)}
       </div>
-      <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
-      ${x.kind ? `<p class="muted small" style="margin:5px 0">${esc(x.kind)}</p>` : ""}
-      <details class="meal-shopping" ${s.lock ? "" : "open"}>
-        <summary>${s.lock ? "🛒 Dans la liste de courses ✓" : s.keep ? "✓ Repas gardé" : "Repas proposé"}</summary>
-        <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p>
-      </details>
-      <div class="meal-persons"><span>Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
-      <div class="meal-side"><span>Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
-      <div class="meal-side"><span>Dessert</span>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
-      <details class="meal-more"><summary>Autres options du repas</summary>
-        <div class="btns"><button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
-        ${s.lock ? "" : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé · toucher pour ne plus le garder" : "Garder ce choix"}</button>`}</div>
-      </details>
+      <details class="meal-section-card meal-options"><summary>⚙️ Options pratiques</summary><div class="meal-actions">
+        <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
+        <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
+        <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une autre recette</button>
+        <button class="btn" data-act="rReroll" data-v="${esc(k)}">Autre idée</button>
+      </div><details class="meal-shopping"><summary>Informations sur les courses</summary>
+      <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p></details></details>
     </section>
-    ${ingBlock(k, s)}
     <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
   if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
@@ -204,7 +208,15 @@ function slotIngredients(k) {
       for(const i of r.ing||[]){if(!i.n)continue;const[q,u]=toBase(i.q,i.u),key=norm(i.n)+"|"+u;
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0};acc[key].q+=q*ingMult(r,i,f*(r.serves||4));}};
     add(s.id,"main");if(s.entree)add(s.entree,"entree");if(s.dessert)add(s.dessert,"dessert");
+    if(Array.isArray(s.ingCustom))return s.ingCustom.map(i=>({key:i.key,n:i.n,qt:i.qt||"",on:!skip.includes(i.key)}));
     return Object.values(acc).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",on:!skip.includes(i.key)}));})()`);
+}
+function rEditIngredientsSheet(k) {
+  const items=slotIngredients(k);
+  openSheet("Modifier les ingrédients", `<p class="muted small">Modifications limitées à ce repas. La recette originale ne sera pas modifiée.</p>
+    <form id="rIngEditForm" data-k="${esc(k)}"><div id="rIngEditRows">${items.map((i,j)=>`<div class="field" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input class="input" name="name${j}" aria-label="Ingrédient" value="${esc(i.n)}" style="flex:2;min-width:0"><input class="input" name="qty${j}" aria-label="Quantité" value="${esc(i.qt)}" style="flex:1;min-width:0"><button type="button" class="btn" data-act="rIngDelete" aria-label="Supprimer">×</button></div>`).join("")}</div>
+    <div class="btns"><button type="button" class="btn" data-act="rIngAdd">+ Ajouter un ingrédient</button></div>
+    <div class="sheet-sticky btns"><button type="button" class="btn" data-act="rSlot" data-v="${esc(k)}">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div></form>`);
 }
 function ingBlock(k, s) {
   let list = [];
@@ -319,7 +331,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -327,6 +339,12 @@ document.addEventListener("click", async e => {
     case "rPrefs": rPrefsSheet(); break;
     case "rSlot": mealSlotSheet(v); break;
     case "rRecipe": rRecipeSheet(v); break;
+    case "rCook": rCookStart(v); break;
+    case "rCookNext": rCookMove(1); break;
+    case "rCookPrev": rCookMove(-1); break;
+    case "rCookRecipe": rCookShowRecipe(); break;
+    case "rCookBack": rCookRestore(); break;
+    case "rCookExit": rCookExit(); break;
     case "rFav": {
       const changed=cev(`(()=>{const s=${slotJs(v)};const r=s&&recipes[s.id];if(!r)return null;r.fav=!r.fav;return {id:s.id,recipe:r,fav:r.fav};})()`);
       if(changed){
@@ -336,11 +354,14 @@ document.addEventListener("click", async e => {
       }
       break;
     }
-    case "rEditIngredients": {
-      // Editing a planned meal starts with a copy, preserving the source recipe.
-      const x=weekSlots(rWeek)[v];if(!x||!x.s||!x.s.id)break;
-      location.assign(CARNET_URL+"?variante="+encodeURIComponent(x.s.id)+"&repasSemaine="+encodeURIComponent(rWeek)+"&repasCase="+encodeURIComponent(v));break;
+    case "rEditIngredients": rEditIngredientsSheet(v); break;
+    case "rIngAdd": {
+      const rows=document.querySelector("#rIngEditRows");if(!rows)break;
+      const row=document.createElement("div");row.className="field";row.style.cssText="display:flex;gap:8px;align-items:center;margin:8px 0";
+      row.innerHTML='<input class="input" aria-label="Ingrédient" placeholder="Ingrédient" style="flex:2;min-width:0"><input class="input" aria-label="Quantité" placeholder="Quantité (ex. 200 g)" style="flex:1;min-width:0"><button type="button" class="btn" data-act="rIngDelete" aria-label="Supprimer">×</button>';
+      rows.appendChild(row);break;
     }
+    case "rIngDelete": b.closest(".field")?.remove();break;
     case "rVariant": {
       const x=weekSlots(rWeek)[v]; if(!x || !x.s || !x.s.id) break;
       const url=CARNET_URL+"?variante="+encodeURIComponent(x.s.id)+"&repasSemaine="+encodeURIComponent(rWeek)+"&repasCase="+encodeURIComponent(v);
@@ -396,6 +417,21 @@ document.addEventListener("click", async e => {
     }
   }
 });
+document.addEventListener("submit", e => {
+  const f=e.target.closest("#rIngEditForm");if(!f||!CK.ready)return;
+  e.preventDefault();const k=f.dataset.k,items=[];
+  for(const row of f.querySelectorAll("#rIngEditRows .field")){
+    const inputs=row.querySelectorAll("input"),n=(inputs[0]?.value||"").trim(),qt=(inputs[1]?.value||"").trim();
+    if(n)items.push({n,qt});
+  }
+  // Normalize quantities through the Carnet's existing unit parser, and keep overrides on the meal only.
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  const result=cev(`(()=>{const s=${slotJs(k)};if(!s)return false;const arr=${JSON.stringify(items)};
+    s.ingCustom=arr.map((i,j)=>{const m=i.qt.match(/^([\d.,\/ ]+)\s*(.*)$/);const q=m?m[1].trim():"",u=m?m[2].trim():"";
+      const key=norm(i.n)+"|"+u.toLowerCase();return {n:i.n,qt:i.qt,key:key+"#"+j};});
+    s.noIng=[];return true;})()`);
+  if(result){carnetSave("Ingrédients du repas enregistrés.");mealSlotSheet(k);}
+});
 document.addEventListener("input", e => { if (e.target.id === "rPickQ" && rPick) $("#rPickList").innerHTML = rPickList(e.target.value); });
 document.addEventListener("submit", e => {
   const f = e.target.closest("form[data-form]"); if (!f || !["rPropose", "rPrefs"].includes(f.dataset.form)) return;
@@ -433,3 +469,45 @@ document.addEventListener("change", e => {
   cev(`(()=>{const s=${slotJs(k)};if(!s)return;s.mealState=${JSON.stringify(state)};s.keep=${JSON.stringify(state!=="Proposé")};s.lock=${JSON.stringify(["En courses","Courses faites","Terminé"].includes(state))};})()`);
   shopIncludeWeek(); carnetSave("État : "+state); mealSlotSheet(k);
 });
+
+// Mode cuisine local à Maisonnée : aucun changement de page ni de données Carnet.
+let rCookSession = null;
+let rCookRecipeVisible = false;
+// A native <dialog> occupies the browser top layer: close it before showing cooking mode.
+document.querySelector("#sheet").addEventListener("close", () => {
+  if (rCookSession && rCookRecipeVisible) {
+    rCookRecipeVisible = false;
+    rCookDraw();
+  }
+});
+function rCookStart(k) {
+  const data = cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];if(!r)return null;
+    let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){}
+    if(!steps.length)steps=String(r.steps||'').split('\\n').filter(Boolean);
+    return {name:r.name,photo:rPhotoSrc(s.id)||'',steps:steps.map(x=>typeof x==='string'?x:(x&&(x.t||x.text||x.title))||'').filter(Boolean)};})()`);
+  if(!data || !data.steps.length){alert('Cette recette ne possède pas encore d’étapes de préparation.');return;}
+  rCookSession={k,data,i:0};
+  rCookRecipeVisible=false;
+  closeSheet();
+  if(!document.querySelector('#mzCookOverlay')){
+    const el=document.createElement('section');el.id='mzCookOverlay';el.className='mz-cook-overlay';el.setAttribute('aria-label','Cuisiner pas à pas');
+    document.body.appendChild(el);
+  }
+  rCookDraw();
+}
+function rCookDraw(){
+  if(!rCookSession)return;
+  const {k,data,i}=rCookSession,steps=data.steps,n=steps.length;
+  const el=document.querySelector('#mzCookOverlay');if(!el)return;
+  el.innerHTML=`<div class="mz-cook-shell">
+    <header class="mz-cook-header"><h2>👨‍🍳 Cuisiner pas à pas</h2><strong>${esc(data.name)}</strong><div class="mz-cook-buttons"><button class="btn" data-act="rCookRecipe">📖 Fiche recette</button><button class="btn" data-act="rCookExit">← Retour au repas</button></div></header>
+    <div class="mz-cook-layout"><nav class="mz-cook-list" aria-label="Étapes de préparation"><h3>Étapes (${i+1}/${n})</h3>${steps.map((st,j)=>`<div class="mz-cook-step ${j===i?'active':''}"><b>${j+1}</b><span>${esc(st).slice(0,85)}</span></div>`).join('')}</nav>
+    <main class="mz-cook-main"><div class="mz-cook-progress"><strong>Étape ${i+1} sur ${n}</strong><progress value="${i+1}" max="${n}"></progress></div><div class="mz-cook-content">${data.photo?`<img src="${esc(data.photo)}" alt="Photo de la recette">`:''}<p>${esc(steps[i])}</p></div><footer><button class="btn" data-act="rCookPrev" ${i===0?'disabled':''}>← Précédent</button><button class="btn primary" data-act="rCookNext" ${i===n-1?'disabled':''}>Suivant →</button></footer></main></div>
+  </div>`;
+  el.hidden=false;
+}
+function rCookMove(d){if(!rCookSession)return;rCookSession.i=Math.max(0,Math.min(rCookSession.data.steps.length-1,rCookSession.i+d));rCookDraw();}
+function rCookShowRecipe(){if(!rCookSession)return;document.querySelector('#mzCookOverlay').hidden=true;rCookRecipeVisible=true;rRecipeSheet(rCookSession.k);
+  const holder=document.querySelector('#sheetIn .sheet-sticky');if(holder){const btn=document.createElement('button');btn.className='btn primary';btn.dataset.act='rCookBack';btn.textContent='← Revenir à la préparation';holder.prepend(btn);}}
+function rCookRestore(){if(!rCookSession)return;rCookRecipeVisible=false;closeSheet();rCookDraw();}
+function rCookExit(){if(!rCookSession)return;const k=rCookSession.k;const el=document.querySelector('#mzCookOverlay');if(el)el.hidden=true;rCookRecipeVisible=false;rCookSession=null;mealSlotSheet(k);}
