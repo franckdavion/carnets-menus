@@ -11,7 +11,33 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif;-webkit-text-size-adjust:100%}img{max-width:100%}[hidden]{display:none!important}
+/* Favoris : étoile dorée clairement identifiable sur toutes les fiches */
+.star.on, .rs-acts button[data-act="fav"][aria-pressed="true"] span {color:#e6a900!important;text-shadow:0 0 7px rgba(255,194,36,.5)}
+.star.on {background:rgba(255,196,38,.15)!important;border-color:rgba(224,166,0,.55)!important}
+.recipe-tools {display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+
+/* Placement uniquement : fenêtres repas/recette sur ordinateur. */
+@media (min-width: 768px) and (pointer: fine) {
+  #slotSheet:not([hidden]), #recSheet:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  #slotSheet > .sheet-in, #recSheet > .sheet-in {
+    position: relative;
+    margin: 0;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+  }
+}
+</style>
 <title>Carnet de menus</title>
 <script src="maison/espace.js"></script>
 <script>(function(){try{var d=document.documentElement,g=function(k,v){var x=localStorage.getItem(k);return x?JSON.parse(x):v};
@@ -773,7 +799,7 @@ code{font-family:var(--f-mono);font-size:.92em}
       <label class="field"><span class="label">Pour (pers.)</span><input id="f-serves" type="number" min="1" inputmode="numeric" value="4"></label>
     </div>
     <div class="field">
-      <span class="label">Ingrédients (quantités pour le nombre de personnes ci-dessus)</span>
+      <span class="label">Ingrédients — ajoutez, supprimez, remplacez ou corrigez chaque ligne avant les courses (quantités pour le nombre de personnes indiqué)</span>
       <div id="f-ings" style="display:flex;flex-direction:column;gap:8px"></div>
       <button type="button" class="btn ghost" data-act="addIng" style="align-self:flex-start">+ Ingrédient</button>
     </div>
@@ -1658,7 +1684,7 @@ function renderRecipes(){
           :`${r.source?`<a class="link" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine</a>`:""}${r.shared?`<span class="muted" style="font-size:12px">Recette de ${esc(r.sharedBy||"un proche")} · lecture seule</span>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}`}</div></div>`;
     }
     return`<article class="card${on?" on":""}"><div class="card-h">
-      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${esc(r.name)}</h3>
+      <button class="open${rPhotoSrc(id)?" has-ph":""}" data-act="open" data-id="${esc(id)}" aria-expanded="${open}" id="card-${esc(id)}">${rPhotoSrc(id)?`<img class="rp-th" src="${esc(rPhotoSrc(id))}" alt=""${!r.photo?(rPhotoSrc(id)===r.image?` data-site="${esc(id)}"`:` data-auto="${esc(id)}"`):""}>`:""}<h3>${r.fav?`<span title="Recette favorite" style="color:#e6a900;text-shadow:0 0 6px #ffc43c">★ </span>`:""}${esc(r.name)}</h3>
       <div class="meta">${shNews[id]?`<span class="tag news">${shNews[id].k==="new"?"🆕 Nouveau":"✎ Modifiée"}</span> `:""}${r.shared?`<span class="tag" style="color:#712B13">de ${esc(r.sharedBy||"")} · </span>`:""}<span class="tag">${esc(catsOf(r).join(" · "))}</span>${filter.theme==="nouveau"&&addedAt(id)?`<span style="color:var(--accent);font-weight:600">🆕 ajoutée ${esc(ago(addedAt(id)))} · </span>`:""}${r.time?esc(r.time)+" min · ":""}${esc(fmtNut(nutri(r),true))}${(()=>{const ts=THEMES.map(x=>x[0]).filter(t=>t!=="nouveau"&&t!=="partage"&&t!=="detail"&&t!=="airfryer"&&hasTheme(r,t)&&!(t==="legumes"&&hasTheme(r,"dessert-legumes")));return ts.length?`<span class="themes">${ts.map(t=>esc(THEME_LABEL[t])).join(" · ")}</span>`:"";})()}</div></button>
       <div class="card-btns"><button class="star${r.fav?" on":""}" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}" aria-label="${r.fav?"Retirer des favoris":"Ajouter aux favoris"}">${r.fav?"★":"☆"}</button>
       <button class="add${on?" on":""}" data-act="toggle" data-id="${esc(id)}">${on?"✓ Au menu":"+ Menu"}</button></div>
@@ -3084,7 +3110,7 @@ document.addEventListener("click",e=>{
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
-  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();$("#slotSheet").hidden=false;$("#slotSheet .sheet-in").scrollTop=0;}
+  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){openRecSheet(planned.id);}}
   else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
   else if(a==="weekMode"){LS.set("cm_wmode",b.dataset.v);render();}
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
@@ -3176,6 +3202,7 @@ document.addEventListener("click",e=>{
   else if(a==="autoOn"){const r=recipes[id];if(r){const n=Object.assign({},r);delete n.noAuto;saveRecipe(id,n);}}
   else if(a==="autoOff"){const r=recipes[id];if(r){const n=Object.assign({},r,{noAuto:true});delete n.pick;delete n.autoPick;delete n.image;saveRecipe(id,n);toast("Photo retirée : « Ajouter ma photo » reste possible");}}
   else if(a==="editRec"){editRecipe(b.dataset.id||recSheetId);}
+  else if(a==="variantRec"){createRecipeVariant(b.dataset.id||recSheetId);}
   else if(a==="addIng")addIngRow();
   else if(a==="rmIng")b.closest(".ing-block").remove();
 });
@@ -3762,7 +3789,9 @@ function renderRecSheet(){
   if(recTab==="ing")body=`<div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       ${platsLine(r,p,id)}<span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}${dishOf(r)?` (1 ${dishOf(r).one})`:""}</span></div>
-    ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}<div class="row">${shopBtn(id,p)}</div>`;
+    ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}
+    <div class="recipe-tools"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ Ajouter, supprimer ou remplacer des ingrédients</button>${sl.length&&sl.some(k=>W()[k].n!==p)?`<button type="button" class="btn primary" data-act="vservApply" data-id="${esc(id)}">Appliquer ${p} personnes au menu</button>`:""}</div>
+    <div class="row">${shopBtn(id,p)}</div>`;
   else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+modeChips(id,sx)+prepHtml(sx.prep)+batchNote(sx,p)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
   else body=(()=>{const ws=(menu.wines||[]).filter(w=>w.rec===id);return ws.length?`<div class="note">🍾 Dans votre cave pour ce plat : ${ws.map(w=>`<button type="button" class="link" data-act="wineOpen" data-id="${w.id}">${esc(wineLabel(w))}${w.stock?` (${w.stock})`:" (plus en stock)"}</button>`).join(", ")}</div>`:"";})()+(r.shared?"":`<div class="row" style="justify-content:flex-end">${confirmDel===id?`<span>Supprimer cette recette${slotsOf(id).length?" (elle sera retirée du menu et des courses)":""} ?</span><button type="button" class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button type="button" class="btn ghost" data-act="delNo">Annuler</button>`:`<button type="button" class="btn ghost" data-act="del" data-id="${esc(id)}">🗑️ Supprimer la recette</button>`}</div>`)+`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
@@ -3772,13 +3801,13 @@ function renderRecSheet(){
     ${r.shared?"":`<div class="row">${confirmDel===id?`<span>Supprimer cette recette ?</span><button class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button class="btn ghost" data-act="delNo">Annuler</button>`:`<button class="x" data-act="del" data-id="${esc(id)}">Supprimer la recette</button>`}</div>`}`;
   const html=`<div class="row rs-head"><span></span><button type="button" class="btn${fromMz?" primary":""}" data-act="closeRec">${fromMz?"← Retour à Maisonnée":"Fermer"}</button></div>
     ${ph?recPhotoBlock(id,true):`<div class="row">${recPhotoBlock(id)}</div>`}
-    <div><h2>${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}${showOn("nut")?" · "+esc(fmtNut(nut,true)):""}${rt?` · <b class="rs-stars">${starTxt(rt.avg)}</b> (${rt.n})`:""}</div></div>
+    <div><h2>${r.fav?`<span title="Favorite" style="color:#e6a900">★ </span>`:""}${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}${showOn("nut")?" · "+esc(fmtNut(nut,true)):""}${rt?` · <b class="rs-stars">${starTxt(rt.avg)}</b> (${rt.n})`:""}</div></div>
     ${shBox}
     <div class="rs-acts">
       <button type="button" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}"><span>${r.fav?"★":"☆"}</span>Favori</button>
       <button type="button" data-act="toggle" data-id="${esc(id)}"><span>📅</span>+ Menu</button>
       <button type="button" data-act="recTab" data-v="ing"><span>🛒</span>Courses</button>
-      <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button></div>
+      <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button><button type="button" data-act="variantRec" data-id="${esc(id)}"><span>📋</span>Créer une variante</button></div>
     ${r.cloudBy?`<div class="muted" style="font-size:13px">👤 Ajoutée par <b>${esc(r.cloudBy)}</b></div>`:""}${proposeHtml(id)}${pageHtml(id)}
     ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
     <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
@@ -3927,6 +3956,17 @@ function openSheet(id){
   else for(let k=0;k<3;k++)addIngRow();
   $("#sheet").hidden=false;$("#recForm").scrollTop=0;if(!r)setTimeout(()=>$("#f-name").focus(),50);
 }
+// Créer une variante sans jamais écraser la recette source.
+let variantPending=null;
+function createRecipeVariant(id,week,slot){
+  const r=recipes[id];if(!r)return;
+  const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;delete n.cloudAuthor;
+  n.name=(r.name||"Recette")+" — variante";n.createdAt=new Date().toISOString();n.variantOf=id;
+  const nid="variante-"+Math.random().toString(36).slice(2,11);
+  saveRecipe(nid,n);
+  variantPending={id:nid,week:week||null,slot:slot||null};
+  editRecipe(nid);
+}
 // edit any recipe from anywhere; a recipe shared by a relative is first copied into my notebook
 function editRecipe(id){const r=recipes[id];if(!r)return;
   if(r.shared||(r.cloudAuthor&&cloud.user&&r.cloudAuthor!==cloud.user.id&&!cloud.admin)){const n=JSON.parse(JSON.stringify(r));delete n.shared;delete n.sharedBy;n.createdAt=new Date().toISOString();
@@ -3946,7 +3986,14 @@ $("#recForm").addEventListener("submit",async e=>{
     const data=Object.assign({},old,{name,cat,time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),updatedAt:new Date().toISOString()});
     delete data.alsoMain;delete data.alsoEntree;if(fc.length>1)data.cats=fc.slice(1);else delete data.cats;
     const id=editId;editId=null;$("#sheet").hidden=true;await saveRecipe(id,data);if(formPhoto){const f=formPhoto;formPhoto=null;setRecipePhoto(id,f);}
-    if(!editBack)openId=id;render();toast("Recette modifiée");return;}
+    if(!editBack)openId=id;render();
+    if(variantPending&&variantPending.id===id){
+      const v=variantPending;variantPending=null;
+      if(v.week&&v.slot&&confirm("Remplacer le repas prévu par cette variante ?")){
+        const wk=(menu.weeks||{})[v.week];if(wk&&wk[v.slot]){wk[v.slot].id=id;saveMenu();toast("Variante enregistrée et repas remplacé");}
+        else toast("Variante enregistrée ; repas prévu introuvable.");
+      }else toast("Variante enregistrée sans modifier le planning");
+    }else toast("Recette modifiée");return;}
   const slug=norm(name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette";
   const id=slug+"-"+Math.random().toString(36).slice(2,6);
   const data={name,cat:fc[0],...(fc.length>1?{cats:fc.slice(1)}:{}),time:Number($("#f-time").value)||0,serves:Math.max(1,Number($("#f-serves").value)||4),ing,steps:$("#f-steps").value.trim(),createdAt:new Date().toISOString()};
@@ -4318,6 +4365,13 @@ function membersHtml(){const l=cloud.members;if(!l)return"";if(!l.length)return`
   return l.map(m=>`<div class="mem"><div><b>${esc(m.pseudo)}</b>${m.role==="admin"?" 👑":""} <span class="muted">· ${S[m.status]||m.status}</span><br><small class="muted">${esc(m.email||"")} · inscrit le ${new Date(m.created_at).toLocaleDateString("fr-FR")}${m.last_seen?" · vu "+ago(Date.parse(m.last_seen)):""} · ${m.recipes_count} recette${m.recipes_count>1?"s":""}</small></div>
     ${m.id===cloud.user.id?"":`<div class="row" style="gap:6px">${m.status!=="active"?`<button type="button" class="btn primary" data-act="memSet" data-id="${m.id}" data-s="active">Valider</button>`:`<button type="button" class="btn" data-act="memSet" data-id="${m.id}" data-s="blocked">Bloquer</button>`}${m.status==="active"?(m.role==="admin"?`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="member">Retirer admin</button>`:`<button type="button" class="btn ghost" data-act="memSet" data-id="${m.id}" data-s="active" data-r="admin">Rendre admin</button>`):""}</div>`}</div>`).join("");}
 async function setMember(id,st,role){const{error}=await cloud.sb.rpc("admin_set_member",{member:id,new_status:st,new_role:role});if(error){toast("Refusé : "+error.message);return;}toast("Accès mis à jour");loadMembers();}
+// Ouverture directe de l’éditeur de variante depuis Maisonnée.
+(function(){const q=new URLSearchParams(location.search),id=q.get("variante");if(!id)return;
+  let attempts=0;const timer=setInterval(()=>{if(!recipes||!recipes[id]){if(++attempts>100)clearInterval(timer);return;}
+    clearInterval(timer);createRecipeVariant(id,q.get("repasSemaine"),q.get("repasCase"));
+    history.replaceState(null,"",location.pathname);
+  },300);
+})();
 // opened from Maisonnée on a recipe (?recette=<id>): its sheet (read, cook, edit), over whatever page is behind
 // closing that sheet takes you back to Maisonnée (same week, the meal open again)
 var fromMz=false;
