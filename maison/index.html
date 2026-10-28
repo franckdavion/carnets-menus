@@ -713,6 +713,27 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 .mz-cook-layout{display:grid;grid-template-columns:minmax(220px,30%) minmax(0,1fr);gap:18px;flex:1}.mz-cook-list h3{margin-top:0}.mz-cook-step{display:flex;align-items:center;gap:12px;border:1px solid #1475b7;border-radius:14px;padding:12px;margin:8px 0;line-height:1.4}.mz-cook-step b{border-radius:50%;background:#155da4;min-width:32px;height:32px;display:grid;place-items:center}.mz-cook-step.active{border-color:#4ae4ff;background:#1765a8}.mz-cook-step.active b{background:#eabf17;color:#09244a}
 .mz-cook-main{display:flex;flex-direction:column;min-height:350px}.mz-cook-progress{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.mz-cook-progress progress{flex:1;min-width:130px;accent-color:#f6c92d;height:14px}.mz-cook-content{display:flex;align-items:center;gap:28px;flex:1;padding:20px 0}.mz-cook-content img{width:min(45%,420px);max-height:48vh;object-fit:cover;border-radius:18px}.mz-cook-content p{font-size:clamp(20px,2.5vw,30px);line-height:1.5;white-space:pre-line;overflow-wrap:anywhere}.mz-cook-main footer{display:flex;justify-content:space-between;gap:14px}
 @media(max-width:700px){.mz-cook-layout{grid-template-columns:1fr}.mz-cook-list{padding:12px}.mz-cook-step{display:none}.mz-cook-step.active{display:flex}.mz-cook-content{flex-direction:column;align-items:stretch}.mz-cook-content img{width:100%;max-height:30vh}.mz-cook-header{padding:14px}.mz-cook-main{padding:14px}}
+
+/* Mode cuisine compact iPhone : ne modifie pas les autres pages */
+@media (max-width:700px){
+ .mz-cook-overlay{height:100dvh;overflow:hidden;padding:env(safe-area-inset-top,8px) 10px env(safe-area-inset-bottom,8px)}
+ .mz-cook-shell{height:100%;min-height:0;gap:8px;overflow:hidden}
+ .mz-cook-header{flex:0 0 auto;padding:10px 12px;gap:6px;border-radius:16px;display:grid;grid-template-columns:1fr auto}
+ .mz-cook-header h2{font-size:19px;grid-column:1;white-space:nowrap}
+ .mz-cook-header strong{font-size:15px;min-width:0;grid-column:1 / -1;grid-row:2}
+ .mz-cook-buttons{grid-column:2;grid-row:1;gap:6px;justify-content:flex-end}
+ .mz-cook-buttons .btn{padding:7px 9px;font-size:12px;min-height:34px}
+ .mz-cook-layout{display:flex;flex:1;min-height:0;gap:0;overflow:hidden}
+ .mz-cook-list{display:none}
+ .mz-cook-main{flex:1;min-height:0;padding:10px;gap:8px;border-radius:16px;overflow:hidden}
+ .mz-cook-progress{flex:0 0 auto;gap:8px;font-size:14px;flex-wrap:nowrap}
+ .mz-cook-progress progress{min-width:0;height:10px}
+ .mz-cook-content{display:block;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 2px}
+ .mz-cook-content img{display:block;width:100%;height:clamp(100px,19dvh,160px);max-height:none;object-fit:cover;border-radius:12px;margin-bottom:8px}
+ .mz-cook-content p{font-size:17px;line-height:1.42;margin:4px 0 12px}
+ .mz-cook-main footer{flex:0 0 auto;position:relative;gap:8px;padding:6px 0 0;background:#071c3e}
+ .mz-cook-main footer .btn{flex:1;min-width:0;padding:11px 8px;font-size:15px}
+}
 </style>
 </head>
 <body>

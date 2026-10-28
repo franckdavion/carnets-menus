@@ -230,27 +230,59 @@ function ingBlock(k, s) {
       ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
       : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}</div>`;
 }
-// 📖 the recipe of a meal, as in the Carnet: photo, time, ingredients for the meal's people, steps
-function rRecipeSheet(k) {
+// Fiche cuisine Maisonnée : les données restent celles du Carnet embarqué.
+let rRecipeTab = "ing";
+function rRecipeSheet(k, tab) {
+  if (tab) rRecipeTab = tab;
   cev(`curWeek=${JSON.stringify(rWeek)}`);
   const R = cj(`(()=>{const s=${slotJs(k)};const r=s&&recipes[s.id];if(!r)return null;
     const n=s.n||menu.people||4,f=n/(r.serves||4);
     const ing=(r.ing||[]).filter(i=>i.n).map(i=>{const[q,u]=toBase(i.q,i.u);const qq=q*ingMult(r,i,f*(r.serves||4));return{n:i.n.trim(),qt:q?fmt(qq,u)||"":""};});
-    let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){steps=String(r.steps||"").split("\\n").map(x=>x.trim()).filter(Boolean);}
+    let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){steps=String(r.steps||"").split("\\n").filter(Boolean);}
     steps=steps.map(x=>typeof x==="string"?x:(x&&(x.t||x.text))||"").filter(Boolean);
-    return{id:s.id,name:r.name,ph:rPhotoSrc(s.id)||"",time:r.time||0,n,ing,steps,src:typeof r.source==="string"&&/^https?:/.test(r.source)?r.source:""};})()`);
+    return{id:s.id,name:r.name,ph:rPhotoSrc(s.id)||"",time:r.time||0,n,ing,steps,fav:!!r.fav,
+      serves:r.serves||4,src:typeof r.source==="string"&&/^https?:/.test(r.source)?r.source:"",
+      info:r.note||r.notes||r.description||"",wine:r.wine||r.wines||""};})()`);
   if (!R) return;
-  const [dn, m] = k.split("|");
-  openSheet(R.name, `
-    ${R.ph ? `<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">` : ""}
-    <p class="muted small" style="margin:8px 0 0">${esc(dn)} ${esc(m)}${R.time ? ` · ⏱ ${R.time} min` : ""} · pour ${R.n} pers.</p>
-    ${R.ing.length ? `<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button></div><p class="group-h">Ingrédients</p><div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.get(i.n)}</button> ${esc(i.n)}</span>${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}</div>`).join("")}</div>` : ""}
-    ${R.steps.length ? `<p class="group-h">Préparation</p><ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>` : ""}
-    ${R.src ? `<p class="small" style="margin-top:14px"><a href="${esc(R.src)}" target="_blank" rel="noopener" style="color:var(--accent)">Recette d'origine ↗</a></p>` : ""}
-    <div class="btns" style="margin-top:16px"><button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Ouvrir dans le Carnet</button></div>
-    <div class="sheet-sticky btns"><button class="btn" data-act="rSlot" data-v="${esc(k)}">← Retour au repas</button><button class="btn primary" data-act="rChoose" data-v="${esc(k)}" data-r="main" style="flex:1">Changer de recette</button></div>`);
+  const [dn,m]=k.split("|");
+  const tabs=`<div class="btns" style="margin-top:14px;display:flex;gap:6px">${[["ing","🥕 Ingrédients"],["steps","📝 Étapes"],["info","ℹ️ Infos"]].map(([id,label])=>`<button class="btn ${rRecipeTab===id?"primary":""}" style="flex:1;padding:9px 4px" data-act="rRecipeTab" data-v="${esc(k)}" data-tab="${id}">${label}</button>`).join("")}</div>`;
+  let body="";
+  if(rRecipeTab==="ing") body=`<div class="btns" style="margin-top:12px"><button class="btn" data-act="rQuantities" data-v="${esc(k)}">⚖️ Modifier les quantités de référence</button><button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">✏️ Ingrédients de ce repas</button></div>
+    ${R.ing.length?`<div class="list">${R.ing.map(i=>`<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.get(i.n)}</button> ${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></div>`).join("")}</div>`:`<p class="muted">Aucun ingrédient renseigné.</p>`}`;
+  if(rRecipeTab==="steps") body=`<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="rEditSteps" data-v="${esc(k)}">✏️ Ajouter / modifier les étapes</button></div>${R.steps.length?`<ol style="padding-left:22px;display:flex;flex-direction:column;gap:10px;line-height:1.5">${R.steps.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:`<p class="muted">Aucune étape : ajoutez votre préparation.</p>`}`;
+  if(rRecipeTab==="info") body=`<div style="margin-top:14px">${R.info?`<p>${esc(typeof R.info==="string"?R.info:JSON.stringify(R.info))}</p>`:`<p class="muted">Aucune note enregistrée pour cette recette.</p>`}${R.wine?`<p>🍷 ${esc(typeof R.wine==="string"?R.wine:JSON.stringify(R.wine))}</p>`:""}${R.src?`<p><a href="${esc(R.src)}" target="_blank" rel="noopener">Recette d'origine ↗</a></p>`:""}<button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Toutes les informations dans le Carnet ↗</button></div>`;
+  openSheet(R.name,`
+    ${R.ph?`<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">`:""}
+    <p class="muted small" style="margin:8px 0">${esc(dn)} ${esc(m)}${R.time?` · ⏱ ${R.time} min`:""}</p>
+    <div class="btns" style="align-items:center"><button class="btn" data-act="rRecipeServ" data-v="${esc(k)}" data-d="-1" ${R.n<=1?"disabled":""}>−</button><strong>${R.n} pers.</strong><button class="btn" data-act="rRecipeServ" data-v="${esc(k)}" data-d="1">+</button><button class="btn" data-act="rRecipeFav" data-v="${esc(k)}">${R.fav?"★ Favori":"☆ Favori"}</button></div>
+    ${tabs}${body}
+    <div class="btns" style="margin-top:16px"><button class="btn primary" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button><button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Ouvrir dans le Carnet</button></div>
+    <div class="sheet-sticky btns"><button class="btn" data-act="rSlot" data-v="${esc(k)}">← Retour au repas</button><button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Changer de recette</button></div>`);
 }
-
+function rEditStepsSheet(k) {
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  const data=cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];if(!r)return null;return{id:s.id,name:r.name,steps:String(r.steps||"").split("\\n").map(x=>x.trim()).filter(Boolean),display:stepsFor(s.id).steps||[],shared:!!r.shared};})()`);
+  if(!data)return;
+  if(data.shared){alert("Cette recette est partagée en lecture seule. Personnalisez-la dans le Carnet de menus.");return;}
+  // Les étapes détaillées du catalogue sont parfois distinctes de r.steps : préremplir avec les étapes visibles.
+  const steps=data.display.length?data.display:data.steps;
+  openSheet("Modifier les étapes · "+data.name,`<p class="muted small">Les étapes enregistrées seront utilisées dans Maisonnée et Carnet de menus. Vous pouvez les réordonner.</p>
+    <form id="rStepsForm" data-k="${esc(k)}" data-id="${esc(data.id)}"><div id="rStepsRows">${steps.map(t=>rStepRow(t)).join("")}</div>
+    <button type="button" class="btn" data-act="rStepAdd">+ Ajouter une étape</button>
+    <div class="sheet-sticky btns"><button type="button" class="btn" data-act="rRecipeTab" data-v="${esc(k)}" data-tab="steps">Annuler</button><button class="btn primary" type="submit">Enregistrer les étapes</button></div></form>`);
+}
+function rStepRow(t="") {return `<div class="field r-step-edit" style="display:flex;gap:6px;align-items:flex-start;margin:8px 0"><textarea class="input" rows="3" style="flex:1;min-width:0" aria-label="Texte de l'étape">${esc(t)}</textarea><div style="display:flex;flex-direction:column;gap:4px"><button type="button" class="btn" data-act="rStepUp" aria-label="Monter">↑</button><button type="button" class="btn" data-act="rStepDown" aria-label="Descendre">↓</button><button type="button" class="btn" data-act="rStepDelete" aria-label="Supprimer">×</button></div></div>`;}
+// Enregistrer dans le moteur de recettes existant, sans toucher au repas planifié.
+document.addEventListener("submit",async e=>{
+  const f=e.target.closest("#rStepsForm");if(!f||!CK.ready)return;
+  e.preventDefault();const steps=[...f.querySelectorAll("textarea")].map(x=>x.value.trim()).filter(Boolean);
+  if(!steps.length&&!confirm("Enregistrer une recette sans aucune étape ?"))return;
+  const id=f.dataset.id,k=f.dataset.k;
+  try {
+    await cev(`(async()=>{const id=${JSON.stringify(id)},r=recipes[id];if(!r)throw Error("Recette introuvable");saveRecipe(id,{...r,steps:${JSON.stringify(steps.join("\n"))}});})()`);
+    toast("Étapes enregistrées localement ; synchronisation en cours.");rRecipeSheet(k,"steps");
+  }catch(err){console.error(err);alert("Impossible d'enregistrer les étapes.");}
+});
 // Édition ciblée des quantités de la recette, sans changer les emojis existants.
 function rQuantitiesSheet(k) {
   cev(`curWeek=${JSON.stringify(rWeek)}`);
@@ -380,7 +412,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
@@ -388,6 +420,22 @@ document.addEventListener("click", async e => {
     case "rPrefs": rPrefsSheet(); break;
     case "rSlot": mealSlotSheet(v); break;
     case "rRecipe": rRecipeSheet(v); break;
+    case "rRecipeTab": rRecipeSheet(v,b.dataset.tab); break;
+    case "rEditSteps": rEditStepsSheet(v); break;
+    case "rStepAdd": {const box=document.querySelector("#rStepsRows");if(box)box.insertAdjacentHTML("beforeend",rStepRow());break;}
+    case "rStepDelete": b.closest(".r-step-edit")?.remove();break;
+    case "rStepUp": {const row=b.closest(".r-step-edit");if(row?.previousElementSibling)row.parentElement.insertBefore(row,row.previousElementSibling);break;}
+    case "rStepDown": {const row=b.closest(".r-step-edit");if(row?.nextElementSibling)row.parentElement.insertBefore(row.nextElementSibling,row);break;}
+    case "rRecipeServ": {
+      const delta=Number(b.dataset.d)||0;
+      const n=cev(`(()=>{const s=${slotJs(v)};if(!s)return null;s.n=Math.max(1,Math.min(30,(s.n||menu.people||4)+${delta}));return s.n;})()`);
+      if(n!==null){carnetSave();rRecipeSheet(v);}break;
+    }
+    case "rRecipeFav": {
+      const x=cev(`(()=>{const s=${slotJs(v)},r=s&&recipes[s.id];if(!r)return null;return {id:s.id,recipe:{...r,fav:!r.fav}};})()`);
+      if(x){await cev(`saveRecipe(${JSON.stringify(x.id)},${JSON.stringify(x.recipe)})`);rRecipeSheet(v);}break;
+    }
+
     case "rCook": rCookStart(v); break;
     case "rCookNext": rCookMove(1); break;
     case "rCookPrev": rCookMove(-1); break;
