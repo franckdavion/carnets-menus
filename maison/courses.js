@@ -62,6 +62,39 @@ function cxMoveSheet(name, cur) {
 }
 const cxShort = d => { try { return new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); } catch (_) { return d; } };
 
+// Préférences d'affichage locales uniquement : ne modifient jamais les données de courses.
+// Icônes purement décoratives : les noms, l’ordre et les règles des rayons restent inchangés.
+function cxRayonIcon(name) {
+  const n = String(name || "").toLocaleLowerCase("fr");
+  if (/fruit|légume|legume/.test(n)) return "🥕";
+  if (/boucher|poisson|viande|charcut/.test(n)) return "🥩";
+  if (/crèmer|cremer|laitage|frais/.test(n)) return "🧀";
+  if (/épicer|epicer/.test(n)) return "🥫";
+  if (/surgel/.test(n)) return "❄️";
+  if (/hygi|maison|entretien/.test(n)) return "🧴";
+  if (/boulanger|pain/.test(n)) return "🥖";
+  if (/boisson/.test(n)) return "🥤";
+  return "📦";
+}
+// Affichage uniquement : réutiliser les emojis du catalogue, y compris les choix personnalisés.
+function cxProductEmoji(name) {
+  const label = String(name || "");
+  try {
+    const local = JSON.parse(localStorage.getItem("maisonnee-ingredient-emojis-v1") || "{}");
+    const key = window.IngredientEmoji?.normalize?.(label);
+    if (key && local[key]) return local[key];
+    if (typeof catData === "function") {
+      const C = catData();
+      const k = Object.keys(C.emoji || {}).find(x => window.IngredientEmoji?.normalize?.(x) === key);
+      if (k && C.emoji[k]) return C.emoji[k];
+    }
+  } catch (_) {}
+  return window.IngredientEmoji?.get(label) || "🛒";
+}
+
+const cxFoldStorageKey = "maisonnee_courses_rayons_ouverts_v1";
+let cxFoldState = (() => { try { return JSON.parse(sessionStorage.getItem(cxFoldStorageKey) || "{}"); } catch (_) { return {}; } })();
+function cxFoldSave() { try { sessionStorage.setItem(cxFoldStorageKey, JSON.stringify(cxFoldState)); } catch (_) {} }
 const shopViewBase = shopView;
 VIEWS.courses = function () {
   if (mode !== "cloud" || !isLinked()) return shopViewBase();
@@ -72,7 +105,7 @@ VIEWS.courses = function () {
   const tick = i => `<span class="box">${I.tick}</span>`;
   const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}">
       <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
-      <span class="nm"><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
+      <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
       ${i.on ? "" : ref.startsWith("k:") ? `<button type="button" class="cx-have" data-act="cxHave" data-v="${esc(i.key)}">J'ai déjà</button>` : `<button type="button" class="cx-x" data-act="cxRmX" data-v="${i.ix}" aria-label="Retirer ${esc(i.t)}">✕</button>`}
     </div>`;
@@ -100,13 +133,21 @@ VIEWS.courses = function () {
     <div class="btns" style="margin-top:8px"><button class="btn block" data-act="catOpen">🛍️ Catalogue · favoris, produits réguliers</button></div>`;
   if (cxUndo) out += `<div class="card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px"><span>Courses terminées.</span><button class="btn" data-act="cxFinishUndo">Annuler</button></div>`;
   if (D.xr.length) out += `<p class="group-h">Recettes ajoutées hors menu</p><div class="list">${D.xr.map(x => `<div class="cx-item"><span class="nm">${esc(x.name)}${x.dup ? `<span class="cx-from">déjà au menu validé : pas compté deux fois</span>` : ""}</span><span class="q">${x.n} pers.</span><button type="button" class="cx-x" data-act="cxRmR" data-v="${esc(x.id)}" aria-label="Retirer ${esc(x.name)}">✕</button></div>`).join("")}</div>`;
+  if (total) out += `<div class="cx-progress" role="status" aria-label="Progression des courses : ${done.length} sur ${total} articles achetés">
+    <div class="cx-progress-label"><strong>🛒 ${done.length} acheté${done.length > 1 ? "s" : ""}</strong><span>${nLeft} restant${nLeft > 1 ? "s" : ""} · ${total} au total</span></div>
+    <div class="cx-progress-track"><span style="width:${Math.round(done.length / total * 100)}%"></span></div>
+  </div>`;
   out += `<h2 class="cx-list-h" id="cxList">🛒 Liste de courses${total ? `<span>${nLeft ? nLeft + " à prendre" : "tout est pris"}${done.length ? " · " + done.length + " dans le caddie" : ""}</span>` : ""}</h2>`;
   if (!total) out += `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>${sel.length ? "Envoyez des repas de ces jours aux courses depuis Repas, ou ajoutez des articles ci-dessus." : "Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;
   if (todo.length + todoX.length) out += `<div class="btns" style="margin-top:14px;justify-content:space-between"><span class="muted small" style="align-self:center">Rangée par rayon · touchez un article pour changer son rayon</span><button class="linkbtn small" data-act="cxOrder">Ordre des rayons</button></div>`;
   for (const ry of cxOrder(D.order)) {
     const l = todo.filter(i => i.r === ry).sort((a, b) => a.n.localeCompare(b.n, "fr")), lx = todoX.filter(x => x.r === ry).sort((a, b) => a.t.localeCompare(b.t, "fr"));
     if (!l.length && !lx.length) continue;
-    out += `<div class="cx-rayon"><p class="group-h">${esc(ry)}</p>${l.length ? `<button type="button" class="linkbtn small" data-act="cxHaveRayon" data-v="${esc(ry)}">J'ai tout ce rayon</button>` : ""}</div><div class="list">${l.map(i => row(i, "k:" + i.key)).join("")}${lx.map(x => row(x, "x:" + x.ix)).join("")}</div>`;
+    const opened = cxFoldState[ry] !== false;
+    out += `<section class="cx-fold ${opened ? "is-open" : ""}" data-cx-rayon="${esc(ry)}">
+      <div class="cx-rayon cx-fold-head"><button type="button" class="cx-fold-toggle" data-act="cxFold" data-v="${esc(ry)}" aria-expanded="${opened}" aria-controls="cx-fold-${cxOrder(D.order).indexOf(ry)}"><span class="cx-rayon-icon" aria-hidden="true">${cxRayonIcon(ry)}</span><strong>${esc(ry)}</strong><span class="cx-fold-count">${l.length + lx.length} à prendre</span><span class="cx-fold-arrow" aria-hidden="true">⌄</span></button></div>
+      <div class="cx-fold-body" id="cx-fold-${cxOrder(D.order).indexOf(ry)}" ${opened ? "" : "hidden"}>${l.length ? `<div class="cx-fold-actions"><button type="button" class="linkbtn small" data-act="cxHaveRayon" data-v="${esc(ry)}">J'ai tout ce rayon</button></div>` : ""}<div class="list">${l.map(i => row(i, "k:" + i.key)).join("")}${lx.map(x => row(x, "x:" + x.ix)).join("")}</div></div>
+    </section>`;
   }
   if (total && !todo.length && !todoX.length) out += `<div class="empty" style="margin-top:16px"><strong>Tout est dans le caddie !</strong></div>`;
   if (done.length) {
@@ -147,17 +188,38 @@ function cxDaySheet(d, fresh) {
       ${x.inList ? `<button class="btn ghost" data-act="cxDsRemove">Retirer ce jour des courses</button>` : ""}</div>`);
   if (!fresh) $("#sheet").scrollTop = sc;
 }
-const CX_ACTS = ["cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxEmojiEdit", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
   switch (a) {
+    case "cxFold": {
+      cxFoldState[v] = cxFoldState[v] === false;
+      cxFoldSave();
+      const section = b.closest(".cx-fold"), body = section && section.querySelector(".cx-fold-body");
+      if (section && body) { const opened = cxFoldState[v]; section.classList.toggle("is-open", opened); body.hidden = !opened; b.setAttribute("aria-expanded", String(opened)); }
+      return;
+    }
     case "cxHaveClose": cxHaveOpen = false; break;
     case "cxMealLock": { const on = cev(`(()=>{const s=((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}];if(!s)return false;if(s.lock)delete s.lock;else s.lock=true;saveMenu();return !!s.lock;})()`);
       msg = on ? "Ajouté aux courses." : "Retiré des courses."; break; }
     case "cxMeal": rWeek = b.dataset.w; mealSlotSheet(v); return;
     case "cxRecipe": rWeek = b.dataset.w; rRecipeSheet(v); return;
+    case "cxEmojiEdit": {
+      const name = b.dataset.n;
+      if (window.IngredientEmoji?.pick) {
+        window.IngredientEmoji.pick(name, () => {
+          // Actualise uniquement les icônes visibles, sans recalculer ni toucher aux courses.
+          document.querySelectorAll('.cx-emoji-edit[data-n]').forEach(button => {
+            if (window.IngredientEmoji.normalize(button.dataset.n) !== window.IngredientEmoji.normalize(name)) return;
+            const icon = button.querySelector('.cx-ingredient-emoji');
+            if (icon) icon.textContent = cxProductEmoji(name);
+          });
+        });
+      }
+      return;
+    }
     case "cxMove": cxMoveSheet(b.dataset.n, b.dataset.r); return;
     case "cxMoveTo": cev(`(()=>{menu.rayonLearn=Object.assign({},menu.rayonLearn,{[${JSON.stringify(String(b.dataset.n).trim().toLowerCase())}]:${JSON.stringify(v)}});saveMenu();})()`); closeSheet(); msg = `Rangé dans « ${v} ».`; break;
     case "cxOrder": cxOrderDraft = cxOrder(cxData().order); cxOrderSheet(); return;

@@ -37,7 +37,7 @@ function catData() {
     return{cats,own:mine,builtin:DAILY.flatMap(x=>x[1]),hidden:(menu.dailyHidden||[]).filter(t=>!mine.includes(t)&&DAILY.some(([,its])=>its.includes(t))),inList:[...inList],fav:menu.dailyFav||[],freq:menu.dailyFreq||{},emoji:menu.dailyEmoji||{},snooze:menu.dailySnooze||{},no:menu.dailyFreqNo||[],
       buy:menu.buyLog||{},trips:(menu.trips||[]).map(t=>({d:t.d,got:(t.got||[]).map(g=>nk2(g.n))}))};})()`);
 }
-const catEmoji = (C, t, g) => C.emoji[t] || (PROD_EMOJI.find(([re]) => re.test(t)) || [0, CAT_EMOJI[g] || "🛒"])[1];
+const catEmoji = (C, t, g) => { const n = window.IngredientEmoji?.normalize?.(t) || String(t).toLowerCase(); const k = Object.keys(C.emoji || {}).find(x => (window.IngredientEmoji?.normalize?.(x) || x.toLowerCase()) === n); return (k && C.emoji[k]) || window.IngredientEmoji?.get(t) && window.IngredientEmoji.get(t) !== "🛒" && window.IngredientEmoji.get(t) || (PROD_EMOJI.find(([re]) => re.test(t)) || [0, CAT_EMOJI[g] || "🛒"])[1]; };
 // dates a product was bought: kept by the Carnet at « Courses terminées », plus the recent trips
 function buyDates(C, t) {
   const k = catNk(t), s = new Set(C.buy[k] || []);
@@ -119,7 +119,7 @@ function catProdSheet(t, g) {
   openSheet(t, `<form data-form="catProd" autocomplete="off">
     <label class="field" style="margin-top:6px"><span class="label">Nom</span><input class="input" name="name" value="${esc(t)}" maxlength="60" required></label>
     <div class="field"><span class="label">Emoji</span><div class="inline" style="gap:10px"><input class="input" name="emoji" id="catEm" value="${esc(em)}" maxlength="4" style="width:70px;text-align:center;font-size:24px;flex:none"><span class="muted small">ou touchez-en un :</span></div>
-      <div class="cat-empick">${sugg.map(x => `<button type="button" data-act="catEmojiPick" data-v="${x}" aria-pressed="${x === em}">${x}</button>`).join("")}</div></div>
+      <button type="button" class="btn" data-act="catEmojiCategories" data-v="${esc(t)}">🎨 Choisir par catégorie</button></div>
     <label class="field"><span class="label">Rayon</span><select class="input" name="cat">${cats.map(c => `<option ${c === g ? "selected" : ""}>${esc(c)}</option>`).join("")}</select></label>
     <label class="switch" style="margin-top:14px"><span><strong>⭐ Favori</strong><br><span class="muted small">en tête du catalogue</span></span><input type="checkbox" name="fav" ${fav ? "checked" : ""}></label>
     <div class="field"><span class="label">🔁 Produit régulier</span><div class="chips">${[[0, "Non"], ...CAT_FREQS].map(([d, l]) => `<button type="button" class="chip" data-act="catFreqPick" data-v="${d}" aria-pressed="${f === d}">${l}</button>`).join("")}</div>
@@ -163,13 +163,14 @@ const catAdd = t => cev(`(()=>{const t=${JSON.stringify(t)};if(inExtras(t)<0)men
 const catToggle = t => cev(`(()=>{const t=${JSON.stringify(t)},i=inExtras(t);if(i>=0){menu.extras=menu.extras.filter((x,j)=>j!==i);}else menu.extras=[...(menu.extras||[]),{t,done:false}];saveMenu();return i<0;})()`);
 const catSet = (field, key, val) => cev(`(()=>{const o=Object.assign({},menu[${JSON.stringify(field)}]);if(${JSON.stringify(val)}===null)delete o[${JSON.stringify(key)}];else o[${JSON.stringify(key)}]=${JSON.stringify(val)};menu[${JSON.stringify(field)}]=o;saveMenu();})()`);
 
-const CAT_ACTS = ["catFilter", "catEmojiPick", "catDel", "catDelYes", "catDelNo", "catUnhide", "catOpen", "catToggle", "catFav", "catProd", "catBack", "catNew", "catFreqPick", "catAdd", "catDueAll", "catSnooze", "catGuessYes", "catGuessNo"];
+const CAT_ACTS = ["catFilter", "catEmojiPick", "catEmojiCategories", "catDel", "catDelYes", "catDelNo", "catUnhide", "catOpen", "catToggle", "catFav", "catProd", "catBack", "catNew", "catFreqPick", "catAdd", "catDueAll", "catSnooze", "catGuessYes", "catGuessNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CAT_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   switch (a) {
     case "catOpen": catQ = ""; catF = ""; catSheet(); break;
     case "catFilter": catF = v; catQ = ""; catSheet(); break;
+    case "catEmojiCategories": { const name=sheetCtx.catT; window.IngredientEmoji?.pick(name,()=>{const em=window.IngredientEmoji.get(name);const field=$("#catEm");if(field)field.value=em;catSet("dailyEmoji",name,em);}); break; }
     case "catEmojiPick": { const i = $("#catEm"); if (i) i.value = v; b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); break; }
     case "catDel": catDelAsk = true; catProdSheet(sheetCtx.catT, sheetCtx.catG); $("#sheet").scrollTop = $("#sheet").scrollHeight; break;
     case "catDelNo": catDelAsk = false; catProdSheet(sheetCtx.catT, sheetCtx.catG); break;
