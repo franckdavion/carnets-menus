@@ -326,14 +326,3 @@ body:has(main.view-home) button.fab.v3-fab-in-grid svg{width:16px!important;heig
  body:has(main.view-home:not(.ultimate-classic)) .umod-link{min-height:65px!important;padding:4px 2px!important}
 }
 
-/* Version V3 — météo/éphéméride réunies, accueil épuré. */
-body:has(main.view-home) .ultimate-grid{display:block!important}
-body:has(main.view-home) .ultimate-today{display:grid!important;grid-template-columns:1fr 1fr!important;gap:18px!important;min-height:0!important;padding:16px 22px!important}
-body:has(main.view-home) .ultimate-today-weather{border-right:1px solid #68c5fa66;padding-right:16px}
-body:has(main.view-home) .ultimate-today-date{padding-left:4px}
-body:has(main.view-home) .ultimate-forecast-button,#ultimate-family-personalize{background:linear-gradient(145deg,#2874b2,#0c3a69);border:1px solid #7cdbff;color:white;border-radius:13px;padding:10px 15px;font-weight:700;box-shadow:0 0 14px #008eff77;cursor:pointer}
-body:has(main.view-home) .ultimate-forecast-button{margin-top:12px}
-body:has(main.view-home) #ultimate-header-controls .stack,body:has(main.view-home) #ultimate-header-controls [aria-label="Localisation"],body:has(main.view-home) #ultimate-header-controls .hh-name{display:none!important}
-body:has(main.view-home) button.fab[data-act="quickAdd"],body:has(main.view-home) button.fab.v3-fab-in-grid{display:none!important}
-body:has(main.view-home) .umod-heading .umod-edit{display:none}
-body:has(main.view-home) .umod-heading .umod-edit[aria-pressed=/* ==========================================================================   AJOUT : Plein écran adaptatif (100vw / 100vh) sans perturber le design   ========================================================================== */html, body {    width: 100%;    height: 100%;    margin: 0;    padding: 0;    overflow-x: hidden;    box-sizing: border-box;}.app-container, .carnet-container, .main-layout {    width: 100vw;    min-height: 100vh;    box-sizing: border-box;}
