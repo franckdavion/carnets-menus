@@ -416,7 +416,22 @@ document.addEventListener("click", async e => {
       const name=prompt("Nouveau nom de la recette :",data.name);
       if(name===null||!name.trim()||name.trim()===data.name)break;
       const updated=cev(`(()=>{const r=recipes[${JSON.stringify(data.id)}];if(!r)return null;return {...r,name:${JSON.stringify(name.trim())}}})()`);
-      if(updated)try{await cev(`saveRecipe(${JSON.stringify(data.id)},${JSON.stringify(updated)})`);carnetSave("Recette renommée");mealSlotSheet(v);}catch(err){console.error(err);alert("Enregistrement impossible.");}
+      if(updated)try{
+        await cev(`(async()=>{
+          const id=${JSON.stringify(data.id)},wanted=${JSON.stringify(name.trim())};
+          saveRecipe(id,{...recipes[id],name:wanted});
+          if(!cloudOn())throw Error("Connexion au carnet commun indisponible");
+          // Attendre une éventuelle synchronisation déjà en cours.
+          for(let i=0;i<40&&cloud.busy;i++)await new Promise(r=>setTimeout(r,250));
+          if(cloud.busy)throw Error("Synchronisation déjà en cours : réessayez");
+          await cloudPush();
+          if((cloud.lastErr||[]).length)throw Error(cloud.lastErr.join(" ; "));
+          const {data:remote,error}=await cloud.sb.from("recipes").select("name").eq("legacy_id",id).maybeSingle();
+          if(error)throw error;
+          if(!remote||remote.name!==wanted)throw Error("Le nouveau nom n’est pas confirmé dans Supabase");
+        })()`);
+        carnetSave("Recette renommée et synchronisée");mealSlotSheet(v);
+      }catch(err){console.error(err);alert("Renommage non confirmé dans le carnet commun : "+(err.message||err));}
       break;
     }
     case "rIngAdd": {
