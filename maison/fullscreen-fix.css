@@ -14,3 +14,16 @@
     display: none;
   }
 }
+
+/* Essai ciblé iOS : limiter le rebond de la page d’accueil uniquement.
+   Conserver le défilement normal, les modales et la position du bandeau V4. */
+@supports (-webkit-touch-callout: none) {
+  html:has(main.view-home),
+  body:has(main.view-home) {
+    overscroll-behavior-y: none !important;
+  }
+  body:has(main.view-home) #app,
+  body:has(main.view-home) main.view-home {
+    overscroll-behavior-y: none;
+  }
+}
