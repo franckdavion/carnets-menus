@@ -666,12 +666,53 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 .meal-side>span:first-child{font-weight:700;flex-shrink:0}.meal-side .btn{min-height:42px;padding:8px 12px;font-size:13px;white-space:normal}
 .meal-more{border-top:1px solid var(--line);padding-top:10px}.meal-more summary{cursor:pointer;font-size:13px}
 @media(max-width:390px){.meal-photo{width:60px;height:60px}.meal-actions .btn{font-size:12px}.meal-state{flex-wrap:wrap}.meal-state select{max-width:100%;width:100%}}
+
+/* Fiche repas 3D : uniquement la fenêtre de détail des repas. */
+.meal-redesign{gap:15px;margin:6px 0 18px}
+.meal-redesign .meal-top-card,.meal-redesign .meal-section-card{border:1px solid #2589d9;border-radius:20px;padding:16px;background:linear-gradient(145deg,rgba(17,75,137,.92),rgba(5,27,68,.97));box-shadow:inset 0 1px 0 #63baff55,0 0 17px #168cfc35;color:#f5faff;min-width:0}
+.meal-redesign .meal-hero{align-items:center;gap:17px}
+.meal-redesign .meal-photo{width:42%;height:auto;aspect-ratio:1.55;max-height:230px;object-fit:cover;border:1px solid #61c9ff;border-radius:17px;box-shadow:0 0 14px #0b9dff88}
+.meal-redesign .meal-no-photo{display:grid;place-items:center;font-size:54px;background:linear-gradient(135deg,#164a7c,#061a3a)}
+.meal-redesign .meal-hero-text{display:flex;flex-direction:column;gap:15px;flex:1;min-width:0}
+.meal-redesign .meal-name{font-size:clamp(18px,2.7vw,26px);line-height:1.24}
+.meal-redesign .meal-hero-actions{display:flex;flex-wrap:wrap;gap:9px}
+.meal-redesign .btn{border:1px solid #4bb8ff;border-radius:24px;background:linear-gradient(#1463a4,#07234f);box-shadow:0 0 10px #0b9dff99;color:#fff;min-height:42px}
+.meal-redesign .meal-favorite{color:#ffda61}
+.meal-redesign .meal-essentials{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:12px;margin-top:15px;padding-top:14px;border-top:1px solid #48aaff77;align-items:center}
+.meal-redesign .meal-persons,.meal-redesign .meal-state,.meal-redesign .meal-keep-area{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;padding:0;border:0;background:none;font-weight:700}
+.meal-redesign .meal-state select{width:100%;max-width:none;border:1px solid #38baff;background:#061a3e;color:white}
+.meal-redesign .meal-keep-label{font-size:12px;color:#b4edff}
+.meal-redesign .meal-section-card h3{font-size:17px;margin:0 0 12px;color:#fff}
+.meal-redesign .meal-compose-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.meal-redesign .meal-compose-item{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:12px;min-width:0;border:1px solid #2684cb;border-radius:15px;background:#073063aa}
+.meal-redesign .meal-compose-item span{overflow-wrap:anywhere;font-size:13px}
+.meal-redesign .meal-compose-item .btn{font-size:12px;white-space:normal;padding:8px 10px;width:100%}
+.meal-redesign .meal-ingredients-card .group-h{display:none}
+.meal-redesign .meal-ingredients-card .field{margin:0}
+.meal-redesign .meal-ingredients-card .card{background:#061b41;border:1px solid #2484c5;border-radius:13px;overflow:hidden}
+.meal-redesign .meal-options summary{cursor:pointer;font-weight:700;list-style-position:inside}
+.meal-redesign .meal-options .meal-actions{margin-top:14px}
+.meal-redesign .meal-shopping{margin-top:15px}
+@media(max-width:600px){.meal-redesign .meal-top-card,.meal-redesign .meal-section-card{padding:12px}.meal-redesign .meal-photo{width:38%;min-height:115px}.meal-redesign .meal-hero{gap:10px}.meal-redesign .meal-hero-actions .btn{font-size:11px;padding:7px 9px;min-height:36px}.meal-redesign .meal-essentials{grid-template-columns:1fr 1fr}.meal-redesign .meal-keep-area{grid-column:1/-1;flex-direction:row;justify-content:space-between}.meal-redesign .meal-compose-grid{grid-template-columns:1fr}.meal-redesign .meal-compose-item{gap:7px}.meal-redesign .meal-actions{grid-template-columns:1fr 1fr}}
+@media(max-width:390px){.meal-redesign .meal-hero{flex-direction:column;align-items:stretch}.meal-redesign .meal-photo{width:100%;max-height:175px}.meal-redesign .meal-hero-actions .btn{flex:1}}
 </style>
 <link rel="stylesheet" href="presences.css">
 <link rel="stylesheet" href="ultimate.css?v=iphone-portrait-2cols-hero-fixed-20261027">
 <link rel="stylesheet" href="design-stable.css?v=stable-3col-20261027-1">
 <link rel="stylesheet" href="responsive-final.css?v=20261027-final-1">
 <link rel="stylesheet" href="grille-remplie.css?v=20261027-fill-1">
+
+<style id="mz-cook-styles">
+.meal-cook-launch{background:linear-gradient(135deg,#06764f,#00a36d)!important;color:white!important;border-color:#52e7ac!important}
+.mz-cook-overlay{position:fixed;inset:0;z-index:2147483000;background:#061329;color:white;overflow:auto;overscroll-behavior:contain;padding:clamp(10px,2vw,28px);box-sizing:border-box}
+.mz-cook-overlay[hidden]{display:none!important}
+.mz-cook-shell{max-width:1600px;min-height:calc(100dvh - 56px);margin:auto;display:flex;flex-direction:column;gap:18px}
+.mz-cook-header,.mz-cook-list,.mz-cook-main{background:linear-gradient(145deg,#0c326a,#061a3c);border:1px solid #13a8ff;border-radius:24px;box-shadow:0 0 18px #008eff77;padding:20px}
+.mz-cook-header{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.mz-cook-header h2{margin:0;font-size:clamp(22px,3vw,34px)}.mz-cook-header strong{flex:1;min-width:180px}.mz-cook-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.mz-cook-layout{display:grid;grid-template-columns:minmax(220px,30%) minmax(0,1fr);gap:18px;flex:1}.mz-cook-list h3{margin-top:0}.mz-cook-step{display:flex;align-items:center;gap:12px;border:1px solid #1475b7;border-radius:14px;padding:12px;margin:8px 0;line-height:1.4}.mz-cook-step b{border-radius:50%;background:#155da4;min-width:32px;height:32px;display:grid;place-items:center}.mz-cook-step.active{border-color:#4ae4ff;background:#1765a8}.mz-cook-step.active b{background:#eabf17;color:#09244a}
+.mz-cook-main{display:flex;flex-direction:column;min-height:350px}.mz-cook-progress{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.mz-cook-progress progress{flex:1;min-width:130px;accent-color:#f6c92d;height:14px}.mz-cook-content{display:flex;align-items:center;gap:28px;flex:1;padding:20px 0}.mz-cook-content img{width:min(45%,420px);max-height:48vh;object-fit:cover;border-radius:18px}.mz-cook-content p{font-size:clamp(20px,2.5vw,30px);line-height:1.5;white-space:pre-line;overflow-wrap:anywhere}.mz-cook-main footer{display:flex;justify-content:space-between;gap:14px}
+@media(max-width:700px){.mz-cook-layout{grid-template-columns:1fr}.mz-cook-list{padding:12px}.mz-cook-step{display:none}.mz-cook-step.active{display:flex}.mz-cook-content{flex-direction:column;align-items:stretch}.mz-cook-content img{width:100%;max-height:30vh}.mz-cook-header{padding:14px}.mz-cook-main{padding:14px}}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -733,5 +774,6 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 <script src="ultimate-modules.js?v=explorer-sync-20261027"></script>
 <script src="ultimate.js"></script>
 <script src="v3-icons-and-add-position.js"></script>
+<script defer src="../navigation-retour.js?v=1"></script>
 </body>
 </html>
