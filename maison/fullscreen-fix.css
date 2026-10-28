@@ -1,0 +1,16 @@
+/* Maisonnée : correctif PWA iPhone limité au bandeau de l'accueil.
+   L'espace est placé sur le dashboard lui-même, pas sur le conteneur défilant.
+   Aucun changement des modules, de la navigation ou du scroll. */
+@media (display-mode: standalone) and (max-width: 768px) {
+  body:has(main.view-home) #ultimate-dashboard {
+    margin-top: 20px !important;
+  }
+  /* Conserver la suppression de la barre verticale validée en V2. */
+  html:has(main.view-home), body:has(main.view-home) {
+    scrollbar-width: none;
+  }
+  html:has(main.view-home)::-webkit-scrollbar,
+  body:has(main.view-home)::-webkit-scrollbar {
+    display: none;
+  }
+}
