@@ -163,31 +163,38 @@ function mealSlotSheet(k) {
   const ro = x.past;
   // the same meal redrawn after a tap (ingredient, people…): stay where you were in the window
   const dlg = $("#sheet"), same = dlg.open && ($("#sheetTitle") || {}).textContent === title, st = dlg.scrollTop, si = $("#sheetIn").scrollTop;
+  const favorite = !!cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`);
+  const photo = cj(`rPhotoSrc(${JSON.stringify(s.id)})||""`);
   openSheet(title, `
-    <p style="margin:8px 0 2px"><strong style="font-size:19px">${esc(x.name)}</strong></p>
-    <button class="linkbtn" data-act="rRecipe" data-v="${esc(k)}" style="margin:2px 0 4px">📖 Voir la recette</button>
-    <div class="btns" style="margin:10px 0;align-items:center;flex-wrap:wrap">
-      <button class="btn" data-act="rFav" data-v="${esc(k)}" aria-label="Ajouter ou retirer des favoris" aria-pressed="${!!cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`)}" style="color:#e6a900;font-weight:800">${cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`)?"★ Favorite":"☆ Ajouter aux favoris"}</button>
-      <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
-      <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
-    </div>
-    <label class="field"><span class="label">État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
-    ${x.kind ? `<p class="muted small" style="margin:0">${esc(x.kind)}</p>` : ""}
-    ${false ? "" : `<div class="r-status ${s.lock ? "shop" : s.keep ? "kept" : "prop"}">${s.lock
-        ? `<b>🛒 Dans la liste de courses</b><span>Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus.</span>`
-        : s.keep ? `<b>✓ Gardé</b><span>« Proposer ma semaine » ne le changera plus. Il n'est <u>pas encore</u> dans les courses : bouton « Ajouter aux courses » en bas.</span>`
-        : `<b>Proposé</b><span>Ce repas peut encore changer si vous relancez « Proposer ma semaine ». Il n'est pas dans les courses.</span>`}</div>
-    <p class="group-h" style="margin-top:16px">Changer le plat</p>
-    <div class="btns" style="margin-top:0">
-      <button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
-      <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button></div>
-    ${s.lock ? "" : `<p class="group-h" style="margin-top:16px">Le garder ?</p><div class="btns" style="margin-top:0"><button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé · toucher pour ne plus le garder" : "Garder ce choix"}</button></div>`}
-    <div class="inline" style="justify-content:space-between;margin-top:16px"><span>Personnes</span><span class="inline"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong style="min-width:2ch;text-align:center">${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></span></div>
-    <div class="field"><span class="label">Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
-    <div class="field"><span class="label">Dessert</span>${x.des ? `<span>${esc(x.des)}</span> <button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
+    <section class="meal-compact">
+      <div class="meal-hero">
+        ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="">` : ""}
+        <strong class="meal-name">${esc(x.name)}</strong>
+        <button type="button" class="meal-star" data-act="rFav" data-v="${esc(k)}" aria-label="${favorite ? "Retirer des favoris" : "Ajouter aux favoris"}" aria-pressed="${favorite}">${favorite ? "★" : "☆"}</button>
+      </div>
+      <div class="meal-actions">
+        <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button>
+        <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">✎ Modifier les ingrédients</button>
+        <button class="btn" data-act="rVariant" data-v="${esc(k)}">↻ Créer une variante</button>
+        <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">⇄ Changer le plat</button>
+      </div>
+      <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
+      ${x.kind ? `<p class="muted small" style="margin:5px 0">${esc(x.kind)}</p>` : ""}
+      <details class="meal-shopping" ${s.lock ? "" : "open"}>
+        <summary>${s.lock ? "🛒 Dans la liste de courses ✓" : s.keep ? "✓ Repas gardé" : "Repas proposé"}</summary>
+        <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p>
+      </details>
+      <div class="meal-persons"><span>Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
+      <div class="meal-side"><span>Entrée</span>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
+      <div class="meal-side"><span>Dessert</span>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
+      <details class="meal-more"><summary>Autres options du repas</summary>
+        <div class="btns"><button class="btn" data-act="rReroll" data-v="${esc(k)}">↻ Autre idée</button>
+        ${s.lock ? "" : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé · toucher pour ne plus le garder" : "Garder ce choix"}</button>`}</div>
+      </details>
+    </section>
     ${ingBlock(k, s)}
     <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>
-    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`}`);
+    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
   if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
 }
 // the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
