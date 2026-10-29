@@ -1172,6 +1172,21 @@ const inCats=(r,cs)=>catsOf(r).some(c=>cs.includes(c));
 const canMain=r=>inCats(r,MAIN_CATS);
 const DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
 const MEALS=[["midi","Midi"],["soir","Soir"]];
+// Quantités personnalisées : référence fixe au moment de la saisie.
+// Ne jamais inférer la référence d'une ancienne recette depuis son nombre actuel.
+function customIngredientQuantity(qt, slot){
+  const original=String(qt||"");
+  const base=Number(slot&&slot.ingCustomPeople), target=Number(slot&&slot.n);
+  if(!(base>0)||!(target>0)||base===target)return original;
+  const m=original.match(/^(\s*)(\d+(?:[.,]\d+)?|\d+\s*\/\s*\d+)(\s*.*)$/);
+  if(!m)return original;
+  let number;
+  if(m[2].includes("/")){const parts=m[2].split("/").map(x=>Number(x.trim()));if(parts.length!==2||!parts[1])return original;number=parts[0]/parts[1];}
+  else number=Number(m[2].replace(",","."));
+  if(!Number.isFinite(number))return original;
+  const scaled=Math.round(number*target/base*100)/100;
+  return m[1]+String(scaled).replace(".",",")+m[3];
+}
 const slotKey=(d,m)=>d+"|"+m;
 const SLOT_ORDER=DAYS.flatMap(d=>MEALS.map(([m])=>slotKey(d,m)));
 const slotLabel=k=>k.replace("|"," ");
@@ -1338,7 +1353,7 @@ function shopping(all){
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
     if(Array.isArray(sl.ingCustom)){
       for(const i of sl.ingCustom){if(!i.n||sk&&sk.includes(i.key))continue;
-        const match=String(i.qt||"").trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+        const match=String(customIngredientQuantity(i.qt,sl)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
         const raw=match?match[1].trim():"",unit=match?match[2].trim():"";
         const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u;
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:"Divers",from:[]};
@@ -4621,7 +4636,7 @@ document.addEventListener("click",e=>{
       if(Array.isArray(slot.ingCustom)){
         for(const ing of slot.ingCustom){
           if(!ing.n||(slot.noIng||[]).includes(ing.key))continue;
-          const match=String(ing.qt||"").trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+          const match=String(customIngredientQuantity(ing.qt,slot)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
           const unit=match?match[2].trim():"";
           keys.push(norm(ing.n)+"|"+toBase(match?match[1].trim():"",unit)[1]);
         }
