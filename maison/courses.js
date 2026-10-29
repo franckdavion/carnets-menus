@@ -311,3 +311,14 @@ document.addEventListener("click", e => {
   if (b.dataset.act === "cxJump") cxGoList(true);
   else { window.scrollTo({ top: 0, behavior: "smooth" }); LS.set("mz_cx_inlist", false); }
 });
+
+// V9.4: the same Carnet engine detects completed meals; Maisonnée displays the dialog.
+window.addEventListener("message", e => {
+  if(e.origin!==location.origin||!CK.frame||e.source!==CK.frame.contentWindow)return;
+  const data=e.data;
+  if(!data||data.type!=="maisonnee-meals-shopping-complete"||!Array.isArray(data.ids))return;
+  if(window.confirm(data.msg)){
+    cev(`window.maisonneeConfirmShoppingMeals(${JSON.stringify(data.ids)})`);
+    if(typeof softRender==="function")softRender();
+  }
+});
