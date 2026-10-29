@@ -4,7 +4,7 @@ const city='Doullens',lat=50.001,lon=2.345;let meteo=null;
 const date=()=>new Intl.DateTimeFormat('fr-FR',{dateStyle:'full'}).format(new Date());
 // Éphéméride : données indépendantes de la météo et de la navigation.
 const ephemeride={saint:'',evenement:''};
-const saintsConnus={'01-01':'Marie, Mère de Dieu','02-14':'Valentin','03-19':'Joseph','05-01':'Joseph artisan','06-24':'Jean-Baptiste','07-14':'Camille','08-15':'Assomption','09-29':'Michel','10-27':'Émeline','10-28':'Simon et Jude','10-31':'Quentin','11-01':'Toussaint','11-11':'Martin','12-06':'Nicolas','12-25':'Noël'};
+const saintsConnus={'01-01':'Marie, Mère de Dieu','02-14':'Valentin','03-19':'Joseph','05-01':'Joseph artisan','06-24':'Jean-Baptiste','07-14':'Camille','08-15':'Assomption','09-29':'Michel','10-27':'Émeline','10-28':'Simon et Jude','10-29':'Narcisse','10-30':'Bienvenue','10-31':'Quentin','11-01':'Toussaint','11-11':'Martin','12-06':'Nicolas','12-25':'Noël'};
 const evenementsConnus={'10-28':'1886 : inauguration de la statue de la Liberté à New York.'};
 function jourAnnee(d){const debut=Date.UTC(d.getFullYear(),0,1),jour=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());return Math.floor((jour-debut)/86400000)+1}
 function texteSur(s){return String(s||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()}
@@ -12,10 +12,13 @@ async function chargerEphemeride(){
  const now=new Date(),key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
  ephemeride.saint=saintsConnus[key]||'';
  ephemeride.evenement=evenementsConnus[key]||'';
+ // Cache quotidien : conserver les dernières informations valides pour cette date.
+ try{const saved=JSON.parse(localStorage.getItem('mn_ephemeride_'+key)||'null');if(saved){ephemeride.saint ||= saved.saint||'';ephemeride.evenement ||= saved.evenement||''}}catch(e){}
  // Wikipédia fournit des événements datés, sans modifier les autres modules.
  try{const r=await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/${now.getMonth()+1}/${now.getDate()}`,{headers:{Accept:'application/json'}});if(r.ok){const data=await r.json();const events=(data.events||[]).filter(x=>x.year&&x.text);if(events.length){const e=events.find(x=>x.year>=1800&&x.year<=2000)||events[0];ephemeride.evenement=`${e.year} : ${texteSur(e.text)}`.slice(0,145)}}}catch(e){}
  // API du calendrier des prénoms : si indisponible, ne jamais inventer de saint.
  if(!ephemeride.saint){try{const r=await fetch('https://nameday.abalin.net/api/V2/today?country=fr');if(r.ok){const data=await r.json();const value=data?.data?.namedays?.fr||data?.namedays?.fr;if(typeof value==='string')ephemeride.saint=texteSur(value)}}catch(e){}}
+ try{if(ephemeride.saint||ephemeride.evenement)localStorage.setItem('mn_ephemeride_'+key,JSON.stringify(ephemeride))}catch(e){}
  render();
 }
 
@@ -59,6 +62,6 @@ function integrateHeader(main){
   header.classList.add('ultimate-header-moved');
 }
 async function load(){try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset&timezone=Europe%2FParis&forecast_days=7`;const r=await fetch(u);if(!r.ok)throw Error('weather');meteo=await r.json()}catch(e){meteo=null}render()}
-function init(){const app=document.querySelector('#app');if(!app)return;new MutationObserver(()=>{if(document.querySelector('main.view-home')&&!document.querySelector('#ultimate-dashboard'))render()}).observe(app,{childList:true});render();load();chargerEphemeride();setInterval(load,1800000);setInterval(()=>{const d=new Date();if(d.getHours()===0)chargerEphemeride()},60000)}
+function init(){const app=document.querySelector('#app');if(!app)return;new MutationObserver(()=>{if(document.querySelector('main.view-home')&&!document.querySelector('#ultimate-dashboard'))render()}).observe(app,{childList:true});render();load();chargerEphemeride();setInterval(load,1800000);let lastDay=new Date().toDateString();setInterval(()=>{const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride();load()}},60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride()}load()}})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
