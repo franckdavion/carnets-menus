@@ -79,6 +79,14 @@ function shopIncludeWeek() {
 
 /* ---------- reading the carnet ---------- */
 const MEAL_STATES = ["Proposé", "Gardé", "En courses", "Courses faites", "Terminé"];
+// Coefficient de portions pour l’interface Maisonnée.
+// Le Carnet possède sa propre fonction dans son iframe : elle n’est pas visible
+// depuis cette page. Sans cette définition, ouvrir une fiche repas déclenche
+// ReferenceError: mealPortionFactor is not defined (Repas et Courses).
+function mealPortionFactor(slot) {
+  const v = Number(slot && slot.portionMultiplier);
+  return Number.isFinite(v) && v >= 0.25 && v <= 4 ? v : 1;
+}
 function mealState(s) { return s && MEAL_STATES.includes(s.mealState) ? s.mealState : s && s.lock ? "En courses" : s && s.keep ? "Gardé" : "Proposé"; }
 function mealBadgeClass(st) { return ({"Proposé":"proposed","Gardé":"saved","En courses":"shopping","Courses faites":"purchased","Terminé":"completed"})[st] || "proposed"; }
 function mealBadgeLabel(st) { return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Courses faites","Terminé":"⚑ Terminé"})[st] || "Proposé"; }
