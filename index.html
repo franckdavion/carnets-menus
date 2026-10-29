@@ -1268,6 +1268,16 @@ function selectedShopDates(){
   const all=shopDates(), keys=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
   return all.filter(x=>keys.includes(x.key));
 }
+// V9.1 : les jours affichés sont indépendants des jours servant au calcul des courses.
+function visibleShopDates(){
+  const all=shopDates(), keys=Array.isArray(menu.shopViewDays)?menu.shopViewDays:defaultShopKeys(all);
+  return all.filter(x=>keys.includes(x.key));
+}
+function setVisibleShopDays(keys){
+  menu.shopViewDays=[...new Set(keys)];
+  render();saveMenu();
+}
+
 const dayShort=x=>x.dn.slice(0,3)+". "+x.d.getDate();
 /* "j'en ai déjà": hidden from the list until the last chosen shopping day has passed */
 function isHave(i){const v=(menu.have||{})[i.key];return !!v&&v>=ymd(new Date());}
@@ -1785,7 +1795,7 @@ function shopSnap(){return{type:"shop",before:JSON.parse(J({bought:menu.bought||
 function eraseItem(i){const until=haveUntil(),today=ymd(new Date());menu.bought=Object.assign({},menu.bought);const b=menu.bought[i.key];
   menu.bought[i.key]={q:(b&&b.until>=today?b.q:0)+i.q,until:b&&b.until>until?b.until:until};if(menu.checked)delete menu.checked[i.key];}
 function renderShop(items,extras,ids){
-  const all=shopDates(), sel=selectedShopDates(), selK=sel.map(x=>x.key);
+  const all=shopDates(), sel=visibleShopDates(), selK=sel.map(x=>x.key);
   const meals=sel.reduce((a,x)=>a+x.locked,0), unlocked=sel.reduce((a,x)=>a+x.n-x.locked,0);
   $("#shopDays").innerHTML=all.length?`<span class="label">Courses pour</span><div class="dchips">${all.map(x=>{const on=selK.includes(x.key);return`<span class="dchip${on?" on":""}"><button type="button" data-act="shopDay" data-d="${x.key}" aria-pressed="${on}">${on?"✓ "+esc(dayShort(x)):esc(dayShort(x))+` · ${x.n} repas`}</button></span>`;}).join("")}</div>
     <div class="row" style="gap:14px"><button type="button" class="link" data-act="shopDaysAll">Tous les jours</button><button type="button" class="link" data-act="shopDaysNone">Aucun</button></div>${shopPlanHtml(sel)}`
@@ -3051,7 +3061,7 @@ document.addEventListener("click",e=>{
   else if(a==="sideToggle"){toggleSide(b.dataset.t);render();renderSide();saveMenu(300);}
   else if(a==="sideForget"){const t=b.dataset.t;menu.sides=(menu.sides||[]).filter(x=>x!==t);render();renderSide();saveMenu();}
   else if(a==="rmSide"){removePart(b.dataset.k,"extra",b.dataset.i);}
-  else if(a==="shopDay")openDaySheet(b.dataset.d);
+  else if(a==="shopDay"){const keys=visibleShopDates().map(x=>x.key),day=b.dataset.d;setVisibleShopDays(keys.includes(day)?keys.filter(x=>x!==day):[...keys,day]);}
   else if(a==="dsTog"){daySel[b.dataset.k]=daySel[b.dataset.k]===false;renderDaySheet();}
   else if(a==="dsSee"){const w=b.dataset.w;$("#daySheet").hidden=true;if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}slotK=b.dataset.k;renderSlotSheet();$("#slotSheet").hidden=false;}
   else if(a==="dsApply"||a==="dsRemove"){const r=dayApply(a==="dsApply");$("#daySheet").hidden=true;render();saveMenu(300);toast(r);}
@@ -3071,8 +3081,8 @@ document.addEventListener("click",e=>{
   else if(a==="lockNo"){lockOrigN.forEach(({t,n})=>{const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)s.n=n;});lockOrigN=[];lockPend=[];lockEdit=false;$("#lockSheet").hidden=true;render();}
   else if(a==="lockN"){const t=lockPend[Number(b.dataset.i)],s=t&&((menu.weeks||{})[t.w]||{})[t.k];if(s){s.n=Math.max(1,Math.min(50,s.n+Number(b.dataset.d)));lockPreview(lockPend,lockEdit,true);}}
   else if(a==="lockUndo"){for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)delete s.lock;}lockPend=[];lockItems=[];lockEdit=false;lockOrigN=[];$("#lockSheet").hidden=true;render();saveMenu();toast("Retiré des courses : ses ingrédients sortent de la liste");}
-  else if(a==="shopDaysAll"){const all=shopDates();menu.shopDays=all.map(x=>x.key);for(const x of all)for(const[m]of MEALS){const sl=x.wk[slotKey(x.dn,m)];if(sl&&recipes[sl.id])sl.lock=true;}render();saveMenu();toast("Tous les repas prévus sont dans les courses");}
-  else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
+  else if(a==="shopDaysAll"){setVisibleShopDays(shopDates().map(x=>x.key));}
+  else if(a==="shopDaysNone"){setVisibleShopDays([]);}
   else if(a==="haveRayon"){const ry=b.dataset.r,u=haveUntil();menu.have=Object.assign({},menu.have);
     shopping().filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).forEach(i=>{menu.have[i.key]=u;});
     render();saveMenu(300);toast("Rayon « "+ry+" » retiré : vous avez déjà tout");}
