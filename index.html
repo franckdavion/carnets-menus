@@ -4228,12 +4228,12 @@ async function sbc(){if(cloud.sb)return cloud.sb;const S=await loadSb();cloud.sb
 const cloudOn=()=>!!(cloud.user&&cloud.profile&&cloud.profile.status==="active");
 async function cloudInit(){if(!LS.get("cm_sb_auth",null)&&!localStorage.getItem("cm_sb_auth"))return; // never signed in: nothing to load
   try{const sb=await sbc();const{data}=await sb.auth.getSession();await cloudSession(data.session);sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT"||ev==="SIGNED_IN")cloudSession(ses);});}catch(e){}}
-async function cloudSession(ses){cloud.user=ses&&ses.user||null;cloud.profile=null;cloud.admin=false;
+async function cloudSession(ses){if(typeof cm96StopRealtime==="function")cm96StopRealtime();cloud.user=ses&&ses.user||null;cloud.profile=null;cloud.admin=false;
   if(cloud.user){try{const{data}=await cloud.sb.from("profiles").select("*").eq("id",cloud.user.id).single();cloud.profile=data||null;cloud.admin=!!(data&&data.role==="admin"&&data.status==="active");
       cloud.sb.from("profiles").update({last_seen:new Date().toISOString()}).eq("id",cloud.user.id).then(()=>{});}catch(e){}
     // Maisonnée: every member of the household works on the same carnet (the one linked to the household)
     cloud.owner=null;try{const{data:o,error:oe}=await cloud.sb.rpc("shared_carnet_owner");if(!oe&&o)cloud.owner=o;}catch(e){}}
-  setAcctLine();if(!$("#acctSheet").hidden)renderAcct();if(cloudOn())cloudSync();}
+  setAcctLine();if(!$("#acctSheet").hidden)renderAcct();if(cloudOn()){await cloudSync();cm96StartRealtime();}}
 // tools only for the administrator's own setup (GitHub sync, Google Agenda): hidden for the other members
 function applyRoleUi(){const isAdmin=!!cloud.admin||(!cloud.user&&!!sync),showSync=!!sync||!!cloud.admin;
   const r=$("#rowSync");if(r)r.hidden=!showSync;document.querySelectorAll(".admin-only").forEach(el=>el.hidden=!isAdmin);}
@@ -4265,7 +4265,7 @@ async function acctSubmit(){const mail=$("#ac-mail").value.trim(),pass=$("#ac-pa
     else{const{data,error}=await sb.auth.signInWithPassword({email:mail,password:pass});if(error)throw error;await cloudSession(data.session);}
     cloud.msg="";sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT")cloudSession(null);});}
   catch(e){m.textContent=/Invalid login/i.test(e.message||"")?"E-mail ou mot de passe incorrect.":/confirm/i.test(e.message||"")?"Confirmez d'abord votre e-mail (lien reçu par mail).":/registered|exists/i.test(e.message||"")?"Ce compte existe déjà : connectez-vous.":"Échec : "+(e.message||"réseau ?");}}
-async function cloudSignOut(){try{await cloud.sb.auth.signOut();}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
+async function cloudSignOut(){cm96StopRealtime();try{await cloud.sb.auth.signOut();}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
 async function savePseudo(){const v=$("#ac-pseudo2").value.trim();if(v.length<2)return;const{error}=await cloud.sb.from("profiles").update({pseudo:v}).eq("id",cloud.user.id);if(error){toast("Pseudo non enregistré");return;}cloud.profile.pseudo=v;setAcctLine();toast("Pseudo enregistré");}
 // what of a recipe is shared (in the common book) and what stays private (favourite, ratings, own photo…)
 const sharedOf=r=>{const o={};SHARED_F.forEach(k=>{if(r[k]!==undefined)o[k]=r[k];});return o;};
@@ -4348,6 +4348,45 @@ function applyRemoteState(remote){
   if(chg)LS.set("cm_recipes",recipes);
   const po={};for(const id in mp)if(!recipes[id])po[id]=mp[id];LS.set("cm_priv_other",po);
 }
+/* V9.6 — Réception rapide des changements du carnet partagé.
+   Le canal ne transporte pas les courses : il déclenche une relecture du serveur.
+   Le contrôle périodique existant reste le repli si Realtime n'est pas activé. */
+let cm96Channel=null,cm96Timer=null,cm96Syncing=false,cm96Pending=false;
+function cm96StopRealtime(){
+  clearTimeout(cm96Timer);cm96Timer=null;cm96Pending=false;
+  if(cm96Channel&&cloud.sb){try{cloud.sb.removeChannel(cm96Channel);}catch(e){}}
+  cm96Channel=null;
+}
+function cm96StartRealtime(){
+  cm96StopRealtime();
+  if(!cloudOn()||!cloud.sb)return;
+  const owner=stateUid();
+  cm96Channel=cloud.sb.channel('cm-courses-v96-'+owner)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'user_state',filter:'user_id=eq.'+owner},event=>{
+      const at=event.new&&event.new.updated_at;
+      if(at&&at===stateSeen)return; // notre propre écriture ou déjà traitée
+      cm96Pending=true;
+      if(document.visibilityState==='visible')cm96Schedule();
+    }).subscribe();
+}
+function cm96Schedule(){
+  if(cm96Timer||!cm96Pending||!cloudOn()||document.visibilityState!=='visible')return;
+  cm96Timer=setTimeout(async()=>{
+    cm96Timer=null;
+    if(cm96Syncing||cloud.busy){cm96Schedule();return;}
+    cm96Pending=false;cm96Syncing=true;
+    try{
+      const before=new Set(shopping().filter(x=>!menu.checked[x.key]).map(x=>x.key));
+      await cloudSync();
+      const added=shopping().filter(x=>!menu.checked[x.key]&&!before.has(x.key));
+      if(added.length){
+        toast(added.length+' nouvel'+(added.length>1?'s':'')+' article'+(added.length>1?'s':'')+' dans les courses');
+        try{if(window.parent!==window)window.parent.postMessage({type:'cm-courses-v96-new',count:added.length},location.origin);}catch(e){}
+      }
+    }catch(e){}finally{cm96Syncing=false;if(cm96Pending)cm96Schedule();}
+  },450);
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cm96Pending)cm96Schedule();});
 // the others' changes arrive every minute while the carnet is open
 // inside Maisonnée (hidden copy): only while its Repas page is open, so two copies never work at once
 const bgIdle=()=>{try{return window.frameElement&&!(window.parent&&window.parent.mzRepasActive);}catch(e){return false;}};
