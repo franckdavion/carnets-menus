@@ -180,6 +180,7 @@ function mealSlotSheet(k) {
         </div>
         <div class="meal-essentials">
           <div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
+          <div class="meal-persons" style="flex-wrap:wrap;gap:7px"><span>🍽️ Portions</span><button class="btn" data-act="rPortion" data-v="${esc(k)}" data-f="1" style="border-color:${mealPortionFactor(s)===1?'#4de6a2':''}">Normale ×1</button><button class="btn" data-act="rPortion" data-v="${esc(k)}" data-f="1.5" style="border-color:${mealPortionFactor(s)===1.5?'#4de6a2':''}">Généreuse ×1,5</button><button class="btn" data-act="rPortionCustom" data-v="${esc(k)}">Personnalisée (${String(mealPortionFactor(s)).replace('.',',')}×)</button></div>
           <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
           <div class="meal-keep-area"><span>Garder ce choix</span>${s.lock ? `<span class="meal-keep-label">✓ Dans les courses</span>` : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder"}</button>`}</div>
         </div>
@@ -207,11 +208,11 @@ function mealSlotSheet(k) {
 // the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
 function slotIngredients(k) {
   return cj(`(()=>{const s=${slotJs(k)};if(!s)return[];const acc={},skip=Array.isArray(s.noIng)?s.noIng:[];
-    const add=(rid,role)=>{const r=recipes[rid];if(!r)return;const n=(s.n||menu.people||4)*portionFactor(r,role),f=n/(r.serves||4);
+    const add=(rid,role)=>{const r=recipes[rid];if(!r)return;const n=(s.n||menu.people||4)*mealPortionFactor(s),f=n/(r.serves||4);
       for(const i of r.ing||[]){if(!i.n)continue;const[q,u]=toBase(i.q,i.u),key=norm(i.n)+"|"+u;
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0};acc[key].q+=q*ingMult(r,i,f*(r.serves||4));}};
     add(s.id,"main");if(s.entree)add(s.entree,"entree");if(s.dessert)add(s.dessert,"dessert");
-    if(Array.isArray(s.ingCustom))return s.ingCustom.map(i=>({key:i.key,n:i.n,qt:typeof customIngredientQuantity==="function"?customIngredientQuantity(i.qt,s):i.qt||"",on:!skip.includes(i.key)}));
+    if(Array.isArray(s.ingCustom))return s.ingCustom.map(i=>({key:i.key,n:i.n,qt:typeof customIngredientQuantity==="function"?mealCustomQuantity(i.qt,s):i.qt||"",on:!skip.includes(i.key)}));
     return Object.values(acc).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",on:!skip.includes(i.key)}));})()`);
 }
 function rFriendlyQty(qt){
@@ -263,8 +264,8 @@ function rRecipeSheet(k, tab) {
   if (tab) rRecipeTab = tab;
   cev(`curWeek=${JSON.stringify(rWeek)}`);
   const R = cj(`(()=>{const s=${slotJs(k)};const r=s&&recipes[s.id];if(!r)return null;
-    const n=s.n||menu.people||4,f=n/(r.serves||4);
-    const ing=Array.isArray(s.ingCustom)?s.ingCustom.filter(i=>i.n).map(i=>({n:i.n.trim(),qt:typeof customIngredientQuantity==="function"?customIngredientQuantity(i.qt,s):i.qt||""})):(r.ing||[]).filter(i=>i.n).map(i=>{const[q,u]=toBase(i.q,i.u);const qq=q*ingMult(r,i,f*(r.serves||4));return{n:i.n.trim(),qt:q?fmt(qq,u)||"":""};});
+    const n=(s.n||menu.people||4)*mealPortionFactor(s),f=n/(r.serves||4);
+    const ing=Array.isArray(s.ingCustom)?s.ingCustom.filter(i=>i.n).map(i=>({n:i.n.trim(),qt:typeof customIngredientQuantity==="function"?mealCustomQuantity(i.qt,s):i.qt||""})):(r.ing||[]).filter(i=>i.n).map(i=>{const[q,u]=toBase(i.q,i.u);const qq=q*ingMult(r,i,f*(r.serves||4));return{n:i.n.trim(),qt:q?fmt(qq,u)||"":""};});
     let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){steps=String(r.steps||"").split("\\n").filter(Boolean);}
     steps=steps.map(x=>typeof x==="string"?x:(x&&(x.t||x.text))||"").filter(Boolean);
     return{id:s.id,name:r.name,ph:rPhotoSrc(s.id)||"",time:r.time||0,n,ing,steps,fav:!!r.fav,
@@ -440,9 +441,15 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
+    case "rPortion": case "rPortionCustom": {
+      let f=Number(b.dataset.f);
+      if(act==="rPortionCustom"){const old=cj(`(()=>{const s=${slotJs(v)};return mealPortionFactor(s);})()`);const input=prompt("Coefficient de portion pour ce repas (0,25 à 4)",String(old).replace('.',','));if(input===null)break;f=Number(input.replace(',','.'));}
+      if(!Number.isFinite(f)||f<0.25||f>4){alert("Coefficient entre 0,25 et 4 requis");break;}
+      cev(`(()=>{const s=${slotJs(v)};if(s)s.portionMultiplier=${f};})()`);carnetSave();mealSlotSheet(v);break;
+    }
     case "rWeek": rWeek = addDays(rWeek, +v); render(); break;
     case "rPropose": rProposeSheet(); break;
     case "rPrefs": rPrefsSheet(); break;
