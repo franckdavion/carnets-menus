@@ -188,7 +188,7 @@ function mealSlotSheet(k) {
         </div>
         <div class="meal-essentials">
           <div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
-          <div class="meal-persons" style="flex-wrap:wrap;gap:7px"><span>🍽️ Portions</span><button class="btn" data-act="rPortion" data-v="${esc(k)}" data-f="1" style="border-color:${mealPortionFactor(s)===1?'#4de6a2':''}">Normale ×1</button><button class="btn" data-act="rPortion" data-v="${esc(k)}" data-f="1.5" style="border-color:${mealPortionFactor(s)===1.5?'#4de6a2':''}">Généreuse ×1,5</button><button class="btn" data-act="rPortionCustom" data-v="${esc(k)}">Personnalisée (${String(mealPortionFactor(s)).replace('.',',')}×)</button></div>
+          <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label>
           <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
           <div class="meal-keep-area"><span>Garder ce choix</span>${s.lock ? `<span class="meal-keep-label">✓ Dans les courses</span>` : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder"}</button>`}</div>
         </div>
@@ -667,6 +667,23 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // start loading the carnet early, so Repas opens quickly
 setTimeout(() => { if (mode === "cloud" && screen === "app") carnetBoot(); }, 2500);
 if (view === "repas") render();
+
+// Sélecteur compact des portions : même donnée et même calcul que les anciens boutons.
+document.addEventListener("change", e => {
+  const el=e.target.closest("select[data-meal-portion]"); if(!el || !CK.ready) return;
+  const k=el.dataset.mealPortion;
+  let f=Number(el.value);
+  if(el.value==="custom") {
+    const old=cj(`(()=>{const s=${slotJs(k)};return mealPortionFactor(s);})()`);
+    const input=prompt("Coefficient de portion pour ce repas (0,25 à 4)",String(old).replace('.',','));
+    if(input===null){mealSlotSheet(k);return;}
+    f=Number(input.replace(',','.'));
+  }
+  if(!Number.isFinite(f)||f<0.25||f>4){alert("Coefficient entre 0,25 et 4 requis");mealSlotSheet(k);return;}
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  cev(`(()=>{const s=${slotJs(k)};if(s)s.portionMultiplier=${f};})()`);
+  carnetSave();mealSlotSheet(k);
+});
 
 // États explicites conservés dans le carnet commun et synchronisés par le pont existant.
 document.addEventListener("change", e => {
