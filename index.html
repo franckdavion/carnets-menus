@@ -1357,6 +1357,20 @@ function shopping(all){
   return all?list:list.filter(i=>!isHave(i));
 }
 
+/* V9.5 — diagnostic non destructif des doublons possibles.
+   Ne fusionne jamais des articles, ne modifie ni quantités ni achats. */
+function shoppingDuplicateWarnings(){
+  const items=shopping(true), groups=new Map();
+  const similar=n=>norm(n).normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[’']/g,"'").replace(/\s+/g," ").replace(/s\b/g,"").trim();
+  for(const i of items){
+    const key=similar(i.n)+"|"+i.u;
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(i);
+  }
+  return [...groups.values()].filter(g=>g.length>1)
+    .map(g=>g.map(i=>i.n+(i.u?" ("+i.u+")":"")));
+}
 /* ---------- storage (on this phone) ---------- */
 function saveMenu(){
   try{localStorage.setItem("cm_menu",JSON.stringify(menu));}
