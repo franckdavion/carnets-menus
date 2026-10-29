@@ -103,7 +103,7 @@ VIEWS.courses = function () {
   if (!CK.ready) return `<div class="empty"><strong>Chargement de la liste du Carnet…</strong>Quelques secondes la première fois.</div>`;
   let D; try { D = cxData(); } catch (e) { return shopViewBase(); }
   const tick = i => `<span class="box">${I.tick}</span>`;
-  const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}">
+  const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}" ${ref.startsWith("x:") ? `data-mz-shop-name="${esc(String(i.t || "").trim().toLocaleLowerCase("fr"))}"` : ""}>
       <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
       <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
@@ -333,3 +333,32 @@ window.addEventListener('message', function(event){
     try{softRender();}catch(e){}
   }
 });
+
+/* V9.8 : navigation vers les articles reçus, sans toucher au moteur des courses. */
+function mzFocusCourseItems() {
+  if (view !== 'courses') return;
+  const items = window.mzCourseTargets || [];
+  if (!items.length) return;
+  const rows = [...document.querySelectorAll('[data-mz-shop-name]')];
+  const names = items.map(x => String(x.name || '').trim().toLocaleLowerCase('fr'));
+  const matches = rows.filter(el => names.includes(el.getAttribute('data-mz-shop-name')));
+  if (matches.length) {
+    const first = matches[0];
+    const fold = first.closest('.cx-fold');
+    if (fold) {
+      fold.classList.add('is-open');
+      const body = fold.querySelector('.cx-fold-body'); if (body) body.hidden = false;
+      const toggle = fold.querySelector('.cx-fold-toggle'); if (toggle) toggle.setAttribute('aria-expanded','true');
+    }
+    matches.forEach(el => { el.style.outline = '2px solid #38bdf8'; el.style.outlineOffset = '2px'; el.style.borderRadius = '12px'; setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 9000); });
+    first.scrollIntoView({behavior:'smooth',block:'center'});
+  } else {
+    const h = document.querySelector('#cxList'); if (h) h.scrollIntoView({behavior:'smooth',block:'start'});
+    if (typeof toast === 'function') toast('Article déjà acheté, retiré ou non visible dans cette liste.');
+  }
+  window.mzCourseTargets = [];
+}
+
+/* Réglages de notifications déplacés depuis la cloche vers Ma famille. */
+const mzFoyerSettingsBase = VIEWS.foyer;
+VIEWS.foyer = function () { return mzFoyerSettingsBase() + `<h2>Réglages</h2><div class="card"><strong>Notifications</strong><p class="muted small">Autorisations, rappels et notifications push de cet appareil.</p><button class="btn" data-act="pushSettings">Configurer les notifications</button></div>`; };

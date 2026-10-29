@@ -261,6 +261,33 @@ async function loadCloud(hid) {
   saveLocal();
 }
 
+/* V9.8 — centre de notifications local à cet appareil (aucune table Supabase ajoutée). */
+const mzNotifsKey = 'mz_course_notifications_v98';
+function mzGetNotifs() { try { const v = JSON.parse(localStorage.getItem(mzNotifsKey) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
+function mzPutNotifs(rows) { try { localStorage.setItem(mzNotifsKey, JSON.stringify(rows.slice(0, 80))); } catch (_) {} }
+function mzUnreadCount() { return mzGetNotifs().filter(x => !x.read).length; }
+function mzBellHtml() { const n = mzUnreadCount(); return `<button class="icon-btn plain" data-act="mzNotifications" aria-label="Notifications${n ? ' : ' + n + ' non lues' : ''}" style="position:relative">🔔${n ? `<span style="position:absolute;right:-3px;top:-5px;background:#ef4444;color:white;border-radius:12px;font-size:10px;min-width:17px;padding:2px 4px;font-weight:800">${n > 99 ? '99+' : n}</span>` : ''}</button>`; }
+function mzStoreNotice(names) {
+  const rows = mzGetNotifs();
+  const items = names.map(x => ({id:x.id, name:x.name}));
+  rows.unshift({id: 'n' + Date.now() + '-' + Math.random().toString(36).slice(2,7), at:Date.now(), read:false, items});
+  mzPutNotifs(rows);
+  if (screen === 'app') renderBellOnly();
+  return rows[0];
+}
+function renderBellOnly() { document.querySelectorAll('[data-act="mzNotifications"]').forEach(b => { const holder = document.createElement('span'); holder.innerHTML = mzBellHtml(); b.replaceWith(holder.firstElementChild); }); }
+function mzOpenNotifs() {
+  const rows = mzGetNotifs();
+  openSheet('Notifications', `<div style="display:grid;gap:10px">${rows.length ? rows.map(n => `<div class="card" style="padding:12px;${n.read ? '' : 'border-color:#38bdf8'}"><div class="inline" style="justify-content:space-between"><strong>🛒 Courses${n.read ? '' : ' · Nouveau'}</strong><small class="muted">${new Date(n.at).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</small></div><p style="margin:8px 0">${esc(n.items.map(x => x.name).join(', '))}</p><div class="btns"><button class="btn primary" data-act="mzOpenNotice" data-v="${esc(n.id)}">Voir ${n.items.length > 1 ? 'les articles' : 'l’article'}</button>${n.read ? '' : `<button class="btn" data-act="mzReadNotice" data-v="${esc(n.id)}">Marquer comme lue</button>`}</div></div>`).join('') : '<p class="muted">Aucune notification enregistrée sur cet appareil.</p>'}<p class="muted small">Historique conservé sur cet appareil. Les notifications push restent configurables dans Ma famille → Réglages.</p></div>`);
+}
+function mzMarkRead(id) { const rows = mzGetNotifs(); const n = rows.find(x => x.id === id); if (n) n.read = true; mzPutNotifs(rows); renderBellOnly(); return n; }
+function mzGoToItems(items) {
+  closeSheet();
+  view = 'courses'; LS.set('mz_view', 'courses');
+  window.mzCourseTargets = items || [];
+  render();
+  if (typeof mzFocusCourseItems === 'function') setTimeout(mzFocusCourseItems, 150);
+}
 /* V9.7 — alertes non intrusives pour les ajouts manuels reçus du foyer.
    N'affecte ni les achats, ni les données Supabase, ni les statuts des repas. */
 const mzIncomingShop = new Map();
@@ -270,14 +297,16 @@ function mzNoticeShopInsert(row) {
   if (row.added_by && row.added_by === S.me) return;
   // Les écritures locales optimistes figurent déjà dans S.shop.
   if ((S.shop || []).some(x => x.id === row.id)) return;
-  mzIncomingShop.set(row.id, String(row.name || 'Article'));
+  mzIncomingShop.set(row.id, {id:row.id, name:String(row.name || 'Article')});
   clearTimeout(mzIncomingShopTimer);
   mzIncomingShopTimer = setTimeout(() => {
-    const names = [...mzIncomingShop.values()]; mzIncomingShop.clear();
-    if (!names.length || screen !== 'app') return;
+    const items = [...mzIncomingShop.values()]; mzIncomingShop.clear();
+    if (!items.length || screen !== 'app') return;
+    const names = items.map(x => x.name);
+    const notice = mzStoreNotice(items);
     const msg = names.length === 1 ? 'Nouvel article ajouté : ' + names[0]
       : names.length + ' nouveaux articles ajoutés aux courses : ' + names.slice(0, 3).join(', ') + (names.length > 3 ? '…' : '');
-    toast(msg, 'Voir', () => { view = 'courses'; render(); });
+    toast(msg, 'Voir', () => { mzMarkRead(notice.id); mzGoToItems(notice.items); });
   }, 1100);
 }
 
@@ -707,8 +736,8 @@ function render() {
   const mod = modOf(view), isHome = view === "home";
   const avatars = `<button class="stack" data-act="go" data-v="foyer" aria-label="Ma famille">${members().slice(0, 4).map(m => av(m)).join("")}</button>`;
   const head = isHome
-    ? `<button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button><span class="inline" style="gap:2px"><button class="icon-btn plain" data-act="go" data-v="carte" aria-label="Localisation">${I.pin}</button>${avatars}<button class="icon-btn plain" data-act="pushSettings" aria-label="Notifications">🔔</button></span>`
-    : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : `${avatars}<button class="icon-btn plain" data-act="pushSettings" aria-label="Notifications">🔔</button>`}`;
+    ? `<button class="hh-name" data-act="go" data-v="foyer">${esc(S.hh ? S.hh.name : "")}</button><span class="inline" style="gap:2px"><button class="icon-btn plain" data-act="go" data-v="carte" aria-label="Localisation">${I.pin}</button>${avatars}${mzBellHtml()}</span>`
+    : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : `${avatars}${mzBellHtml()}`}`;
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
@@ -1358,6 +1387,9 @@ document.addEventListener("click", async e => {
   }
   const v = b.dataset.v, act = b.dataset.act;
   switch (act) {
+    case "mzNotifications": mzOpenNotifs(); break;
+    case "mzReadNotice": mzMarkRead(v); mzOpenNotifs(); break;
+    case "mzOpenNotice": { const n = mzMarkRead(v); if (n) mzGoToItems(n.items); break; }
     case "pushSettings": await showPushSettings(); break;
     case "pushEnable": await enablePush(); break;
     case "pushDisable": await disablePush(); break;
