@@ -117,16 +117,15 @@ VIEWS.courses = function () {
   const sel = D.days.filter(x => x.on);
   const nLeft = todo.length + todoX.length;
   let out = `<button type="button" class="cx-jump" data-act="cxJump">🛒 Ma liste de courses<span>${total ? (nLeft ? `${nLeft} article${nLeft > 1 ? "s" : ""} à prendre` : "tout est dans le caddie ✓") : "liste vide"}</span><i aria-hidden="true">↓</i></button>`;
-  out += `<div class="cx-ultimate-stats" aria-label="Résumé des courses"><div><strong>${nLeft}</strong><span>À prendre</span></div><div><strong>${done.length}</strong><span>Dans le panier</span></div><div><strong>${sel.length}</strong><span>Jours sélectionnés</span></div></div>
-    <div class="cx-ultimate-progress"><span style="width:${total ? Math.round(done.length / total * 100) : 0}%"></span></div>
-    <div class="cx-ultimate-actions"><button class="btn primary" type="button" data-act="cxJump">🛒 Mode magasin</button><button class="btn" type="button" data-act="cxAddFocus">＋ Ajouter un article</button><a class="btn" href="${CARNET_URL}">📖 Ouvrir le Carnet</a></div>
-    <details class="card cx-ultimate-help"><summary>ⓘ Aide et états des repas</summary><p class="muted small">Touchez un plat pour choisir une action. Touchez son état pour ouvrir la fiche du repas.</p><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></details>`;
-
+  out += `<div class="card linkcard"><span>Préparez vos courses à partir des repas prévus. Touchez un plat pour consulter ou modifier sa recette ; touchez son état pour ouvrir sa fiche.</span><a class="linkbtn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`;
+  out += `<div class="card" style="margin-top:10px;padding:12px"><strong style="display:block;margin-bottom:8px">États des repas <span class="muted small" style="font-weight:400">· légende</span></strong><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></div>`;
   out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
     <p class="muted small" style="margin:8px 2px 0">${sel.length ? `${sel.length} jour${sel.length > 1 ? "s" : ""} · ` : ""}${total} article${total > 1 ? "s" : ""}${done.length ? ` · ${done.length} dans le caddie` : ""}. Touchez un jour pour voir ses repas et choisir ce qui part dans les courses.</p>
-    ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="cx-ultimate-days">${D.plan.map(d => `<section class="cx-ultimate-day"><h3>${esc(d.lab)} <small>${d.meals.length} repas</small></h3>${d.meals.map(m=>`<div class="cx-ultimate-meal"><button type="button" class="cx-ultimate-meal-name" data-act="cxMealActions" data-w="${esc(d.w)}" data-v="${esc(m.k)}" data-name="${esc(m.name)}" data-n="${m.n}" data-meal="${esc(m.m)}"><span class="cx-ultimate-meal-time">${/midi/i.test(m.m)?"☀️":"🌙"} ${esc(m.m)}</span><strong>${esc(m.name)}</strong><small>👥 ${m.n} pers. · Options ›</small></button><button type="button" class="r-meal-badge ${cxStateClass(m.state)}" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${cxStateLabel(m.state)}</button></div>`).join("")}</section>`).join("")}</div>` : ""}
+    ${D.plan.length ? `<p class="group-h">Au menu ces jours-là</p><div class="list">${D.plan.map(d => d.meals.map((m, i) => `<div class="cx-item">
+        <span class="nm"><button type="button" class="cx-name" data-act="cxRecipe" data-w="${esc(d.w)}" data-v="${esc(m.k)}">${i ? "" : `<strong>${esc(d.lab)}</strong> · `}${esc(m.m)} : ${esc(m.name)}</button><span class="cx-from">${m.n} pers. · touchez le plat pour ouvrir sa recette</span></span>
+        <button type="button" class="r-meal-badge ${cxStateClass(m.state)}" data-act="cxMeal" data-w="${esc(d.w)}" data-v="${esc(m.k)}" title="Voir le repas et modifier son état" aria-label="${esc(m.state)} — ouvrir la fiche du repas">${cxStateLabel(m.state)}</button></div>`).join("")).join("")}</div>` : ""}
     ${typeof catDueHtml === "function" ? catDueHtml() : ""}
     <form data-form="cxAdd" class="inline" style="margin-top:14px" autocomplete="off">
       <input class="input" id="cxIn" name="name" aria-label="Article à ajouter" placeholder="Ajouter : lait, piles, pain…" enterkeyhint="done">
@@ -189,21 +188,12 @@ function cxDaySheet(d, fresh) {
       ${x.inList ? `<button class="btn ghost" data-act="cxDsRemove">Retirer ce jour des courses</button>` : ""}</div>`);
   if (!fresh) $("#sheet").scrollTop = sc;
 }
-const CX_ACTS = ["cxEmojiEdit", "cxAddFocus", "cxMealActions", "cxActionRecipe", "cxActionMeal", "cxActionChange", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxEmojiEdit", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
   switch (a) {
-    case "cxAddFocus": { const target=document.getElementById("cxIn"); if(target){target.scrollIntoView({behavior:"smooth",block:"center"});target.focus();} return; }
-    case "cxMealActions": {
-      const w=b.dataset.w,k=b.dataset.v;
-      openSheet(b.dataset.name, `<p class="muted small">${esc(b.dataset.meal)} · ${esc(b.dataset.n)} personnes</p><div class="cx-ultimate-menu"><button class="btn" data-act="cxActionRecipe" data-w="${esc(w)}" data-v="${esc(k)}">📖 Voir la recette complète</button><button class="btn" data-act="cxActionMeal" data-w="${esc(w)}" data-v="${esc(k)}">✏️ Modifier ce repas / son état</button><button class="btn" data-act="cxActionRecipe" data-w="${esc(w)}" data-v="${esc(k)}">🥕 Modifier les ingrédients ou créer une variante dans la recette</button><button class="btn" data-act="cxActionChange" data-w="${esc(w)}" data-v="${esc(k)}">🔄 Changer de repas</button><a class="btn" href="${CARNET_URL}">📚 Ouvrir le Carnet de menus</a></div>`);
-      return;
-    }
-    case "cxActionRecipe": closeSheet(); rWeek=b.dataset.w; rRecipeSheet(v); return;
-    case "cxActionMeal": closeSheet(); rWeek=b.dataset.w; mealSlotSheet(v); return;
-    case "cxActionChange": closeSheet(); rWeek=b.dataset.w; rPick = { k: v, role: "main", q: "" }; rPickSheet(); return;
     case "cxFold": {
       cxFoldState[v] = cxFoldState[v] === false;
       cxFoldSave();
