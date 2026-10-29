@@ -1333,7 +1333,7 @@ function shopping(all){
   // Only locked meals go to the shopping list: unlocking a meal takes its ingredients off.
   // Only the days chosen at the top of the shopping list count.
   for(const x of selectedShopDates())for(const[m]of MEALS){
-    const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id])continue;
+    const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id]||sl.mealState==="Courses faites"||sl.mealState==="Terminé")continue;
     const when=x.dn+" "+x.d.getDate()+" "+m;
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
     if(Array.isArray(sl.ingCustom)){
@@ -1616,7 +1616,7 @@ function renderIdea(){
 }
 
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
-function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(!s.lock)return["p1","🛒 à ajouter aux courses"];
+function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(s.mealState==="Courses faites"||s.mealState==="Terminé")return["p3",s.mealState==="Terminé"?"✓ terminé":"✓ courses faites"];if(!s.lock)return["p1","🛒 à ajouter aux courses"];
   const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","✓ dans les courses"];
   const r=recipes[s.id],dd=parseYmd(date),when=`${k.split("|")[0]} ${dd.getDate()} ${k.split("|")[1]}`;
   const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","✓ dans les courses"]:["p3","✓ courses faites"];}
@@ -4554,6 +4554,84 @@ document.addEventListener("click",e=>{
   slotFree=null;if(typeof clearSheetBack==="function")clearSheetBack();$("#slotSheet").hidden=true;slotK=null;render();saveMenu();toast(f==="note"?"✏️ "+t+" : noté":"🥡 Restes ("+t+") : rien à acheter");
 });
 </script>
+
+<!-- V9.4 : confirmation commune de fin des courses (Carnet et Maisonnée). -->
+<script>
+(function(){
+  const offered = new Set();
+  function eligible(){
+    const result=[];
+    for(const day of selectedShopDates()) for(const [meal] of MEALS){
+      const slot=day.wk[slotKey(day.dn,meal)];
+      if(!slot||!slot.lock||!recipes[slot.id]||["Courses faites","Terminé"].includes(slot.mealState))continue;
+      let keys=[];
+      if(Array.isArray(slot.ingCustom)){
+        for(const ing of slot.ingCustom){
+          if(!ing.n||(slot.noIng||[]).includes(ing.key))continue;
+          const match=String(ing.qt||"").trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+          const unit=match?match[2].trim():"";
+          keys.push(norm(ing.n)+"|"+toBase(match?match[1].trim():"",unit)[1]);
+        }
+      }else{
+        for(const id of [slot.id,slot.entree,slot.dessert].filter(Boolean)){
+          for(const ing of (recipes[id]?.ing||[])){
+            if(!ing.n)continue;
+            const key=norm(ing.n)+"|"+toBase(ing.q,ing.u)[1];
+            if(!(slot.noIng||[]).includes(key))keys.push(key);
+          }
+        }
+      }
+      keys=[...new Set(keys)];
+      if(!keys.length)continue; // Never automatically validate an empty recipe.
+      const id=ymd(mondayOf(day.d))+"|"+slotKey(day.dn,meal);
+      result.push({id,week:ymd(mondayOf(day.d)),slot:slotKey(day.dn,meal),name:recipes[slot.id].name,
+        complete:keys.every(key=>!!(menu.checked||{})[key]||!!(menu.have||{})[key])});
+    }
+    return result;
+  }
+  function offer(completed){
+    const ids=completed.map(x=>x.id);
+    const names=completed.map(x=>"• "+x.name).join("\n");
+    const msg=completed.length===1?"Courses terminées pour ce repas ?\n\n"+names+"\n\nValider le statut « Courses faites » ?":
+      "Courses terminées pour ces "+completed.length+" repas ?\n\n"+names+"\n\nValider le statut « Courses faites » pour tous ?";
+    // The Carnet is a hidden iframe inside Maisonnée. Its parent must show the confirmation.
+    if(window.parent!==window){window.parent.postMessage({type:"maisonnee-meals-shopping-complete",ids,msg},location.origin);return;}
+    if(window.confirm(msg))window.maisonneeConfirmShoppingMeals(ids);
+  }
+  window.maisonneeConfirmShoppingMeals=function(ids){
+    let changed=0;
+    for(const x of eligible()){
+      if(!ids.includes(x.id)||!x.complete)continue;
+      const slot=(menu.weeks||{})[x.week]?.[x.slot];
+      if(!slot||["Courses faites","Terminé"].includes(slot.mealState))continue;
+      slot.mealState="Courses faites";slot.keep=true;slot.lock=true;changed++;
+    }
+    if(changed){render();saveMenu();toast(changed+" repas : courses faites");}
+    return changed;
+  };
+  // Observe only explicit check actions, never day navigation or meal display.
+  document.addEventListener("click",function(e){
+    const btn=e.target.closest('[data-act="storeTick"]');
+    if(!btn||!String(btn.dataset.s||"").startsWith("k:"))return;
+    const before=new Map(eligible().map(x=>[x.id,x.complete]));
+    setTimeout(()=>{
+      const done=eligible().filter(x=>x.complete&&!before.get(x.id)&&!offered.has(x.id));
+      if(!done.length)return;
+      done.forEach(x=>offered.add(x.id));offer(done);
+    },0);
+  },true);
+  document.addEventListener("change",function(e){
+    const t=e.target;
+    if(t.dataset.act!=="check"||!t.checked)return;
+    // The change event runs before the original handler; compare after it completes.
+    const before=new Map(eligible().map(x=>[x.id,x.complete]));
+    setTimeout(()=>{const done=eligible().filter(x=>x.complete&&!before.get(x.id)&&!offered.has(x.id));
+      if(done.length){done.forEach(x=>offered.add(x.id));offer(done);}
+    },0);
+  },true);
+})();
+</script>
+
 <!-- Pont avec Maisonnée (repas et courses synchronisés, bouton de retour) -->
 <script src="maison/pont.js"></script>
 
