@@ -629,7 +629,32 @@ code{font-family:var(--f-mono);font-size:.92em}
 @media (prefers-reduced-motion: no-preference){.card,.add,.tab{transition:background .15s,border-color .15s,color .15s}}
 </style>
 
-</head><body>
+<style id="cm-status-harmonisation">
+.cm-state-box{padding:13px;border:1px solid var(--border,#365047);border-radius:15px;background:rgba(30,80,65,.08);margin:12px 0}
+.cm-state-box>strong{display:block;margin-bottom:10px;font-size:14px}
+.cm-state-options{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.cm-state-chip{font:inherit;font-size:11px;line-height:1.3;padding:9px 2px;border-radius:11px;border:1px solid currentColor;background:transparent;cursor:pointer;min-width:0;overflow-wrap:anywhere}
+.cm-state-chip:disabled{opacity:1;cursor:default}.cm-reversible{margin:14px 0}.cm-reversible>.btn{width:100%;font-weight:700;padding:13px}.cm-reversible .cm-remove{border-color:#f0a34b;color:#ffd19b}.cm-state-chip[aria-pressed="true"]{background:color-mix(in srgb,currentColor 15%,transparent);box-shadow:0 0 0 1px currentColor inset;font-weight:700}
+.cm-state-0{color:#aeb9bb}.cm-state-1{color:#66b4ff}.cm-state-2{color:#ffc24a}.cm-state-3{color:#67e6b3}.cm-state-4{color:#56cf79}
+.cm-card-state{border:1px solid currentColor;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:650;white-space:nowrap;align-self:center}
+@media(max-width:390px){.cm-state-chip{font-size:10px;padding:8px 1px}.cm-card-state{font-size:10px;padding:4px 6px}}
+</style>
+<style id="cm-v5-meal-actions">
+.cm-meal-actions{margin:10px 0 16px}.cm-meal-note{font-size:12px;opacity:.8;padding:4px 3px 10px}.cm-meal-buttons{display:flex;gap:8px;flex-wrap:wrap}.cm-meal-buttons .btn{flex:1 1 170px;min-height:44px}.cm-meal-buttons .danger{border-color:#b85a60;color:#ff999f;background:rgba(130,30,40,.12)}
+</style><style id="cm-v6-bright-status">
+.cm-state-box{background:rgba(14,32,31,.78)!important;border:1px solid rgba(180,255,226,.38)!important}
+.cm-state-box>strong{color:#fff!important;font-weight:800!important;font-size:15px!important}
+.cm-state-chip{font-weight:750!important;opacity:1!important;border-width:2px!important;background:rgba(15,25,30,.9)!important;text-shadow:0 1px 2px rgba(0,0,0,.65);min-height:49px}
+.cm-state-chip.cm-state-0{color:#f2f4f5!important;border-color:#c5d0d5!important}
+.cm-state-chip.cm-state-1{color:#65baff!important;border-color:#369dff!important}
+.cm-state-chip.cm-state-2{color:#ffd36b!important;border-color:#ffa600!important}
+.cm-state-chip.cm-state-3{color:#70ffd5!important;border-color:#34e9aa!important}
+.cm-state-chip.cm-state-4{color:#92ff9c!important;border-color:#4bdb65!important}
+.cm-state-chip:disabled{opacity:1;cursor:default}.cm-reversible{margin:14px 0}.cm-reversible>.btn{width:100%;font-weight:700;padding:13px}.cm-reversible .cm-remove{border-color:#f0a34b;color:#ffd19b}.cm-state-chip[aria-pressed="true"]{color:#fff!important;border-width:3px!important;font-weight:900!important;box-shadow:0 0 0 1px currentColor inset,0 0 12px currentColor!important;filter:brightness(1.25);background:rgba(60,105,90,.52)!important}
+.cm-state-chip:disabled{opacity:1;cursor:default}.cm-reversible{margin:14px 0}.cm-reversible>.btn{width:100%;font-weight:700;padding:13px}.cm-reversible .cm-remove{border-color:#f0a34b;color:#ffd19b}.cm-state-chip[aria-pressed="true"]::before{content:'● ';font-size:9px}
+.cm-card-state{font-weight:800!important;border-width:2px!important}
+@media(max-width:390px){.cm-state-chip{font-size:10px!important;padding:7px 1px!important}}
+</style></head><body>
 <div class="wrap">
   <header class="top">
     <h1>Carnet de menus</h1>
@@ -1279,6 +1304,16 @@ function shopDates(){
   return out;
 }
 function defaultShopKeys(all){const end=ymd(addDays(mondayOf(new Date()),6));return all.filter(x=>x.key<=end).map(x=>x.key);}
+// V9: an explicitly sent meal must be included in the calculation window.
+// The visual day filter (shopViewDays) remains independent.
+function cmEnsureShoppingDay(k){
+  const day=k&&k.split("|")[0], i=DAYS.indexOf(day);
+  if(i<0)return;
+  const d=addDays(new Date(curWeek+"T12:00:00"),i), key=ymd(d);
+  if(!shopDates().some(x=>x.key===key))return;
+  const keys=Array.isArray(menu.shopDays)?menu.shopDays.slice():defaultShopKeys(shopDates());
+  if(!keys.includes(key))menu.shopDays=[...keys,key].sort();
+}
 function selectedShopDates(){
   const all=shopDates(), keys=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
   return all.filter(x=>keys.includes(x.key));
@@ -1297,10 +1332,11 @@ const dayShort=x=>x.dn.slice(0,3)+". "+x.d.getDate();
 /* "j'en ai déjà": hidden from the list until the last chosen shopping day has passed */
 function isHave(i){const v=(menu.have||{})[i.key];return !!v&&v>=ymd(new Date());}
 function haveUntil(){const s=selectedShopDates();return s.length?s[s.length-1].key:ymd(new Date());}
-function portionFactor(r,role){if(!r)return 1;
-  if(role==="main"&&r.cat==="Entrée")return Number(r.mainFactor)||2;
-  if(role==="entree"&&!["Entrée","Soupe"].includes(r.cat))return 0.5;
-  return 1;}
+// Portion choisie pour un repas : aucune multiplication automatique liée à la catégorie.
+function mealPortionFactor(slot){const v=Number(slot&&slot.portionMultiplier);return Number.isFinite(v)&&v>=0.25&&v<=4?v:1;}
+function portionFactor(r,role){return 1;}
+function mealIngredientBase(r,i,people,slot){const [q,u]=toBase(i.q,i.u);return [q*ingMult(r,i,Number(people)*mealPortionFactor(slot)),u];}
+function mealCustomQuantity(qt,slot){const text=String(customIngredientQuantity(qt,slot));const m=text.trim().match(/^([\d.,\/ ]+)\s*(.*)$/);if(!m)return text;const [q,u]=toBase(m[1].trim(),m[2].trim());return fmt(q*mealPortionFactor(slot),u)||text;}
 // a recipe already in a validated meal of the chosen shopping days is already in the list: never count it twice
 function validatedUses(id){const out=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];
   if(s&&s.lock&&recipes[s.id]&&(s.id===id||s.entree===id||s.dessert===id))out.push(`${dayShort(x)} ${m}`);}return out;}
@@ -1314,6 +1350,8 @@ function dishOf(r){if(!r)return null;const d=DISH_RE.find(([re])=>re.test(r.name
 function platsFor(r,p){const S=r.serves||4;return p<=Math.ceil(S*1.5)?1:Math.ceil(p/S);}
 // how much of the base recipe this ingredient needs for p people
 function ingMult(r,i,p){const S=r.serves||4;if(!dishOf(r))return p/S;const k=platsFor(r,p);if(k>1)return k;return FIXED_RE.test(i.n||"")?1:p/S;}
+// Source unique des quantités : fiche recette et courses utilisent exactement ce calcul.
+function recipeIngredientBase(r,i,people,role){const [q,u]=toBase(i.q,i.u);return [q*ingMult(r,i,Number(people)*portionFactor(r,role||"main")),u];}
 function platsLine(r,p,id){const d=dishOf(r);if(!d)return"";const k=platsFor(r,p);
   return`<span class="plats"><span>— ${k} ${k>1?d.many:d.one}</span><span class="ctl"><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="-1" ${k<=1?"disabled":""} aria-label="Un plat de moins">−</button><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="1" aria-label="Un plat de plus">+</button></span></span>`;}
 /* ---------- a meal changed after its shopping was done: postpone it, keep its ingredients to use first, or cook something with them ---------- */
@@ -1331,16 +1369,16 @@ function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
   return`<div class="use-first"><span class="label">🧊 À consommer en priorité (ou à congeler)</span>${l.map(x=>`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span style="font-size:14px"><b>${esc(x.ing.join(", "))}</b><br><small class="muted">achetés pour ${esc(x.name)}</small></span><button type="button" class="btn ghost" data-act="useFirstDone" data-id="${x.id}">✓ Fait</button></div>`).join("")}</div>`;}
 function shopping(all){
   const acc={};
-  const add=(rid,n,when,role,skip)=>{n=n*portionFactor(recipes[rid],role);
+  const add=(rid,n,when,role,skip)=>{
     const r=recipes[rid]; if(!r)return;
     const f=n/(r.serves||4);
     for(const i of r.ing||[]){
       if(!i.n)continue;
-      const[q,u]=toBase(i.q,i.u);
+      const[q,u]=recipeIngredientBase(r,i,n,role);
       const key=norm(i.n)+"|"+u;
       if(skip&&skip.includes(key))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
       if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:i.r||"Divers",from:[]};
-      acc[key].q+=q*ingMult(r,i,f*(r.serves||4));
+      acc[key].q+=q;
       const lab=r.name+(when?" ("+when+")":"");
       if(!acc[key].from.includes(lab))acc[key].from.push(lab);
     }
@@ -1353,7 +1391,7 @@ function shopping(all){
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
     if(Array.isArray(sl.ingCustom)){
       for(const i of sl.ingCustom){if(!i.n||sk&&sk.includes(i.key))continue;
-        const match=String(customIngredientQuantity(i.qt,sl)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+        const match=String(mealCustomQuantity(i.qt,sl)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
         const raw=match?match[1].trim():"",unit=match?match[2].trim():"";
         const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u;
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:"Divers",from:[]};
@@ -1362,7 +1400,7 @@ function shopping(all){
         if(!acc[key].from.includes(lab))acc[key].from.push(lab);
       }
     }else{
-      add(sl.id,sl.n,when,"main",sk); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk);
+      add(sl.id,sl.n,when,"main",sk,sl); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl);
     }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
@@ -1644,6 +1682,23 @@ function renderIdea(){
    ${pool.length>ideaIds.length?`<div class="row"><button type="button" class="btn ghost" data-act="reroll">Autres idées</button></div>`:""}`;
 }
 
+// Shared five-state model, compatible with Maisonnée (mealState + keep + lock).
+const CM_MEAL_STATES=["Proposé","Gardé","En courses","Courses faites","Terminé"];
+function cmMealStatus(s){
+  if(!s)return "Proposé";
+  if(CM_MEAL_STATES.includes(s.mealState))return s.mealState;
+  return s.lock?"En courses":s.keep?"Gardé":"Proposé";
+}
+function cmSetMealStatus(s,state){
+  if(!s||!CM_MEAL_STATES.includes(state))return;
+  s.mealState=state;
+  s.keep=state!=="Proposé";
+  s.lock=["En courses","Courses faites","Terminé"].includes(state);
+}
+function cmStatusChips(k,s){
+  const active=cmMealStatus(s);
+  return `<div class="cm-state-box"><strong>État du repas</strong><div class="cm-state-options" role="group" aria-label="État du repas">${CM_MEAL_STATES.map((st,i)=>`<button type="button" class="cm-state-chip cm-state-${i}" data-state="${st}" disabled aria-pressed="${st===active}">${["◷","✓","🛒","✓","✓"][i]} ${st}</button>`).join("")}</div></div>`;
+}
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
 function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(s.mealState==="Courses faites"||s.mealState==="Terminé")return["p3",s.mealState==="Terminé"?"✓ terminé":"✓ courses faites"];if(!s.lock)return["p1","🛒 à ajouter aux courses"];
   const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","✓ dans les courses"];
@@ -1659,7 +1714,7 @@ function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],da
     ${ph?`<img class="mc-ph" src="${esc(ph)}" alt=""${r&&!r.photo?` data-auto="${esc(s.id)}"`:""} loading="lazy">`:`<span class="mc-ph mc-noph">${lab==="Midi"?"☀️":"🌙"}</span>`}
     <span class="mc-t"><span class="mc-m">${lab}${s.n?` · ${s.n} pers.`:""}</span><b>${r?esc(r.name):"Plat à choisir"}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
       ${r&&!past?`<small class="mc-info">${[showOn("nut")&&nut?esc(fmtNut(nut,true)):"",showOn("wine")?esc(drinkLine(r)):""].filter(Boolean).join(" · ")}${menu.prefs.dissoc?" "+dissocBadge(mealDissoc(s)):""}</small>`:""}</span>
-    ${st?`<span class="pill ${st[0]}">${st[1]}</span>`:""}</button>`;}
+    ${st?`<span class="cm-card-state cm-state-${CM_MEAL_STATES.indexOf(cmMealStatus(s))}">${esc(cmMealStatus(s))}</span>`:""}</button>`;}
 // the future meals of the shown week that are planned but not validated yet
 function weekToValidate(){const ws=weekStartDate(),today=ymd(new Date()),out=[];
   DAYS.forEach((d,i)=>{if(ymd(addDays(ws,i))<today)return;MEALS.forEach(([m])=>{const k=slotKey(d,m),s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k))out.push({w:curWeek,k});});});return out;}
@@ -1718,7 +1773,7 @@ function renderRecipes(){
     const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=viewServ[id]||(on?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
     let det="";
     if(open){
-      const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*ingMult(r,i,p),u))}</li><li>${esc(i.n)}</li>`;}).join("");
+      const ings=(r.ing||[]).map(i=>{const[b,u]=recipeIngredientBase(r,i,p,"main");return`<li class="q">${esc(fmt(b,u))}</li><li>${esc(i.n)}</li>`;}).join("");
       const steps=stepsFor(id).steps;
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
       const role=r.cat==="Entrée"?"entree":r.cat==="Dessert"?"dessert":undefined,dk=r.linkOnly?null:drinkFor(r,role);
@@ -1793,7 +1848,7 @@ function renderLock(){
 }
 function lockConfirm(){if(lockDays.length){menu.shopDays=[...new Set([...selectedShopDates().map(x=>x.key),...lockDays])].sort();lockDays=[];}
   const n0=shopping().length,until=haveUntil(),today=ymd(new Date());let n=0;
-  for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s&&!s.lock){s.lock=true;n++;}}
+  for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s&&!s.lock){cmSetMealStatus(s,"En courses");n++;}}
   menu.have=Object.assign({},menu.have);menu.bought=Object.assign({},menu.bought);
   for(const i of lockItems){
     if(i.home){if(i.buy)delete menu.have[i.key];else continue;}
@@ -1813,7 +1868,7 @@ function shopPlanHtml(sel){
       const sub=[s.entree&&recipes[s.entree]?"Entrée : "+nm(s.entree):"",s.dessert&&recipes[s.dessert]?"Dessert : "+nm(s.dessert):""].filter(Boolean).join(" · ");
       return`<div class="sp-meal${s.lock?" ok":""}"><span class="sp-m">${lab}</span><button type="button" class="sp-n" data-act="viewRec" data-id="${esc(s.id)}">${esc(nm(s.id))}${sub?`<small>${esc(sub)}</small>`:""}<small>${s.n} pers.</small></button>
         <button type="button" class="sp-swap" data-act="shopSwap" data-w="${w}" data-k="${k}" aria-label="Changer de plat">↻</button>
-        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${s.lock?"✓ Dans les courses":"🛒 Ajouter"}</button></div>`;}).join("");
+        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${["Courses faites","Terminé"].includes(cmMealStatus(s))?cmMealStatus(s):s.lock?"✓ Dans les courses":"🛒 Ajouter"}</button></div>`;}).join("");
     return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
   return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas pas encore dans les courses`:"· tout est dans les courses ✓"}</span></summary>${days}
     ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🛒 Tout ajouter aux courses (${unl} repas)</button><span class="muted" style="font-size:12px">Les repas avec ✓ sont dans la liste de courses. Touchez un jour ci-dessus pour ajouter ou retirer tous ses repas.</span>`:""}</details>`;
@@ -1836,7 +1891,7 @@ function renderShop(items,extras,ids){
   const xrHtml=xr.length?`<div class="rayon"><h4>Recettes ajoutées hors menu</h4>${xr.map(([id,n])=>`<div class="xr-item"><button type="button" class="nm" data-act="viewRec" data-id="${esc(id)}">${esc(recipes[id].name)}${validatedUses(id).length?`<small class="muted" style="display:block;font-size:12px">déjà au menu validé : pas compté deux fois</small>`:""}</button><span class="q">${n} p. <button type="button" class="x" data-act="shopRm" data-id="${esc(id)}" aria-label="Retirer ${esc(recipes[id].name)}">✕</button></span></div>`).join("")}</div>`:"";
   const hint=false&&unlocked?`<div class="note" style="margin-top:12px">${unlocked} repas du menu ${unlocked>1?"ne sont pas verrouillés":"n'est pas verrouillé"} : verrouillez-${unlocked>1?"les":"le"} pour ajouter ${unlocked>1?"leurs":"ses"} ingrédients.</div>`:"";
   const hv=shopping(true).filter(isHave).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
-  const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length})</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
+  const hvHtml=hv.length?`<details class="rayon"><summary class="muted" style="font-size:13px;cursor:pointer">Déjà à la maison (${hv.length}) · ingrédients masqués de la liste</summary>${hv.map(i=>`<div class="item" style="cursor:default"><span></span><span class="nm muted">${esc(i.n)}</span><span class="q muted">${esc(fmt(i.q,i.u))}</span><button type="button" class="have" data-act="haveUndo" data-k="${esc(i.key)}">Remettre</button></div>`).join("")}<button type="button" class="link" data-act="haveReset" style="margin-top:6px">Tout remettre dans la liste</button></details>`:"";
   if(!items.length&&!extras.length){el.innerHTML=hint+hvHtml+`<div class="muted" style="padding:16px 0">${sel.length?"Touchez un jour ci-dessus : ses repas et leurs ingrédients arrivent dans la liste.":"Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;return;}
   const groups=RAYONS.map(ry=>({ry,its:items.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
   const drive=(n,ref)=>!curDrive()?"":`<a class="drive" href="${driveUrl(n)}" target="_blank" rel="noopener" data-act="driveGo" data-ref="${esc(ref)}" aria-label="Chercher ${esc(n)} sur ${esc((curDrive()||{n:""}).n)}">Drive ↗</a>`;
@@ -2530,6 +2585,7 @@ function renderSlotSheet(){
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
     (s.extra||[]).forEach((t,j)=>{h+=`<div class="sl-line"><span class="muted" style="font-size:14px">En plus : ${esc(t)}</span>${rx("extra",j)}</div>`;});
     if(r&&!past){const nut=slotNut(s);const info=[showOn("nut")&&nut?fmtNut(nut,true):"",showOn("wine")?drinkLine(r):""].filter(Boolean).join(" · ");if(info)h+=`<span class="muted" style="font-size:13px">${esc(info)}</span>`;}
+    if(r)h+=cmStatusChips(k,s);
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
       (r?btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
@@ -2942,10 +2998,15 @@ document.addEventListener("click",e=>{
   else if(a==="swap"){const k=b.dataset.k;if(!W()[k])return;openPick(k,"main",true);}
   else if(a==="moreSugg"){suggSeen.push(...suggNow);renderSugg();}
   else if(a==="moreFav"){favLimit+=50;renderSugg();}
-  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock){delete sl.lock;toast("Retiré des courses : ses ingrédients sortent de la liste");}else{sl.lock=true;toast("Ajouté aux courses : ses ingrédients sont dans la liste");}render();saveMenu();}}
+  else if(a==="lock"){const sl=W()[b.dataset.k];if(sl){if(sl.lock){cmSetMealStatus(sl,"Gardé");toast("Retiré des courses : ses ingrédients sortent de la liste");}else{cmSetMealStatus(sl,"En courses");toast("Ajouté aux courses : ses ingrédients sont dans la liste");}render();saveMenu();}}
   else if(a==="vserv"){const r=recipes[id];if(!r)return;const sl=slotsOf(id);
-    const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));render();}
-  else if(a==="vplat"){const r=recipes[id];if(!r)return;const sl=slotsOf(id),S=r.serves||4,cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people),k=Math.max(1,platsFor(r,cur)+Number(b.dataset.d));viewServ[id]=Math.min(50,k*S);render();}
+    const cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people);viewServ[id]=Math.max(1,Math.min(50,cur+Number(b.dataset.d)));
+    // A planned meal is the single source of truth for quantities sent to courses.
+    if(recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id){W()[recMealCtx].n=viewServ[id];if(W()[recMealCtx].lock)cmEnsureShoppingDay(recMealCtx);saveMenu();}
+    render();}
+  else if(a==="vplat"){const r=recipes[id];if(!r)return;const sl=slotsOf(id),S=r.serves||4,cur=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people),k=Math.max(1,platsFor(r,cur)+Number(b.dataset.d));viewServ[id]=Math.min(50,k*S);
+    if(recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id){W()[recMealCtx].n=viewServ[id];if(W()[recMealCtx].lock)cmEnsureShoppingDay(recMealCtx);saveMenu();}
+    render();}
   else if(a==="vservApply"){const n=viewServ[id];if(n){slotsOf(id).forEach(k=>W()[k].n=n);render();saveMenu();toast("Portions du menu mises à jour");}}
   else if(a==="week"){curWeek=b.dataset.w;LS.set("cm_week",curWeek);proposeAsk=0;render();}
   else if(a==="openPrefs")openPrefs();
@@ -2955,6 +3016,13 @@ document.addEventListener("click",e=>{
       const t0=Date.now();$("#pwMsg").textContent="⏳ Le robot lit la recette… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";
       const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
         m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
+  else if(a==="mealPortion"||a==="mealPortionCustom"){
+    const k=b.dataset.k,sl=W()[k];if(!sl)return;
+    let v=Number(b.dataset.v);
+    if(a==="mealPortionCustom"){const x=prompt("Coefficient de portion pour ce repas (entre 0,25 et 4)",String(mealPortionFactor(sl)).replace('.',','));if(x===null)return;v=Number(x.replace(',','.'));}
+    if(!Number.isFinite(v)||v<0.25||v>4){toast("Indiquez un coefficient entre 0,25 et 4");return;}
+    sl.portionMultiplier=v;saveMenu();lastRecHtml="";render();renderRecSheet();toast("Portions mises à jour dans les deux applications");
+  }
   else if(a==="recAlso"){const id=recSheetId,r=recipes[id];if(!r)return;saveRecipe(id,Object.assign({},r,{mainFactor:Number(b.dataset.v)}));renderRecSheet();}
   else if(a==="propSend"){const f=follows.find(x=>x.url===b.dataset.f);proposeRecipe(b.dataset.id,f);}
   else if(a==="propAdd"){propAnswer(b.dataset.p,true);}
@@ -3095,14 +3163,60 @@ document.addEventListener("click",e=>{
   else if(a==="dsSee"){const w=b.dataset.w;$("#daySheet").hidden=true;if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}slotK=b.dataset.k;renderSlotSheet();$("#slotSheet").hidden=false;}
   else if(a==="dsApply"||a==="dsRemove"){const r=dayApply(a==="dsApply");$("#daySheet").hidden=true;render();saveMenu(300);toast(r);}
   else if(a==="closeDay")$("#daySheet").hidden=true;
-  else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
+  else if(a==="cmCancelCourses"){
+    const k=b.dataset.k,sl=W()[k];
+    if(sl&&sl.id===recSheetId&&!isPast(k)&&!["Courses faites","Terminé"].includes(cmMealStatus(sl))){
+      cmSetMealStatus(sl,"Gardé");if(menu.shopExtra&&menu.shopExtra[sl.id]&&!validatedUses(sl.id).length)delete menu.shopExtra[sl.id];render();saveMenu();lastRecHtml="";renderRecSheet();toast("Repas conservé au menu, retiré des courses");
+    }
+  }
+  else if(a==="cmRemoveMenu"){
+    const k=b.dataset.k,sl=W()[k];
+    if(sl&&sl.id===recSheetId&&!isPast(k)){
+      const label=(recipes[sl.id]||{}).name||"ce repas";
+      if(confirm("Retirer « "+label+" » du menu ?\n\nLa recette sera conservée. Les achats déjà effectués resteront enregistrés.")){
+        const snap=snapshotSlot(k);
+        const removedId=sl.id;
+        if(hasSide(sl)){delete sl.id;delete sl.lock;delete sl.keep;delete sl.mealState;}
+        else delete W()[k];
+        // A legacy recipe-level addition can survive removal of the planned meal.
+        // Clear it only if no other planned, validated meal uses this recipe.
+        if(menu.shopExtra&&menu.shopExtra[removedId]&&!validatedUses(removedId).length){delete menu.shopExtra[removedId];}
+        recMealCtx=null;$("#recSheet").hidden=true;render();saveMenu();showUndo(label+" ("+slotLabel(k)+")",snap);
+        toast("Repas retiré du menu ; recette conservée");
+      }
+    }
+  }
+  else if(a==="cmToggleCourses"){
+    const k=b.dataset.k,sl=W()[k];
+    if(sl&&sl.id===recSheetId&&!isPast(k)){
+      if(["Courses faites","Terminé"].includes(cmMealStatus(sl))){toast("Ce repas est déjà finalisé : ses achats sont conservés.");return;}
+      const next=sl.lock?"Gardé":"En courses";
+      cmSetMealStatus(sl,next);
+      if(next==="En courses")cmEnsureShoppingDay(k);
+      // Legacy recipe-level additions must not double count a scheduled meal.
+      // Preserve manually added articles and all other recipes.
+      if(next==="En courses"&&menu.shopExtra&&menu.shopExtra[sl.id])delete menu.shopExtra[sl.id];
+      saveMenu();render();lastRecHtml="";renderRecSheet();
+      toast(next==="En courses"?"Repas envoyé aux courses":"Repas retiré des courses");
+    }
+  }
+  else if(a==="cmMealState"){
+    const k=b.dataset.k,state=b.dataset.state,sl=W()[k];
+    if(sl&&!isPast(k)&&CM_MEAL_STATES.includes(state)){
+      cmSetMealStatus(sl,state);if(state==="En courses")cmEnsureShoppingDay(k);render();saveMenu();
+      if(!$("#recSheet").hidden){lastRecHtml="";renderRecSheet();}
+      if(!$("#slotSheet").hidden)renderSlotSheet();
+      toast("État du repas : "+state);
+    }
+  }
+  else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(["Courses faites","Terminé"].includes(cmMealStatus(s))){toast("Repas déjà finalisé");}else if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
   else if(a==="shopSwap"&&!b.dataset.go&&mealBought(b.dataset.w,b.dataset.k)){bumpCtx={w:b.dataset.w,k:b.dataset.k};const s=menu.weeks[bumpCtx.w][bumpCtx.k];
     $("#bumpTxt").textContent=`« ${recipes[s.id].name} » (${slotLabel(bumpCtx.k)}) : ses ingrédients ont déjà été achetés. Que voulez-vous en faire ?`;$("#bumpSheet").hidden=false;}
   else if(a==="bumpClose"){$("#bumpSheet").hidden=true;bumpCtx=null;}
   else if(a==="bumpGo"){const c=bumpCtx;if(!c)return;$("#bumpSheet").hidden=true;bumpCtx=null;bumpDo(c,b.dataset.v);}
   else if(a==="useFirstDone"){menu.useFirst=(menu.useFirst||[]).filter(x=>x.id!==b.dataset.id);saveMenu();render();}
   else if(a==="shopSwap"){const w=b.dataset.w,k=b.dataset.k;shopSwapCtx={w,k};if(curWeek!==w){curWeek=w;LS.set("cm_week",w);render();}openPick(k,"main");}
-  else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock)t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
+  else if(a==="shopLockAll"){const t=[];for(const x of selectedShopDates())for(const[m]of MEALS){const s=x.wk[slotKey(x.dn,m)];if(s&&recipes[s.id]&&!s.lock&&!(["Courses faites","Terminé"].includes(cmMealStatus(s))))t.push({w:ymd(mondayOf(x.d)),k:slotKey(x.dn,m)});}lockPreview(t);}
   else if(a==="lockYes")lockConfirm();
   else if(a==="lockTog"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){i.buy=!i.buy;renderLock();}}
   else if(a==="lockQ"){const i=lockItems.find(x=>x.key===b.dataset.k);if(i){const st=qStep(i.u,i.bq);i.bq=Math.max(0,Math.round((i.bq+Number(b.dataset.d)*st)/st)*st);if(i.bq<=1e-6){i.bq=i.d;i.buy=false;}renderLock();}}
@@ -3161,7 +3275,7 @@ document.addEventListener("click",e=>{
   else if(a==="wStock"){if(wineDraft){wineCollect();wineDraft.stock=Math.max(0,(wineDraft.stock||0)+Number(b.dataset.d));renderWineForm();}}
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
-  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){$("#slotSheet").hidden=true;openRecSheet(planned.id);}}
+  else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){$("#slotSheet").hidden=true;openRecSheet(planned.id,k);}}
   else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
   else if(a==="weekMode"){LS.set("cm_wmode",b.dataset.v);render();}
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
@@ -3661,14 +3775,14 @@ function renderDaySheet(){const x=dayInfo(dayK);if(!x){$("#daySheet").hidden=tru
       ${inList?'<button type="button" class="btn ghost" data-act="dsRemove">Retirer ce jour des courses</button>':""}</div>`;}
 function dayApply(add){const x=dayInfo(dayK);if(!x)return"";const all=shopDates();let keys=Array.isArray(menu.shopDays)?menu.shopDays.filter(k=>all.some(y=>y.key===k)):defaultShopKeys(all);
   keys=keys.filter(k=>k!==dayK);if(add)keys.push(dayK);menu.shopDays=keys.sort();
-  for(const[m]of MEALS){const k=slotKey(x.dn,m),sl=x.wk[k];if(!sl||!recipes[sl.id])continue;if(add&&daySel[k]!==false)sl.lock=true;else delete sl.lock;}
+  for(const[m]of MEALS){const k=slotKey(x.dn,m),sl=x.wk[k];if(!sl||!recipes[sl.id])continue;if(add&&daySel[k]!==false){if(!["Courses faites","Terminé"].includes(cmMealStatus(sl)))cmSetMealStatus(sl,"En courses");}else if(!["Courses faites","Terminé"].includes(cmMealStatus(sl)))cmSetMealStatus(sl,"Gardé");}
   return add?"Liste de courses mise à jour":"Jour retiré des courses";}
 $("#daySheet").addEventListener("click",e=>{if(e.target.id==="daySheet")$("#daySheet").hidden=true;});
 
 let viewServ={}, recLimit=50;
 /* recipe shown over the current screen: closing it returns exactly where you were */
-let recSheetId=null;
-function openRecSheet(id){ natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; lastRecHtml=""; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
+let recSheetId=null,recMealCtx=null;
+function openRecSheet(id,mealKey=null){ recMealCtx=mealKey; natAsk=null; if(!recipes[id])return; if(recSheetId!==id)recTab="ing"; lastRecHtml=""; if(shNews[id]){seenNews(id);setTimeout(render,0);} recSheetId=id; renderRecSheet(); $("#recSheet").hidden=false; $("#recSheetIn").scrollTop=0; }
 let recTab="ing";
 /* ---------- detailed steps for beginners: etapes-detaillees.json on the site (id → prep + steps + hash of the short steps they were written from) ---------- */
 let DETAIL=LS.get("cm_detail",{recipes:{}}),DETAIL_NAME={};
@@ -3826,23 +3940,24 @@ function ratingOf(r){const l=(r&&r.ratings)||[];if(!l.length)return null;return{
 const starTxt=v=>"★".repeat(Math.round(v))+"☆".repeat(5-Math.round(v));
 function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
-  const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
-  const ings=(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<li class="q">${esc(fmt(b*ingMult(r,i,p),u))}</li><li>${esc(i.n)}</li>`;}).join("");
+  const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4), activeSlot=recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id?W()[recMealCtx]:null;
+  const ings=(r.ing||[]).map(i=>{const[b,u]=mealIngredientBase(r,i,p,activeSlot);return`<li class="q">${esc(fmt(b,u))}</li><li>${esc(i.n)}</li>`;}).join("");
   const steps=stepsFor(id).steps;
   const shBox=r.shared?`<div class="note" style="display:flex;flex-direction:column;gap:8px"><span>Recette de <b>${esc(r.sharedBy||"un proche")}</b> (lecture seule).${r.linkOnly?" Elle vient d'un site : ouvrez-la avec « Voir la recette d'origine ».":""}</span>
       <div class="row">${r.linkOnly&&r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine ↗</a>`:`<button type="button" class="btn" data-act="copyShared">Copier dans mon carnet</button>`}</div></div>`:"";
   const ph=rPhotoSrc(id),rt=ratingOf(r),nut=nutri(r);
   const tab=(v,l)=>`<button type="button" class="chip" data-act="recTab" data-v="${v}" aria-pressed="${recTab===v}">${l}</button>`;
   const cats=`<div class="field"${r.shared?' hidden':""}><span class="label">Catégories (plusieurs possibles)</span><div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}${r.cat===c&&catsOf(r).length>1?" (principale)":""}</button></span>`;}).join("")}</div>
-      ${r.cat==="Entrée"&&canMain(r)?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en plat, les quantités sont multipliées (« pour 4 en entrée = pour 2 en plat »)</span><div class="dchips">${[["2","×2"],["1.5","×1,5"]].map(([v,l])=>`<span class="dchip${String(r.mainFactor||2)===v?" on":""}"><button type="button" data-act="recAlso" data-v="${v}" aria-pressed="${String(r.mainFactor||2)===v}">${l}</button></span>`).join("")}</div>`
+      ${false?``
        :MAIN_CATS.includes(r.cat)&&inCat(r,"Entrée")?`<span class="muted" style="font-size:13px;margin-top:6px">Servie en entrée, elle compte pour une demi-portion.</span>`:""}</div>`;
   let body="";
   if(recTab==="ing")body=`<div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       ${platsLine(r,p,id)}<span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}${dishOf(r)?` (1 ${dishOf(r).one})`:""}</span></div>
+    ${activeSlot?`<div style="margin:9px 0 13px;padding:12px;border:1px solid #4b98ff;border-radius:12px;background:#102d4c"><b>🍽️ Adapter les portions</b><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">${[[1,"Normale ×1"],[1.5,"Généreuse ×1,5"],[2,"Double ×2"]].map(([v,t])=>`<button type="button" class="btn" data-act="mealPortion" data-k="${esc(recMealCtx)}" data-v="${v}" style="border-color:${mealPortionFactor(activeSlot)===v?'#45dd9c':'#4b98ff'}">${t}</button>`).join("")}<button type="button" class="btn" data-act="mealPortionCustom" data-k="${esc(recMealCtx)}">Personnalisée (${String(mealPortionFactor(activeSlot)).replace('.',',')}×)</button></div><small>Choix enregistré pour ce repas, identique dans Maisonnée et les courses.</small></div>`:""}
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}
-    <div class="recipe-tools"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ Ajouter, supprimer ou remplacer des ingrédients</button>${sl.length&&sl.some(k=>W()[k].n!==p)?`<button type="button" class="btn primary" data-act="vservApply" data-id="${esc(id)}">Appliquer ${p} personnes au menu</button>`:""}</div>
-    <div class="row">${shopBtn(id,p)}</div>`;
+    <div class="recipe-tools"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ Ajouter, supprimer ou remplacer des ingrédients</button></div>
+    ${recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id?`<div class="cm-reversible"><button type="button" class="btn ${W()[recMealCtx].lock?"cm-remove":"primary"}" data-act="cmToggleCourses" data-k="${esc(recMealCtx)}">${W()[recMealCtx].lock?"↩ Retirer des courses":"🛒 Ajouter aux courses"} · ${p} pers.</button><div class="muted" style="font-size:12px;margin-top:7px">${W()[recMealCtx].lock?"✓ Ce repas est dans les courses. Les besoins sont recalculés à chaque changement de personnes.":"Ce repas n'est pas dans les courses."}</div></div>`:""}`;
   else if(recTab==="steps"){const sx=stepsFor(id);body=stepsToggle(id,sx)+modeChips(id,sx)+prepHtml(sx.prep)+batchNote(sx,p)+(sx.steps.length?`<ol class="steps">${sx.steps.map(x=>`<li>${esc(x)}${techHtml(techsIn(x))}</li>`).join("")}</ol>`:`<p class="muted">Pas d'étapes notées.${r.source?" Voyez la recette d'origine.":""}</p>`);}
   else body=(()=>{const ws=(menu.wines||[]).filter(w=>w.rec===id);return ws.length?`<div class="note">🍾 Dans votre cave pour ce plat : ${ws.map(w=>`<button type="button" class="link" data-act="wineOpen" data-id="${w.id}">${esc(wineLabel(w))}${w.stock?` (${w.stock})`:" (plus en stock)"}</button>`).join(", ")}</div>`:"";})()+(r.shared?"":`<div class="row" style="justify-content:flex-end">${confirmDel===id?`<span>Supprimer cette recette${slotsOf(id).length?" (elle sera retirée du menu et des courses)":""} ?</span><button type="button" class="btn danger" data-act="delYes" data-id="${esc(id)}">Supprimer</button><button type="button" class="btn ghost" data-act="delNo">Annuler</button>`:`<button type="button" class="btn ghost" data-act="del" data-id="${esc(id)}">🗑️ Supprimer la recette</button>`}</div>`)+`<div class="drink">${(()=>{const d=drinkFor(r);return`🍷 Vin : ${esc(d[0])} ${vivinoLink(pairingQuery(d[0]),"Vivino")}<br>🥤 Sans alcool : ${esc(d[1])}`;})()}</div>
     <div class="nut">${esc(fmtNut(nut))} par personne</div><div>${dissocBadge(recipeDissoc(r))}</div>
@@ -3854,19 +3969,20 @@ function renderRecSheet(){
     ${ph?recPhotoBlock(id,true):`<div class="row">${recPhotoBlock(id)}</div>`}
     <div><h2>${r.fav?`<span title="Favorite" style="color:#e6a900">★ </span>`:""}${esc(r.name)}</h2><div class="muted" style="font-size:13px;margin-top:4px"><span class="tag">${esc(catsOf(r).join(" · "))}</span>${r.time?r.time+" min · ":""}${KIND_LABEL[kindOf(r)]}${isLight(r)?" · léger":""}${showOn("nut")?" · "+esc(fmtNut(nut,true)):""}${rt?` · <b class="rs-stars">${starTxt(rt.avg)}</b> (${rt.n})`:""}</div></div>
     ${shBox}
+    ${recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id?`<div class="cm-meal-actions">${cmStatusChips(recMealCtx,W()[recMealCtx])}<div class="cm-meal-note">${W()[recMealCtx].lock?"🛒 Ce repas est inclus dans les courses.":"Ce repas n’est pas envoyé aux courses."}</div><div class="cm-meal-buttons"><button type="button" class="btn danger" data-act="cmRemoveMenu" data-k="${esc(recMealCtx)}">🗑️ Retirer du menu</button></div></div>`:""}
     <div class="rs-acts">
       <button type="button" data-act="fav" data-id="${esc(id)}" aria-pressed="${!!r.fav}"><span>${r.fav?"★":"☆"}</span>Favori</button>
       <button type="button" data-act="toggle" data-id="${esc(id)}"><span>📅</span>+ Menu</button>
-      <button type="button" data-act="recTab" data-v="ing"><span>🛒</span>Courses</button>
+      
       <button type="button" data-act="editRec" data-id="${esc(id)}"><span>✏️</span>${r.shared?"Personnaliser":"Modifier"}</button><button type="button" data-act="variantRec" data-id="${esc(id)}"><span>📋</span>Créer une variante</button></div>
     ${r.cloudBy?`<div class="muted" style="font-size:13px">👤 Ajoutée par <b>${esc(r.cloudBy)}</b></div>`:""}${proposeHtml(id)}${pageHtml(id)}
     ${steps.length?`<button type="button" class="btn primary rs-cook" data-act="cook" data-id="${esc(id)}">👨‍🍳 Cuisiner pas à pas</button>`:""}
     <div class="chips rs-tabs">${tab("ing","Ingrédients")}${tab("steps","Étapes"+(steps.length?" ("+steps.length+")":""))}${tab("info","Vin & infos")}</div>
     <div class="rs-body">${body}</div>`;
   // only redraw when something changed (photos arriving in the background must not reset what you are reading)
-  const box=$("#recSheetIn");if(html===lastRecHtml&&box.childElementCount)return;lastRecHtml=html;
+  const box=$("#recSheetIn");if(html===lastRecHtml&&box.childElementCount)return;const oldScroll=box.scrollTop;lastRecHtml=html;
   const opened=[...box.querySelectorAll("details[open] summary")].map(s=>s.textContent);
-  box.innerHTML=html;box.querySelectorAll("details summary").forEach(s=>{if(opened.includes(s.textContent))s.parentNode.open=true;});
+  box.innerHTML=html;box.querySelectorAll("details summary").forEach(s=>{if(opened.includes(s.textContent))s.parentNode.open=true;});box.scrollTop=oldScroll;
 }
 let lastRecHtml="";
 // switching tab: the tab bar stays exactly where it was under the finger
