@@ -3071,7 +3071,7 @@ document.addEventListener("click",e=>{
   else if(a==="lockNo"){lockOrigN.forEach(({t,n})=>{const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)s.n=n;});lockOrigN=[];lockPend=[];lockEdit=false;$("#lockSheet").hidden=true;render();}
   else if(a==="lockN"){const t=lockPend[Number(b.dataset.i)],s=t&&((menu.weeks||{})[t.w]||{})[t.k];if(s){s.n=Math.max(1,Math.min(50,s.n+Number(b.dataset.d)));lockPreview(lockPend,lockEdit,true);}}
   else if(a==="lockUndo"){for(const t of lockPend){const s=((menu.weeks||{})[t.w]||{})[t.k];if(s)delete s.lock;}lockPend=[];lockItems=[];lockEdit=false;lockOrigN=[];$("#lockSheet").hidden=true;render();saveMenu();toast("Retiré des courses : ses ingrédients sortent de la liste");}
-  else if(a==="shopDaysAll"){const all=shopDates();menu.shopDays=all.map(x=>x.key);/* Sélection des jours uniquement : ne jamais valider automatiquement un repas proposé. */render();saveMenu();toast("Tous les jours sélectionnés ; seuls les repas déjà validés restent dans les courses");}
+  else if(a==="shopDaysAll"){const all=shopDates();menu.shopDays=all.map(x=>x.key);for(const x of all)for(const[m]of MEALS){const sl=x.wk[slotKey(x.dn,m)];if(sl&&recipes[sl.id])sl.lock=true;}render();saveMenu();toast("Tous les repas prévus sont dans les courses");}
   else if(a==="shopDaysNone"){menu.shopDays=[];render();saveMenu();}
   else if(a==="haveRayon"){const ry=b.dataset.r,u=haveUntil();menu.have=Object.assign({},menu.have);
     shopping().filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).forEach(i=>{menu.have[i.key]=u;});
