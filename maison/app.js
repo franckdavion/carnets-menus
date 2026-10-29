@@ -261,6 +261,26 @@ async function loadCloud(hid) {
   saveLocal();
 }
 
+/* V9.7 — alertes non intrusives pour les ajouts manuels reçus du foyer.
+   N'affecte ni les achats, ni les données Supabase, ni les statuts des repas. */
+const mzIncomingShop = new Map();
+let mzIncomingShopTimer = null;
+function mzNoticeShopInsert(row) {
+  if (!row || row.done || String(row.source || '').startsWith('carnet:') || String(row.source || '').startsWith('menu:')) return;
+  if (row.added_by && row.added_by === S.me) return;
+  // Les écritures locales optimistes figurent déjà dans S.shop.
+  if ((S.shop || []).some(x => x.id === row.id)) return;
+  mzIncomingShop.set(row.id, String(row.name || 'Article'));
+  clearTimeout(mzIncomingShopTimer);
+  mzIncomingShopTimer = setTimeout(() => {
+    const names = [...mzIncomingShop.values()]; mzIncomingShop.clear();
+    if (!names.length || screen !== 'app') return;
+    const msg = names.length === 1 ? 'Nouvel article ajouté : ' + names[0]
+      : names.length + ' nouveaux articles ajoutés aux courses : ' + names.slice(0, 3).join(', ') + (names.length > 3 ? '…' : '');
+    toast(msg, 'Voir', () => { view = 'courses'; render(); });
+  }, 1100);
+}
+
 function listen(hid) {
   if (rt) { sb.removeChannel(rt); rt = null; }
   rt = sb.channel("foyer-" + hid);
@@ -269,6 +289,7 @@ function listen(hid) {
     if (V3.includes(key) && !S.v3) continue;
     if (key === "photos" && !S.v4) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
+      if (key === "shop" && p.eventType === "INSERT") mzNoticeShopInsert(p.new);
       if (p.eventType === "DELETE") { S[key] = S[key].filter(x => x.id !== p.old.id); }
       else {
         const row = p.new; if (row.household_id !== hid) return;

@@ -323,3 +323,13 @@ window.addEventListener("message", e => {
     if(typeof softRender==="function")softRender();
   }
 });
+
+/* V9.6 : signal non bloquant des nouveaux articles, depuis le Carnet partagé. */
+window.addEventListener('message', function(event){
+  if(event.origin!==location.origin || !event.data || event.data.type!=='cm-courses-v96-new')return;
+  const n=Number(event.data.count)||0;
+  if(n>0 && view==='courses'){
+    toast(n+' nouvel'+(n>1?'s':'')+' article'+(n>1?'s':'')+' ajouté'+(n>1?'s':'')+' aux courses');
+    try{softRender();}catch(e){}
+  }
+});
