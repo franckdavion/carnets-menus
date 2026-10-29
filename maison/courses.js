@@ -24,7 +24,7 @@ function cxData() {
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
     const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
-    return {days,plan,items,extras,xr,have,learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
+    return {days,plan,items,extras,xr,have,duplicateWarnings:shoppingDuplicateWarnings(),learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
 }
 /* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
    An item typed by hand finds its aisle by its name; moved once by hand, it stays there next time (menu.rayonLearn,
@@ -122,6 +122,7 @@ VIEWS.courses = function () {
     <div class="cx-ultimate-actions"><button class="btn primary" type="button" data-act="cxJump">🛒 Mode magasin</button><button class="btn" type="button" data-act="cxAddFocus">＋ Ajouter un article</button><a class="btn" href="${CARNET_URL}">📖 Ouvrir le Carnet</a></div>
     <details class="card cx-ultimate-help"><summary>ⓘ Aide et états des repas</summary><p class="muted small">Touchez un plat pour choisir une action. Touchez son état pour ouvrir la fiche du repas.</p><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></details>`;
 
+  if(D.duplicateWarnings&&D.duplicateWarnings.length) out += `<details class="card" style="margin-top:12px"><summary>⚠️ ${D.duplicateWarnings.length} doublon${D.duplicateWarnings.length>1?"s":""} possible${D.duplicateWarnings.length>1?"s":""} à vérifier</summary><p class="muted small">Ces articles se ressemblent. Aucun regroupement ni achat n'a été modifié automatiquement.</p>${D.duplicateWarnings.map(g=>`<p class="small">${g.map(esc).join(" / ")}</p>`).join("")}</details>`;
   out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
     <div class="btns" style="margin-top:8px"><button class="linkbtn small" data-act="cxDaysAll">Tous les jours</button><button class="linkbtn small" data-act="cxDaysNone">Aucun</button></div>`
     : `<p class="muted small">Aucun repas prévu dans les 3 prochaines semaines.</p>`}
