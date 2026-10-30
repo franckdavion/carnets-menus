@@ -1369,14 +1369,15 @@ function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
   return`<div class="use-first"><span class="label">🧊 À consommer en priorité (ou à congeler)</span>${l.map(x=>`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span style="font-size:14px"><b>${esc(x.ing.join(", "))}</b><br><small class="muted">achetés pour ${esc(x.name)}</small></span><button type="button" class="btn ghost" data-act="useFirstDone" data-id="${x.id}">✓ Fait</button></div>`).join("")}</div>`;}
 function shopping(all){
   const acc={};
-  const add=(rid,n,when,role,skip)=>{
+  const add=(rid,n,when,role,skip,freshKey)=>{
     const r=recipes[rid]; if(!r)return;
     const f=n/(r.serves||4);
     for(const i of r.ing||[]){
       if(!i.n)continue;
       const[q,u]=recipeIngredientBase(r,i,n,role);
-      const key=norm(i.n)+"|"+u;
-      if(skip&&skip.includes(key))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
+      const baseKey=norm(i.n)+"|"+u;
+      const key=freshKey?baseKey+"|nouvelle-preparation:"+freshKey:baseKey;
+      if(skip&&skip.includes(baseKey))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
       if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:i.r||"Divers",from:[]};
       acc[key].q+=q;
       const lab=r.name+(when?" ("+when+")":"");
@@ -1393,14 +1394,14 @@ function shopping(all){
       for(const i of sl.ingCustom){if(!i.n||sk&&sk.includes(i.key))continue;
         const match=String(mealCustomQuantity(i.qt,sl)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
         const raw=match?match[1].trim():"",unit=match?match[2].trim():"";
-        const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u;
+        const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u+(sl.freshShopKey?"|nouvelle-preparation:"+sl.freshShopKey:"");
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:"Divers",from:[]};
         acc[key].q+=q;
         const lab=recipes[sl.id].name+" ("+when+")";
         if(!acc[key].from.includes(lab))acc[key].from.push(lab);
       }
     }else{
-      add(sl.id,sl.n,when,"main",sk,sl); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl);
+      add(sl.id,sl.n,when,"main",sk,sl.freshShopKey); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl.freshShopKey); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl.freshShopKey);
     }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
@@ -1979,7 +1980,8 @@ $("#driveForm").addEventListener("submit",e=>{e.preventDefault();
 /* ---------- finishing a trip: bought items leave the list, missed ones stay, the trip goes to history ---------- */
 let finishAsk=false, lastFinish=null;
 function finishTrip(){
-  const snap=JSON.stringify({checked:menu.checked,bought:menu.bought,missed:menu.missed,extras:menu.extras,trips:menu.trips});
+  const completedMealIds=typeof window.maisonneeFinishEligibleMeals==="function" ? window.maisonneeFinishEligibleMeals() : [];
+  const snap=JSON.stringify({checked:menu.checked,bought:menu.bought,missed:menu.missed,extras:menu.extras,trips:menu.trips,weeks:menu.weeks});
   const today=ymd(new Date()), until=haveUntil()>today?haveUntil():today;
   const items=shopping(), got=[], miss=[];
   menu.bought=Object.assign({},menu.bought); menu.missed=Object.assign({},menu.missed);
@@ -1995,11 +1997,16 @@ function finishTrip(){
   menu.trips=[{d:today,got,miss},...(menu.trips||[])].slice(0,20);
   // dates each product was bought (the last 8): Maisonnée's « produits réguliers » use them
   {const bl=Object.assign({},menu.buyLog);for(const g of got){const k=norm(String(g.n).split(" : ")[0]);bl[k]=[...(bl[k]||[]).filter(d=>d!==today),today].slice(-8);}menu.buyLog=bl;}
+  // A confirmed shopping trip completes only the planned meals whose ingredients
+  // were all checked (or already available). Unrelated extras never block them.
+  if(completedMealIds.length && typeof window.maisonneeApplyFinishedMeals==="function"){
+    window.maisonneeApplyFinishedMeals(completedMealIds);
+  }
   lastFinish=snap; finishAsk=false;
   $("#storeSheet").hidden=true; render(); saveMenu();
   toast(`Courses terminées : ${got.length} article${got.length>1?"s":""} acheté${got.length>1?"s":""}`);
 }
-function undoFinish(){if(!lastFinish)return;const o=JSON.parse(lastFinish);["checked","bought","missed","extras","trips"].forEach(k=>{if(k in o)menu[k]=o[k];else delete menu[k];});lastFinish=null;render();saveMenu();toast("Courses remises comme avant");}
+function undoFinish(){if(!lastFinish)return;const o=JSON.parse(lastFinish);["checked","bought","missed","extras","trips","weeks"].forEach(k=>{if(k in o)menu[k]=o[k];else delete menu[k];});lastFinish=null;render();saveMenu();toast("Courses remises comme avant");}
 function renderTrips(){
   $("#finishNote").innerHTML=lastFinish?`<div class="note row" style="justify-content:space-between">Courses terminées.<button type="button" class="btn" data-act="finishUndo">Annuler</button></div>`:"";
   const tr=menu.trips||[];
@@ -3117,7 +3124,7 @@ document.addEventListener("click",e=>{
   else if(a==="pickRandom"){
     if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
-  else if(a==="pickClear"){if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
+  else if(a==="pickClear"){if(pickRole==="main")detachRemovedMealPurchases(curWeek,pickKey);if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
   else if(a==="rmCourse"){removePart(b.dataset.k,b.dataset.role);}
   else if(a==="shopDel"){const i=shopping(true).find(x=>x.key===b.dataset.k);if(i){const snap=shopSnap();eraseItem(i);render();saveMenu();showUndo(i.n+" (liste de courses)",snap);}}
   else if(a==="shopClear"){shopClearAsk=true;render();}
@@ -3209,6 +3216,7 @@ document.addEventListener("click",e=>{
       if(confirm("Retirer « "+label+" » du menu ?\n\nLa recette sera conservée. Les achats déjà effectués resteront enregistrés.")){
         const snap=snapshotSlot(k);
         const removedId=sl.id;
+        detachRemovedMealPurchases(curWeek,k);
         if(hasSide(sl)){delete sl.id;delete sl.lock;delete sl.keep;delete sl.mealState;}
         else delete W()[k];
         // A legacy recipe-level addition can survive removal of the planned meal.
@@ -3224,6 +3232,23 @@ document.addEventListener("click",e=>{
     if(sl&&sl.id===recSheetId&&!isPast(k)){
       if(["Courses faites","Terminé"].includes(cmMealStatus(sl))){toast("Ce repas est déjà finalisé : ses achats sont conservés.");return;}
       const next=sl.lock?"Gardé":"En courses";
+      if(next==="En courses"){
+        // V7: explicit choice only when an earlier purchase covers ingredients.
+        // A new preparation has separate shopping keys; no historic purchase is deleted.
+        const recipe=recipes[sl.id];
+        const alreadyBought=(recipe?.ing||[]).some(i=>{
+          if(!i.n)return false;
+          const [,u]=recipeIngredientBase(recipe,i,sl.n,"main");
+          const key=norm(i.n)+"|"+u;
+          const bgt=menu.bought?.[key];
+          return (bgt&&bgt.until>=ymd(new Date())&&Number(bgt.q)>0)||!!menu.checked?.[key];
+        });
+        if(alreadyBought){
+          const restart=confirm("Des ingrédients de ce repas ont déjà été achetés.\n\nOK : Recommencer les courses (nouvelle préparation).\nAnnuler : Conserver les achats précédents.");
+          if(restart)sl.freshShopKey="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+          else delete sl.freshShopKey;
+        }else delete sl.freshShopKey;
+      }
       cmSetMealStatus(sl,next);
       if(next==="En courses")cmEnsureShoppingDay(k);
       // Legacy recipe-level additions must not double count a scheduled meal.
@@ -4048,6 +4073,37 @@ function pickPool(){
 }
 function flashSlot(k){setTimeout(()=>{const el=document.querySelector(view==="week"?`[data-wslot="${k}"]`:`[data-slot="${k}"]`);if(!el||(view!=="menu"&&view!=="week"))return;
   el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1600);},90);}
+/* V6 — Une programmation supprimée ne doit pas réutiliser ses anciens achats.
+   Ne libérer que les crédits attribuables au repas retiré et non requis
+   par d'autres repas encore en courses. Les achats historiques restent dans trips. */
+function detachRemovedMealPurchases(w,k){
+  const slot=((menu.weeks||{})[w]||{})[k];
+  if(!slot||!slot.id||!slot.lock)return;
+  const oldBought=menu.bought||{},oldChecked=menu.checked||{},oldQty=menu.checkedQty||{};
+  const before=shopping(true); // déclenche d'abord les ajustements V4 éventuels
+  const credits=menu.bought||{};
+  const oldLock=slot.lock,oldState=slot.mealState;
+  // Mesurer la contribution du repas sans achats déjà déduits.
+  const measure=()=>{const save=menu.bought;menu.bought={};try{return Object.fromEntries(shopping(true).map(i=>[i.key,i.q]));}finally{menu.bought=save;}};
+  const full=measure();
+  delete slot.lock;delete slot.mealState;
+  const rest=measure();
+  slot.lock=oldLock;slot.mealState=oldState;
+  menu.bought=Object.assign({},credits);
+  menu.checked=Object.assign({},oldChecked);
+  menu.checkedQty=Object.assign({},oldQty);
+  const today=ymd(new Date());
+  for(const [key,total] of Object.entries(full)){
+    const contribution=Math.max(0,total-(rest[key]||0));
+    if(contribution<=0.000001)continue;
+    // Un produit partagé par plusieurs repas ne doit pas perdre leurs achats.
+    if((rest[key]||0)>0.000001)continue;
+    const b=menu.bought[key];
+    if(b&&b.until>=today){const left=Math.max(0,(Number(b.q)||0)-contribution);
+      if(left<=0.000001)delete menu.bought[key];else menu.bought[key]={...b,q:left};}
+    delete menu.checked[key];delete menu.checkedQty[key];
+  }
+}
 // changing a dish from Courses: if the meal was already validated, its old ingredients leave the list first
 let shopSwapCtx=null;
 function releaseMeal(w,k){const s=((menu.weeks||{})[w]||{})[k];if(!s||!s.lock)return 0;
@@ -4806,6 +4862,20 @@ document.addEventListener("click",e=>{
     }
     return result;
   }
+  // Called by finishTrip BEFORE checked items are cleared, then applied AFTER
+  // the purchase is recorded. Shared by Carnet and Maisonnée's embedded iframe.
+  window.maisonneeFinishEligibleMeals=()=>eligible().filter(x=>x.complete).map(x=>x.id);
+  window.maisonneeApplyFinishedMeals=function(ids){
+    let changed=0;
+    for(const id of ids){
+      const split=id.indexOf("|");if(split<0)continue;
+      const week=id.slice(0,split),key=id.slice(split+1);
+      const slot=(menu.weeks||{})[week]?.[key];
+      if(!slot||!slot.lock||!recipes[slot.id]||["Courses faites","Terminé"].includes(slot.mealState))continue;
+      slot.mealState="Courses faites";slot.keep=true;slot.lock=true;changed++;
+    }
+    return changed;
+  };
   function offer(completed){
     const ids=completed.map(x=>x.id);
     const names=completed.map(x=>"• "+x.name).join("\n");
