@@ -181,7 +181,7 @@ function mealSlotSheet(k) {
       <div class="meal-top-card">
         <div class="meal-hero">
           ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="Photo du plat" loading="lazy" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer" title="Changer la photo">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo disponible" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer">🍽️</div>`}
-          <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong><button class="btn" data-act="rRename" data-v="${esc(k)}" aria-label="Renommer la recette">✏️ Renommer</button>
+          <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong><button class="btn meal-rename-compact" data-act="rRename" data-v="${esc(k)}" aria-label="Renommer la recette" title="Renommer">✏️<span> Renommer</span></button>
             <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button>
             <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
           </div>
@@ -192,9 +192,9 @@ function mealSlotSheet(k) {
         </div>
       </div>
       <div class="meal-section-card"><h3>🍴 Composer mon repas</h3><div class="meal-compose-grid">
-        <div class="meal-compose-item"><b>Plat principal</b><span>${esc(x.name)}</span></div>
-        <div class="meal-compose-item"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
-        <div class="meal-compose-item"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
+        <div class="meal-compose-item meal-compose-main"><b>🍽️ Plat principal</b><span>${esc(x.name)}</span></div>
+        <div class="meal-compose-item meal-compose-side"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
+        <div class="meal-compose-item meal-compose-side"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
       </div></div>
       <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="meal-ingredient-controls"><div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
           <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label></div>
