@@ -9,9 +9,12 @@
 MC.presences = "#4ADE80";
 MI.presences = '<rect class="f" x="4" y="7" width="24" height="20" rx="5"/><path d="M4 13h24M10 4.5v5M22 4.5v5"/><path class="s" d="M10.5 19.5l3 3 7-7"/>';
 MODS.push({ k: "presences", t: "Présences", g: "Organisation", sub() {
-  if (!PR.ix) return "Présences des enfants";
-  const d = today(), n = PRC.childrenFor(PR.ix, d, d).filter(c => PRC.dayStatus(PR.ix, c.id, d).st === "present").length;
-  return `${plural(n, "enfant présent", "enfants présents")} aujourd'hui`;
+  if (!PR.ix) { if (!PR.loading && !PR.loadErr && !PR.need && typeof prLoad === "function") prLoad(); return "Présences des enfants"; }
+  if (typeof prKick === "function") prKick();
+  const d = today();
+  const la = PRC.childrenFor(PR.ix, d, d).map(c => ({ c, s: PRC.dayStatus(PR.ix, c.id, d) })).filter(x => x.s.st === "present");
+  if (!la.length) return "Aucun enfant présent";
+  return la.map(x => x.s.kind === "relais" ? x.c.first_name + " (relais)" : x.c.first_name).join(", ");
 } });
 // La tuile apparaît aussi sur l'Accueil de ceux qui ont déjà personnalisé leur accueil (une seule fois).
 (function () { const p = LS.get("mz_home", null); if (Array.isArray(p) && !LS.get("mz_pr_pin", false)) { if (!p.includes("presences")) LS.set("mz_home", [...p, "presences"]); LS.set("mz_pr_pin", true); } })();
@@ -129,7 +132,7 @@ let prKickT = 0;
 function prKick() {
   clearTimeout(prKickT);
   prKickT = setTimeout(() => {
-    if (view !== "presences" || !PR.data || PR.sync.busy || !(prSet().cals || []).length) return;
+    if ((view !== "presences" && view !== "home") || !PR.data || PR.sync.busy || !(prSet().cals || []).length) return;
     const [a, b] = prWin(), fresh = Date.now() - PR.sync.at < 10 * 60e3;
     if (!PR.synced.has(a + "|" + b) || !fresh) { if (PR.sync.failAt && Date.now() - PR.sync.failAt < 60e3) return; prSync(a, b); }
   }, 500);

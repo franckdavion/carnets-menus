@@ -636,20 +636,24 @@ document.addEventListener("click", async e => {
       const part=b.dataset.r;
       if(!["main","entree","dessert","all"].includes(part))break;
       const x=weekSlots(rWeek)[v];if(!x||!x.s)break;
-      const label=part==="all"?"tout le repas":part==="main"?"le plat principal":part==="entree"?"l’entrée":"le dessert";
-      if(!confirm(`Confirmer le retrait de ${label} ?`))break;
       if(part==="all"){
         cev(`delete ${slotJs(v)}`);
-        if(rRemoveContext)rRemoveContext.all=true;
-        carnetSave("Repas complet retiré.");
+        carnetSave();
+        rRemoveContext=null;
+        closeSheet();
+        toast("Repas retiré.");
+        break;
       }else if(part==="main"){
         cev(`(()=>{const s=${slotJs(v)};if(!s)return;delete s.id;delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;delete s.lock;})()`);
-        carnetSave("Plat principal retiré.");
+        carnetSave();
       }else{
         cev(`(()=>{const s=${slotJs(v)};if(s){delete s[${JSON.stringify(part)}];delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;}})()`);
-        carnetSave(label+" retiré(e).");
+        carnetSave();
       }
-      rRemoveChooseSheet(v);
+      const left=weekSlots(rWeek)[v];
+      const still=left&&left.s&&(left.name||left.s.entree||left.s.dessert);
+      if(!still){rRemoveContext=null;closeSheet();toast("Repas retiré.");}
+      else rRemoveChooseSheet(v);
       break;
     }
     case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré."); break;

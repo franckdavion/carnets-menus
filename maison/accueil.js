@@ -139,6 +139,17 @@ const iconForCode=n=>n==null?'☁️':n===0?'☀️':n<=3?'⛅':n<=48?'🌫️':
 const icon3D=n=>n==null?'cloud':n===0?'sun':n<=3?'partly-cloudy-day':n<=48?'fog':n<=67?'rain':n<=77?'snow':n<=82?'rain':'storm';
 const iconImage=n=>`<img class="mn-3d-weather" src="assets/weather3d/${icon3D(n)}.svg" alt="" loading="lazy" onerror="this.hidden=true"><span class="mn-icon-fallback">${iconForCode(n)}</span>`;
 const saisonDe=m=>[11,0,1].includes(m)?'Hiver':[2,3,4].includes(m)?'Printemps':[5,6,7].includes(m)?'Été':'Automne';
+function infoLune(date){
+ const synod=29.530588853;
+ const known=Date.UTC(2000,0,6,18,14,0);
+ let age=((date.getTime()-known)/86400000)%synod;
+ if(age<0)age+=synod;
+ const illum=Math.round((1-Math.cos(2*Math.PI*age/synod))/2*100);
+ const bornes=[[1.84566,'Nouvelle lune'],[5.53699,'Premier croissant'],[9.22831,'Premier quartier'],[12.91963,'Lune gibbeuse'],[16.61096,'Pleine lune'],[20.30228,'Lune gibbeuse'],[23.99361,'Dernier quartier'],[27.68493,'Dernier croissant'],[29.53059,'Nouvelle lune']];
+ let nom='Nouvelle lune';
+ for(const [limite,label] of bornes){if(age<limite){nom=label;break}}
+ return {nom,illum};
+}
 const HOME_CAL='mz_home_cal';
 function agendaChoisi(){
  const v=typeof LS!=='undefined'?LS.get(HOME_CAL,null):null;
@@ -213,7 +224,7 @@ function apercuMaison(){
   const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
   vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
   const livre=(Array.isArray(S.recipes)&&S.recipes.length)?S.recipes:(typeof DEMO_RECIPES!=='undefined'?DEMO_RECIPES:[]);
-  if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Recette du foyer'};}
+  if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Recette du foyer',id:r.legacy_id||r.id||''};}
  }catch(e){}
  return vide;
 }
@@ -236,6 +247,7 @@ function render(){
  const dailyCards=d?.time?.length?d.time.slice(0,7).map((day,i)=>`<div class="mn-day" aria-label="${day}"><span class="mn-day-name">${weekday(day)}</span><span class="mn-day-icon" aria-hidden="true">${iconImage(d.weather_code?.[i])}</span><strong>${Number.isFinite(d.temperature_2m_max?.[i])?Math.round(d.temperature_2m_max[i])+'°':'—'}</strong><small>${Number.isFinite(d.temperature_2m_min?.[i])?Math.round(d.temperature_2m_min[i])+'°':'—'}</small></div>`).join(''):'<p class="mn-weather-empty">Prévisions indisponibles</p>';
  const key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
  const saint=ephemeride.saint||saintsConnus[key]||'Fête du jour indisponible';
+ const lune=infoLune(now);
  const g=apercuMaison();
  const plus={agenda:{k:g.cal.k,t:g.cal.t,m:g.cal.m},repas:{k:g.repas.k,t:g.repas.t,m:g.repas.m},courses:{k:g.courses.k,t:g.courses.t,m:g.courses.m},recettes:{k:g.recette.k,t:g.recette.t,m:g.recette.m}};
  const ton=k=>k==='agenda'?'cal':k==='recettes'?'recette':k;
@@ -248,10 +260,11 @@ function render(){
   const tete=`<span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>`;
   const corps=`<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}`;
   if(k==='agenda')return `<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`;
+  if(k==='recettes'&&g.recette.id)return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
   return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
  }).join('');
  el.innerHTML=`<section class="ultimate-hero"><div class="ultimate-scene" aria-hidden="true"><div class="ultimate-sun">☀️</div><div class="ultimate-cup"><img class="mn-3d-coffee" src="assets/weather3d/coffee.svg" alt="" onerror="this.hidden=true"><span class="mn-icon-fallback">☕</span></div></div><div class="ultimate-greeting"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><div class="ultimate-kicker">⌂ MAISONNÉE · ULTIMATE</div><h1>Bonjour la famille ! ☀️</h1><p>Voici votre journée · ${date()}</p></div><div class="ultimate-window" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>
-<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div></section>
+<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div></div></div></section>
 <section class="mn-house" aria-label="Notre maison"><h2>Notre maison</h2><div class="mn-house-grid">
 ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
 </div></section>
@@ -262,7 +275,8 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
 }
 document.addEventListener('click',e=>{
- const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"]');if(!b)return;
+ const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"]');if(!b)return;
+ if(b.dataset.act==='homeRecette'){const id=b.dataset.v;if(id&&typeof CARNET_URL==='string')location.assign(CARNET_URL+'?recette='+encodeURIComponent(id));return}
  if(b.dataset.act==='homeCal'){ouvrirChoixAgenda();return}
  const id=b.dataset.v;
  let name='Agenda familial';
