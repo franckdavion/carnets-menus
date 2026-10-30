@@ -76,8 +76,13 @@ VIEWS.home = function () {
 VIEWS.today = VIEWS.home;
 VIEWS.explore = function () {
   const pins = homePins();
-  const sec = g => `<p class="group-h">${g}</p><div class="sq-grid">${MODS.filter(m => m.g === g).map(m => `<button class="sq" data-act="${exploreEdit ? "pin" : "go"}" data-v="${m.k}" ${exploreEdit ? `aria-pressed="${pins.includes(m.k)}"` : ""}>
-      <span class="sq-ic">${mi(m.k)}${exploreEdit ? `<i class="pin-mark">${pins.includes(m.k) ? I.tick : I.plus}</i>` : ""}</span><span class="sq-t">${esc(m.t)}</span></button>`).join("")}</div>`;
+  const ton = k => k === "agenda" ? "cal" : k === "recettes" ? "recette" : k;
+  const sec = g => `<p class="group-h">${g}</p><div class="mn-house-grid">${MODS.filter(m => m.g === g).map(m => {
+    const on = pins.includes(m.k);
+    return `<button type="button" class="mn-card mn-card-${ton(m.k)}" data-act="${exploreEdit ? "pin" : "go"}" data-v="${m.k}" ${exploreEdit ? `aria-pressed="${on}"` : ""}>
+      <span class="mn-card-h"><img src="assets/modules3d/${m.k}.svg" alt="" width="46" height="46"><span>${esc(m.t)}</span>${exploreEdit ? `<i class="pin-mark">${on ? I.tick : I.plus}</i>` : `<span class="mn-chev" aria-hidden="true">›</span>`}</span>
+      <strong>${esc(m.sub())}</strong></button>`;
+  }).join("")}</div>`;
   return `<p class="muted" style="margin-top:4px">${exploreEdit ? "Touchez un module pour l'afficher ou le retirer de l'accueil." : "Tous les modules du foyer."}</p>
     ${sec("Essentiels")}${sec("Organisation")}
     <div class="btns"><button class="btn ${exploreEdit ? "primary" : ""}" data-act="exploreEdit">${exploreEdit ? "Terminé" : "Personnaliser l'accueil"}</button></div>`;

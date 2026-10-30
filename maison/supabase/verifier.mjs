@@ -34,7 +34,7 @@ const page = text(path.join(maison, "index.html"));
 ok("page Maisonnée : une feuille et l'accueil", page.includes('href="maison.css"') && page.includes('src="accueil.js"') && page.includes('src="supabase/functions/_shared/cal.js"'));
 ok("page Maisonnée sans les anciennes feuilles", !/ultimate\.css|design-stable\.css|v3-icons/.test(page));
 const sw = text(path.join(maison, "sw.js"));
-ok("cache Maisonnée aligné", sw.includes("maison.css") && sw.includes("accueil.js") && sw.includes("supabase/functions/_shared/cal.js") && sw.includes("carnet-archive-maison-v66"));
+ok("cache Maisonnée aligné", sw.includes("maison.css") && sw.includes("accueil.js") && sw.includes("supabase/functions/_shared/cal.js") && sw.includes("carnet-archive-maison-v68"));
 
 const carnet = text(path.join(root, "index.html"));
 const carnetSw = text(path.join(root, "sw.js"));

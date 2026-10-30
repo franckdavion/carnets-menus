@@ -135,26 +135,73 @@ async function chargerEphemeride(){
 
 const directionVent=deg=>Number.isFinite(Number(deg))&&deg!==null&&deg!==undefined?['N','NE','E','SE','S','SO','O','NO'][Math.round(((Number(deg)%360)+360)%360/45)%8]:null;
 const codes=n=>n===0?'☀️ Ensoleillé':n<=3?'⛅ Nuageux':n<=48?'🌫️ Brouillard':n<=67?'🌧️ Pluie':n<=77?'❄️ Neige':n<=82?'🌦️ Averses':'⛈️ Orages';
-function hourlyForecast(){const h=meteo?.hourly;if(!h)return '';const now=Date.now();let points=h.time.map((t,i)=>({t,i})).filter(x=>new Date(x.t).getTime()>=now-3600000).slice(0,4);return `<div class="ultimate-forecast">${points.map(x=>`<span>${x.t.slice(11,16)}<br><strong>${Math.round(h.temperature_2m[x.i])}°</strong><br>${h.precipitation_probability[x.i]}% pluie</span>`).join('')}</div>`}
-function render(){const main=document.querySelector('main.view-home');if(!main)return;let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
-const w=meteo?.current,d=meteo?.daily;
-const weather=w?`<div class="ultimate-big">${Math.round(w.temperature_2m)}°C</div><div class="ultimate-line">${codes(w.weather_code)}</div><div class="ultimate-secondary">Ressenti ${Math.round(w.apparent_temperature)}° · Vent ${Math.round(w.wind_speed_10m)} km/h${directionVent(w.wind_direction_10m)?` · ${directionVent(w.wind_direction_10m)}`:''}</div><div class="ultimate-secondary">Pluie ${d?.precipitation_probability_max?.[0]??'—'} %</div>`:'<div class="ultimate-secondary">Prévisions en cours de chargement ou indisponibles.</div>';
 const iconForCode=n=>n==null?'☁️':n===0?'☀️':n<=3?'⛅':n<=48?'🌫️':n<=67?'🌧️':n<=77?'❄️':n<=82?'🌦️':'⛈️';
 const icon3D=n=>n==null?'cloud':n===0?'sun':n<=3?'partly-cloudy-day':n<=48?'fog':n<=67?'rain':n<=77?'snow':n<=82?'rain':'storm';
 const iconImage=n=>`<img class="mn-3d-weather" src="assets/weather3d/${icon3D(n)}.svg" alt="" loading="lazy" onerror="this.hidden=true"><span class="mn-icon-fallback">${iconForCode(n)}</span>`;
-const weekday=iso=>new Intl.DateTimeFormat('fr-FR',{weekday:'short',timeZone:'Europe/Paris'}).format(new Date(iso+'T12:00:00')).replace('.','');
-const todayCode=w?.weather_code;
-const dailyCards=d?.time?.length?d.time.slice(0,7).map((day,i)=>`<div class="mn-day" aria-label="${day}"><span class="mn-day-name">${weekday(day)}</span><span class="mn-day-icon" aria-hidden="true">${iconImage(d.weather_code?.[i])}</span><strong>${Number.isFinite(d.temperature_2m_max?.[i])?Math.round(d.temperature_2m_max[i])+'°':'—'}</strong><small>${Number.isFinite(d.temperature_2m_min?.[i])?Math.round(d.temperature_2m_min[i])+'°':'—'}</small></div>`).join(''):'<p class="mn-weather-empty">Prévisions indisponibles</p>';
-const now=new Date(),key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-const saint=ephemeride.saint||saintsConnus[key]||'Fête du jour indisponible';
-el.innerHTML=`<section class="ultimate-hero"><div class="ultimate-scene" aria-hidden="true"><div class="ultimate-sun">☀️</div><div class="ultimate-cup"><img class="mn-3d-coffee" src="assets/weather3d/coffee.svg" alt="" onerror="this.hidden=true"><span class="mn-icon-fallback">☕</span></div></div><div class="ultimate-greeting"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><div class="ultimate-kicker">⌂ MAISONNÉE · ULTIMATE</div><h1>Bonjour la famille ! ☀️</h1><p>Voici votre journée · ${date()}</p></div><div class="ultimate-window" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>
-<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(todayCode)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${[11,0,1].includes(now.getMonth())?'Hiver':[2,3,4].includes(now.getMonth())?'Printemps':[5,6,7].includes(now.getMonth())?'Été':'Automne'}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div></section>
+const saisonDe=m=>[11,0,1].includes(m)?'Hiver':[2,3,4].includes(m)?'Printemps':[5,6,7].includes(m)?'Été':'Automne';
+function apercuMaison(){
+ const vide={cal:{k:'Prochain événement',t:'Agenda du foyer',m:'Ouvrir le calendrier'},repas:{k:'Ce soir',t:'Menu de la semaine',m:'Choisir un plat'},courses:{k:'Liste de courses',t:'À voir',m:''},recette:{k:'Idée du jour',t:'Livre de recettes',m:'Ouvrir le Carnet'}};
+ try{
+  if(typeof S==='undefined'||!S)return vide;
+  const d=typeof today==='function'?today():'';
+  if(typeof occurrences==='function'&&d){
+   const e=occurrences(d,addDays(d,45))[0];
+   if(e)vide.cal={k:'Prochain événement',t:e.title||'Événement',m:(typeof dayLabel==='function'?dayLabel(e.on):e.on)+(e.start_time&&typeof hm==='function'?' · '+hm(e.start_time):'')};
+   else vide.cal={k:'Prochain événement',t:'Rien de prévu',m:'La semaine est libre'};
+  }
+  if(typeof mealAt==='function'&&d){
+   const hour=new Date().getHours(),slot=hour<15?'midi':'soir';
+   const meal=mealAt(d,slot)||mealAt(d,slot==='midi'?'soir':'midi');
+   const nom=meal&&typeof mealName==='function'?mealName(meal):'';
+   vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom||'Rien de prévu',m:nom?'Au menu':'Choisir un plat'};
+  }
+  const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
+  vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
+  const livre=(Array.isArray(S.recipes)&&S.recipes.length)?S.recipes:(typeof DEMO_RECIPES!=='undefined'?DEMO_RECIPES:[]);
+  if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Recette du foyer'};}
+ }catch(e){}
+ return vide;
+}
+function restoreHeader(){
+ const header=document.querySelector('#app > header.top');
+ const source=header?.querySelector('.wrap');
+ const parked=document.querySelector('#ultimate-header-controls');
+ if(!source||!parked)return;
+ while(parked.firstChild)source.appendChild(parked.firstChild);
+ header.classList.remove('ultimate-header-moved');
+}
+function render(){
+ const main=document.querySelector('main.view-home');if(!main)return;
+ restoreHeader();
+ let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
+ el.className='';
+ const w=meteo?.current,d=meteo?.daily,now=new Date();
+ const weather=w?`<div class="ultimate-big">${Math.round(w.temperature_2m)}°C</div><div class="ultimate-line">${codes(w.weather_code)}</div><div class="ultimate-secondary">Ressenti ${Math.round(w.apparent_temperature)}° · Vent ${Math.round(w.wind_speed_10m)} km/h${directionVent(w.wind_direction_10m)?` · ${directionVent(w.wind_direction_10m)}`:''}</div><div class="ultimate-secondary">Pluie ${d?.precipitation_probability_max?.[0]??'—'} %</div>`:'<div class="ultimate-secondary">Prévisions en cours de chargement ou indisponibles.</div>';
+ const weekday=iso=>new Intl.DateTimeFormat('fr-FR',{weekday:'short',timeZone:'Europe/Paris'}).format(new Date(iso+'T12:00:00')).replace('.','');
+ const dailyCards=d?.time?.length?d.time.slice(0,7).map((day,i)=>`<div class="mn-day" aria-label="${day}"><span class="mn-day-name">${weekday(day)}</span><span class="mn-day-icon" aria-hidden="true">${iconImage(d.weather_code?.[i])}</span><strong>${Number.isFinite(d.temperature_2m_max?.[i])?Math.round(d.temperature_2m_max[i])+'°':'—'}</strong><small>${Number.isFinite(d.temperature_2m_min?.[i])?Math.round(d.temperature_2m_min[i])+'°':'—'}</small></div>`).join(''):'<p class="mn-weather-empty">Prévisions indisponibles</p>';
+ const key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+ const saint=ephemeride.saint||saintsConnus[key]||'Fête du jour indisponible';
+ const g=apercuMaison();
+ const plus={agenda:{k:g.cal.k,t:g.cal.t,m:g.cal.m},repas:{k:g.repas.k,t:g.repas.t,m:g.repas.m},courses:{k:g.courses.k,t:g.courses.t,m:g.courses.m},recettes:{k:g.recette.k,t:g.recette.t,m:g.recette.m}};
+ const ton=k=>k==='agenda'?'cal':k==='recettes'?'recette':k;
+ let pins=typeof homePins==='function'?homePins():['agenda','repas','courses','recettes'];
+ try{const order=window.maisonHomeStore&&window.maisonHomeStore.read().order;if(Array.isArray(order)&&order.length)pins=[...pins].sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib)})}catch(e){}
+ const cartes=pins.map(k=>{
+  const mod=typeof modOf==='function'?modOf(k):null;if(!mod)return '';
+  let ligne='',meta='',kicker='';
+  try{const extra=plus[k];if(extra){kicker=extra.k;ligne=extra.t;meta=extra.m}else if(typeof mod.sub==='function')ligne=mod.sub()}catch(e){ligne=mod.t}
+  return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}"><span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}</button>`;
+ }).join('');
+ el.innerHTML=`<section class="ultimate-hero"><div class="ultimate-scene" aria-hidden="true"><div class="ultimate-sun">☀️</div><div class="ultimate-cup"><img class="mn-3d-coffee" src="assets/weather3d/coffee.svg" alt="" onerror="this.hidden=true"><span class="mn-icon-fallback">☕</span></div></div><div class="ultimate-greeting"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><div class="ultimate-kicker">⌂ MAISONNÉE · ULTIMATE</div><h1>Bonjour la famille ! ☀️</h1><p>Voici votre journée · ${date()}</p></div><div class="ultimate-window" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>
+<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div></section>
+<section class="mn-house" aria-label="Notre maison"><h2>Notre maison</h2><div class="mn-house-grid">
+${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
+</div></section>
 <button type="button" class="ultimate-classic-button" id="ultimate-toggle-classic" aria-expanded="${main.classList.contains('ultimate-classic')}">${main.classList.contains('ultimate-classic')?'Masquer':'Afficher'} l’accueil classique et tous ses raccourcis</button>`;
-integrateHeader(main);
-window.maisonneeModuleGrid?.mount(main);
-
-const toggle=el.querySelector('#ultimate-toggle-classic');toggle.addEventListener('click',()=>{main.classList.toggle('ultimate-classic');toggle.setAttribute('aria-expanded',String(main.classList.contains('ultimate-classic')));toggle.textContent=(main.classList.contains('ultimate-classic')?'Masquer':'Afficher')+' l’accueil classique et tous ses raccourcis';});
-const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
+ integrateHeader(main);
+ const toggle=el.querySelector('#ultimate-toggle-classic');
+ toggle.addEventListener('click',()=>{main.classList.toggle('ultimate-classic');toggle.setAttribute('aria-expanded',String(main.classList.contains('ultimate-classic')));toggle.textContent=(main.classList.contains('ultimate-classic')?'Masquer':'Afficher')+' l’accueil classique et tous ses raccourcis';});
+ const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
 }
 function showForecast(){
  let dialog=document.querySelector('#ultimate-forecast-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='ultimate-forecast-dialog';document.body.appendChild(dialog)}
