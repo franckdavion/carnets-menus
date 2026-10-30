@@ -3,7 +3,7 @@
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
 
 Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule" });
-const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase-foyer-3.sql
+const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
 
 /* ---------- module registry: colour, icon, home summary ---------- */
 const MC = { tasks: "#F5C451", agenda: "#A07CF5", repas: "#5B8DEF", courses: "#F2A93B", recettes: "#F39A4A", messages: "#35C9B0", carte: "#6CC4F2", foyer: "#8AD6A6", anniv: "#F2917B", budget: "#3DB972", docs: "#6A86F0", edt: "#E46CA6" };
@@ -56,7 +56,7 @@ const homePins = () => {
   return Array.isArray(p) ? p.filter(modOf) : MODS.map(m => m.k);
 };
 let exploreEdit = false;
-function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-3.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
+function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0003_anniversaires_budget_documents.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
 
 /* ---------- home and explore ---------- */
 VIEWS.home = function () {
@@ -256,7 +256,7 @@ const DOC_CATS = ["Identité", "Santé", "Maison", "École", "Voiture", "Banque 
 let docFilter = "", docPath = ""; // docPath: folder shown ("Maison/Travaux"), "" = all folders
 const docKind = d => /pdf/.test(d.mime) ? "PDF" : /^image\//.test(d.mime) ? "Photo" : d.file_name ? (d.file_name.split(".").pop() || "").toUpperCase().slice(0, 4) : "—";
 /* folders: a document's « category » is its folder (sub-folders written "Maison/Travaux").
-   Empty folders are kept with the household (households.doc_folders, script supabase-foyer-12.sql), otherwise on this phone. */
+   Empty folders are kept with the household (households.doc_folders, script supabase/migrations/0013_dossiers_documents.sql), otherwise on this phone. */
 const docFoldersSaved = () => (S.hh && Array.isArray(S.hh.doc_folders) ? S.hh.doc_folders : LS.get("mz_docfolders", []));
 function docFolders() {
   const set = new Set();
@@ -301,7 +301,7 @@ function folderSheet(rename) {
   openSheet(rename ? "Renommer le dossier" : "Nouveau dossier", `<form data-form="docFolder">
     ${!rename && docPath ? `<p class="muted small" style="margin:6px 0 0">Dans « ${esc(docPath.split("/").join(" › "))} »</p>` : ""}
     <label class="field"><span class="label">Nom du dossier</span><input class="input" name="name" value="${esc(cur)}" maxlength="40" required placeholder="Ex. Travaux, Factures 2026…"></label>
-    ${mode === "cloud" && S.hh && !("doc_folders" in S.hh) ? `<p class="muted small">Un dossier vide reste sur ce téléphone tant que le script supabase-foyer-12.sql n'est pas collé dans Supabase ; dès qu'il contient un document, tout le foyer le voit.</p>` : ""}
+    ${mode === "cloud" && S.hh && !("doc_folders" in S.hh) ? `<p class="muted small">Un dossier vide reste sur ce téléphone tant que le script supabase/migrations/0013_dossiers_documents.sql n'est pas collé dans Supabase ; dès qu'il contient un document, tout le foyer le voit.</p>` : ""}
     <div class="sheet-sticky btns" style="margin-top:0"><button class="btn primary" type="submit" style="flex:1">${rename ? "Renommer" : "Créer"}</button></div></form>`, { rename: !!rename });
 }
 function docSheet(d) {
@@ -547,7 +547,7 @@ TABLES.photos = "photos";
 const PH_BUCKET = "household-photos";
 let phAlbum = "", phPending = [], lbList = [], lbIdx = -1;
 const purl = {}; // signed address cache: path -> { url, until }
-function v4Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-4.sql</b> dans Supabase (comme les précédents), puis rouvrez l'appli.</div>`; }
+function v4Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0004_galerie.sql</b> dans Supabase (comme les précédents), puis rouvrez l'appli.</div>`; }
 const albums = () => [...new Set(S.photos.map(p => p.album).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 const phSorted = () => S.photos.filter(p => !phAlbum || p.album === phAlbum).sort((a, b) => String(b.taken_at || b.created_at).localeCompare(String(a.taken_at || a.created_at)));
 
@@ -730,7 +730,7 @@ VIEWS.foyer = function () {
       (user && S.hh.carnet_user === user.id) ? `<p style="margin:0 0 6px"><strong>Votre Carnet est le carnet commun du foyer.</strong></p><p class="muted small">Chaque membre qui a un compte retrouve dans son Carnet de menus les mêmes menus, courses, cave, favoris et notes. Le menu et les courses sont aussi synchronisés avec Maisonnée.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a><button class="btn ghost danger" data-act="linkCarnet" data-v="0">Délier</button></div>`
       : S.hh.carnet_user ? `<p style="margin:0"><strong>Carnet commun du foyer : celui de ${esc(owner ? owner.name : "un membre")}.</strong></p><p class="muted small" style="margin-top:6px">Ouvrez le Carnet de menus avec votre propre compte : vous y retrouvez les mêmes menus, courses, cave, favoris et notes que tout le foyer.</p><div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a></div>`
       : `<p class="muted small" style="margin:0">Reliez votre Carnet de menus : le menu de la semaine et la liste de courses seront les mêmes dans les deux applis, dans les deux sens.</p><div class="btns"><button class="btn primary" data-act="linkCarnet" data-v="1">Relier mon Carnet</button></div>`}</div>`;
-  } else if (mode === "cloud" && !S.v5) card = `<h2>Carnet de menus</h2><div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-5.sql</b> dans Supabase pour relier votre Carnet, Google Agenda et les adresses.</div>`;
+  } else if (mode === "cloud" && !S.v5) card = `<h2>Carnet de menus</h2><div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0005_carnet_google.sql</b> dans Supabase pour relier votre Carnet, Google Agenda et les adresses.</div>`;
   return foyerViewCarnet() + card;
 };
 

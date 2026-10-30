@@ -1,5 +1,5 @@
-const CACHE="carnet-v201";
-const FILES=["./","index.html","manifest.json","icon-180.png","icon-192.png","icon-512.png","maison/espace.js"];
+const CACHE="carnet-v203";
+const FILES=["./","index.html","carnet.css","carnet-calc.js","carnet-base.js","carnet-github.js","carnet-semaine.js","carnet-courses.js","carnet-repas.js","carnet-partage.js","carnet-cloud.js","manifest.json","icon-180.png","icon-192.png","icon-512.png","maison/espace.js","maison/pont.js","navigation-retour.js"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES.map(f=>new Request(f,{cache:"reload"})))));self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE&&!k.startsWith("carnet-archive")).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener("fetch",e=>{

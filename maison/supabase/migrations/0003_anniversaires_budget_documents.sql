@@ -1,7 +1,7 @@
 -- =====================================================================
 --  Maisonnée, étape 3 : anniversaires, budget, documents, emploi du temps
 --  À coller dans Supabase › SQL Editor › New query › Run (une seule fois),
---  APRÈS supabase-foyer.sql et supabase-foyer-2.sql.
+--  APRÈS supabase/migrations/0001_foyer.sql et supabase/migrations/0002_messages_positions.sql.
 -- =====================================================================
 
 -- ---------- 1. ANNIVERSAIRES ----------

@@ -1,5 +1,7 @@
 // Robot du Carnet de menus : lit les recettes dont on lui donne le lien et tient l'agenda Google à jour.
-// Exécuté par GitHub Actions dans le dépôt des données. Aucune dépendance.
+// Exécuté par GitHub Actions dans le dépôt des données, pas dans ce dossier de code.
+// Copie locale des données du foyer : ../carnets-donnees (carnet.json, agenda.json, inbox/, photos/).
+// Aucune dépendance.
 const RAYONS=["Fruits & légumes","Boucherie & poisson","Crémerie","Épicerie","Boulangerie","Surgelés","Divers"];
 const UNITS=["g","kg","ml","cl","l","pièce","c. à s.","c. à c.","botte","tranche","boîte","sachet","pincée"];
 const CATS=["Plat","Végé","Rapide","Soupe","Dessert"];
@@ -128,6 +130,7 @@ function parseRecipeText(text){
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15 CarnetDeMenus/1.0";
 const MEAT = /(b(?:œ|oe)uf|veau|agneau|porc|lardon|jambon|saucisse|chorizo|bacon|poulet|dinde|canard|volaille|saumon|cabillaud|thon|crevette|poisson|colin|merlu|truite|sardine|maquereau|moule|steak)/i;
@@ -382,4 +385,7 @@ async function main() {
     else { try { const at = Date.parse(JSON.parse(fs.readFileSync(p, "utf8")).at); if (Date.now() - at > 3 * 864e5) fs.rmSync(p); } catch {} }
   }
 }
-await main();
+const direct = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (direct) await main();
+
+export { parseIng, parseRecipeText, guessRayon };

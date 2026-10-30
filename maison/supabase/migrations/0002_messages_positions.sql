@@ -1,7 +1,7 @@
 -- =====================================================================
 --  Maisonnée, étape 2 : messagerie du foyer et positions partagées
 --  À coller dans Supabase › SQL Editor › New query › Run (une seule fois),
---  APRÈS supabase-foyer.sql.
+--  APRÈS supabase/migrations/0001_foyer.sql.
 -- =====================================================================
 
 -- Le membre qui correspond au compte connecté, dans un foyer donné

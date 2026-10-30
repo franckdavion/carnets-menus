@@ -8,12 +8,26 @@
 //     repas du soir, anniversaires du jour, documents qui expirent.
 //  4. Anniversaires : la veille à 19 h (et dans le résumé du matin le jour même).
 //  5. Toutes les 5 minutes : les tâches des foyers qui l'ont demandé sont recopiées dans Google Agenda
-//     (households.google_tasks, script supabase-foyer-11.sql ; secrets GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).
+//     (households.google_tasks, script supabase/migrations/0012_taches_google.sql ; secrets GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).
 // Chaque personne choisit ce qu'elle reçoit (table maison_push_prefs, réglée depuis la cloche).
 // Les rendez-vous enregistrés dans Google Agenda sont rappelés par Google Agenda lui-même.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import "../_shared/cal.js";
+
+interface MaisonCalApi {
+  addDays(day: string, n: number): string;
+  diffDays(a: string, b: string): number;
+  nextDue(t: { freq: string; every_n: number; weekdays: number[]; next_due: string }, base: string): string | null;
+  startsBetween(e: { day: string; repeat: string }, from: string, to: string): string[];
+  reminderClaim(eventId: string, delay: number, userId: string, start: string): string;
+  messageClaim(messageId: string, userId: string): string;
+  digestClaim(day: string, userId: string): string;
+  birthdayEveClaim(id: string, day: string, userId: string): string;
+}
+const MaisonCal = (globalThis as unknown as { MaisonCal: MaisonCalApi }).MaisonCal;
+const { addDays, diffDays, nextDue, startsBetween } = MaisonCal;
 
 const env = (key: string) => Deno.env.get(key) || "";
 const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
@@ -45,8 +59,6 @@ function localTimestamp(day: string, time: string) {
   }
   return guess;
 }
-const addDays = (day: string, n: number) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const diffDays = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / DAY);
 const hm = (t: string | null) => { if (!t) return ""; const [h, m] = String(t).slice(0, 5).split(":"); return `${Number(h)} h${m === "00" ? "" : " " + m}`; };
 function whenFr(day: string, startTime: string | null, today: string) {
   const label = day === today ? "aujourd'hui" : day === addDays(today, 1) ? "demain"
@@ -54,33 +66,8 @@ function whenFr(day: string, startTime: string | null, today: string) {
   return startTime ? `${label} à ${hm(startTime)}` : `${label} (toute la journée)`;
 }
 
-/* ---------- répétitions (même règle que l'appli) ---------- */
-function repeatRule(repeat: string): { unit: string; interval: number } | null {
-  const m = /^custom:(\d{1,3}):(days|weeks|months|years)$/.exec(repeat || "");
-  if (m) return { unit: m[2], interval: Number(m[1]) };
-  const unit = ({ weekly: "weeks", monthly: "months", yearly: "years" } as Record<string, string>)[repeat];
-  return unit ? { unit, interval: 1 } : null;
-}
-function recurrenceDate(start: string, i: number, unit: string, interval: number) {
-  const n = i * interval;
-  if (unit === "days") return addDays(start, n);
-  if (unit === "weeks") return addDays(start, 7 * n);
-  const d = new Date(`${start}T12:00:00Z`), months = unit === "years" ? n * 12 : n;
-  const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1, 12));
-  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0, 12)).getUTCDate();
-  return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(d.getUTCDate(), last), 12)).toISOString().slice(0, 10);
-}
-// dates de début de l'événement comprises entre from et to
-function startsBetween(e: { day: string; repeat: string }, from: string, to: string) {
-  if (!e.repeat || e.repeat === "none") return e.day >= from && e.day <= to ? [e.day] : [];
-  const r = repeatRule(e.repeat); if (!r) return [];
-  const out: string[] = [];
-  for (let i = 0; i < 2000; i++) { const d = recurrenceDate(e.day, i, r.unit, r.interval); if (d > to) break; if (d >= from) out.push(d); }
-  return out;
-}
-
 /* ---------- envoi ---------- */
-let sent = 0, failed = 0;
+let sent = 0, failed = 0, googleFailed = 0;
 const subsCache = new Map<string, { id: string; subscription: unknown }[]>();
 async function subsOf(userId: string) {
   if (!subsCache.has(userId)) { const { data } = await supabase.from("maison_push_subscriptions").select("id,subscription").eq("user_id", userId); subsCache.set(userId, data || []); }
@@ -105,25 +92,6 @@ async function pushOnce(claim: string, userId: string, payload: { title: string;
 
 /* ---------- 5. tâches → Google Agenda (même règle que l'appli, maison/gtaches.js) ---------- */
 type Task = { id: string; title: string; room: string; assignee: string | null; rotate: boolean; freq: string; every_n: number; weekdays: number[]; next_due: string };
-const isoDay = (d: string) => ((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
-function nextDue(t: Task, base: string): string | null {
-  switch (t.freq) {
-    case "daily": return addDays(base, 1);
-    case "every": return addDays(base, Math.max(1, t.every_n || 1));
-    case "weekly": {
-      const days = t.weekdays?.length ? t.weekdays : [isoDay(t.next_due)];
-      for (let i = 1; i <= 7; i++) { const d = addDays(base, i); if (days.includes(isoDay(d))) return d; }
-      return addDays(base, 7);
-    }
-    case "monthly": {
-      const want = Number(t.next_due.slice(8, 10)), b = new Date(`${base}T12:00:00Z`);
-      let y = b.getUTCFullYear(), m = b.getUTCMonth() + 1; if (m > 11) { m = 0; y++; }
-      const last = new Date(Date.UTC(y, m + 1, 0, 12)).getUTCDate();
-      return new Date(Date.UTC(y, m, Math.min(want, last), 12)).toISOString().slice(0, 10);
-    }
-    default: return null;
-  }
-}
 async function googleToken(userId: string) {
   const { data } = await supabase.from("google_calendar_tokens").select("*").eq("user_id", userId).maybeSingle();
   if (!data) throw new Error("Google Agenda n'est plus connecté pour ce compte.");
@@ -190,7 +158,7 @@ async function syncTasks(today: string) {
         delete have[k];
       }
       for (const list of Object.values(have)) for (const e of list) { await g("DELETE", base + "/" + encodeURIComponent(e.id)); n++; }
-    } catch (e) { err = (e as Error).message || "Erreur Google Agenda"; console.error("Tâches → Google", h.id, err); }
+    } catch (e) { err = (e as Error).message || "Erreur Google Agenda"; googleFailed++; console.error("Tâches → Google", h.id, err); }
     await supabase.from("households").update({ google_tasks: { ...cfg, at: new Date().toISOString(), err, changed: n } }).eq("id", h.id);
   }
 }
@@ -199,19 +167,19 @@ Deno.serve(async req => {
   if (!env("CRON_SECRET") || req.headers.get("x-cron-secret") !== env("CRON_SECRET")) return new Response("Unauthorized", { status: 401 });
   if (![env("VAPID_SUBJECT"), env("VAPID_PUBLIC_KEY"), env("VAPID_PRIVATE_KEY")].every(Boolean)) return new Response("VAPID secrets missing", { status: 500 });
 
-  sent = 0; failed = 0; subsCache.clear();
+  sent = 0; failed = 0; googleFailed = 0; subsCache.clear();
   const now = Date.now(), { day: today, time: nowTime } = parisDateParts(new Date(now));
   const yesterday = addDays(today, -1), tomorrow = addDays(today, 1);
 
   // tâches → Google Agenda, toutes les 5 minutes (sans gêner les notifications si Google répond mal)
   if (new Date(now).getUTCMinutes() % 5 === 0 && env("GOOGLE_CLIENT_ID") && env("GOOGLE_CLIENT_SECRET")) {
-    try { await syncTasks(today); } catch (e) { console.error("Tâches → Google", e); }
+    try { await syncTasks(today); } catch (e) { googleFailed++; console.error("Tâches → Google", e); }
   }
 
   // qui reçoit des notifications, et avec quelles préférences
   const { data: allSubs } = await supabase.from("maison_push_subscriptions").select("user_id");
   const users = new Set((allSubs || []).map(s => s.user_id as string));
-  if (!users.size) return Response.json({ sent, failed, note: "aucun appareil abonné" });
+  if (!users.size) return Response.json({ sent, failed, googleFailed, note: "aucun appareil abonné" });
   const { data: prefRows, error: prefErr } = await supabase.from("maison_push_prefs").select("user_id,prefs").in("user_id", [...users]);
   const prefs = (uid: string): Prefs => ({ ...DEFAULT_PREFS, ...((prefErr ? null : (prefRows || []).find(p => p.user_id === uid)?.prefs) || {}) });
 
@@ -240,7 +208,7 @@ Deno.serve(async req => {
         const targets = (byHousehold.get(ev.household_id) || []).filter(m => !ev.members?.length || ev.members.includes(m.id));
         for (const m of targets) {
           if (!prefs(m.user_id).reminders) continue;
-          await pushOnce(`${ev.id}:${delay}:${m.user_id}:${start}`, m.user_id, {
+          await pushOnce(MaisonCal.reminderClaim(ev.id, delay, m.user_id, start), m.user_id, {
             title: "⏰ Rappel", body: `${ev.title} — ${whenFr(start, ev.start_time, today)}`, tag: `event-${ev.id}-${start}`, url: "./?v=agenda"
           });
         }
@@ -254,7 +222,7 @@ Deno.serve(async req => {
     const text = String(msg.body || "").replace(/\s+/g, " ").trim();
     for (const m of (byHousehold.get(msg.household_id) || []).filter(x => x.id !== msg.member_id)) {
       if (!prefs(m.user_id).messages) continue;
-      await pushOnce(`msg:${msg.id}:${m.user_id}`, m.user_id, {
+      await pushOnce(MaisonCal.messageClaim(msg.id, m.user_id), m.user_id, {
         title: `💬 ${memberName.get(msg.member_id) || "Message"}`, body: text.length > 180 ? text.slice(0, 177) + "…" : text, tag: `msg-${msg.id}`, url: "./?v=messages"
       });
     }
@@ -285,7 +253,7 @@ Deno.serve(async req => {
     if (eveHouseholds.has(hid)) for (const b of bdayOn(tomorrow)) for (const m of ms) {
       const p = prefs(m.user_id); if (!p.birthdays || !inWindow("19:00")) continue;
       const age = b.year ? ` (${Number(tomorrow.slice(0, 4)) - b.year} ans)` : "";
-      await pushOnce(`bday-eve:${b.id}:${tomorrow}:${m.user_id}`, m.user_id, { title: "🎂 Anniversaire demain", body: `${b.name}${age}`, tag: `bday-${b.id}`, url: "./?v=anniv" });
+      await pushOnce(MaisonCal.birthdayEveClaim(b.id, tomorrow, m.user_id), m.user_id, { title: "🎂 Anniversaire demain", body: `${b.name}${age}`, tag: `bday-${b.id}`, url: "./?v=anniv" });
     }
 
     if (!digestHouseholds.has(hid)) continue;
@@ -316,12 +284,12 @@ Deno.serve(async req => {
         parts.push(`📄 ${d.title} expire ${left === 0 ? "aujourd'hui" : `dans ${left} jours`}`);
       }
       if (!parts.length) continue;
-      await pushOnce(`digest:${today}:${m.user_id}`, m.user_id, { title: "☀️ Votre journée", body: parts.join("\n").slice(0, 400), tag: `digest-${today}`, url: "./" });
+      await pushOnce(MaisonCal.digestClaim(today, m.user_id), m.user_id, { title: "☀️ Votre journée", body: parts.join("\n").slice(0, 400), tag: `digest-${today}`, url: "./" });
     }
   }
 
   // ménage : les traces d'envoi de plus de 40 jours ne servent plus
   if (new Date(now).getUTCMinutes() === 0) await supabase.from("maison_push_deliveries").delete().lt("sent_at", new Date(now - 40 * DAY).toISOString());
 
-  return Response.json({ sent, failed, checked: seen.size });
+  return Response.json({ sent, failed, googleFailed, checked: seen.size });
 });

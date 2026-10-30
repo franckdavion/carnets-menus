@@ -147,7 +147,7 @@ const prIco = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
 VIEWS.presences = function () {
   if (!prOn()) return `<div class="empty"><strong>Réservé au foyer connecté.</strong>Les présences des enfants sont enregistrées dans votre foyer Maisonnée (pas en mode démo).</div>`;
   if (!PR.data && !PR.need && !PR.loadErr) { prLoad(); return `<p class="muted" style="margin-top:20px">Chargement des présences…</p>`; }
-  if (PR.need) return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-14.sql</b> dans Supabase › SQL Editor (comme les précédents), puis rouvrez cette page.</div>`;
+  if (PR.need) return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0015_presences.sql</b> dans Supabase › SQL Editor (comme les précédents), puis rouvrez cette page.</div>`;
   if (!PR.data) return `<div class="empty"><strong>Présences indisponibles pour l'instant.</strong>${esc(PR.loadErr)}<br><button class="btn" data-act="prReload">Réessayer</button></div>`;
   prKick();
   const tab = PR_TABS.map(([k, t, ic]) => `<button data-act="prTab" data-v="${k}" aria-pressed="${PR.tab === k}">${prIco(ic)}<span>${t}</span></button>`).join("");

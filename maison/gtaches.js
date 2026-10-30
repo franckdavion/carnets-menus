@@ -122,7 +122,7 @@ VIEWS.foyer = function () {
     ${c.on ? `<label class="field"><span class="label">Agenda</span><select class="input" data-gtcal>${cals.map(x => `<option value="${esc(x.id)}" ${x.id === cur ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
       <p class="muted small" style="margin:6px 0 0">${GT.busy ? "Mise à jour de l'agenda…" : GT.err ? "⚠️ " + esc(GT.err) : GT.at ? "À jour · " + new Date(GT.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "Première mise à jour dans quelques secondes."} Il suffit de l'activer sur un seul téléphone.</p>
       ${(() => { const sv = S.hh && S.hh.google_tasks;
-        if (gtNoServer || !sv) return `<p class="muted small" style="margin:6px 0 0">Appli fermée : pas encore de mise à jour par le serveur (script supabase-foyer-11.sql à coller, puis fonction maison-push-dispatch à redéployer).</p>`;
+        if (gtNoServer || !sv) return `<p class="muted small" style="margin:6px 0 0">Appli fermée : pas encore de mise à jour par le serveur (script supabase/migrations/0012_taches_google.sql à coller, puis fonction maison-push-dispatch à redéployer).</p>`;
         return `<p class="muted small" style="margin:6px 0 0">Appli fermée : le serveur met l'agenda à jour toutes les 5 minutes${sv.at ? ` · dernier passage ${esc(new Date(sv.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }))}${sv.err ? " · ⚠️ " + esc(sv.err) : ""}` : " (pas encore passé)"}.</p>`; })()}
       <div class="btns"><button class="btn" data-act="gtNow">Mettre à jour maintenant</button></div>` : ""}</div>`;
 };

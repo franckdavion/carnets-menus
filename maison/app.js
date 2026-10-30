@@ -19,11 +19,11 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xx
 const pad = n => String(n).padStart(2, "0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parse = s => { const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d); };
-const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); };
+function addDays(s, n) { return MaisonCal.addDays(s, n); }
 const today = () => ymd(new Date());
-const isoDay = s => ((parse(s).getDay() + 6) % 7) + 1; // 1 = lundi … 7 = dimanche
+function isoDay(s) { return MaisonCal.isoDay(s); } // 1 = lundi … 7 = dimanche
 const mondayOf = s => addDays(s, 1 - isoDay(s));
-const diffDays = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+function diffDays(a, b) { return MaisonCal.diffDays(a, b); }
 const DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
 const DAYS_SHORT = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
@@ -93,7 +93,7 @@ async function showPushSettings() {
       ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
       ${sw("birthdays", "Anniversaires", "la veille à 19 h, et le jour même dans le résumé")}
-      ${prOk ? "" : `<p class="muted small" style="margin:0">Pour choisir, collez d'abord le script supabase-foyer-10.sql dans Supabase.</p>`}
+      ${prOk ? "" : `<p class="muted small" style="margin:0">Pour choisir, collez d'abord le script supabase/migrations/0011_push_prefs.sql dans Supabase.</p>`}
     </div>
     <button class="btn primary block" type="button" data-act="pushEnable" ${mode !== "cloud" || !pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC ? "disabled" : ""}>${current ? "Réactiver cet appareil" : "Activer sur cet iPhone"}</button>
     ${current ? '<button class="btn block" type="button" data-act="pushDisable">Désactiver sur cet appareil</button>' : ""}
@@ -146,7 +146,7 @@ let repasTab = "menu";
 let S = blank();
 function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null }; }
 const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
-const V2 = ["msgs", "locs"]; // tables added by supabase-foyer-2.sql
+const V2 = ["msgs", "locs"]; // tables added by supabase/migrations/0002_messages_positions.sql
 
 const member = id => S.members.find(m => m.id === id) || null;
 const members = () => [...S.members].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
@@ -410,7 +410,7 @@ async function init() {
 
 async function enterCloud() {
   const { data: mine, error } = await sb.from("household_members").select("household_id").eq("user_id", user.id);
-  if (error) { screen = "setup"; setupErr = /relation|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase-foyer.sql (voir maison/LISEZMOI.md)." : ""; return render(); }
+  if (error) { screen = "setup"; setupErr = /relation|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase/migrations/0001_foyer.sql (voir maison/LISEZMOI.md)." : ""; return render(); }
   const ids = mine.map(r => r.household_id);
   const join = LS.get("mz_join", null);
   if (!ids.length || join) { screen = "setup"; if (join) await previewJoin(join); return render(); }
@@ -428,26 +428,7 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 /* ---------- task logic ---------- */
-function nextDue(t, from) {
-  const base = from;
-  switch (t.freq) {
-    case "daily": return addDays(base, 1);
-    case "every": return addDays(base, Math.max(1, t.every_n || 1));
-    case "weekly": {
-      const days = (t.weekdays && t.weekdays.length) ? t.weekdays : [isoDay(t.next_due)];
-      for (let i = 1; i <= 7; i++) { const d = addDays(base, i); if (days.includes(isoDay(d))) return d; }
-      return addDays(base, 7);
-    }
-    case "monthly": {
-      const want = parse(t.next_due).getDate(), b = parse(base);
-      let y = b.getFullYear(), m = b.getMonth() + 1;
-      if (m > 11) { m = 0; y++; }
-      const last = new Date(y, m + 1, 0).getDate();
-      return ymd(new Date(y, m, Math.min(want, last)));
-    }
-    default: return null;
-  }
-}
+function nextDue(t, from) { return MaisonCal.nextDue(t, from); }
 function nextInTurn(id) {
   const list = members(); if (!list.length || !id) return id;
   const i = list.findIndex(m => m.id === id);
@@ -500,15 +481,7 @@ function recurrenceInfo(repeat) {
   const m = /^custom:(\d{1,3}):(days|weeks|months|years)$/.exec(repeat || "");
   return m ? { interval: Number(m[1]), unit: m[2] } : null;
 }
-function recurrenceDate(start, i, unit, interval) {
-  const n = i * interval;
-  if (unit === "days") return addDays(start, n);
-  if (unit === "weeks") return addDays(start, 7 * n);
-  const d = parse(start), months = unit === "years" ? n * 12 : n;
-  const first = new Date(d.getFullYear(), d.getMonth() + months, 1);
-  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-  return ymd(new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), last)));
-}
+function recurrenceDate(start, i, unit, interval) { return MaisonCal.recurrenceDate(start, i, unit, interval); }
 function returnToTodayAgenda() {
   const d = today();
   view = "agenda"; LS.set("mz_view", "agenda");
@@ -524,12 +497,10 @@ function occurrences(from, to) {
     const len = spanOf(e);
     if (e.repeat === "none" || !e.repeat) { if (e.day <= to && addDays(e.day, len) >= from) push(e, e.day); continue; }
     if (e.day > to) continue;
-    const custom = recurrenceInfo(e.repeat);
-    const unit = custom?.unit || ({weekly:"weeks",monthly:"months",yearly:"years"}[e.repeat]);
-    if (!unit) continue;
-    const interval = custom?.interval || 1;
+    const rule = MaisonCal.repeatRule(e.repeat);
+    if (!rule) continue;
     for (let i = 0; i < 800; i++) {
-      const d = recurrenceDate(e.day, i, unit, interval);
+      const d = recurrenceDate(e.day, i, rule.unit, rule.interval);
       if (d > to) break;
       if (addDays(d, len) >= from) push(e, d);
     }
@@ -597,7 +568,7 @@ const readKey = () => "mz_read_" + (S.hh ? S.hh.id : "");
 const unread = () => { const r = LS.get(readKey(), ""); return S.msgs.filter(m => m.member_id !== S.me && m.created_at > r).length; };
 function updateBadge() { const b = $("#msgBadge"); if (!b) return; const n = view === "messages" ? 0 : unread(); b.hidden = !n; b.textContent = n > 9 ? "9+" : n; }
 const timeHM = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-function v2Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase-foyer-2.sql</b> dans Supabase (comme le premier), puis rouvrez l'appli.</div>`; }
+function v2Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0002_messages_positions.sql</b> dans Supabase (comme le premier), puis rouvrez l'appli.</div>`; }
 function msgListHtml() {
   if (!S.msgs.length) return `<div class="empty"><strong>Aucun message pour l'instant.</strong>Ce que vous écrivez ici, tout le foyer le voit.</div>`;
   let out = "", lastDay = "", lastWho = null;
@@ -723,15 +694,86 @@ function drawMarkers(fit) {
 }
 
 /* ---------- toast ---------- */
-let toastT = null;
-function toast(msg, label, fn) {
+// V9.1 — Notifications persistantes, validées explicitement, en file d'attente.
+// L'action secondaire (« Voir », « Annuler »…) reste disponible jusqu'au choix.
+const mzToastQueue = [];
+let mzToastActive = false;
+function mzShowNextToast() {
   const el = $("#toast");
-  el.innerHTML = `<span>${esc(msg)}</span>${label ? `<button type="button">${esc(label)}</button>` : ""}`;
-  el.classList.toggle("mz-course-alert", Boolean(label && msg.includes("article")));
+  if (!el || mzToastActive || !mzToastQueue.length) return;
+  const {msg, label, fn} = mzToastQueue.shift();
+  mzToastActive = true;
+  // Hors des conteneurs transformés : évite les contextes d'empilement sur Mac.
+  if (el.parentElement !== document.body) document.body.appendChild(el);
+  const message = String(msg || "");
+  const error = /impossible|erreur|refus|introuvable|pas de connexion|échou|non enregistrée/i.test(message);
+  const warning = !error && /attention|déjà|manquant|attente|vérifi/i.test(message);
+  const success = !error && !warning && /ajouté|terminé|enregistré|activé|validé|acheté|supprimé|effectué/i.test(message);
+  const icon = error ? "⚠️" : warning ? "📝" : success ? "✅" : /course|article|ingrédient/i.test(message) ? "🛒" : "🔔";
+  const title = error ? "Action impossible" : warning ? "À noter" : success ? "C’est fait !" : "Maisonnée";
+  el.innerHTML = `<span class="mz-v9-icon" aria-hidden="true">${icon}</span><span class="mz-v9-copy"><strong>${title}</strong>${esc(message)}</span><span class="mz-v91-actions">${label ? `<button type="button" class="mz-v91-action">${esc(label)}</button>` : ""}<button type="button" class="mz-v91-ok">OK ✓</button></span>`;
+  el.classList.add("mz-v9-toast");
+  el.classList.toggle("mz-v9-error", error);
+  el.classList.toggle("mz-v9-warning", warning);
+  el.classList.toggle("mz-v9-success", success);
+  el.classList.toggle("mz-course-alert", Boolean(label && message.includes("article")));
   el.hidden = false;
-  if (label) el.querySelector("button").onclick = () => { el.hidden = true; fn(); };
-  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, label ? 6000 : 3500);
+  const dismiss = (action) => {
+    if (!mzToastActive) return;
+    el.hidden = true;
+    mzToastActive = false;
+    if (action && typeof fn === "function") { try { fn(); } catch (e) { console.error(e); } }
+    // Laisser la page se mettre à jour avant d'afficher la notification suivante.
+    setTimeout(mzShowNextToast, 80);
+  };
+  el.querySelector(".mz-v91-ok").addEventListener("click", () => dismiss(false));
+  const action = el.querySelector(".mz-v91-action");
+  if (action) action.addEventListener("click", () => dismiss(true));
 }
+function toast(msg, label, fn) {
+  mzToastQueue.push({msg, label, fn});
+  mzShowNextToast();
+}
+
+// V10 : point central de présentation des confirmations modales.
+// Un <dialog>.showModal() utilise la top layer native : il reste devant
+// la fiche Repas, elle-même ouverte avec showModal(), sans z-index artificiel.
+const mzWindowManager = {
+  confirm(content, options = {}) {
+    return new Promise(resolve => {
+      const d = document.createElement('dialog');
+      d.className = 'mz-v10-modal';
+      d.setAttribute('aria-label', options.title || 'Confirmation');
+      d.innerHTML = content;
+      const prior = document.activeElement;
+      let done = false;
+      const finish = value => {
+        if (done) return;
+        done = true;
+        if (d.open) d.close();
+        d.remove();
+        if (prior && prior.isConnected && typeof prior.focus === 'function') {
+          try { prior.focus({preventScroll:true}); } catch (_) { prior.focus(); }
+        }
+        resolve(value);
+      };
+      d.addEventListener('cancel', e => { e.preventDefault(); finish(null); });
+      d.addEventListener('click', e => {
+        const btn = e.target.closest('[data-choice]');
+        if (btn) finish(btn.dataset.choice === 'cancel' ? null : btn.dataset.choice === 'restart');
+      });
+      document.body.appendChild(d);
+      try { d.showModal(); }
+      catch (err) { d.remove(); console.error('Impossible d’ouvrir la confirmation', err); resolve(null); return; }
+      d.querySelector('[data-choice=keep]')?.focus({preventScroll:true});
+    });
+  }
+};
+// Fenêtre non destructive : le choix est retourné au moteur de courses inchangé.
+function mzV9ChoiceCourses() {
+  return mzWindowManager.confirm(`<section class="mz-v9-dialog" aria-labelledby="mz-v9-title"><div class="mz-v9-hero" aria-hidden="true">🛒🥕</div><h2 id="mz-v9-title">Des ingrédients ont déjà été achetés pour ce repas.</h2><p>Que souhaitez-vous faire pour cette nouvelle préparation ?</p><div class="mz-v9-choices"><button type="button" data-choice="keep">✅ Conserver les achats<small>Seules les quantités manquantes seront ajoutées.</small></button><button type="button" data-choice="restart">🔄 Recommencer les courses<small>Tous les ingrédients seront ajoutés comme non achetés.</small></button></div><button type="button" class="mz-v9-cancel" data-choice="cancel">Annuler</button></section>`, {title:'Recommencer les courses'});
+}
+
 
 /* ---------- icons ---------- */
 const I = {
@@ -1647,7 +1689,7 @@ document.addEventListener("submit", async e => {
       btn.disabled = true;
       try {
         const ok = id ? await patch("events", id, row) : !!(await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }));
-        if (!ok) { eventFormFeedback(f, row.kind ? "Le rendez-vous n'a pas été enregistré. Si le message persiste, collez le script supabase-foyer-6.sql dans Supabase (colonnes des rappels)." : "L'événement n'a pas été enregistré. Vérifiez la connexion et réessayez."); return; }
+        if (!ok) { eventFormFeedback(f, row.kind ? "Le rendez-vous n'a pas été enregistré. Si le message persiste, collez le script supabase/migrations/0007_rappels.sql dans Supabase (colonnes des rappels)." : "L'événement n'a pas été enregistré. Vérifiez la connexion et réessayez."); return; }
         closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.");
       } catch (err) { console.error("Enregistrement rendez-vous", err); eventFormFeedback(f, "Échec de l’enregistrement : " + (err?.message || "vérifie la connexion")); }
       finally { btn.disabled = false; }
@@ -1700,7 +1742,7 @@ document.addEventListener("submit", async e => {
     case "create": {
       btn.disabled = true; setupErr = "";
       const { data, error } = await sb.rpc("create_household", { p_name: fd.name.trim(), p_display: fd.display.trim(), p_color: COLORS[0] });
-      if (error) { setupErr = /function|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase-foyer.sql." : "Création impossible pour l'instant. Réessayez."; render(); break; }
+      if (error) { setupErr = /function|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase/migrations/0001_foyer.sql." : "Création impossible pour l'instant. Réessayez."; render(); break; }
       LS.set("mz_hh", data); LS.del("mz_join"); await enterCloud();
       break;
     }

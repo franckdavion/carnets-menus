@@ -4,8 +4,8 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 
 ## À faire AVANT de tester
 
-1. Dans Supabase > SQL Editor, exécuter `maison/notifications-supabase.sql`.
-2. Exécuter `maison/supabase-foyer-6.sql` : il crée les colonnes `events.kind` et `events.reminders` (et la table des jetons Google) s'ils n'existent pas encore.
+1. Dans Supabase > SQL Editor, exécuter `supabase/migrations/0006_notifications.sql`.
+2. Exécuter `supabase/migrations/0007_rappels.sql` : il crée les colonnes `events.kind` et `events.reminders` (et la table des jetons Google) s'ils n'existent pas encore.
 3. Générer une paire de clés VAPID avec `npx web-push generate-vapid-keys` (Node.js requis). Conserver la clé privée secrète.
 4. Coller UNIQUEMENT la clé PUBLIQUE dans `maison/push-config.js`.
 5. Dans Supabase Edge Functions, déployer `maison/supabase/functions/maison-push-dispatch/index.ts` sous le nom `maison-push-dispatch`. Désactiver la vérification JWT pour CETTE fonction : elle contrôle elle-même un secret fort via `x-cron-secret`.
@@ -20,14 +20,14 @@ Cette mise à jour ajoute une interface « Notifications » (cloche en haut), l'
 - **Nouveaux messages** du foyer, à tous sauf l'auteur, dans la minute.
 - **Résumé du matin**, à l'heure choisie par chacun : tâches du jour (les siennes et celles de « n'importe qui »), agenda Maisonnée du jour, repas du soir, anniversaires du jour, documents qui expirent aujourd'hui, dans 7 ou 30 jours.
 - **Anniversaires** : la veille à 19 h.
-- Chacun choisit ce qu'il reçoit dans la cloche 🔔 (table `maison_push_prefs`, script `supabase-foyer-10.sql`).
+- Chacun choisit ce qu'il reçoit dans la cloche 🔔 (table `maison_push_prefs`, script `supabase/migrations/0011_push_prefs.sql`).
 - Les rendez-vous enregistrés dans **Google Agenda** sont rappelés par Google Agenda lui-même.
 
 ## Tâches dans Google Agenda, appli fermée (même fonction)
 
 Toutes les 5 minutes, `maison-push-dispatch` recopie les tâches des foyers qui l'ont activé (Ma famille › « Tâches dans Google Agenda ») dans l'agenda choisi, avec le compte Google de la personne qui l'a activé.
 
-1. Coller `maison/supabase-foyer-11.sql` dans le SQL Editor (colonne `households.google_tasks`).
+1. Coller `supabase/migrations/0012_taches_google.sql` dans le SQL Editor (colonne `households.google_tasks`).
 2. Redéployer `maison-push-dispatch` avec le nouveau `index.ts`.
 3. Les secrets `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` (déjà créés pour la fonction `google-calendar`) servent aussi ici : rien à ajouter.
 4. Dans Ma famille, désactiver puis réactiver « Mettre les tâches dans Google Agenda » une fois. La ligne « Appli fermée » indique le dernier passage du serveur.

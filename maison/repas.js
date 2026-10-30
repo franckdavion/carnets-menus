@@ -585,8 +585,41 @@ document.addEventListener("click", async e => {
       else cev(`(()=>{const s=W()[${JSON.stringify(k)}];if(s)s[${JSON.stringify(role)}]=${JSON.stringify(v)};})()`);
       carnetSave(); mealSlotSheet(k); break;
     }
-    case "rLock": { const on = cev(`(()=>{const s=${slotJs(v)};if(s)s.lock=!s.lock;return !!(s&&s.lock);})()`); shopIncludeWeek();
-      carnetSave(on ? "Ajouté aux courses : les ingrédients sont dans la liste." : "Retiré des courses."); mealSlotSheet(v); break; }
+    case "rLock": {
+      // V8 : la fiche Repas de Maisonnée n'utilise pas le bouton cmToggleCourses
+      // de Carnet de menus. Elle doit donc proposer le même choix ici.
+      const hadLock = !!cev(`(()=>{const s=${slotJs(v)};return s&&s.lock;})()`);
+      let restart = false;
+      if (!hadLock) {
+        const previousPurchases = !!cev(`(()=>{
+          const s=${slotJs(v)};if(!s||!recipes[s.id])return false;
+          const ids=[s.id,s.entree,s.dessert].filter(Boolean);
+          return ids.some(id=>{const r=recipes[id];return (r&&r.ing||[]).some(i=>{
+            if(!i.n)return false;
+            const base=recipeIngredientBase(r,i,s.n||4,"main");
+            const key=norm(i.n)+"|"+base[1];
+            const b=menu.bought&&menu.bought[key];
+            return !!(menu.checked&&menu.checked[key])||!!(b&&b.until>=ymd(new Date())&&Number(b.q)>0);
+          });});
+        })()`);
+        if (previousPurchases) {
+          const choice = await mzV9ChoiceCourses();
+          if (choice === null) break;
+          restart = choice;
+        }
+      }
+      const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;
+        s.lock=!s.lock;
+        if(s.lock){
+          if(${restart})s.freshShopKey="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+          else delete s.freshShopKey;
+        }
+        return !!s.lock;
+      })()`);
+      shopIncludeWeek();
+      carnetSave(on ? (restart ? "Nouvelle préparation : ingrédients à acheter." : "Ajouté aux courses : les achats existants sont conservés.") : "Retiré des courses.");
+      mealSlotSheet(v); break;
+    }
     case "rKeep": { const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;if(s.keep)delete s.keep;else s.keep=true;return !!s.keep;})()`);
       carnetSave(on ? "Gardé : « Proposer ma semaine » ne le changera plus." : "Ce repas pourra de nouveau changer.");
       if (b.closest("#sheet")) mealSlotSheet(v); break; }

@@ -11,7 +11,7 @@ arrive dans l'appli sans recompiler.
 - Une position n'est envoyée à Supabase (`member_locations`) que si le membre s'est
   éloigné de **plus de 50 m** de sa dernière position enregistrée. Les relevés flous
   (précision > 100 m) sont ignorés.
-- Aucune modification de la base Supabase n'est nécessaire (tables de `supabase-foyer-2.sql` et `-5.sql`).
+- Aucune modification de la base Supabase n'est nécessaire (tables de `supabase/migrations/0002_messages_positions.sql` et `-5.sql`).
 
 Limite iOS : si quelqu'un ferme Maisonnée en la balayant vers le haut dans le sélecteur
 d'applis, iOS arrête le suivi jusqu'à la prochaine ouverture. Le simple retour à l'écran
