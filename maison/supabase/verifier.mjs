@@ -45,6 +45,7 @@ for (const name of ["ultimate.css", "ultimate.js", "ultimate-modules.js", "v3-ic
   ok("retiré " + name, !fs.existsSync(path.join(maison, name)));
 }
 ok("pas de copie d'octobre dans le site", !fs.existsSync(path.join(root, "version-23-octobre")) && !fs.existsSync(path.join(root, "version-etape-1")));
+ok("GitHub Pages publie le dossier _shared", fs.existsSync(path.join(root, ".nojekyll")));
 ok("carnet.json hors du site", !fs.existsSync(path.join(root, "carnet.json")) && fs.existsSync(path.join(root, "..", "carnets-donnees", "carnet.json")));
 
 const secrets = ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "CRON_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
