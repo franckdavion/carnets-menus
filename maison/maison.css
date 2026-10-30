@@ -1051,7 +1051,7 @@ body:has(main.view-home) .umod-link{gap:3px!important;}
 html:has(main.view-home){min-height:100%;background:#061329;}
 body:has(main.view-home){min-height:100dvh;position:relative;}
 body:has(main.view-home)::before{content:""!important;position:fixed!important;inset:0!important;z-index:0!important;pointer-events:none!important;}
-body:has(main.view-home) > *{position:relative;z-index:1;}
+body:has(main.view-home) > #app{position:relative;z-index:1;}
 body:has(main.view-home) .wrap{box-sizing:border-box!important;padding-inline:clamp(10px,2.2vw,35px)!important;}
 body:has(main.view-home) main.view-home{margin-inline:auto!important;}
 @media (orientation:portrait) and (max-width:760px){
@@ -1943,3 +1943,29 @@ button.r-meal-badge{cursor:pointer;font-family:inherit;}
 
 #ultimate-city{background:none;border:0;color:inherit;font:inherit;padding:0;cursor:pointer;text-align:left;}
 #ultimate-city:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+
+/* Fenêtres dans l'écran, au-dessus de la barre. L'accueil défile
+   au lieu d'écraser les cartes. Le verre bleu nuit reste le même. */
+dialog[open]{position:fixed;z-index:10060;inset:0;height:fit-content;margin:auto;box-sizing:border-box;max-width:calc(100vw - 12px);max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 12px);}
+dialog.sheet[open]{top:auto;bottom:0;height:auto;width:min(640px,100%);margin:0 auto;overflow:auto;}
+.mz-v10-modal[open]{width:min(430px,calc(100vw - 16px));overflow:visible;}
+.sheet-h{min-width:0;}
+.sheet-h h2{min-width:0;flex:1;overflow-wrap:anywhere;}
+.sheet-h .btn{flex:none;}
+body:has(main.view-home) #ultimate-module-grid .umod-grid,
+main.view-home #ultimate-module-grid .umod-grid,
+#ultimate-module-grid > .umod-grid{height:auto!important;min-height:0!important;max-height:none!important;grid-auto-rows:minmax(76px,auto)!important;align-content:start!important;}
+body:has(main.view-home) .mn-weather-panel .mn-weather-main h2{white-space:normal!important;}
+body:has(main.view-home) .ultimate-today-weather,
+body:has(main.view-home) .ultimate-today-date,
+body:has(main.view-home) .mn-weather-main,
+body:has(main.view-home) .ultimate-dayline{min-width:0;overflow-wrap:anywhere;}
+@media(max-width:480px){
+  body:has(main.view-home) .ultimate-today.mn-weather-panel{grid-template-columns:1fr!important;}
+  body:has(main.view-home) .ultimate-today-weather{border-right:0;padding-right:0;border-bottom:1px solid #68c5fa66;padding-bottom:8px;}
+}
+.ultimate-hour-list{grid-template-columns:repeat(auto-fit,minmax(132px,1fr));}
+.cx-ultimate-meal{flex-wrap:wrap;}
+.cx-ultimate-meal .r-meal-badge{max-width:100%;}
+.r-legend{grid-template-columns:repeat(auto-fit,minmax(108px,1fr))!important;}
+.cx-ultimate-stats,.cx-ultimate-actions{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));}

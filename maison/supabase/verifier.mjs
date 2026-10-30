@@ -34,12 +34,12 @@ const page = text(path.join(maison, "index.html"));
 ok("page Maisonnée : une feuille et l'accueil", page.includes('href="maison.css"') && page.includes('src="accueil.js"') && page.includes('src="supabase/functions/_shared/cal.js"'));
 ok("page Maisonnée sans les anciennes feuilles", !/ultimate\.css|design-stable\.css|v3-icons/.test(page));
 const sw = text(path.join(maison, "sw.js"));
-ok("cache Maisonnée aligné", sw.includes("maison.css") && sw.includes("accueil.js") && sw.includes("supabase/functions/_shared/cal.js") && sw.includes("carnet-archive-maison-v64"));
+ok("cache Maisonnée aligné", sw.includes("maison.css") && sw.includes("accueil.js") && sw.includes("supabase/functions/_shared/cal.js") && sw.includes("carnet-archive-maison-v65"));
 
 const carnet = text(path.join(root, "index.html"));
 const carnetSw = text(path.join(root, "sw.js"));
 ok("Carnet découpé", carnet.includes('href="carnet.css"') && carnet.includes('src="carnet-calc.js"') && carnet.includes('src="carnet-cloud.js"') && carnet.includes('src="maison/pont.js"') && !carnet.includes('src="carnet.js"'));
-ok("cache Carnet aligné", carnetSw.includes("carnet.css") && carnetSw.includes("carnet-calc.js") && carnetSw.includes("carnet-courses.js") && carnetSw.includes("carnet-v203"));
+ok("cache Carnet aligné", carnetSw.includes("carnet.css") && carnetSw.includes("carnet-calc.js") && carnetSw.includes("carnet-courses.js") && carnetSw.includes("carnet-v204"));
 
 for (const name of ["ultimate.css", "ultimate.js", "ultimate-modules.js", "v3-icons-and-add-position.js", "presences.css", "design-stable.css"]) {
   ok("retiré " + name, !fs.existsSync(path.join(maison, name)));

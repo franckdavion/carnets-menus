@@ -632,3 +632,11 @@ code{font-family:var(--f-mono);font-size:.92em}
 .cm-state-chip:disabled{opacity:1;cursor:default}.cm-reversible{margin:14px 0}.cm-reversible>.btn{width:100%;font-weight:700;padding:13px}.cm-reversible .cm-remove{border-color:#f0a34b;color:#ffd19b}.cm-state-chip[aria-pressed="true"]::before{content:'● ';font-size:9px}
 .cm-card-state{font-weight:800!important;border-width:2px!important}
 @media(max-width:390px){.cm-state-chip{font-size:10px!important;padding:7px 1px!important}}
+
+/* Fenêtres au-dessus de la barre, titre et fermeture qui ne se recouvrent pas. */
+:root{--tabh:72px;}
+.sheet{z-index:40;overflow:hidden;}
+#cropSheet,#scanSheet{z-index:50;}
+.sheet-in>.row:first-child h2{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.cm-state-options{grid-template-columns:repeat(auto-fit,minmax(64px,1fr));}
+.cm-card-state{white-space:normal;text-align:center;max-width:100%;}
