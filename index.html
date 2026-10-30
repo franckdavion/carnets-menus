@@ -1404,6 +1404,30 @@ function shopping(all){
     }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
+  // V4 : une coche correspond à une quantité achetée, jamais à une quantité future.
+  // Le recalcul est centralisé : il fonctionne également après une synchronisation
+  // depuis un autre appareil ou une modification de recette.
+  const nowDay=ymd(new Date());
+  let changed=false;
+  menu.checkedQty=menu.checkedQty||{};
+  for(const i of Object.values(acc)){
+    if(!menu.checked?.[i.key])continue;
+    const saved=Number(menu.checkedQty[i.key]);
+    if(!Number.isFinite(saved)||saved<=0){menu.checkedQty[i.key]=i.q;changed=true;continue;}
+    if(i.q>saved+0.0001){
+      const prior=menu.bought?.[i.key];
+      const priorQ=prior&&prior.until>=nowDay?Number(prior.q)||0:0;
+      const until=haveUntil();
+      menu.bought=Object.assign({},menu.bought,{[i.key]:{q:priorQ+saved,until:prior&&prior.until>until?prior.until:until}});
+      delete menu.checked[i.key];delete menu.checkedQty[i.key];changed=true;
+    }
+  }
+  if(changed){
+    // Ne pas réentrer dans render() depuis shopping().
+    try{localStorage.setItem("cm_menu",JSON.stringify(menu));}catch(e){}
+    if(typeof scheduleSync==="function")scheduleSync();
+    if(typeof cloudSoon==="function")cloudSoon();
+  }
   const today=ymd(new Date()), bt=menu.bought||{};
   const list=Object.values(acc).map(i=>{const b=bt[i.key];if(b&&b.until>=today)i.q=Math.max(0,i.q-b.q);return i;})
     .filter(i=>!(bt[i.key]&&bt[i.key].until>=today&&i.q<=0.0001));
@@ -1712,7 +1736,7 @@ function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],da
   const ph=r?rPhotoSrc(s.id):"",st=past?null:mealState(k,s,date),nut=slotNut(s);
   return`<button type="button" class="mc${past?" past":""}${s&&s.lock?" locked":""}" data-act="wcell" data-k="${k}" data-slot="${k}">
     ${ph?`<img class="mc-ph" src="${esc(ph)}" alt=""${r&&!r.photo?` data-auto="${esc(s.id)}"`:""} loading="lazy">`:`<span class="mc-ph mc-noph">${lab==="Midi"?"☀️":"🌙"}</span>`}
-    <span class="mc-t"><span class="mc-m">${lab}${s.n?` · ${s.n} pers.`:""}</span><b>${r?esc(r.name):"Plat à choisir"}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
+    <span class="mc-t"><span class="mc-m">${lab}</span><b>${r?esc(r.name):"Plat à choisir"} ${s.n?`<span class="muted" style="font-size:.82em;font-weight:500;white-space:nowrap">· 👥 ${s.n} pers.</span>`:""}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
       ${r&&!past?`<small class="mc-info">${[showOn("nut")&&nut?esc(fmtNut(nut,true)):"",showOn("wine")?esc(drinkLine(r)):""].filter(Boolean).join(" · ")}${menu.prefs.dissoc?" "+dissocBadge(mealDissoc(s)):""}</small>`:""}</span>
     ${st?`<span class="cm-card-state cm-state-${CM_MEAL_STATES.indexOf(cmMealStatus(s))}">${esc(cmMealStatus(s))}</span>`:""}</button>`;}
 // the future meals of the shown week that are planned but not validated yet
@@ -2979,7 +3003,16 @@ document.addEventListener("click",e=>{
   else if(a==="addOk")applyAdd();
   else if(a==="closeAdd"){if(!$("#addOk").disabled)applyAdd();else $("#addSheet").hidden=true;} // closing keeps what was ticked
   else if(["serv","swap","lock","pick"].includes(a)&&b.dataset.k&&isPast(b.dataset.k)){toast("Ce jour est passé : son menu ne se modifie plus");}
-  else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){sl.n=Math.max(1,sl.n+Number(b.dataset.d));render();saveMenu();}}
+  else if(a==="serv"){const sl=W()[b.dataset.k];if(sl){
+    const previous=sl.n;
+    sl.n=Math.max(1,sl.n+Number(b.dataset.d));
+    if(sl.lock&&sl.n!==previous){
+      const day=ymd(addDays(parseYmd(curWeek),DAYS.indexOf(b.dataset.k.split("|")[0])));
+      menu.shopDays=[...new Set([...(menu.shopDays||selectedShopDates().map(x=>x.key)),day])].sort();
+    }
+    render();saveMenu();
+    if(sl.lock&&sl.n!==previous)toast("Courses actualisées pour "+sl.n+" personnes : compléments à acheter affichés");
+  }}
   else if(a==="applyAll"){for(const k in W())if(!isPast(k))W()[k].n=menu.people;render();saveMenu();}
   else if(a==="clearMenu"){for(const k in W())if(!W()[k].lock&&!isPast(k))delete W()[k];menu.checked={};proposeAsk=0;render();saveMenu();}
   else if(a==="propose"){
@@ -3150,7 +3183,7 @@ document.addEventListener("click",e=>{
   else if(a==="openStore"){finishAsk=false;renderStore();$("#storeSheet").hidden=false;$("#storeSheet .sheet-in").scrollTop=0;}
   else if(a==="closeStore"){$("#storeSheet").hidden=true;}
   else if(a==="storeTick"){const s=b.dataset.s;
-    if(s.startsWith("k:")){const k=s.slice(2);if(menu.checked[k])delete menu.checked[k];else menu.checked[k]=true;}
+    if(s.startsWith("k:")){const k=s.slice(2);if(menu.checked[k]){delete menu.checked[k];if(menu.checkedQty)delete menu.checkedQty[k];}else{menu.checked[k]=true;(menu.checkedQty||(menu.checkedQty={}))[k]=(shopping(true).find(i=>i.key===k)||{}).q||0;}}
     else{const x=(menu.extras||[])[Number(s.slice(2))];if(x)x.done=!x.done;}
     render();renderStore();saveMenu(300);}
   else if(a==="openSide"){sideKey=b.dataset.k;renderSide();$("#sideSheet").hidden=false;$("#sideSheet .sheet-in").scrollTop=0;}
@@ -3242,7 +3275,7 @@ document.addEventListener("click",e=>{
     t.got.forEach(x=>{const lab=x.n+(x.q?" : "+x.q:"");if(!have.has(norm(lab))){menu.extras=[...(menu.extras||[]),{t:lab,done:false}];n++;}});
     render();saveMenu();toast(n+" article"+(n>1?"s":"")+" remis dans la liste");}
   else if(a==="driveGo"||a==="cartUndo"){const ref=b.dataset.ref,on=a==="driveGo";
-    if(ref.startsWith("k:")){const k=ref.slice(2);if(on)menu.checked[k]=true;else delete menu.checked[k];}
+    if(ref.startsWith("k:")){const k=ref.slice(2);if(on){menu.checked[k]=true;(menu.checkedQty||(menu.checkedQty={}))[k]=(shopping(true).find(i=>i.key===k)||{}).q||0;}else{delete menu.checked[k];if(menu.checkedQty)delete menu.checkedQty[k];}}
     else{const x=(menu.extras||[])[Number(ref.slice(2))];if(x)x.done=on;}
     // let the link open first, then refresh the list
     if(on)setTimeout(()=>{render();saveMenu(300);},400);else{render();saveMenu(300);}}
@@ -3373,7 +3406,7 @@ document.addEventListener("click",e=>{
 });
 document.addEventListener("change",e=>{
   const t=e.target;
-  if(t.dataset.act==="check"){if(t.checked)menu.checked[t.dataset.k]=true;else delete menu.checked[t.dataset.k];render();saveMenu(300);}
+  if(t.dataset.act==="check"){if(t.checked){menu.checked[t.dataset.k]=true;(menu.checkedQty||(menu.checkedQty={}))[t.dataset.k]=(shopping(true).find(i=>i.key===t.dataset.k)||{}).q||0;}else{delete menu.checked[t.dataset.k];if(menu.checkedQty)delete menu.checkedQty[t.dataset.k];}render();saveMenu(300);}
   if(t.dataset.act==="checkX"){menu.extras[Number(t.dataset.i)].done=t.checked;render();saveMenu(300);}
 });
 $("#q").value=filter.q||"";
