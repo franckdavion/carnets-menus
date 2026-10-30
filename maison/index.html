@@ -767,6 +767,29 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 }
 @media(max-width:390px){.meal-redesign .meal-hero{grid-template-columns:minmax(95px,37%) minmax(0,1fr)}.meal-redesign .meal-photo{width:100%;max-height:190px}.meal-redesign .meal-hero-actions .btn{font-size:10px}.meal-redesign .meal-compose-item{grid-template-columns:minmax(80px,29%) minmax(0,1fr)}}
 @media(min-width:800px){.meal-redesign .meal-compose-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.meal-redesign .meal-compose-item{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start}}
+
+/* V21 : correctifs visuels ciblés pour la fiche repas iOS/PWA.
+   Le défilement reste actif, seul son indicateur est masqué. */
+dialog.sheet{scrollbar-width:none;-ms-overflow-style:none}
+dialog.sheet::-webkit-scrollbar{display:none;width:0;height:0}
+/* Le résumé Options est visuellement identique au bouton voisin. */
+.meal-redesign .meal-shopping-actions>.btn,
+.meal-redesign .meal-shopping-actions>.meal-options-inline>summary{
+  box-sizing:border-box;min-height:48px;height:100%;
+  display:flex;align-items:center;justify-content:center;
+  padding:10px 12px;border:1px solid #4bb8ff;border-radius:24px;
+  background:linear-gradient(#1463a4,#07234f);
+  box-shadow:0 0 10px #0b9dff99;color:#fff;
+  font:inherit;font-weight:700;text-align:center;line-height:1.25;
+}
+.meal-redesign .meal-shopping-actions>.meal-options-inline>summary{cursor:pointer;list-style:none}
+.meal-redesign .meal-shopping-actions>.meal-options-inline>summary::-webkit-details-marker{display:none}
+@media(max-width:600px){
+ .meal-redesign .meal-shopping-actions{flex-wrap:wrap;gap:8px}
+ .meal-redesign .meal-shopping-actions>.btn,
+ .meal-redesign .meal-shopping-actions>.meal-options-inline{flex:1 1 calc(50% - 4px);min-width:0}
+ .meal-redesign .meal-shopping-actions>.meal-options-inline>summary{font-size:13px}
+}
 </style>
 <link rel="stylesheet" href="presences.css">
 <link rel="stylesheet" href="ultimate.css?v=iphone-portrait-2cols-hero-fixed-20261027">
