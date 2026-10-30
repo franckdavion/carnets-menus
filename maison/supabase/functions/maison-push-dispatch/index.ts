@@ -7,7 +7,8 @@
 //  3. Résumé du matin, à l'heure choisie par chacun : tâches du jour, agenda Maisonnée du jour,
 //     repas du soir, anniversaires du jour, documents qui expirent.
 //  4. Anniversaires : la veille à 19 h (et dans le résumé du matin le jour même).
-//  5. Toutes les 5 minutes : les tâches des foyers qui l'ont demandé sont recopiées dans Google Agenda
+//  5. Ajouts aux courses : un autre membre a ajouté un article dans les trois dernières minutes.
+//  6. Toutes les 5 minutes : les tâches des foyers qui l'ont demandé sont recopiées dans Google Agenda
 //     (households.google_tasks, script supabase/migrations/0012_taches_google.sql ; secrets GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).
 // Chaque personne choisit ce qu'elle reçoit (table maison_push_prefs, réglée depuis la cloche).
 // Les rendez-vous enregistrés dans Google Agenda sont rappelés par Google Agenda lui-même.
@@ -25,6 +26,7 @@ interface MaisonCalApi {
   messageClaim(messageId: string, userId: string): string;
   digestClaim(day: string, userId: string): string;
   birthdayEveClaim(id: string, day: string, userId: string): string;
+  shoppingClaim(ids: string, userId: string): string;
 }
 const MaisonCal = (globalThis as unknown as { MaisonCal: MaisonCalApi }).MaisonCal;
 const { addDays, diffDays, nextDue, startsBetween } = MaisonCal;
@@ -38,8 +40,8 @@ const DAY = 86400000;
 const MAX_DELAY = 40320; // 4 semaines, en minutes
 const zone = "Europe/Paris";
 
-type Prefs = { messages: boolean; reminders: boolean; digest: boolean; digest_at: string; birthdays: boolean };
-const DEFAULT_PREFS: Prefs = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true };
+type Prefs = { messages: boolean; reminders: boolean; digest: boolean; digest_at: string; birthdays: boolean; shopping: boolean };
+const DEFAULT_PREFS: Prefs = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true };
 
 /* ---------- dates à l'heure de Paris ---------- */
 function parisDateParts(d: Date) {
@@ -224,6 +226,29 @@ Deno.serve(async req => {
       if (!prefs(m.user_id).messages) continue;
       await pushOnce(MaisonCal.messageClaim(msg.id, m.user_id), m.user_id, {
         title: `💬 ${memberName.get(msg.member_id) || "Message"}`, body: text.length > 180 ? text.slice(0, 177) + "…" : text, tag: `msg-${msg.id}`, url: "./?v=messages"
+      });
+    }
+  }
+
+  /* ===== 2b. Articles ajoutés aux courses par un autre membre ===== */
+  const { data: shopAdds } = await supabase.from("shopping_items").select("id,household_id,name,added_by,done").gte("created_at", new Date(now - 3 * MINUTE).toISOString()).not("added_by", "is", null).eq("done", false).limit(80);
+  const shopGroups = new Map<string, { hid: string; by: string; ids: string[]; names: string[] }>();
+  for (const it of shopAdds || []) {
+    const name = String(it.name || "").trim();
+    if (!name || !it.added_by) continue;
+    const k = it.household_id + "|" + it.added_by;
+    const g = shopGroups.get(k) || { hid: it.household_id, by: it.added_by, ids: [], names: [] };
+    g.ids.push(it.id); g.names.push(name);
+    shopGroups.set(k, g);
+  }
+  for (const g of shopGroups.values()) {
+    const ids = g.ids.slice().sort().join(",");
+    const shown = g.names.slice(0, 3).join(", ");
+    const body = g.names.length === 1 ? g.names[0] : g.names.length + " articles : " + shown + (g.names.length > 3 ? "…" : "");
+    for (const m of (byHousehold.get(g.hid) || []).filter(x => x.id !== g.by)) {
+      if (prefs(m.user_id).shopping === false) continue;
+      await pushOnce(MaisonCal.shoppingClaim(ids, m.user_id), m.user_id, {
+        title: "🛒 Courses", body, tag: "shop-" + g.by, url: "./?v=courses"
       });
     }
   }

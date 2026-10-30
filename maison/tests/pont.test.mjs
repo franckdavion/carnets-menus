@@ -16,7 +16,7 @@ for (const file of order) {
   if (i > at) at = i;
 }
 const sw = read("sw.js");
-ok("cache du Carnet contient chaque fichier", order.filter(f => f !== "maison/pont.js").every(f => sw.includes(f)) && sw.includes("maison/pont.js") && sw.includes("carnet-v206"));
+ok("cache du Carnet contient chaque fichier", order.filter(f => f !== "maison/pont.js").every(f => sw.includes(f)) && sw.includes("maison/pont.js") && sw.includes("carnet-v207"));
 ok("l'ancien fichier unique n'est plus chargé", !page.includes('src="carnet.js"') && !fs.existsSync(path.join(root, "carnet.js")));
 
 const carnet = order.filter(f => f.startsWith("carnet-")).map(read).join("\n");

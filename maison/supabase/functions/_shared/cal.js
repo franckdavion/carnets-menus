@@ -91,10 +91,13 @@
   function birthdayEveClaim(id, day, userId) {
     return "bday-eve:" + id + ":" + day + ":" + userId;
   }
+  function shoppingClaim(ids, userId) {
+    return "shop:" + ids + ":" + userId;
+  }
 
   const api = {
     addDays, diffDays, isoDay, repeatRule, recurrenceDate, startsBetween, nextDue,
-    reminderClaim, messageClaim, digestClaim, birthdayEveClaim
+    reminderClaim, messageClaim, digestClaim, birthdayEveClaim, shoppingClaim
   };
   root.MaisonCal = api;
   if (typeof module !== "undefined" && module && module.exports) module.exports = api;

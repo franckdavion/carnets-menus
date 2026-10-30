@@ -6,7 +6,7 @@
    - la liste de courses : articles calculés par le Carnet (repas validés), articles ajoutés à la main, coches.
    Il ajoute aussi un bouton « Maisonnée » en haut du Carnet pour revenir dans l'autre appli. */
 (() => {
-  const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, map: null, mapAt: 0, hid: null };
+  const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, userEdit: false, me: null, meFor: "", map: null, mapAt: 0, hid: null };
   // only after this copy has received the shared carnet once: a copy still showing what it had in memory
   // (phone just reopened, new device) must not send its old week to Maisonnée
   const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
@@ -57,9 +57,16 @@
       ]);
       if (ml.error || sh.error) throw ml.error || sh.error;
 
+      if (!P.me || P.meFor !== uid) {
+        let me = null;
+        try { if (window.parent && window.parent !== window && window.parent.S && window.parent.S.me) me = window.parent.S.me; } catch (e) {}
+        if (!me) { const { data: mm } = await sb.from("household_members").select("id").eq("household_id", hid).eq("user_id", uid).maybeSingle(); me = mm && mm.id; }
+        if (me) { P.me = me; P.meFor = uid; }
+      }
       const before = JSON.stringify([menu.weeks, menu.extras, menu.checked, menu.mzBase]);
       const base = menu.mzBase && menu.mzBase.hid === hid ? JSON.parse(JSON.stringify(menu.mzBase)) : { hid, meals: {}, extras: {}, checked: {} };
-      const ops = [], now = new Date().toISOString();
+      const ops = [], authored = [], now = new Date().toISOString();
+      const shopInsert = row => { if (P.userEdit) authored.push(row); ops.push(sb.from("shopping_items").insert(row)); };
       let pulled = 0;
 
       /* 1. meals: each side's change goes to the other; if both changed, the Carnet (open now) wins */
@@ -137,7 +144,7 @@
           }
           const want = { name: i.n, qty: fmt(i.q, i.u) || "", aisle: aisleOf(i.r), done };
           if (r.name !== want.name || r.qty !== want.qty || r.aisle !== want.aisle || !!r.done !== done) ops.push(sb.from("shopping_items").update(want).eq("id", r.id));
-        } else ops.push(sb.from("shopping_items").insert({ household_id: hid, name: i.n, qty: fmt(i.q, i.u) || "", aisle: aisleOf(i.r), done: cDone, source: "carnet:" + key }));
+        } else shopInsert({ household_id: hid, name: i.n, qty: fmt(i.q, i.u) || "", aisle: aisleOf(i.r), done: cDone, source: "carnet:" + key });
         base.checked[key] = done;
       }
       for (const [key, r] of Object.entries(rowsC)) if (!C[key]) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.checked[key]; }
@@ -153,7 +160,7 @@
           base.extras[k] = done;
         } else if (c) {
           if (inB) { ex = ex.filter(x => x !== c); exChanged = true; pulled++; delete base.extras[k]; }
-          else { ops.push(sb.from("shopping_items").insert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" })); base.extras[k] = !!c.done; }
+          else { shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" }); base.extras[k] = !!c.done; }
         } else if (r) {
           if (inB) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
           else { ex.push({ t: r.name, done: !!r.done }); exChanged = true; pulled++; base.extras[k] = !!r.done; }
@@ -161,6 +168,7 @@
       }
       if (exChanged) menu.extras = ex;
 
+      if (authored.length && authored.length <= 15 && P.me) for (const row of authored) row.added_by = P.me;
       const res = await Promise.all(ops);
       const bad = res.find(r => r && r.error);
       if (bad) throw bad.error;
@@ -171,14 +179,14 @@
         if (pulled && typeof toast === "function") toast("🏠 Mis à jour depuis Maisonnée");
       }
     } catch (e) { console.warn("Pont Maisonnée :", e); }
-    finally { P.busy = false; if (P.again) { P.again = false; soon(1500); } }
+    finally { P.busy = false; P.userEdit = false; if (P.again) { P.again = false; soon(1500); } }
   }
   function soon(ms) { clearTimeout(P.timer); P.timer = setTimeout(pontSync, ms); }
 
   /* ---------- when to sync: after the Carnet's own cloud sync, after each change, every minute ---------- */
   if (typeof saveMenu === "function") {
     const orig = saveMenu;
-    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else soon(3000); return r; };
+    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(3000); } return r; };
   }
   if (typeof cloudSync === "function") {
     const orig = cloudSync;

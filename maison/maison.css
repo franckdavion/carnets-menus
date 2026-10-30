@@ -975,9 +975,10 @@ body:has(main.view-home) #app > header.top.ultimate-header-moved{display:none!im
 .ultimate-header-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px;max-width:100%;flex-wrap:wrap;}
 .ultimate-header-controls .hh-name{font-size:13px!important;color:#bdeaff!important;text-align:left;max-width:100%;white-space:normal;}
 .ultimate-header-controls .inline{display:flex;align-items:center;gap:3px;flex-shrink:0;}
-.ultimate-header-controls .icon-btn{width:36px;height:36px;min-height:36px;color:#f1faff;background:#164674c7;border:1px solid #58b7e8;box-shadow:0 0 10px #159eff55;}
+.ultimate-header-controls .icon-btn:not(.mz-bell){width:36px;height:36px;min-height:36px;color:#f1faff;background:#164674c7;border:1px solid #58b7e8;box-shadow:0 0 10px #159eff55;}
+.ultimate-header-controls .mz-bell{color:#f1faff;background:#164674c7;border:1px solid #58b7e8;box-shadow:0 0 10px #159eff55;}
 .ultimate-header-controls .stack{flex-shrink:0;}
-@media(max-width:700px){.ultimate-header-controls{gap:5px;margin-bottom:8px;}.ultimate-header-controls .hh-name{font-size:12px!important;}.ultimate-header-controls .icon-btn{width:32px;height:32px;min-height:32px;}}
+@media(max-width:700px){.ultimate-header-controls{gap:5px;margin-bottom:8px;}.ultimate-header-controls .hh-name{font-size:12px!important;}.ultimate-header-controls .icon-btn:not(.mz-bell){width:32px;height:32px;min-height:32px;}}
 
 #ultimate-module-grid{margin:16px 0 25px;padding:16px;border:1.5px solid #56bfff;border-radius:24px;background:linear-gradient(145deg,#10395eea,#071b35f5);box-shadow:0 0 20px #008cff66;color:#eef8ff;}
 .umod-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}.umod-heading h2{font-size:22px;margin:0;color:#fff;}
@@ -1001,7 +1002,7 @@ body:has(main.view-home) .ultimate-greeting p{margin:0!important;}
 body:has(main.view-home) .ultimate-kicker,
 body:has(main.view-home) .ultimate-header-controls .hh-name{display:none!important;}
 body:has(main.view-home) .ultimate-header-controls{justify-content:flex-end!important;margin:0 0 2px!important;}
-body:has(main.view-home) .ultimate-header-controls .icon-btn{width:29px!important;height:29px!important;min-height:29px!important;}
+body:has(main.view-home) .ultimate-header-controls .icon-btn:not(.mz-bell){width:29px!important;height:29px!important;min-height:29px!important;}
 body:has(main.view-home) .ultimate-grid{margin:0!important;}
 body:has(main.view-home) .ultimate-card{border-radius:19px!important;}
 body:has(main.view-home) .ultimate-card h2{margin:0 0 5px!important;}
@@ -2070,3 +2071,16 @@ body:has(main.view-home) .mn-weather-panel .ultimate-today-date{grid-column:2!im
 .cat-rem{display:inline-flex;align-items:center;justify-content:center}
 .cat-rem .ing-art,.cx-ingredient-emoji .ing-art{width:28px;height:28px;flex-basis:28px}
 .cat-rem .ing-art svg,.cx-ingredient-emoji .ing-art svg{width:28px;height:28px}
+
+/* Cloche : le nombre reste dans le bouton, et chaque notification est une pile de lignes. */
+.mz-bell{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;width:auto;min-width:36px;height:36px;padding:0 8px;border-radius:999px;overflow:visible}
+.mz-bell-count{position:static;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center}
+.mz-notices{display:flex;flex-direction:column;gap:10px;min-width:0}
+.mz-notice{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px;border:1px solid #38bdf8;border-radius:16px;background:rgba(12,36,68,.55)}
+.mz-notice-top{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mz-notice-top strong{overflow-wrap:anywhere}
+.mz-notice-top time{color:var(--muted);font-size:13px}
+.mz-notice p{margin:0;overflow-wrap:anywhere}
+.mz-notice-acts{display:flex;flex-direction:column;gap:8px}
+.mz-notice-acts .btn{width:100%}
+.mz-notices>.btn{width:100%}

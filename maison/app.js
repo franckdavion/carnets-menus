@@ -88,7 +88,7 @@ async function showPushSettings() {
     <p class="muted small">Chaque téléphone doit activer les notifications séparément. Ces choix valent pour tous vos appareils.</p>
     <div class="card" style="display:grid;gap:14px">
       ${sw("messages", "Messages", "un nouveau message du foyer")}
-      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre. L'alerte s'affiche tout de suite si Maisonnée est ouverte. Le téléphone verrouillé dépend encore de l'envoi par le serveur.")}
+      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre. Écran allumé : tout de suite. iPhone verrouillé : dans la minute, si les notifications sont activées sur cet appareil.")}
       ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)")}
       ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
@@ -267,7 +267,7 @@ const mzNotifsKey = 'mz_course_notifications_v98';
 function mzGetNotifs() { try { const v = JSON.parse(localStorage.getItem(mzNotifsKey) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
 function mzPutNotifs(rows) { try { localStorage.setItem(mzNotifsKey, JSON.stringify(rows.slice(0, 80))); } catch (_) {} }
 function mzUnreadCount() { return mzGetNotifs().filter(x => !x.read).length; }
-function mzBellHtml() { const n = mzUnreadCount(); return `<button class="icon-btn plain" data-act="mzNotifications" aria-label="Notifications${n ? ' : ' + n + ' non lues' : ''}" style="position:relative">🔔${n ? `<span style="position:absolute;right:-3px;top:-5px;background:#ef4444;color:white;border-radius:12px;font-size:10px;min-width:17px;padding:2px 4px;font-weight:800">${n > 99 ? '99+' : n}</span>` : ''}</button>`; }
+function mzBellHtml() { const n = mzUnreadCount(); return `<button class="icon-btn plain mz-bell" data-act="mzNotifications" aria-label="Notifications${n ? ' : ' + n + ' non lues' : ''}">🔔${n ? `<span class="mz-bell-count">${n > 99 ? '99+' : n}</span>` : ''}</button>`; }
 function mzStoreNotice(names) {
   const rows = mzGetNotifs();
   const items = names.map(x => ({id:x.id, name:x.name}));
@@ -278,10 +278,22 @@ function mzStoreNotice(names) {
 }
 function renderBellOnly() { document.querySelectorAll('[data-act="mzNotifications"]').forEach(b => { const holder = document.createElement('span'); holder.innerHTML = mzBellHtml(); b.replaceWith(holder.firstElementChild); }); }
 function mzOpenNotifs() {
-  const rows = mzGetNotifs();
-  openSheet('Notifications', `<div style="display:grid;gap:10px">${rows.length ? rows.map(n => `<div class="card" style="padding:12px;${n.read ? '' : 'border-color:#38bdf8'}"><div class="inline" style="justify-content:space-between"><strong>🛒 Courses${n.read ? '' : ' · Nouveau'}</strong><small class="muted">${new Date(n.at).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</small></div><p style="margin:8px 0">${esc(n.items.map(x => x.name).join(', '))}</p><div class="btns"><button class="btn primary" data-act="mzOpenNotice" data-v="${esc(n.id)}">Voir ${n.items.length > 1 ? 'les articles' : 'l’article'}</button>${n.read ? '' : `<button class="btn" data-act="mzReadNotice" data-v="${esc(n.id)}">Marquer comme lue</button>`}</div></div>`).join('') : '<p class="muted">Aucune notification enregistrée sur cet appareil.</p>'}<p class="muted small">Historique conservé sur cet appareil. Les notifications push restent configurables dans Ma famille → Réglages.</p></div>`);
+  const kept = mzGetNotifs().filter(n => !n.read);
+  if (kept.length !== mzGetNotifs().length) mzPutNotifs(kept);
+  const when = t => new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const cards = kept.map(n => `<article class="mz-notice"><div class="mz-notice-top"><strong>Courses</strong><time datetime="${new Date(n.at).toISOString()}">${esc(when(n.at))}</time></div><p>${esc(n.items.map(x => x.name).join(', '))}</p><div class="mz-notice-acts"><button type="button" class="btn primary" data-act="mzOpenNotice" data-v="${esc(n.id)}">Voir ${n.items.length > 1 ? 'les articles' : 'l’article'}</button><button type="button" class="btn" data-act="mzReadNotice" data-v="${esc(n.id)}">Marquer comme lue</button></div></article>`).join('');
+  openSheet('Notifications', `<div class="mz-notices">${cards || '<p class="muted">Aucune notification.</p>'}${kept.length > 1 ? '<button type="button" class="btn" data-act="mzClearNotices">Tout retirer</button>' : ''}<p class="muted small">Marquer comme lue retire la notification. Les alertes du téléphone se règlent dans Ma famille.</p></div>`);
 }
-function mzMarkRead(id) { const rows = mzGetNotifs(); const n = rows.find(x => x.id === id); if (n) n.read = true; mzPutNotifs(rows); renderBellOnly(); return n; }
+function mzMarkRead(id) {
+  const rows = mzGetNotifs();
+  const i = rows.findIndex(x => x.id === id);
+  const n = i >= 0 ? rows[i] : null;
+  if (i >= 0) rows.splice(i, 1);
+  mzPutNotifs(rows);
+  renderBellOnly();
+  return n;
+}
+function mzClearNotices() { mzPutNotifs([]); renderBellOnly(); mzOpenNotifs(); }
 function mzGoToItems(items) {
   closeSheet();
   view = 'courses'; LS.set('mz_view', 'courses');
@@ -1462,6 +1474,7 @@ document.addEventListener("click", async e => {
   switch (act) {
     case "mzNotifications": mzOpenNotifs(); break;
     case "mzReadNotice": mzMarkRead(v); mzOpenNotifs(); break;
+    case "mzClearNotices": mzClearNotices(); break;
     case "mzOpenNotice": { const n = mzMarkRead(v); if (n) mzGoToItems(n.items); break; }
     case "pushSettings": await showPushSettings(); break;
     case "pushEnable": await enablePush(); break;
