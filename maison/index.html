@@ -705,6 +705,28 @@ dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repe
 .meal-redesign .meal-shopping{margin-top:15px}
 @media(max-width:600px){.meal-redesign .meal-top-card,.meal-redesign .meal-section-card{padding:12px}.meal-redesign .meal-photo{width:38%;min-height:115px}.meal-redesign .meal-hero{gap:10px}.meal-redesign .meal-hero-actions .btn{font-size:11px;padding:7px 9px;min-height:36px}.meal-redesign .meal-essentials{grid-template-columns:1fr 1fr}.meal-redesign .meal-keep-area{grid-column:1/-1;flex-direction:row;justify-content:space-between}.meal-redesign .meal-compose-grid{grid-template-columns:1fr}.meal-redesign .meal-compose-item{gap:7px}.meal-redesign .meal-actions{grid-template-columns:1fr 1fr}}
 @media(max-width:390px){.meal-redesign .meal-hero{flex-direction:column;align-items:stretch}.meal-redesign .meal-photo{width:100%;max-height:175px}.meal-redesign .meal-hero-actions .btn{flex:1}}
+
+/* V17 — Actions des courses sur une ligne, sans doublon */
+.meal-shopping-actions{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.meal-shopping-actions>.btn{flex:1 1 180px;width:auto;min-width:0}
+.meal-shopping-actions>.small{flex:0 0 100%}
+.meal-options-inline{flex:1 1 180px;min-width:0;margin:0;padding:0;border:0;background:none;box-shadow:none}
+.meal-options-inline>summary{display:flex;align-items:center;justify-content:center;min-height:44px;height:100%;padding:10px 12px;border:1px solid var(--line, #389de6);border-radius:18px;background:linear-gradient(180deg,#155f9e,#062b56);color:#fff;font-weight:700;cursor:pointer;list-style:none;text-align:center}
+.meal-options-inline>summary::-webkit-details-marker{display:none}
+.meal-options-inline[open]{flex-basis:100%}
+.meal-options-inline[open]>summary{height:auto}
+.meal-options-inline>.meal-actions{margin-top:10px}
+@media(max-width:390px){.meal-shopping-actions{gap:7px}.meal-shopping-actions>.btn,.meal-options-inline{flex-basis:calc(50% - 4px);font-size:13px}.meal-options-inline>summary{padding:8px 5px;font-size:13px}}
+
+/* V18 : réglages regroupés dans Ingrédients et courses */
+.meal-redesign .meal-essentials-status{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.meal-redesign .meal-ingredient-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center;margin:0 0 16px;padding:12px;border:1px solid #2684cb;border-radius:15px;background:#061b41}
+.meal-redesign .meal-ingredient-controls .meal-persons{min-width:0;display:flex;flex-direction:column;gap:8px}
+.meal-redesign .meal-ingredient-controls .meal-portions{width:100%}
+.meal-remove-choice{display:grid;gap:12px;padding:8px 0}
+.meal-remove-choice>.btn{text-align:left;white-space:normal;min-height:52px}
+.meal-remove-choice>.btn:last-child{text-align:center}
+@media(max-width:600px){.meal-redesign .meal-ingredient-controls{gap:8px;padding:10px}.meal-redesign .meal-ingredient-controls .meal-persons{font-size:13px}.meal-redesign .meal-ingredient-controls .meal-stepper{gap:6px}.meal-redesign .meal-ingredient-controls .icon-btn{width:38px;height:38px;min-width:38px}.meal-redesign .meal-ingredient-controls .meal-portion-select{font-size:13px;padding:8px 4px}.meal-redesign .meal-essentials-status{grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="presences.css">
 <link rel="stylesheet" href="ultimate.css?v=iphone-portrait-2cols-hero-fixed-20261027">

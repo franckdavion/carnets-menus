@@ -186,9 +186,7 @@ function mealSlotSheet(k) {
             <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
           </div>
         </div>
-        <div class="meal-essentials">
-          <div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
-          <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label>
+        <div class="meal-essentials meal-essentials-status">
           <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
           <div class="meal-keep-area"><span>Garder ce choix</span>${s.lock ? `<span class="meal-keep-label">✓ Dans les courses</span>` : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder"}</button>`}</div>
         </div>
@@ -198,21 +196,44 @@ function mealSlotSheet(k) {
         <div class="meal-compose-item"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
         <div class="meal-compose-item"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
       </div></div>
-      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="btns"><button class="btn primary" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button></div>
+      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="meal-ingredient-controls"><div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
+          <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label></div>
         ${ingBlock(k, s)}
       </div>
-      <details class="meal-section-card meal-options"><summary>⚙️ Options pratiques</summary><div class="meal-actions">
-        <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
-        <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
-        <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une autre recette</button>
-        <button class="btn" data-act="rReroll" data-v="${esc(k)}">Autre idée</button>
-      </div><details class="meal-shopping"><summary>Informations sur les courses</summary>
-      <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p></details></details>
     </section>
-    <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>
+    <div class="btns"><button class="btn danger block" data-act="rRemoveChoose" data-v="${esc(k)}">Retirer ce repas</button></div>
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
   if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
 }
+// Fenêtre de retrait persistante : revenir à la fiche seulement avec « Fermer ».
+let rRemoveContext = null;
+function rRemoveChooseSheet(k) {
+  if (!rRemoveContext || rRemoveContext.k !== k) rRemoveContext = {k, week:rWeek, all:false};
+  const x = weekSlots(rWeek)[k], slot = x && x.s;
+  const hasMain = !!(slot && x.name), hasEntree = !!(slot && slot.entree), hasDessert = !!(slot && slot.dessert);
+  const empty = !hasMain && !hasEntree && !hasDessert;
+  const buttons = empty ? `<p class="muted" role="status">Aucun élément restant dans ce repas.</p>` : `
+    ${hasMain ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="main">🍽️ Plat principal · ${esc(x.name)}</button>` : ""}
+    ${hasEntree ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="entree">🥗 Entrée · ${esc(x.ent || "Entrée")}</button>` : ""}
+    ${hasDessert ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="dessert">🍰 Dessert · ${esc(x.des || "Dessert")}</button>` : ""}
+    <button type="button" class="btn danger block" data-act="rRemovePart" data-v="${esc(k)}" data-r="all">🗑️ Tout le repas</button>`;
+  openSheet("Retirer un élément de ce repas", `<div class="meal-remove-choice">
+    <p class="muted">Que souhaitez-vous retirer ?</p>${buttons}
+  </div>`);
+}
+// Le bouton Fermer de l'en-tête est le seul chemin de retour après un retrait.
+document.addEventListener("click", e => {
+  const b=e.target.closest('[data-act="closeSheet"]');
+  if(!b || !rRemoveContext || !document.querySelector('#sheetTitle')?.textContent.includes('Retirer un élément de ce repas')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const ctx=rRemoveContext; rRemoveContext=null;
+  rWeek=ctx.week;
+  if(ctx.all){closeSheet();render();return;}
+  const x=weekSlots(rWeek)[ctx.k];
+  if(x && x.s && x.name) mealSlotSheet(ctx.k);
+  else if(x && x.s){rPick={k:ctx.k,role:"main",q:""};rPickSheet();}
+  else {closeSheet();render();}
+},true);
 // the ingredients of this meal (dish, starter, dessert) for its number of people, computed like the Carnet's shopping list
 function slotIngredients(k) {
   return cj(`(()=>{const s=${slotJs(k)};if(!s)return[];const acc={},skip=Array.isArray(s.noIng)?s.noIng:[];
@@ -252,9 +273,16 @@ function ingBlock(k, s) {
   return `<p class="group-h" style="margin-top:20px">Les courses</p><div class="field" style="margin-top:0"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} cochés</span>
     <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà à la maison : seuls les ingrédients cochés partiront dans la liste.</p>
     <div class="card" style="padding:0">${list.map(i => `<div class="ing-emoji-row"><button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span></button><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji de ${esc(i.n)}">${IngredientEmoji.get(i.n)}</button><span class="ing-emoji-label ${i.on ? 'on' : ''}">${esc(i.n)}</span><span class="ing-emoji-qty">${esc(i.qt)}</span></div>`).join("")}</div></div>
-    <div class="btns" style="margin-top:10px">${s.lock
+    <div class="btns meal-shopping-actions" style="margin-top:10px">${s.lock
       ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
-      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}</div>`;
+      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}<details class="meal-options meal-options-inline"><summary>⚙️ Options pratiques</summary><div class="meal-actions">
+        <button class="btn" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button>
+        <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
+        <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
+        <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une autre recette</button>
+        <button class="btn" data-act="rReroll" data-v="${esc(k)}">Autre idée</button>
+      </div><details class="meal-shopping"><summary>Informations sur les courses</summary>
+      <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p></details></details></div>`;
 }
 // Fiche cuisine Maisonnée : les données restent celles du Carnet embarqué.
 let rRecipeTab = "ing";
@@ -449,7 +477,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rPortion": case "rPortionCustom": {
@@ -570,6 +598,27 @@ document.addEventListener("click", async e => {
       cev(`(()=>{const s=${slotJs(v)};if(s)s.n=Math.max(1,Math.min(20,(s.n||menu.people||4)+(${+b.dataset.d})));})()`); carnetSave(); mealSlotSheet(v); break;
     }
     case "rSide": cev(`(()=>{const s=${slotJs(v)};if(s)delete s[${JSON.stringify(b.dataset.r)}];})()`); carnetSave(); mealSlotSheet(v); break;
+    case "rRemoveChoose": rRemoveChooseSheet(v); break;
+    case "rRemovePart": {
+      const part=b.dataset.r;
+      if(!["main","entree","dessert","all"].includes(part))break;
+      const x=weekSlots(rWeek)[v];if(!x||!x.s)break;
+      const label=part==="all"?"tout le repas":part==="main"?"le plat principal":part==="entree"?"l’entrée":"le dessert";
+      if(!confirm(`Confirmer le retrait de ${label} ?`))break;
+      if(part==="all"){
+        cev(`delete ${slotJs(v)}`);
+        if(rRemoveContext)rRemoveContext.all=true;
+        carnetSave("Repas complet retiré.");
+      }else if(part==="main"){
+        cev(`(()=>{const s=${slotJs(v)};if(!s)return;delete s.id;delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;delete s.lock;})()`);
+        carnetSave("Plat principal retiré.");
+      }else{
+        cev(`(()=>{const s=${slotJs(v)};if(s){delete s[${JSON.stringify(part)}];delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;}})()`);
+        carnetSave(label+" retiré(e).");
+      }
+      rRemoveChooseSheet(v);
+      break;
+    }
     case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré."); break;
     case "rLeft": rLeftSheet(v); break;
     case "rNote": rNoteSheet(v); break;
