@@ -180,7 +180,7 @@ function cxDaySheet(d, fresh) {
   if (!fresh) $("#sheet").scrollTop = sc;
 }
 const CX_ACTS = ["cxEmojiEdit", "cxAddFocus", "cxMealActions", "cxActionRecipe", "cxActionMeal", "cxActionChange", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
-document.addEventListener("click", e => {
+document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
   let msg = "";
@@ -202,8 +202,16 @@ document.addEventListener("click", e => {
       return;
     }
     case "cxHaveClose": cxHaveOpen = false; break;
-    case "cxMealLock": { const on = cev(`(()=>{const s=((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}];if(!s)return false;if(s.lock)delete s.lock;else s.lock=true;saveMenu();return !!s.lock;})()`);
-      msg = on ? "Ajouté aux courses." : "Retiré des courses."; break; }
+    case "cxMealLock": {
+      cev(`curWeek=${JSON.stringify(b.dataset.w)}`);
+      const cur = mealState(cj(`((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}]`));
+      const next = MEAL_LOCK_STATES.includes(cur) ? "Gardé" : "En courses";
+      const note = await writeMealStatus(v, next);
+      if (!note) break;
+      cev("saveMenu()");
+      msg = note;
+      break;
+    }
     case "cxMeal": rWeek = b.dataset.w; mealSlotSheet(v); return;
     case "cxRecipe": rWeek = b.dataset.w; rRecipeSheet(v); return;
     case "cxEmojiEdit": {

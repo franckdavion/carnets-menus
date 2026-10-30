@@ -73,8 +73,98 @@ function carnetSave(msg) { cev("saveMenu()"); render(); if (msg) toast(msg); }
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {
   cev(`(()=>{const all=shopDates(),cur=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
-    const add=all.filter(x=>x.key>=curWeek&&x.key<=ymd(addDays(parseYmd(curWeek),6))&&x.locked>0).map(x=>x.key);
-    menu.shopDays=[...new Set([...cur,...add])].sort();})()`);
+    const from=curWeek,to=ymd(addDays(parseYmd(curWeek),6));
+    const week=all.filter(x=>x.key>=from&&x.key<=to);
+    const drop=new Set(week.filter(x=>!(x.locked>0)).map(x=>x.key));
+    const add=week.filter(x=>x.locked>0).map(x=>x.key);
+    menu.shopDays=[...new Set([...cur.filter(k=>!drop.has(k)),...add])].sort();})()`);
+}
+const MEAL_LOCK_STATES = ["En courses", "Courses faites", "Terminé"];
+const MEAL_HINT = {
+  "Proposé": "La proposition de semaine peut remplacer ce repas.",
+  "Gardé": "Ce repas reste au menu. Rien n'est à acheter.",
+  "En courses": "Les ingrédients cochés sont dans la liste.",
+  "Courses faites": "Ces ingrédients sont comptés comme achetés. Un ingrédient partagé avec un autre repas reste à acheter pour celui-là.",
+  "Terminé": "Le repas est fait. Ses courses ne sont plus à acheter."
+};
+function mealHadPurchases(k) {
+  return !!cev(`(()=>{
+    const s=${slotJs(k)};if(!s)return false;
+    const ids=[s.id,s.entree,s.dessert].filter(Boolean);
+    return ids.some(id=>{const r=recipes[id];return (r&&r.ing||[]).some(i=>{
+      if(!i.n)return false;
+      const base=recipeIngredientBase(r,i,s.n||4,"main");
+      const key=norm(i.n)+"|"+base[1];
+      const b=menu.bought&&menu.bought[key];
+      return !!(menu.checked&&menu.checked[key])||!!(b&&b.until>=ymd(new Date())&&Number(b.q)>0);
+    });});
+  })()`);
+}
+function holdCartLines(k, items) {
+  const payload = (items || []).filter(i => i.on).map(i => ({ key: i.key, n: i.n, qt: i.qt || "" }));
+  return cev(`(()=>{
+    const slot=${JSON.stringify(k)};
+    const items=${JSON.stringify(payload)};
+    const present=new Set((shopping(true)||[]).map(i=>i.key));
+    if(!Array.isArray(menu.extras))menu.extras=[];
+    let left=0,kept=0;
+    for(const i of items){
+      const base=String(i.key).split("#")[0];
+      const stays=[...present].some(p=>p===i.key||p===base||String(p).startsWith(base+"|nouvelle-preparation:"));
+      const checked=!!(menu.checked&&(menu.checked[i.key]||menu.checked[base]));
+      if(stays){kept++;continue;}
+      if(checked){
+        if(!menu.extras.some(x=>x.heldSlot===slot&&x.heldKey===i.key))
+          menu.extras.push({t:i.qt?i.n+" · "+i.qt:i.n,done:true,heldSlot:slot,heldKey:i.key});
+        kept++;
+      }else left++;
+    }
+    return {left,kept};
+  })()`) || { left: 0, kept: 0 };
+}
+function releaseHeldLines(k) {
+  cev(`menu.extras=(menu.extras||[]).filter(x=>x.heldSlot!==${JSON.stringify(k)})`);
+}
+async function writeMealStatus(k, state) {
+  if (!MEAL_STATES.includes(state)) return null;
+  const cur = mealState(cj(`W()[${JSON.stringify(k)}]`));
+  if (!cur || cur === state) return null;
+  const locking = MEAL_LOCK_STATES.includes(state);
+  const wasLock = MEAL_LOCK_STATES.includes(cur);
+  let restart = false;
+  if (locking && !wasLock) {
+    if (mealHadPurchases(k)) {
+      const choice = await mzV9ChoiceCourses();
+      if (choice === null) return null;
+      restart = choice === true || choice === "restart";
+    }
+    releaseHeldLines(k);
+  }
+  const leaving = !locking && wasLock ? slotIngredients(k) : null;
+  cev(`(()=>{const s=${slotJs(k)};if(!s)return;
+    s.mealState=${JSON.stringify(state)};
+    s.keep=${state !== "Proposé"};
+    s.lock=${locking};
+    if(${locking && !wasLock}){
+      if(${restart})s.freshShopKey="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      else delete s.freshShopKey;
+    }
+    if(!${locking})delete s.freshShopKey;
+  })()`);
+  let msg = "État : " + state;
+  if (leaving) {
+    const n = holdCartLines(k, leaving);
+    const bits = [];
+    if (n.left) bits.push(n.left + " ingrédient" + (n.left > 1 ? "s" : "") + " pas encore acheté" + (n.left > 1 ? "s" : "") + " " + (n.left > 1 ? "sortent" : "sort") + " de la liste");
+    if (n.kept) bits.push(n.kept + " déjà coché" + (n.kept > 1 ? "s" : "") + " ou partagé" + (n.kept > 1 ? "s" : "") + " " + (n.kept > 1 ? "restent" : "reste"));
+    msg = bits.length ? "Retiré des courses : " + bits.join(". ") + "." : "Retiré des courses.";
+  } else if (state === "En courses") msg = restart ? "Nouvelle préparation : ingrédients à acheter." : "Ajouté aux courses : les achats existants sont conservés.";
+  else if (state === "Courses faites") msg = "Courses faites : ces ingrédients sont comptés comme achetés.";
+  else if (state === "Terminé") msg = "Repas terminé.";
+  else if (state === "Gardé") msg = "Gardé : la proposition de semaine ne le changera plus.";
+  else if (state === "Proposé") msg = "Ce repas pourra de nouveau changer.";
+  shopIncludeWeek();
+  return msg;
 }
 
 /* ---------- reading the carnet ---------- */
@@ -111,9 +201,10 @@ VIEWS.repas = function () {
       <button class="icon-btn plain" data-act="rWeek" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>
     <div class="r-intro"><span aria-hidden="true">🗓️</span><div><strong>Préparez vos repas de la semaine</strong><small>Proposez des repas, confirmez vos choix et suivez les courses.</small></div></div>
     <div class="btns" style="margin-top:10px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">⚙️ Réglages</button></div>
+    <details class="r-legend-fold"><summary>États des repas</summary>
     <div class="r-legend" aria-label="Légende des états des repas">
       ${MEAL_STATES.map(st=>`<span class="r-legend-item"><i class="r-meal-badge ${mealBadgeClass(st)}">${mealBadgeLabel(st)}</i><small>${({"Proposé":"À valider","Gardé":"Confirmé","En courses":"À acheter","Courses faites":"Achetés","Terminé":"Réalisé"})[st]}</small></span>`).join("")}
-    </div>`;
+    </div></details>`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${dn}<span>${esc(fmtShort(day))}</span></h3></header>`;
@@ -182,24 +273,21 @@ function mealSlotSheet(k) {
         <div class="meal-hero">
           ${photo ? `<img class="meal-photo" src="${esc(photo)}" alt="Photo du plat" loading="lazy" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer" title="Changer la photo">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo disponible" data-act="rPhotoEdit" data-v="${esc(k)}" style="cursor:pointer">🍽️</div>`}
           <div class="meal-hero-text"><strong class="meal-name">${esc(x.name)}</strong><button class="btn meal-rename-compact" data-act="rRename" data-v="${esc(k)}" aria-label="Renommer la recette" title="Renommer">✏️<span> Renommer</span></button>
-            <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button>
-            <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
+            <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
           </div>
         </div>
-        <div class="meal-essentials meal-essentials-status">
-          <label class="meal-state"><span>État du repas</span><select class="input" data-meal-state="${esc(k)}">${MEAL_STATES.map(t=>`<option value="${t}" ${mealState(s)===t?'selected':''}>${t}</option>`).join('')}</select></label>
-          <div class="meal-keep-area"><span>Garder ce choix</span>${s.lock ? `<span class="meal-keep-label">✓ Dans les courses</span>` : `<button class="btn ${s.keep ? "primary" : ""}" data-act="rKeep" data-v="${esc(k)}" aria-pressed="${!!s.keep}">${s.keep ? "✓ Gardé" : "Garder"}</button>`}</div>
-        </div>
+        <div class="meal-status" role="group" aria-label="État du repas">${MEAL_STATES.map(st => `<button type="button" class="meal-status-btn${mealState(s)===st ? " is-on" : ""}" data-act="rState" data-v="${esc(k)}" data-state="${esc(st)}" aria-pressed="${mealState(s)===st}">${esc(st)}</button>`).join("")}</div>
+        <p class="muted small meal-status-hint">${MEAL_HINT[mealState(s)] || ""}</p>
+      </div>
+      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="meal-ingredient-controls"><div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
+          <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label></div>
+        ${ingBlock(k, s)}
       </div>
       <div class="meal-section-card"><h3>🍴 Composer mon repas</h3><div class="meal-compose-grid">
         <div class="meal-compose-item meal-compose-main"><b>🍽️ Plat principal</b><span>${esc(x.name)}</span></div>
         <div class="meal-compose-item meal-compose-side"><b>🥗 Entrée</b>${x.ent ? `<span>${esc(x.ent)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="entree">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="entree">+ Ajouter une entrée</button>`}</div>
         <div class="meal-compose-item meal-compose-side"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
       </div></div>
-      <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="meal-ingredient-controls"><div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
-          <label class="meal-persons meal-portions"><span>🍽️ Portions</span><select class="input meal-portion-select" data-meal-portion="${esc(k)}" aria-label="Choisir les portions"><option value="1" ${mealPortionFactor(s)===1?'selected':''}>Normale ×1</option><option value="1.5" ${mealPortionFactor(s)===1.5?'selected':''}>Généreuse ×1,5</option><option value="custom" ${![1,1.5].includes(mealPortionFactor(s))?'selected':''}>${![1,1.5].includes(mealPortionFactor(s))?'Personnalisée '+String(mealPortionFactor(s)).replace('.',',')+'×':'Personnalisée…'}</option></select></label></div>
-        ${ingBlock(k, s)}
-      </div>
     </section>
     <div class="btns"><button class="btn danger block" data-act="rRemoveChoose" data-v="${esc(k)}">Retirer ce repas</button></div>
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
@@ -218,7 +306,9 @@ function rRemoveChooseSheet(k) {
     ${hasDessert ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="dessert">🍰 Dessert · ${esc(x.des || "Dessert")}</button>` : ""}
     <button type="button" class="btn danger block" data-act="rRemovePart" data-v="${esc(k)}" data-r="all">🗑️ Tout le repas</button>`;
   openSheet("Retirer un élément de ce repas", `<div class="meal-remove-choice">
-    <p class="muted">Que souhaitez-vous retirer ?</p>${buttons}
+    <p class="muted">Que souhaitez-vous retirer ?</p>
+    ${slot && slot.lock ? `<p class="muted small">Ce repas est dans les courses. Le retirer enlève les ingrédients qui ne sont pas encore cochés. Ce qui est déjà dans le caddie, ou partagé avec un autre repas, reste.</p>` : ""}
+    ${buttons}
   </div>`);
 }
 // Le bouton Fermer de l'en-tête est le seul chemin de retour après un retrait.
@@ -268,21 +358,26 @@ function rEditIngredientsSheet(k) {
 function ingBlock(k, s) {
   let list = [];
   try { list = slotIngredients(k); } catch (_) {}
-  if (!list.length) return `<p class="muted small" style="margin-top:16px">Pas d'ingrédients notés pour cette recette.</p>`;
   const n = list.filter(i => i.on).length;
-  return `<p class="group-h" style="margin-top:20px">Les courses</p><div class="field" style="margin-top:0"><span class="label">Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} cochés</span>
-    <p class="muted small" style="margin:2px 0 6px">Décochez ce que vous avez déjà à la maison : seuls les ingrédients cochés partiront dans la liste.</p>
-    <div class="card" style="padding:0">${list.map(i => `<div class="ing-emoji-row"><button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span></button><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji de ${esc(i.n)}">${IngredientEmoji.html(i.n)}</button><span class="ing-emoji-label ${i.on ? 'on' : ''}">${esc(i.n)}</span><span class="ing-emoji-qty">${esc(i.qt)}</span></div>`).join("")}</div></div>
-    <div class="btns meal-shopping-actions" style="margin-top:10px">${s.lock
-      ? `<p class="small" style="margin:0 0 6px;width:100%">✓ Dans les courses : ${n} ingrédient${n > 1 ? "s" : ""}.</p><button class="btn" data-act="rLock" data-v="${esc(k)}">Retirer des courses</button>`
-      : `<button class="btn primary block" data-act="rLock" data-v="${esc(k)}" ${n ? "" : "disabled"}>🛒 Ajouter aux courses (${n} ingrédient${n > 1 ? "s" : ""})</button>`}<details class="meal-options meal-options-inline"><summary aria-label="Options pratiques" title="Options pratiques">⚙️ Options</summary><div class="meal-actions">
+  const st = mealState(s);
+  const onList = MEAL_LOCK_STATES.includes(st);
+  const rows = list.length ? `<div class="card" style="padding:0">${list.map(i => `<div class="ing-emoji-row"><button type="button" class="shop-item ing-item ${i.on ? "on" : ""}" data-act="rIng" data-v="${esc(k)}" data-k="${esc(i.key)}" aria-pressed="${i.on}"><span class="box">${I.tick}</span></button><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji de ${esc(i.n)}">${IngredientEmoji.html(i.n)}</button><span class="ing-emoji-label ${i.on ? 'on' : ''}">${esc(i.n)}</span><span class="ing-emoji-qty">${esc(i.qt)}</span></div>`).join("")}</div>` : `<p class="muted small">Pas d'ingrédients notés pour cette recette.</p>`;
+  return `<p class="group-h" style="margin-top:20px">Les courses</p><div class="field" style="margin-top:0"><span class="label">${list.length ? `Ingrédients pour ${s.n || 4} pers. · ${n}/${list.length} cochés` : "Ingrédients"}</span>
+    <p class="muted small" style="margin:2px 0 6px">${onList ? "Décochez ce que vous avez déjà : seuls les ingrédients cochés restent dans la liste." : "Décochez ce que vous avez déjà. Ils partiront dans la liste quand le repas passera « En courses »."}</p>
+    ${rows}</div>
+    <div class="meal-quick-add">
+      <p class="group-h">Ajouter à ce repas</p>
+      <div class="meal-quick-row"><input class="input" name="qn" maxlength="80" placeholder="Ingrédient" autocomplete="off" aria-label="Ingrédient à ajouter"><input class="input" name="qq" maxlength="40" placeholder="Quantité" autocomplete="off" aria-label="Quantité"><button type="button" class="btn primary" data-act="rQuickIng" data-v="${esc(k)}">Ajouter</button></div>
+      <p class="muted small">${onList ? "La ligne arrive tout de suite dans la liste de courses." : "La ligne rejoint ce repas. Elle partira aux courses avec lui."}</p>
+    </div>
+    <details class="meal-options meal-options-inline"><summary aria-label="Options pratiques" title="Options pratiques">⚙️ Options</summary><div class="meal-actions">
+        <button class="btn" data-act="rRecipe" data-v="${esc(k)}">📖 Voir la recette</button>
         <button class="btn" data-act="rQuantities" data-v="${esc(k)}">✏️ Modifier les quantités</button>
         <button class="btn" data-act="rVariant" data-v="${esc(k)}">Créer une variante</button>
         <button class="btn" data-act="rEditIngredients" data-v="${esc(k)}">Modifier les ingrédients</button>
         <button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une autre recette</button>
         <button class="btn" data-act="rReroll" data-v="${esc(k)}">Autre idée</button>
-      </div><details class="meal-shopping"><summary>Informations sur les courses</summary>
-      <p>${s.lock ? "Ses ingrédients cochés sont dans la liste. « Proposer ma semaine » ne le changera plus." : s.keep ? "« Proposer ma semaine » ne le changera plus. Il n'est pas encore dans les courses." : "Ce repas peut encore changer si vous relancez « Proposer ma semaine »."}</p></details></details></div>`;
+      </div></details>`;
 }
 // Fiche cuisine Maisonnée : les données restent celles du Carnet embarqué.
 let rRecipeTab = "ing";
@@ -477,7 +572,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rPortion": case "rPortionCustom": {
@@ -569,7 +664,7 @@ document.addEventListener("click", async e => {
     }
     case "rRecipeOpen": rRecipeOpen(v, b.dataset.id); return;
     case "rLockAll": {
-      const n = cev(`(()=>{let n=0;for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k)){s.lock=true;n++;}}return n;})()`);
+      const n = cev(`(()=>{let n=0;for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k)&&s.mealState!=="Courses faites"&&s.mealState!=="Terminé"){s.lock=true;s.keep=true;s.mealState="En courses";n++;}}return n;})()`);
       shopIncludeWeek();
       carnetSave(`${n} repas validé${n > 1 ? "s" : ""} : les ingrédients partent dans les courses.`); break;
     }
@@ -585,44 +680,45 @@ document.addEventListener("click", async e => {
       else cev(`(()=>{const s=W()[${JSON.stringify(k)}];if(s)s[${JSON.stringify(role)}]=${JSON.stringify(v)};})()`);
       carnetSave(); mealSlotSheet(k); break;
     }
-    case "rLock": {
-      // V8 : la fiche Repas de Maisonnée n'utilise pas le bouton cmToggleCourses
-      // de Carnet de menus. Elle doit donc proposer le même choix ici.
-      const hadLock = !!cev(`(()=>{const s=${slotJs(v)};return s&&s.lock;})()`);
-      let restart = false;
-      if (!hadLock) {
-        const previousPurchases = !!cev(`(()=>{
-          const s=${slotJs(v)};if(!s||!recipes[s.id])return false;
-          const ids=[s.id,s.entree,s.dessert].filter(Boolean);
-          return ids.some(id=>{const r=recipes[id];return (r&&r.ing||[]).some(i=>{
-            if(!i.n)return false;
-            const base=recipeIngredientBase(r,i,s.n||4,"main");
-            const key=norm(i.n)+"|"+base[1];
-            const b=menu.bought&&menu.bought[key];
-            return !!(menu.checked&&menu.checked[key])||!!(b&&b.until>=ymd(new Date())&&Number(b.q)>0);
-          });});
-        })()`);
-        if (previousPurchases) {
-          const choice = await mzV9ChoiceCourses();
-          if (choice === null) break;
-          restart = choice;
-        }
-      }
-      const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;
-        s.lock=!s.lock;
-        if(s.lock){
-          if(${restart})s.freshShopKey="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-          else delete s.freshShopKey;
-        }
-        return !!s.lock;
+    case "rState": {
+      const msg = await writeMealStatus(v, b.dataset.state);
+      if (msg) { carnetSave(msg); mealSlotSheet(v); }
+      else mealSlotSheet(v);
+      break;
+    }
+    case "rQuickIng": {
+      const box = b.closest(".meal-quick-add");
+      const name = (box && box.querySelector("[name=qn]") ? box.querySelector("[name=qn]").value : "").trim();
+      const qt = (box && box.querySelector("[name=qq]") ? box.querySelector("[name=qq]").value : "").trim();
+      if (!name) { toast("Écrivez l'ingrédient.", null, null, box || b); break; }
+      const items = slotIngredients(v).map(i => ({ n: i.n, qt: i.qt || "", key: i.key }));
+      items.push({ n: name, qt, key: "" });
+      const onCourses = MEAL_LOCK_STATES.includes(mealState((weekSlots(rWeek)[v] || {}).s));
+      cev(`(()=>{const s=${slotJs(v)};if(!s)return;
+        const arr=${JSON.stringify(items)};
+        s.ingCustomPeople=Number(s.n)||Number(menu.people)||4;
+        s.ingCustom=arr.map((i,j)=>{
+          if(i.key)return {n:i.n,qt:i.qt||"",key:i.key};
+          const m=String(i.qt||"").match(/^([\\d.,\\/ ]+)\\s*(.*)$/);
+          const u=m?m[2].trim():"";
+          return {n:i.n,qt:i.qt||"",key:norm(i.n)+"|"+u.toLowerCase()+"#"+j};
+        });
       })()`);
-      shopIncludeWeek();
-      carnetSave(on ? (restart ? "Nouvelle préparation : ingrédients à acheter." : "Ajouté aux courses : les achats existants sont conservés.") : "Retiré des courses.");
+      carnetSave(onCourses ? "Ajouté à ce repas et à la liste de courses." : "Ajouté à ce repas.");
       mealSlotSheet(v); break;
     }
-    case "rKeep": { const on = cev(`(()=>{const s=${slotJs(v)};if(!s)return false;if(s.keep)delete s.keep;else s.keep=true;return !!s.keep;})()`);
-      carnetSave(on ? "Gardé : « Proposer ma semaine » ne le changera plus." : "Ce repas pourra de nouveau changer.");
-      if (b.closest("#sheet")) mealSlotSheet(v); break; }
+    case "rLock": {
+      const cur = mealState(cj(`${slotJs(v)}`));
+      const msg = await writeMealStatus(v, MEAL_LOCK_STATES.includes(cur) ? "Gardé" : "En courses");
+      if (msg) { carnetSave(msg); mealSlotSheet(v); }
+      break;
+    }
+    case "rKeep": {
+      const cur = mealState(cj(`${slotJs(v)}`));
+      const msg = await writeMealStatus(v, cur === "Gardé" ? "Proposé" : "Gardé");
+      if (msg) { carnetSave(msg); if (b.closest("#sheet")) mealSlotSheet(v); }
+      break;
+    }
     case "rIng": cev(`(()=>{const s=${slotJs(v)};if(!s)return;const k=${JSON.stringify(b.dataset.k)},l=Array.isArray(s.noIng)?s.noIng.slice():[];
       const i=l.indexOf(k);if(i>=0)l.splice(i,1);else l.push(k);if(l.length)s.noIng=l;else delete s.noIng;})()`); carnetSave(); mealSlotSheet(v); break;
     case "rServ": {
@@ -637,17 +733,26 @@ document.addEventListener("click", async e => {
       if(!["main","entree","dessert","all"].includes(part))break;
       const x=weekSlots(rWeek)[v];if(!x||!x.s)break;
       if(part==="all"){
+        const locked = !!(x.s && x.s.lock);
+        const lines = locked ? slotIngredients(v) : [];
+        cev(`(()=>{const s=${slotJs(v)};if(s){s.lock=false;}})()`);
+        if (locked) holdCartLines(v, lines);
         cev(`delete ${slotJs(v)}`);
+        shopIncludeWeek();
         carnetSave();
         rRemoveContext=null;
         closeSheet();
-        toast("Repas retiré.");
+        toast(locked ? "Repas retiré. Les ingrédients pas encore achetés sortent de la liste. Ce qui est déjà coché, ou partagé, reste." : "Repas retiré.");
         break;
       }else if(part==="main"){
-        cev(`(()=>{const s=${slotJs(v)};if(!s)return;delete s.id;delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;delete s.lock;})()`);
+        const locked = !!(x.s && x.s.lock);
+        const lines = locked ? slotIngredients(v) : [];
+        cev(`(()=>{const s=${slotJs(v)};if(!s)return;delete s.id;delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;delete s.lock;delete s.mealState;})()`);
+        if (locked) holdCartLines(v, lines);
+        shopIncludeWeek();
         carnetSave();
       }else{
-        cev(`(()=>{const s=${slotJs(v)};if(s){delete s[${JSON.stringify(part)}];delete s.ingCustom;delete s.ingCustomPeople;delete s.noIng;}})()`);
+        cev(`(()=>{const s=${slotJs(v)};if(s)delete s[${JSON.stringify(part)}];})()`);
         carnetSave();
       }
       const left=weekSlots(rWeek)[v];
@@ -735,7 +840,7 @@ document.addEventListener("submit", e => {
     const before = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]).length`);
     cev(`planWeek(${all})`);
     let n = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]&&!isPast(k)&&!W()[k].lock).length`);
-    if (lock) { cev(`(()=>{for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!isPast(k))s.lock=true;}})()`); shopIncludeWeek(); }
+    if (lock) { cev(`(()=>{for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!isPast(k)&&s.mealState!=="Courses faites"&&s.mealState!=="Terminé"){s.lock=true;s.keep=true;s.mealState="En courses";}}})()`); shopIncludeWeek(); }
     const after = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]).length`);
     closeSheet();
     const held = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]&&!isPast(k)&&(W()[k].lock||W()[k].keep)).length`);
@@ -776,8 +881,8 @@ document.addEventListener("change", e => {
   const el=e.target.closest("select[data-meal-state]"); if(!el || !CK.ready) return;
   const k=el.dataset.mealState, state=el.value;
   if(!MEAL_STATES.includes(state)) return;
-  cev(`(()=>{const s=${slotJs(k)};if(!s)return;s.mealState=${JSON.stringify(state)};s.keep=${JSON.stringify(state!=="Proposé")};s.lock=${JSON.stringify(["En courses","Courses faites","Terminé"].includes(state))};})()`);
-  shopIncludeWeek(); carnetSave("État : "+state); mealSlotSheet(k);
+  cev(`curWeek=${JSON.stringify(rWeek)}`);
+  writeMealStatus(k, state).then(msg => { if (msg) { carnetSave(msg); mealSlotSheet(k); } else mealSlotSheet(k); });
 });
 
 // Mode cuisine local à Maisonnée : aucun changement de page ni de données Carnet.

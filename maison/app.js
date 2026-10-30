@@ -713,39 +713,96 @@ let mzToastActive = false;
 function mzShowNextToast() {
   const el = $("#toast");
   if (!el || mzToastActive || !mzToastQueue.length) return;
-  const {msg, label, fn} = mzToastQueue.shift();
+  const {msg, label, fn, anchor} = mzToastQueue.shift();
   mzToastActive = true;
-  // Hors des conteneurs transformés : évite les contextes d'empilement sur Mac.
-  if (el.parentElement !== document.body) document.body.appendChild(el);
+  // Une fiche ouverte avec showModal() occupe le calque du navigateur :
+  // un avis posé dans la page reste derrière. On le met dans la fiche,
+  // à côté du geste en cours plutôt qu'en haut.
+  const sheet = document.querySelector("dialog[open]");
+  const host = sheet ? document.createElement("div") : el;
+  if (sheet) {
+    host.className = "mz-toast-in-sheet";
+    host.setAttribute("role", "status");
+  } else if (el.parentElement !== document.body) document.body.appendChild(el);
   const message = String(msg || "");
   const error = /impossible|erreur|refus|introuvable|pas de connexion|échou|non enregistrée/i.test(message);
   const warning = !error && /attention|déjà|manquant|attente|vérifi/i.test(message);
   const success = !error && !warning && /ajouté|terminé|enregistré|activé|validé|acheté|supprimé|effectué/i.test(message);
   const icon = error ? "⚠️" : warning ? "📝" : success ? "✅" : /course|article|ingrédient/i.test(message) ? "🛒" : "🔔";
   const title = error ? "Action impossible" : warning ? "À noter" : success ? "C’est fait !" : "Maisonnée";
-  el.innerHTML = `<span class="mz-v9-icon" aria-hidden="true">${icon}</span><span class="mz-v9-copy"><strong>${title}</strong>${esc(message)}</span><span class="mz-v91-actions">${label ? `<button type="button" class="mz-v91-action">${esc(label)}</button>` : ""}<button type="button" class="mz-v91-ok">OK ✓</button></span>`;
-  el.classList.add("mz-v9-toast");
-  el.classList.toggle("mz-v9-error", error);
-  el.classList.toggle("mz-v9-warning", warning);
-  el.classList.toggle("mz-v9-success", success);
-  el.classList.toggle("mz-course-alert", Boolean(label && message.includes("article")));
-  el.hidden = false;
+  host.innerHTML = `<span class="mz-v9-icon" aria-hidden="true">${icon}</span><span class="mz-v9-copy"><strong>${title}</strong>${esc(message)}</span><span class="mz-v91-actions">${label ? `<button type="button" class="mz-v91-action">${esc(label)}</button>` : ""}<button type="button" class="mz-v91-ok">OK ✓</button></span>`;
+  host.classList.add("toast", "mz-v9-toast");
+  host.classList.toggle("mz-v9-error", error);
+  host.classList.toggle("mz-v9-warning", warning);
+  host.classList.toggle("mz-v9-success", success);
+  host.classList.toggle("mz-course-alert", Boolean(label && message.includes("article")));
   const dismiss = (action) => {
     if (!mzToastActive) return;
-    el.hidden = true;
     mzToastActive = false;
+    if (sheet) host.remove();
+    else host.hidden = true;
     if (action && typeof fn === "function") { try { fn(); } catch (e) { console.error(e); } }
     // Laisser la page se mettre à jour avant d'afficher la notification suivante.
     setTimeout(mzShowNextToast, 80);
   };
-  el.querySelector(".mz-v91-ok").addEventListener("click", () => dismiss(false));
-  const action = el.querySelector(".mz-v91-action");
+  host.querySelector(".mz-v91-ok").addEventListener("click", () => dismiss(false));
+  const action = host.querySelector(".mz-v91-action");
   if (action) action.addEventListener("click", () => dismiss(true));
+  if (sheet) mzMountSheetToast(host, sheet, anchor);
+  else {
+    mzPlacePageToast(host, anchor);
+    host.hidden = false;
+  }
 }
-function toast(msg, label, fn) {
-  mzToastQueue.push({msg, label, fn});
+function mzToastSpot(anchor, sheet) {
+  if (!anchor || !anchor.isConnected || !sheet.contains(anchor)) return null;
+  const quick = anchor.closest(".meal-quick-add");
+  if (quick) return quick.querySelector(".meal-quick-row") || quick;
+  return anchor.closest(".meal-status, .btns, .field") || anchor;
+}
+function mzMountSheetToast(host, sheet, anchor) {
+  sheet.querySelectorAll(".mz-toast-in-sheet").forEach(n => { if (n !== host) n.remove(); });
+  const spot = mzToastSpot(anchor, sheet);
+  if (spot && spot.parentElement) {
+    const sel = spot.matches(".meal-quick-row") ? ".meal-quick-row" : spot.matches(".meal-status") ? ".meal-status" : spot.matches(".meal-quick-add") ? ".meal-quick-add" : "";
+    if (sel) host.dataset.spot = sel;
+    spot.insertAdjacentElement("afterend", host);
+  } else {
+    delete host.dataset.spot;
+    const inn = sheet.querySelector("#sheetIn");
+    if (inn) sheet.insertBefore(host, inn);
+    else sheet.prepend(host);
+  }
+  host.scrollIntoView({block:"nearest", inline:"nearest"});
+}
+function mzPlacePageToast(host, anchor) {
+  if (anchor && anchor.isConnected && !anchor.closest("dialog")) {
+    const r = anchor.getBoundingClientRect();
+    const top = Math.max(8, Math.min(window.innerHeight - 96, r.bottom + 8));
+    const left = Math.max(8, Math.min(window.innerWidth - 300, r.left));
+    host.style.setProperty("--mz-near-top", top + "px");
+    host.style.setProperty("--mz-near-left", left + "px");
+    host.classList.add("mz-toast-near");
+  } else {
+    host.classList.remove("mz-toast-near");
+    host.style.removeProperty("--mz-near-top");
+    host.style.removeProperty("--mz-near-left");
+  }
+}
+function toast(msg, label, fn, anchor) {
+  let node = anchor && anchor.nodeType === 1 ? anchor : null;
+  const active = document.activeElement;
+  if (!node && active && active.closest && active !== document.body) node = active;
+  mzToastQueue.push({msg, label, fn, anchor: node});
   mzShowNextToast();
 }
+document.querySelector("#sheet").addEventListener("close", () => {
+  const stuck = document.querySelector("#sheet .mz-toast-in-sheet");
+  if (!stuck) return;
+  stuck.remove();
+  mzToastActive = false;
+  setTimeout(mzShowNextToast, 80);
+});
 
 // V10 : point central de présentation des confirmations modales.
 // Un <dialog>.showModal() utilise la top layer native : il reste devant
@@ -1119,9 +1176,17 @@ function unlockSheetBackground() {
   window.scrollTo(0, y);
 }
 function openSheet(title, body, ctx = {}) {
+  const d = $("#sheet");
+  const live = d.querySelector(".mz-toast-in-sheet");
+  const spotSel = live && live.dataset.spot;
+  if (live) live.remove();
   sheetCtx = ctx;
   $("#sheetIn").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div>${body}`;
-  const d = $("#sheet");
+  if (live && mzToastActive) {
+    const again = spotSel && d.querySelector(spotSel);
+    if (again) again.insertAdjacentElement("afterend", live);
+    else d.insertBefore(live, $("#sheetIn"));
+  }
   if (!d.open) { lockSheetBackground(); d.showModal(); }
   d.scrollTop = 0;
   // Do not focus an input when opening: iOS must keep the keyboard closed.

@@ -140,7 +140,8 @@ function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
   return`<div class="use-first"><span class="label">🧊 À consommer en priorité (ou à congeler)</span>${l.map(x=>`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span style="font-size:14px"><b>${esc(x.ing.join(", "))}</b><br><small class="muted">achetés pour ${esc(x.name)}</small></span><button type="button" class="btn ghost" data-act="useFirstDone" data-id="${x.id}">✓ Fait</button></div>`).join("")}</div>`;}
 function shopping(all){
   const acc={};
-  const add=(rid,n,when,role,skip,freshKey)=>{
+  const doneQty={};
+  const add=(rid,n,when,role,skip,freshKey,done)=>{
     const r=recipes[rid]; if(!r)return;
     const f=n/(r.serves||4);
     for(const i of r.ing||[]){
@@ -151,36 +152,44 @@ function shopping(all){
       if(skip&&skip.includes(baseKey))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
       if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:i.r||"Divers",from:[]};
       acc[key].q+=q;
-      const lab=r.name+(when?" ("+when+")":"");
-      if(!acc[key].from.includes(lab))acc[key].from.push(lab);
+      if(done)doneQty[key]=(doneQty[key]||0)+q;
+      else{const lab=r.name+(when?" ("+when+")":"");if(!acc[key].from.includes(lab))acc[key].from.push(lab);}
     }
   };
   // Only locked meals go to the shopping list: unlocking a meal takes its ingredients off.
+  // A finished meal stays in the sum, then its own quantity is removed, so a shared ingredient keeps the other meal's share.
   // Only the days chosen at the top of the shopping list count.
   for(const x of selectedShopDates())for(const[m]of MEALS){
-    const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock||!recipes[sl.id]||sl.mealState==="Courses faites"||sl.mealState==="Terminé")continue;
+    const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock)continue;
+    const hasRecipe=!!recipes[sl.id], hasSide=!!(sl.entree||sl.dessert), hasCustom=Array.isArray(sl.ingCustom);
+    if(!hasRecipe&&!hasSide&&!hasCustom)continue;
+    const done=sl.mealState==="Courses faites"||sl.mealState==="Terminé";
     const when=x.dn+" "+x.d.getDate()+" "+m;
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
-    if(Array.isArray(sl.ingCustom)){
+    if(hasCustom){
       for(const i of sl.ingCustom){if(!i.n||sk&&sk.includes(i.key))continue;
         const match=String(mealCustomQuantity(i.qt,sl)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
         const raw=match?match[1].trim():"",unit=match?match[2].trim():"";
         const [q,u]=toBase(raw,unit),key=norm(i.n)+"|"+u+(sl.freshShopKey?"|nouvelle-preparation:"+sl.freshShopKey:"");
         if(!acc[key])acc[key]={key,n:i.n.trim(),u,q:0,r:"Divers",from:[]};
         acc[key].q+=q;
-        const lab=recipes[sl.id].name+" ("+when+")";
-        if(!acc[key].from.includes(lab))acc[key].from.push(lab);
+        if(done)doneQty[key]=(doneQty[key]||0)+q;
+        else if(hasRecipe){const lab=recipes[sl.id].name+" ("+when+")";if(!acc[key].from.includes(lab))acc[key].from.push(lab);}
       }
     }else{
-      add(sl.id,sl.n,when,"main",sk,sl.freshShopKey); if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl.freshShopKey); if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl.freshShopKey);
+      if(hasRecipe)add(sl.id,sl.n,when,"main",sk,sl.freshShopKey,done);
+      if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl.freshShopKey,done);
+      if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl.freshShopKey,done);
     }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");
+  for(const i of Object.values(acc)) if(doneQty[i.key]) i.q=Math.max(0,i.q-doneQty[i.key]);
   // V4 : une coche correspond à une quantité achetée, jamais à une quantité future.
   // Le recalcul est centralisé : il fonctionne également après une synchronisation
   // depuis un autre appareil ou une modification de recette.
   const nowDay=ymd(new Date());
-  const settled=settleCheckedGrowth(menu,Object.values(acc),nowDay,haveUntil());
+  const live=Object.values(acc).filter(i=>i.q>0.0001);
+  const settled=settleCheckedGrowth(menu,live,nowDay,haveUntil());
   menu.checked=settled.checked;menu.checkedQty=settled.checkedQty;menu.bought=settled.bought;
   const changed=settled.changed;
   if(changed){
@@ -191,7 +200,7 @@ function shopping(all){
   }
   const today=ymd(new Date()), bt=menu.bought||{};
   const list=Object.values(acc).map(i=>{const b=bt[i.key];if(b&&b.until>=today)i.q=Math.max(0,i.q-b.q);return i;})
-    .filter(i=>!(bt[i.key]&&bt[i.key].until>=today&&i.q<=0.0001));
+    .filter(i=>i.q>0.0001);
   return all?list:list.filter(i=>!isHave(i));
 }
 
