@@ -290,6 +290,11 @@ dialog.sheet[open]{animation:none}
   max-width:min(92vw,520px);font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:4px}
 
+/* V3: course alerts remain visible above every Maisonnée view, including Home. */
+.toast[hidden]{display:none!important}
+.toast.mz-course-alert{top:calc(env(safe-area-inset-top) + 68px);bottom:auto;z-index:10020;
+ background:rgba(12,31,57,.96);color:#f2f8ff;border:1px solid rgba(56,189,248,.75);
+ box-shadow:0 12px 34px rgba(0,0,0,.35),0 0 18px rgba(56,189,248,.18)}
 /* ---------- messages ---------- */
 main.wrap.view-messages{padding-bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 80px)}
 .msgs{display:flex;flex-direction:column;gap:3px}

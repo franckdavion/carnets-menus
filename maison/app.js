@@ -80,7 +80,7 @@ async function showPushSettings() {
     try { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, ko) => setTimeout(ko, 1500))]); current = await reg.pushManager.getSubscription(); } catch (_) {}
   }
   // what this person wants to receive (shared by all their devices, read by the server)
-  let pr = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true }, prOk = false;
+  let pr = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true }, prOk = false;
   if (mode === "cloud" && user && sb) { try { const { data, error } = await sb.from("maison_push_prefs").select("prefs").eq("user_id", user.id).maybeSingle(); if (!error) { prOk = true; pr = { ...pr, ...((data && data.prefs) || {}) }; } } catch (_) {} }
   const sw = (k, t, d) => `<label class="switch" style="margin:0"><span><strong>${t}</strong><br><span class="muted small">${d}</span></span><input type="checkbox" data-pref="${k}" ${pr[k] ? "checked" : ""} ${prOk ? "" : "disabled"}></label>`;
   openSheet("Notifications", `<div style="display:grid;gap:14px">
@@ -88,6 +88,7 @@ async function showPushSettings() {
     <p class="muted small">Chaque téléphone doit activer les notifications séparément. Ces choix valent pour tous vos appareils.</p>
     <div class="card" style="display:grid;gap:14px">
       ${sw("messages", "Messages", "un nouveau message du foyer")}
+      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre (push : nécessite aussi la prise en charge serveur)")}
       ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)")}
       ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
@@ -291,12 +292,41 @@ function mzGoToItems(items) {
 /* V9.7 — alertes non intrusives pour les ajouts manuels reçus du foyer.
    N'affecte ni les achats, ni les données Supabase, ni les statuts des repas. */
 const mzIncomingShop = new Map();
+// Les rafraîchissements de données peuvent précéder l’événement realtime.
+// Ne pas confondre « déjà présent dans S.shop » avec « notification déjà envoyée ».
+const mzNotifiedShopIds = new Set();
+let mzShopPollBusy = false;
+let mzShopPollTimer = null;
+// Repli si le flux Realtime est interrompu : comparer avec les IDs déjà connus.
+async function mzPollShopAdds() {
+  if (mzShopPollBusy || mode !== "cloud" || !sb || !S.hh || !user || document.visibilityState !== "visible") return;
+  mzShopPollBusy = true;
+  try {
+    const {data,error}=await sb.from("shopping_items").select("*").eq("household_id",S.hh.id);
+    if(error) return;
+    const known=new Set((S.shop||[]).map(x=>x.id));
+    for(const row of data||[]) {
+      if(!known.has(row.id)) mzNoticeShopInsert(row);
+      const i=S.shop.findIndex(x=>x.id===row.id);
+      if(i<0) S.shop.push(row); else S.shop[i]=row;
+    }
+    const ids=new Set((data||[]).map(x=>x.id));
+    S.shop=S.shop.filter(x=>ids.has(x.id));
+    saveLocal(); softRender();
+  } catch(e) { console.warn("Courses : vérification des ajouts",e); }
+  finally {mzShopPollBusy=false;}
+}
+function mzStartShopPoll() {
+  clearInterval(mzShopPollTimer);
+  mzShopPollTimer=setInterval(mzPollShopAdds,15000);
+}
 let mzIncomingShopTimer = null;
 function mzNoticeShopInsert(row) {
   if (!row || row.done || String(row.source || '').startsWith('carnet:') || String(row.source || '').startsWith('menu:')) return;
   if (row.added_by && row.added_by === S.me) return;
   // Les écritures locales optimistes figurent déjà dans S.shop.
-  if ((S.shop || []).some(x => x.id === row.id)) return;
+  if (mzNotifiedShopIds.has(row.id)) return;
+  mzNotifiedShopIds.add(row.id);
   mzIncomingShop.set(row.id, {id:row.id, name:String(row.name || 'Article')});
   clearTimeout(mzIncomingShopTimer);
   mzIncomingShopTimer = setTimeout(() => {
@@ -387,13 +417,13 @@ async function enterCloud() {
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
-  listen(hid); screen = "app"; render(); geoTick();
+  listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll();
   loadRecipes().then(() => softRender());
 }
 
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || mode !== "cloud" || !S.hh || !user) return;
-  try { await loadCloud(S.hh.id); softRender(); } catch (e) {}
+  try { await mzPollShopAdds(); await loadCloud(S.hh.id); softRender(); } catch (e) {}
   geoTick();
 });
 
@@ -697,6 +727,7 @@ let toastT = null;
 function toast(msg, label, fn) {
   const el = $("#toast");
   el.innerHTML = `<span>${esc(msg)}</span>${label ? `<button type="button">${esc(label)}</button>` : ""}`;
+  el.classList.toggle("mz-course-alert", Boolean(label && msg.includes("article")));
   el.hidden = false;
   if (label) el.querySelector("button").onclick = () => { el.hidden = true; fn(); };
   clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, label ? 6000 : 3500);

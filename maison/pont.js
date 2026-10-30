@@ -126,7 +126,13 @@
           const mDone = !!r.done;
           if (b !== undefined && cDone === b && mDone !== b) {
             done = mDone; menu.checked = Object.assign({}, menu.checked);
-            if (done) menu.checked[key] = true; else delete menu.checked[key];
+            if (done) {
+              menu.checked[key] = true;
+              (menu.checkedQty||(menu.checkedQty={}))[key] = i.q;
+            } else {
+              delete menu.checked[key];
+              if(menu.checkedQty)delete menu.checkedQty[key];
+            }
             pulled++;
           }
           const want = { name: i.n, qty: fmt(i.q, i.u) || "", aisle: aisleOf(i.r), done };
