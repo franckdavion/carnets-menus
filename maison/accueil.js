@@ -139,16 +139,71 @@ const iconForCode=n=>n==null?'☁️':n===0?'☀️':n<=3?'⛅':n<=48?'🌫️':
 const icon3D=n=>n==null?'cloud':n===0?'sun':n<=3?'partly-cloudy-day':n<=48?'fog':n<=67?'rain':n<=77?'snow':n<=82?'rain':'storm';
 const iconImage=n=>`<img class="mn-3d-weather" src="assets/weather3d/${icon3D(n)}.svg" alt="" loading="lazy" onerror="this.hidden=true"><span class="mn-icon-fallback">${iconForCode(n)}</span>`;
 const saisonDe=m=>[11,0,1].includes(m)?'Hiver':[2,3,4].includes(m)?'Printemps':[5,6,7].includes(m)?'Été':'Automne';
+const HOME_CAL='mz_home_cal';
+function agendaChoisi(){
+ const v=typeof LS!=='undefined'?LS.get(HOME_CAL,null):null;
+ if(!v||v.id==='family'||!v.id)return {id:'family',name:'Agenda familial'};
+ const list=typeof G!=='undefined'&&Array.isArray(G.list)?G.list:[];
+ const known=list.find(c=>c.id===v.id);
+ if(known)return {id:known.id,name:known.name};
+ if(list.length)return {id:'family',name:'Agenda familial'};
+ return {id:v.id,name:v.name||'Agenda Google'};
+}
+function heureMaintenant(){const n=new Date();return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')}
+function encoreLa(day,start,end){
+ const d=typeof today==='function'?today():'';
+ if(!d||day>d)return true;
+ if(day<d)return false;
+ if(!start)return true;
+ const now=heureMaintenant();
+ if(end)return end>now;
+ return start>=now;
+}
+function texteEvenement(e,dayKey){
+ const day=e[dayKey];
+ const quand=(typeof dayLabel==='function'?dayLabel(day):day)+(e.start_time&&typeof hm==='function'?' · '+hm(e.start_time):'');
+ return {t:e.title||'Événement',m:quand};
+}
+function prochainFamille(){
+ if(typeof occurrences!=='function'||typeof today!=='function'||typeof addDays!=='function')return null;
+ return occurrences(today(),addDays(today(),45)).find(e=>encoreLa(e.on,e.start_time,e.end_time))||null;
+}
+function prochainGoogle(calId){
+ if(typeof G==='undefined'||!G.ev||!Array.isArray(G.ev.items)||typeof today!=='function'||typeof addDays!=='function')return null;
+ const d=today(),fin=addDays(d,45),best=new Map();
+ for(const e of G.ev.items){
+  if(e.cal!==calId||e.day<d||e.day>fin||!encoreLa(e.day,e.start_time,e.end_time))continue;
+  const prev=best.get(e.id);
+  if(!prev||e.day<prev.day||(e.day===prev.day&&String(e.start_time||'')<String(prev.start_time||'')))best.set(e.id,e);
+ }
+ return [...best.values()].sort((a,b)=>a.day.localeCompare(b.day)||String(a.start_time||'').localeCompare(String(b.start_time||'')))[0]||null;
+}
+function apercuCalendrier(){
+ const choix=agendaChoisi();
+ const vide={k:choix.name,t:'Agenda du foyer',m:'Ouvrir le calendrier'};
+ try{
+  if(choix.id==='family'){
+   const e=prochainFamille();
+   return e?{k:choix.name,...texteEvenement(e,'on')}:{k:choix.name,t:'Rien de prévu',m:'Les 45 prochains jours'};
+  }
+  const e=prochainGoogle(choix.id);
+  if(e)return {k:choix.name,...texteEvenement(e,'day')};
+  if(typeof G!=='undefined'&&G.busy)return {k:choix.name,t:'Lecture de l’agenda',m:''};
+  if(typeof G!=='undefined'&&G.ev&&Array.isArray(G.ev.items))return {k:choix.name,t:'Rien de prévu',m:'Les 45 prochains jours'};
+ }catch(e){}
+ return vide;
+}
+function ouvrirChoixAgenda(){
+ const cur=agendaChoisi();
+ const list=typeof G!=='undefined'&&Array.isArray(G.list)?G.list:[];
+ const puce=(id,name)=>`<button type="button" class="chip" data-act="homeCalPick" data-v="${esc(id)}" aria-pressed="${cur.id===id?'true':'false'}">${esc(name)}</button>`;
+ openSheet('Quel agenda ?',`<p class="muted small" style="margin:6px 0 10px">Le prochain événement de cet agenda, sur l’accueil. Ce choix reste sur ce téléphone.</p><div class="chips">${puce('family','Agenda familial')}${list.map(c=>puce(c.id,c.name)).join('')}</div>${list.length?'':`<p class="muted small">Les agendas Google s’affichent ici lorsqu’ils sont connectés dans Ma famille.</p>`}<div class="sheet-sticky btns"><button type="button" class="btn primary block" data-act="closeSheet">Terminé</button></div>`);
+}
 function apercuMaison(){
- const vide={cal:{k:'Prochain événement',t:'Agenda du foyer',m:'Ouvrir le calendrier'},repas:{k:'Ce soir',t:'Menu de la semaine',m:'Choisir un plat'},courses:{k:'Liste de courses',t:'À voir',m:''},recette:{k:'Idée du jour',t:'Livre de recettes',m:'Ouvrir le Carnet'}};
+ const vide={cal:apercuCalendrier(),repas:{k:'Ce soir',t:'Menu de la semaine',m:'Choisir un plat'},courses:{k:'Liste de courses',t:'À voir',m:''},recette:{k:'Idée du jour',t:'Livre de recettes',m:'Ouvrir le Carnet'}};
  try{
   if(typeof S==='undefined'||!S)return vide;
   const d=typeof today==='function'?today():'';
-  if(typeof occurrences==='function'&&d){
-   const e=occurrences(d,addDays(d,45))[0];
-   if(e)vide.cal={k:'Prochain événement',t:e.title||'Événement',m:(typeof dayLabel==='function'?dayLabel(e.on):e.on)+(e.start_time&&typeof hm==='function'?' · '+hm(e.start_time):'')};
-   else vide.cal={k:'Prochain événement',t:'Rien de prévu',m:'La semaine est libre'};
-  }
   if(typeof mealAt==='function'&&d){
    const hour=new Date().getHours(),slot=hour<15?'midi':'soir';
    const meal=mealAt(d,slot)||mealAt(d,slot==='midi'?'soir':'midi');
@@ -190,7 +245,10 @@ function render(){
   const mod=typeof modOf==='function'?modOf(k):null;if(!mod)return '';
   let ligne='',meta='',kicker='';
   try{const extra=plus[k];if(extra){kicker=extra.k;ligne=extra.t;meta=extra.m}else if(typeof mod.sub==='function')ligne=mod.sub()}catch(e){ligne=mod.t}
-  return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}"><span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}</button>`;
+  const tete=`<span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>`;
+  const corps=`<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}`;
+  if(k==='agenda')return `<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`;
+  return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
  }).join('');
  el.innerHTML=`<section class="ultimate-hero"><div class="ultimate-scene" aria-hidden="true"><div class="ultimate-sun">☀️</div><div class="ultimate-cup"><img class="mn-3d-coffee" src="assets/weather3d/coffee.svg" alt="" onerror="this.hidden=true"><span class="mn-icon-fallback">☕</span></div></div><div class="ultimate-greeting"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><div class="ultimate-kicker">⌂ MAISONNÉE · ULTIMATE</div><h1>Bonjour la famille ! ☀️</h1><p>Voici votre journée · ${date()}</p></div><div class="ultimate-window" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>
 <section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div></section>
@@ -203,6 +261,20 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  toggle.addEventListener('click',()=>{main.classList.toggle('ultimate-classic');toggle.setAttribute('aria-expanded',String(main.classList.contains('ultimate-classic')));toggle.textContent=(main.classList.contains('ultimate-classic')?'Masquer':'Afficher')+' l’accueil classique et tous ses raccourcis';});
  const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
 }
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"]');if(!b)return;
+ if(b.dataset.act==='homeCal'){ouvrirChoixAgenda();return}
+ const id=b.dataset.v;
+ let name='Agenda familial';
+ if(id!=='family'){
+  const c=(typeof G!=='undefined'&&Array.isArray(G.list)?G.list:[]).find(x=>x.id===id);
+  if(!c)return;
+  name=c.name;
+ }
+ LS.set(HOME_CAL,{id,name});
+ b.parentElement.querySelectorAll('[data-act="homeCalPick"]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+ render();
+});
 function showForecast(){
  let dialog=document.querySelector('#ultimate-forecast-dialog');if(!dialog){dialog=document.createElement('dialog');dialog.id='ultimate-forecast-dialog';document.body.appendChild(dialog)}
  const h=meteo?.hourly,d=meteo?.daily;const now=Date.now();

@@ -2014,6 +2014,9 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
 .mn-card-h span:nth-child(2){flex:1;min-width:0;}
 .mn-chev{color:#c5dff6;font-size:22px;line-height:1;}
 .mn-card-k{color:#c5d9ee;font-size:12px;}
+.mn-card-split .mn-card-open,.mn-card-split .mn-card-src{appearance:none;background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;text-align:left;width:100%;}
+.mn-card-split .mn-card-h{margin-bottom:0;}
+.mn-card-src{color:#b9dcff;font-size:12px;line-height:1.3;min-height:32px;text-decoration:underline;text-underline-offset:3px;}
 .mn-card strong{font:700 16px/1.25 var(--display);letter-spacing:-.02em;}
 .mn-card small{color:#d5e4f4;font-size:12px;}
 .mn-card-cal{background:linear-gradient(165deg,#1a4e86,#0c2748);}
