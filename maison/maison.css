@@ -1969,3 +1969,33 @@ body:has(main.view-home) .ultimate-dayline{min-width:0;overflow-wrap:anywhere;}
 .cx-ultimate-meal .r-meal-badge{max-width:100%;}
 .r-legend{grid-template-columns:repeat(auto-fit,minmax(108px,1fr))!important;}
 .cx-ultimate-stats,.cx-ultimate-actions{grid-template-columns:repeat(auto-fit,minmax(96px,1fr));}
+
+/* Toutes les vues : le contenu se range dans l'écran. Le verre bleu nuit reste. */
+html,body{overflow-x:hidden;max-width:100%;}
+.wrap,main.wrap,.card,.list,.slot,.row,.inline,.day-card,.pr,.pr-main,.pr-panel{min-width:0;max-width:100%;}
+.inline{flex-wrap:wrap;}
+.inline .input{min-width:0;flex:1 1 140px;}
+.weeknav{gap:8px;}
+.weeknav strong{min-width:0;flex:1;text-align:center;overflow-wrap:anywhere;}
+.weeknav .icon-btn{flex:none;}
+.linkcard{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+.slot .what,.shop-item .nm,.cx-item .nm,.day-card header h3{min-width:0;overflow-wrap:anywhere;}
+.slot .what{flex:1;}
+.lb{z-index:10040!important;}
+.pr-h{flex-wrap:wrap;}
+.pr-h span{min-width:0;margin-left:auto;}
+.toast.mz-v9-toast{flex-wrap:wrap;align-items:flex-start;}
+@media(max-width:700px){
+  main:has(.group-h) .sq-grid,
+  .sq-grid{grid-template-columns:repeat(auto-fill,minmax(88px,1fr))!important;}
+  dialog.sheet:has(.sq[data-act="pickPhotos"]) .sq-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))!important;}
+  .ph-grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));}
+  .tiles{grid-template-columns:repeat(auto-fit,minmax(148px,1fr));}
+}
+@media(max-width:480px){
+  .pr-tabs{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .pr-actions,.pr-opts{grid-template-columns:1fr;}
+  .pr-months{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .pr-act{flex-direction:row;text-align:left;min-height:56px;}
+  .card.inline{flex-wrap:wrap;}
+}
