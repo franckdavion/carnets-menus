@@ -141,7 +141,7 @@ function renderRecipes(){
     const sl=slotsOf(id), on=sl.length>0, open=openId===id, p=viewServ[id]||(on?W()[sl[0]].n:menu.people), f=p/(r.serves||4);
     let det="";
     if(open){
-      const ings=(r.ing||[]).map(i=>{const[b,u]=recipeIngredientBase(r,i,p,"main");return`<li class="q">${esc(fmt(b,u))}</li><li>${esc(i.n)}</li>`;}).join("");
+      const ings=(r.ing||[]).map(i=>{const[b,u]=recipeIngredientBase(r,i,p,"main");return`<li class="q">${esc(fmt(b,u))}</li><li class="ing-row">${IngredientEmoji.html(i.n)}<span>${esc(i.n)}</span></li>`;}).join("");
       const steps=stepsFor(id).steps;
       const catRow=r.shared?"":`<div class="dchips">${CATS.map(c=>{const on=inCat(r,c);return`<span class="dchip${on?" on":""}"><button type="button" data-act="recCat" data-id="${esc(id)}" data-c="${c}" aria-pressed="${on}">${on?"✓ ":""}${c}</button></span>`;}).join("")}</div>`;
       const role=r.cat==="Entrée"?"entree":r.cat==="Dessert"?"dessert":undefined,dk=r.linkOnly?null:drinkFor(r,role);
@@ -207,10 +207,10 @@ function renderLock(){
     ${(()=>{const cur=shopping(),ex=menu.extras||[];if(!cur.length&&!ex.length)return"";
       const gs=RAYONS.map(ry=>({ry,its:cur.filter(i=>(RAYONS.includes(i.r)?i.r:"Divers")===ry).sort((a,b)=>a.n.localeCompare(b.n,"fr"))})).filter(g=>g.its.length);
       return`<details class="lk-cur"><summary>Voir la liste de courses actuelle (${cur.length+ex.length} article${cur.length+ex.length>1?"s":""})</summary>
-        ${gs.map(g=>`<h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-cl"><span>${esc(i.n)}</span><b>${esc(fmt(i.q,i.u))}</b></div>`).join("")}`).join("")}
-        ${ex.length?`<h4>En plus</h4>${ex.map(x=>`<div class="lk-cl"><span>${esc(x.t)}</span></div>`).join("")}`:""}</details>`;})()}
+        ${gs.map(g=>`<h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-cl"><span class="ing-row">${IngredientEmoji.html(i.n)}<span>${esc(i.n)}</span></span><b>${esc(fmt(i.q,i.u))}</b></div>`).join("")}`).join("")}
+        ${ex.length?`<h4>En plus</h4>${ex.map(x=>`<div class="lk-cl"><span class="ing-row">${IngredientEmoji.html(x.t)}<span>${esc(x.t)}</span></span></div>`).join("")}`:""}</details>`;})()}
     ${lockEdit?`<button type="button" class="btn danger" data-act="lockUndo" style="align-self:flex-start;order:99">Retirer ce repas des courses</button>`:""}
-    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-it${i.buy?" on":""}"><button type="button" class="lk-t" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${esc(i.n)}<small>${!i.buy&&i.erased?"effacé de la liste · touchez pour le remettre":i.buy?[i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:"",Math.abs(i.bq-i.d)>1e-6?`prévu ${esc(fmt(i.d,i.u))} · j'en ai déjà ${esc(fmt(Math.max(0,i.d-i.bq),i.u))||"un peu"}`:""].filter(Boolean).join(" · "):"j'ai déjà · pas acheté"}</small></span></button>
+    ${groups.map(g=>`<div class="lk-ry"><h4>${esc(g.ry)}</h4>${g.its.map(i=>`<div class="lk-it${i.buy?" on":""}"><button type="button" class="lk-t" data-act="lockTog" data-k="${esc(i.key)}" aria-pressed="${i.buy}"><span class="lk-box" aria-hidden="true">${i.buy?"✓":""}</span><span class="lk-n">${IngredientEmoji.html(i.n)}<span class="lk-name">${esc(i.n)}<small>${!i.buy&&i.erased?"effacé de la liste · touchez pour le remettre":i.buy?[i.was?`déjà ${esc(fmt(i.was,i.u))} dans la liste`:"",Math.abs(i.bq-i.d)>1e-6?`prévu ${esc(fmt(i.d,i.u))} · j'en ai déjà ${esc(fmt(Math.max(0,i.d-i.bq),i.u))||"un peu"}`:""].filter(Boolean).join(" · "):"j'ai déjà · pas acheté"}</small></span></span></button>
       ${i.buy?`<span class="lk-q"><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="-1" aria-label="Moins de ${esc(i.n)}">−</button><b>${i.was?"+":""}${esc(fmt(i.bq,i.u))||"?"}</b><button type="button" class="step sm" data-act="lockQ" data-k="${esc(i.key)}" data-d="1" aria-label="Plus de ${esc(i.n)}">+</button></span>`:`<b class="muted">${esc(fmt(i.d,i.u))}</b>`}</div>`).join("")}</div>`).join("")}`;
   $("#lockYesBtn").textContent=lockEdit?`✓ Enregistrer · ${nb} en liste de courses`:nb?`🛒 Ajouter · ${nb} en liste de courses`:"✓ Ajouter (rien à acheter)";
 }

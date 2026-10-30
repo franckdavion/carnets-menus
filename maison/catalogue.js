@@ -38,6 +38,7 @@ function catData() {
       buy:menu.buyLog||{},trips:(menu.trips||[]).map(t=>({d:t.d,got:(t.got||[]).map(g=>nk2(g.n))}))};})()`);
 }
 const catEmoji = (C, t, g) => { const n = window.IngredientEmoji?.normalize?.(t) || String(t).toLowerCase(); const k = Object.keys(C.emoji || {}).find(x => (window.IngredientEmoji?.normalize?.(x) || x.toLowerCase()) === n); return (k && C.emoji[k]) || window.IngredientEmoji?.get(t) && window.IngredientEmoji.get(t) !== "🛒" && window.IngredientEmoji.get(t) || (PROD_EMOJI.find(([re]) => re.test(t)) || [0, CAT_EMOJI[g] || "🛒"])[1]; };
+const catMark = t => window.IngredientEmoji?.html?.(t) || "🛒";
 // dates a product was bought: kept by the Carnet at « Courses terminées », plus the recent trips
 function buyDates(C, t) {
   const k = catNk(t), s = new Set(C.buy[k] || []);
@@ -78,7 +79,7 @@ function catDueHtml() {
   const due = catDue(C), g = catGuess(C);
   let h = "";
   if (due.length) h += `<div class="card" style="margin-top:14px"><div class="inline" style="justify-content:space-between"><strong>🔁 À racheter</strong><button class="btn primary" data-act="catDueAll" style="padding:6px 12px;font-size:14px">Tout ajouter</button></div>
-    <div class="list" style="margin-top:8px">${due.map(x => `<div class="cx-item"><span class="nm">${catEmoji(C, x.t)} ${esc(x.t)}<span class="cx-from">${x.last ? `acheté il y a ${daysSince(x.last)} jours` : "pas encore acheté"} · ${esc(catFreqLabel(x.f).toLowerCase())}</span></span>
+    <div class="list" style="margin-top:8px">${due.map(x => `<div class="cx-item"><span class="nm">${catMark(x.t)} ${esc(x.t)}<span class="cx-from">${x.last ? `acheté il y a ${daysSince(x.last)} jours` : "pas encore acheté"} · ${esc(catFreqLabel(x.f).toLowerCase())}</span></span>
       <button type="button" class="cx-have" data-act="catSnooze" data-v="${esc(x.t)}">Pas cette fois</button><button type="button" class="cx-have on" data-act="catAdd" data-v="${esc(x.t)}">+ Ajouter</button></div>`).join("")}</div></div>`;
   if (g) h += `<div class="card" style="margin-top:12px"><span class="small">💡 Vous achetez <strong>${esc(g.t)}</strong> environ tous les ${g.avg} jours : le mettre en 🔁 ${esc(catFreqLabel(g.f).toLowerCase())} ?</span>
     <div class="btns" style="margin-top:6px"><button class="btn primary" data-act="catGuessYes" data-v="${esc(g.t)}" data-f="${g.f}">Oui</button><button class="btn" data-act="catGuessNo" data-v="${esc(g.t)}">Non merci</button></div></div>`;
@@ -91,7 +92,7 @@ function catSheet(keepScroll) {
   const all = C.cats.flatMap(c => c[1]), gOf = t => (C.cats.find(c => c[1].includes(t)) || ["Mes produits"])[0];
   const favs = C.fav.filter(t => all.includes(t));
   const row = t => { const on = inList.has(catNk(t)), f = C.freq[t], fav = favs.includes(t);
-    return `<div class="cat-row ${on ? "on" : ""}"><button type="button" class="cat-rmain" data-act="catToggle" data-v="${esc(t)}" aria-pressed="${on}"><span class="cat-rem">${catEmoji(C, t, gOf(t))}</span><span class="cat-rnm">${esc(t)}${fav ? ' <span class="cat-rfav" aria-label="favori">★</span>' : ""}${f ? `<small>🔁 ${esc(catFreqLabel(f).toLowerCase())}</small>` : ""}</span><span class="cat-rchk" aria-hidden="true">${on ? "✓" : "+"}</span></button>
+    return `<div class="cat-row ${on ? "on" : ""}"><button type="button" class="cat-rmain" data-act="catToggle" data-v="${esc(t)}" aria-pressed="${on}"><span class="cat-rem">${catMark(t)}</span><span class="cat-rnm">${esc(t)}${fav ? ' <span class="cat-rfav" aria-label="favori">★</span>' : ""}${f ? `<small>🔁 ${esc(catFreqLabel(f).toLowerCase())}</small>` : ""}</span><span class="cat-rchk" aria-hidden="true">${on ? "✓" : "+"}</span></button>
       <button type="button" class="cat-rmore" data-act="catProd" data-v="${esc(t)}" data-g="${esc(gOf(t))}" aria-label="Modifier ${esc(t)}">⋯</button></div>`; };
   const list = l => `<div class="cat-list">${l.map(row).join("")}</div>`;
   const chip = (v, l) => `<button type="button" class="chip" data-act="catFilter" data-v="${esc(v)}" aria-pressed="${catF === v}">${l}</button>`;
@@ -106,7 +107,7 @@ function catSheet(keepScroll) {
   else {
     if (favs.length) body += `<p class="group-h">⭐ Mes favoris</p>${list(favs)}`;
     for (const [g, its] of C.cats) { const l = its.filter(t => !favs.includes(t)); if (l.length) body += `<p class="group-h">${CAT_EMOJI[g] || "🛒"} ${esc(g)}</p>${list(l)}`; }
-    if (C.hidden.length) body += `<details class="cat-hidden"><summary class="muted small">Produits masqués (${C.hidden.length})</summary><div class="cat-list">${C.hidden.map(t => `<div class="cat-row"><span class="cat-rmain" style="cursor:default"><span class="cat-rem">${catEmoji(C, t)}</span><span class="cat-rnm muted">${esc(t)}</span></span><button type="button" class="btn small" data-act="catUnhide" data-v="${esc(t)}" style="margin-right:8px">Remettre</button></div>`).join("")}</div></details>`;
+    if (C.hidden.length) body += `<details class="cat-hidden"><summary class="muted small">Produits masqués (${C.hidden.length})</summary><div class="cat-list">${C.hidden.map(t => `<div class="cat-row"><span class="cat-rmain" style="cursor:default"><span class="cat-rem">${catMark(t)}</span><span class="cat-rnm muted">${esc(t)}</span></span><button type="button" class="btn small" data-act="catUnhide" data-v="${esc(t)}" style="margin-right:8px">Remettre</button></div>`).join("")}</div></details>`;
   }
   const n = C.inList.length;
   openSheet("Catalogue", body + `<div style="height:16px"></div><div class="sheet-sticky btns"><button class="btn" data-act="catNew">+ Nouveau produit</button><button class="btn primary" data-act="closeSheet" style="flex:1">Terminé · ${n} dans la liste</button></div>`);

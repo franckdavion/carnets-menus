@@ -2063,3 +2063,10 @@ body:has(main.view-home) .mn-weather-panel .ultimate-today-date{grid-column:2!im
   body:has(main.view-home) .mn-day-icon .mn-3d-weather{width:14px;height:14px;}
   body:has(main.view-home) .mn-weather-panel .ultimate-today-date{padding:0 0 0 6px!important;gap:1px!important;}
 }
+
+.ing-art{display:inline-flex;width:30px;height:30px;flex:0 0 30px;align-items:center;justify-content:center;vertical-align:middle}
+.ing-art svg{width:30px;height:30px;display:block}
+.ing-emoji-change{display:inline-flex;align-items:center;justify-content:center}
+.cat-rem{display:inline-flex;align-items:center;justify-content:center}
+.cat-rem .ing-art,.cx-ingredient-emoji .ing-art{width:28px;height:28px;flex-basis:28px}
+.cat-rem .ing-art svg,.cx-ingredient-emoji .ing-art svg{width:28px;height:28px}

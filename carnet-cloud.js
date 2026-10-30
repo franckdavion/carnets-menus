@@ -154,18 +154,73 @@ function cm96Schedule(){
     cm96Timer=null;
     if(cm96Syncing||cloud.busy){cm96Schedule();return;}
     cm96Pending=false;cm96Syncing=true;
-    try{
-      const before=new Set(shopping().filter(x=>!menu.checked[x.key]).map(x=>x.key));
-      await cloudSync();
-      const added=shopping().filter(x=>!menu.checked[x.key]&&!before.has(x.key));
-      if(added.length){
-        toast(added.length+' nouvel'+(added.length>1?'s':'')+' article'+(added.length>1?'s':'')+' dans les courses');
-        try{if(window.parent!==window)window.parent.postMessage({type:'cm-courses-v96-new',count:added.length},location.origin);}catch(e){}
-      }
-    }catch(e){}finally{cm96Syncing=false;if(cm96Pending)cm96Schedule();}
+    try{await cloudSync();}catch(e){}finally{cm96Syncing=false;if(cm96Pending)cm96Schedule();}
   },450);
 }
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cm96Pending)cm96Schedule();});
+function cm96WantWatch(){
+  try{if(window.parent!==window&&window.parent.mzRepasActive)return true;}catch(e){}
+  if($("#storeSheet")&&!$("#storeSheet").hidden)return true;
+  return typeof view!=="undefined"&&view==="shop";
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!cloudOn())return;
+  if(cm96Pending||cm96WantWatch()){cm96Pending=true;cm96Schedule();}
+});
+/* Articles encore à acheter : ingrédients des repas verrouillés ET articles saisis à la main. */
+function cm96Lines(){
+  const lines=[];
+  try{for(const i of shopping()) if(i&&i.n&&!menu.checked[i.key]) lines.push(["k:"+i.key,i.n]);}catch(e){}
+  for(const x of menu.extras||[]) if(x&&x.t&&!x.done) lines.push(["x:"+norm(x.t),x.t]);
+  return lines;
+}
+let cm96Fresh=new Set(),cm96FreshNames=[],cm96FreshTimer=null,cm96Flight=null;
+function cm96IsFresh(name){return cm96Fresh.has(norm(name));}
+function cm96PaintAlert(){
+  const el=$("#storeAlert"); if(!el) return;
+  const names=cm96FreshNames;
+  if(!names.length||!$("#storeSheet")||$("#storeSheet").hidden){el.hidden=true;el.innerHTML="";return;}
+  el.hidden=false;
+  el.innerHTML=`<strong>${names.length===1?"Nouvel article":names.length+" nouveaux articles"}</strong><span>${esc(names.join(", "))}</span><button type="button" data-act="storeAlertClear">Vu</button>`;
+}
+function cm96ClearAlert(){
+  clearTimeout(cm96FreshTimer);cm96Fresh=new Set();cm96FreshNames=[];cm96PaintAlert();
+  if($("#storeSheet")&&!$("#storeSheet").hidden) renderStore();
+}
+function cm96Ping(body){
+  try{
+    if(!("Notification" in window)||Notification.permission!=="granted") return;
+    const opts={body,tag:"courses-ajout-"+Date.now()};
+    if(navigator.serviceWorker) navigator.serviceWorker.ready.then(reg=>{try{reg.showNotification("Courses",opts);}catch(e){new Notification("Courses",opts);}}).catch(()=>{});
+    else new Notification("Courses",opts);
+  }catch(e){}
+}
+function cm96Note(names){
+  const list=[];
+  for(const n of names){const t=String(n||"").trim(); if(t&&!list.some(x=>norm(x)===norm(t))) list.push(t);}
+  if(!list.length) return;
+  cm96Fresh=new Set(list.map(norm)); cm96FreshNames=list.slice(0,12);
+  clearTimeout(cm96FreshTimer);
+  cm96FreshTimer=setTimeout(cm96ClearAlert,180000);
+  const msg=list.length===1?"Nouvel article dans la liste : "+list[0]:list.length+" nouveaux articles dans la liste : "+list.slice(0,3).join(", ")+(list.length>3?"…":"");
+  toast(msg);
+  if($("#storeSheet")&&!$("#storeSheet").hidden){
+    renderStore();
+    const row=document.querySelector("#storeList .srow-new");
+    if(row) row.scrollIntoView({block:"center"});
+  }
+  try{
+    if(window.parent!==window) window.parent.postMessage({type:"cm-courses-v96-new",count:list.length,names:cm96FreshNames},location.origin);
+    else cm96Ping(msg);
+  }catch(e){cm96Ping(msg);}
+}
+function cm96Diff(before){
+  const watched=LS.get("cm_shop_watch",false);
+  LS.set("cm_shop_watch",true);
+  if(!watched&&!before.length) return;
+  const prev=new Set(before.map(x=>x[0])), added=[];
+  for(const [k,n] of cm96Lines()) if(!prev.has(k)&&!added.includes(n)) added.push(n);
+  if(added.length) cm96Note(added);
+}
 // the others' changes arrive every minute while the carnet is open
 // inside Maisonnée (hidden copy): only while its Repas page is open, so two copies never work at once
 const bgIdle=()=>{try{return window.frameElement&&!(window.parent&&window.parent.mzRepasActive);}catch(e){return false;}};
@@ -197,9 +252,17 @@ async function cloudPull(){const sb=cloud.sb,uid=cloud.user.id;
    if(n)try{localStorage.setItem(RPH,JSON.stringify(m));}catch(e){}}
   LS.set("cm_cloudhash",H);LS.set("cm_recipes",recipes);return added;}
 function confirmNewer(){return true;}
-async function cloudSync(manual){if(!cloudOn())return;const m=$("#ac-sync");if(m)m.textContent="⏳ Synchronisation…";
-  try{const n=await cloudPull();await cloudPush();render();LS.set("cm_cloud_at",Date.now());cloud.msg="";if(m)m.textContent="✓ À jour · "+new Date().toLocaleTimeString("fr-FR");if(n&&!manual)toast(`🆕 ${n} recette${n>1?"s":""} de la base commune`);}
-  catch(e){if(m)m.textContent="Synchro impossible pour l'instant : "+(e.message||"réseau ?");}}
+async function cloudSync(manual){
+  if(!cloudOn())return;
+  if(cm96Flight) return cm96Flight;
+  const before=cm96Lines(), m=$("#ac-sync");
+  cm96Flight=(async()=>{
+    try{if(m)m.textContent="⏳ Synchronisation…";const n=await cloudPull();await cloudPush();render();LS.set("cm_cloud_at",Date.now());cloud.msg="";if(m)m.textContent="✓ À jour · "+new Date().toLocaleTimeString("fr-FR");if(n&&!manual)toast(`🆕 ${n} recette${n>1?"s":""} de la base commune`);cm96Diff(before);}
+    catch(e){if(m)m.textContent="Synchro impossible pour l'instant : "+(e.message||"réseau ?");}
+    finally{cm96Flight=null;}
+  })();
+  return cm96Flight;
+}
 async function cloudMigrate(){if(!cloud.admin)return;const sb=cloud.sb;toast("⏳ Vérification de la base commune…");
   // what is really in the common book (not what this phone believes)
   const exist=new Map();let f=0;for(;;){const{data,error}=await sb.from("recipes").select("legacy_id,author_id").range(f,f+999);if(error){toast("Base inaccessible : "+error.message);return;}(data||[]).forEach(x=>exist.set(x.legacy_id,x.author_id));if(!data||data.length<1000)break;f+=1000;}

@@ -117,6 +117,8 @@ const rules=[
 ];
 function saved(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(_){return {}}}
 function get(name){const n=norm(name);const custom=saved();if(custom[n])return custom[n];try{if(typeof catData==='function'){const C=catData();const key=Object.keys(C.emoji||{}).find(k=>norm(k)===n);if(key&&C.emoji[key])return C.emoji[key];}}catch(_){}if(exact.has(n))return exact.get(n);for(const [re,e] of rules)if(re.test(n))return e;return '🛒'}
+function chosen(name){const n=norm(name);const custom=saved();if(custom[n])return custom[n];try{if(typeof catData==='function'){const C=catData();const key=Object.keys(C.emoji||{}).find(k=>norm(k)===n);if(key&&C.emoji[key])return C.emoji[key];}}catch(_){}return ''}
+function html(name){const c=chosen(name);if(c)return c;const art=window.IngredientArt&&IngredientArt.svg(name);if(art)return `<span class="ing-art" aria-hidden="true">${art}</span>`;return get(name)}
 // Palette enrichie : tous les emojis disponibles dans le sélecteur sont de vrais caractères Unicode.
 const categories={
  'Légumes et aromates':['🛒','🥔','🍠','🧅','🧄','🥦','🥕','🥒','🫑','🍆','🥬','🍄','🌽','🫛','🫘','🎃','🍅','🥑','🫒','🌶️','🌿','🫚','🥗','🪴','🌱','🥜'],
@@ -150,5 +152,5 @@ function pick(name,onChange){
  input.addEventListener('input',draw);draw();
  const close=document.createElement('button');close.textContent='Fermer';close.style.cssText='margin-top:15px;padding:10px 20px;border-radius:12px;background:#194577;color:white;border:1px solid #38bdf8';close.onclick=()=>d.close();d.append(close);d.addEventListener('close',()=>d.remove());document.body.append(d);d.showModal();
 }
-window.IngredientEmoji={get,pick,normalize:norm,choices};
+window.IngredientEmoji={get,html,pick,normalize:norm,choices};
 })();

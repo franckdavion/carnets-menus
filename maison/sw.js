@@ -1,13 +1,13 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v71";
+const CACHE = "carnet-archive-maison-v72";
 const FILES = [
   "./", "index.html", "maison.css",
   "espace.js", "push-config.js", "supabase/functions/_shared/cal.js",
   "app.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
   "presences-core.js", "presences.js", "presences-export.js",
   "natif.js", "accueil.js", "pont.js",
-  "../ingredient-emojis.js", "../navigation-retour.js",
+  "../ingredient-arts.js", "../ingredient-emojis.js", "../navigation-retour.js",
   "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png"
 ];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" }))))); self.skipWaiting(); });
@@ -16,7 +16,7 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const u = new URL(e.request.url);
   const scopePath = new URL("./", self.location).pathname;
-  const own = u.origin === self.location.origin && (u.pathname.startsWith(scopePath) || /\/(ingredient-emojis|navigation-retour)\.js$/.test(u.pathname));
+  const own = u.origin === self.location.origin && (u.pathname.startsWith(scopePath) || /\/(ingredient-arts|ingredient-emojis|navigation-retour)\.js$/.test(u.pathname));
   const lib = /fonts\.(googleapis|gstatic)\.com$|cdn\.jsdelivr\.net$/.test(u.hostname);
   if (!own && !lib) return;
   e.respondWith(fetch(own ? new Request(e.request, { cache: "no-cache" }) : e.request)

@@ -78,18 +78,7 @@ function cxRayonIcon(name) {
 }
 // Affichage uniquement : réutiliser les emojis du catalogue, y compris les choix personnalisés.
 function cxProductEmoji(name) {
-  const label = String(name || "");
-  try {
-    const local = JSON.parse(localStorage.getItem("maisonnee-ingredient-emojis-v1") || "{}");
-    const key = window.IngredientEmoji?.normalize?.(label);
-    if (key && local[key]) return local[key];
-    if (typeof catData === "function") {
-      const C = catData();
-      const k = Object.keys(C.emoji || {}).find(x => window.IngredientEmoji?.normalize?.(x) === key);
-      if (k && C.emoji[k]) return C.emoji[k];
-    }
-  } catch (_) {}
-  return window.IngredientEmoji?.get(label) || "🛒";
+  return window.IngredientEmoji?.html?.(name) || "🛒";
 }
 
 const cxFoldStorageKey = "maisonnee_courses_rayons_ouverts_v1";
@@ -103,7 +92,7 @@ VIEWS.courses = function () {
   if (!CK.ready) return `<div class="empty"><strong>Chargement de la liste du Carnet…</strong>Quelques secondes la première fois.</div>`;
   let D; try { D = cxData(); } catch (e) { return shopViewBase(); }
   const tick = i => `<span class="box">${I.tick}</span>`;
-  const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}" ${ref.startsWith("x:") ? `data-mz-shop-name="${esc(String(i.t || "").trim().toLocaleLowerCase("fr"))}"` : ""}>
+  const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}" data-mz-shop-name="${esc(String(i.n || i.t || "").trim().toLocaleLowerCase("fr"))}">
       <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
       <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
@@ -225,7 +214,7 @@ document.addEventListener("click", e => {
           document.querySelectorAll('.cx-emoji-edit[data-n]').forEach(button => {
             if (window.IngredientEmoji.normalize(button.dataset.n) !== window.IngredientEmoji.normalize(name)) return;
             const icon = button.querySelector('.cx-ingredient-emoji');
-            if (icon) icon.textContent = cxProductEmoji(name);
+            if (icon) icon.innerHTML = cxProductEmoji(name);
           });
         });
       }
@@ -324,14 +313,35 @@ window.addEventListener("message", e => {
   }
 });
 
-/* V9.6 : signal non bloquant des nouveaux articles, depuis le Carnet partagé. */
+/* Ajout reçu pendant les courses : noms, liste mise à jour, et notification si l'iPhone les autorise. */
+function mzPingCourses(body){
+  try{
+    if(!("Notification" in window) || Notification.permission!=="granted") return;
+    const opts={body, tag:"courses-ajout-"+Date.now(), data:{url:"./?v=courses"}};
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification("Courses", opts)).catch(()=>{});
+  }catch(e){}
+}
 window.addEventListener('message', function(event){
   if(event.origin!==location.origin || !event.data || event.data.type!=='cm-courses-v96-new')return;
-  const n=Number(event.data.count)||0;
-  if(n>0 && view==='courses'){
-    toast(n+' nouvel'+(n>1?'s':'')+' article'+(n>1?'s':'')+' ajouté'+(n>1?'s':'')+' aux courses');
-    try{softRender();}catch(e){}
+  const names=(Array.isArray(event.data.names)?event.data.names:[]).map(x=>String(x||"").trim()).filter(Boolean).slice(0,12);
+  const n=names.length||Number(event.data.count)||0;
+  if(n<=0) return;
+  const items=names.map((name,i)=>({id:"live"+Date.now()+"-"+i, name}));
+  const msg=names.length===1?"Nouvel article dans la liste : "+names[0]
+    :n+" nouveaux articles dans la liste : "+names.slice(0,3).join(", ")+(names.length>3?"…":"");
+  let notice=null;
+  if(items.length && typeof mzStoreNotice==="function") notice=mzStoreNotice(items);
+  const go=()=>{
+    if(notice && typeof mzMarkRead==="function") mzMarkRead(notice.id);
+    if(items.length && typeof mzGoToItems==="function") mzGoToItems(items);
+  };
+  if(typeof toast==="function") toast(msg, items.length?"Voir":"", items.length?go:null);
+  try{ if(view==="courses" && typeof softRender==="function") softRender(); }catch(e){}
+  if(view==="courses" && items.length){
+    window.mzCourseTargets=items.slice();
+    setTimeout(()=>{ if(typeof mzFocusCourseItems==="function") mzFocusCourseItems(); }, 180);
   }
+  mzPingCourses(msg);
 });
 
 /* V9.8 : navigation vers les articles reçus, sans toucher au moteur des courses. */

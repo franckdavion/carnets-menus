@@ -258,6 +258,7 @@ d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Au magasin</h2><button type="button" class="btn primary" data-act="closeStore">Terminé</button></div>
     <div class="store-prog"><div class="track"><div class="fill" id="storeFill"></div></div><span class="count" id="storeCount"></span></div>
+    <div id="storeAlert" class="store-alert" hidden></div>
     <div id="storeList"></div>
     <div id="storeEnd" style="border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px"></div>
   </div>
@@ -549,6 +550,8 @@ Préparation :
 <!-- V9.4 : confirmation commune de fin des courses (Carnet et Maisonnée). -->
 
 <!-- Pont avec Maisonnée (repas et courses synchronisés, bouton de retour) -->
+<script src="ingredient-arts.js"></script>
+<script src="ingredient-emojis.js"></script>
 <script src="carnet-calc.js"></script>
 <script src="carnet-base.js"></script>
 <script src="carnet-github.js"></script>

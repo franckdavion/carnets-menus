@@ -88,7 +88,7 @@ async function showPushSettings() {
     <p class="muted small">Chaque téléphone doit activer les notifications séparément. Ces choix valent pour tous vos appareils.</p>
     <div class="card" style="display:grid;gap:14px">
       ${sw("messages", "Messages", "un nouveau message du foyer")}
-      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre (push : nécessite aussi la prise en charge serveur)")}
+      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre. L'alerte s'affiche tout de suite si Maisonnée est ouverte. Le téléphone verrouillé dépend encore de l'envoi par le serveur.")}
       ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)")}
       ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>

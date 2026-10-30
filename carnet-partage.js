@@ -117,7 +117,7 @@ function renderProps(){const el=$("#propBox");if(!el)return;const sh=menu.share|
   if(!l.length){el.innerHTML="";return;}
   el.innerHTML=`<div class="prop-box"><span class="label">📥 Recettes proposées · ${l.length}</span>${l.map(([pid,p])=>{const r=p.r,op=propOpen===pid;
     return`<div class="prop-it"><div class="prop-h">${r.image?`<img src="${esc(r.image)}" alt="" class="dish-ph">`:`<span class="dish-ph ph-none">🍽️</span>`}<div><b>${esc(r.name)}</b><div class="muted" style="font-size:12px">de ${esc(p.by)} · ${ago(p.at)}${r.time?" · "+esc(r.time)+" min":""}</div></div></div>
-      ${op?`<ul class="ings">${(r.ing||[]).map(i=>`<li class="q">${esc(fmt(...toBase(i.q,i.u)))}</li><li>${esc(i.n)}</li>`).join("")}</ul>${r.steps?`<ol class="steps">${String(r.steps).split("\n").filter(x=>x.trim()).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}`:""}
+      ${op?`<ul class="ings">${(r.ing||[]).map(i=>`<li class="q">${esc(fmt(...toBase(i.q,i.u)))}</li><li class="ing-row">${IngredientEmoji.html(i.n)}<span>${esc(i.n)}</span></li>`).join("")}</ul>${r.steps?`<ol class="steps">${String(r.steps).split("\n").filter(x=>x.trim()).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>`:""}`:""}
       <div class="row"><button type="button" class="btn primary" data-act="propAdd" data-p="${pid}">Ajouter à mon carnet</button><button type="button" class="btn" data-act="propView" data-p="${pid}">${op?"Masquer":"Voir"}</button><button type="button" class="btn ghost" data-act="propNo" data-p="${pid}">Refuser</button></div></div>`;}).join("")}</div>`;}
 function propAnswer(pid,ok){const sh=menu.share,p=sh&&sh.props&&sh.props[pid];if(!p)return;
   if(ok){const r=p.r,slug=norm(r.name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette",nid=slug+"-"+Math.random().toString(36).slice(2,6);
@@ -452,6 +452,7 @@ document.addEventListener("click",e=>{
   else if(a==="uncheck"){menu.checked={};(menu.extras||[]).forEach(x=>x.done=false);render();saveMenu();}
   else if(a==="openStore"){finishAsk=false;renderStore();$("#storeSheet").hidden=false;$("#storeSheet .sheet-in").scrollTop=0;}
   else if(a==="closeStore"){$("#storeSheet").hidden=true;}
+  else if(a==="storeAlertClear"){if(typeof cm96ClearAlert==="function")cm96ClearAlert();}
   else if(a==="storeTick"){const s=b.dataset.s;
     if(s.startsWith("k:")){const k=s.slice(2);if(menu.checked[k]){delete menu.checked[k];if(menu.checkedQty)delete menu.checkedQty[k];}else{menu.checked[k]=true;(menu.checkedQty||(menu.checkedQty={}))[k]=(shopping(true).find(i=>i.key===k)||{}).q||0;}}
     else{const x=(menu.extras||[])[Number(s.slice(2))];if(x)x.done=!x.done;}
@@ -1229,7 +1230,7 @@ function renderCook(){if(!cook)return;const r=recipes[cook.id];if(!r){stopCook()
     ${ing.length?`<div class="cook-ing">${ing.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}
     ${techHtml(techsIn(s),"dark")}
     ${d?`<button type="button" class="btn cook-timer" data-act="cookTimer" data-s="${d}">${cookTimer?`⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter`:`⏱ Lancer le minuteur · ${dur(d)}`}</button>`:(cookTimer?`<button type="button" class="btn cook-timer" data-act="cookTimer">⏱ ${dur(Math.max(0,Math.round((cookTimer.end-Date.now())/1000)))} · ${esc(cookTimer.label)} · Arrêter</button>`:"")}
-    <details class="cook-all"><summary>Tous les ingrédients</summary>${(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<div>${esc(fmt(b*ingMult(r,i,cook.n),u))} ${esc(i.n)}</div>`;}).join("")}</details>
+    <details class="cook-all"><summary>Tous les ingrédients</summary>${(r.ing||[]).map(i=>{const[b,u]=toBase(i.q,i.u);return`<div class="ing-row">${IngredientEmoji.html(i.n)}<span>${esc(fmt(b*ingMult(r,i,cook.n),u))} ${esc(i.n)}</span></div>`;}).join("")}</details>
     <div class="row cook-nav"><button type="button" class="btn" data-act="cookPrev" ${cook.i?"":"disabled"}>← Précédente</button><button type="button" class="btn primary" data-act="cookNext">${cook.i<cook.steps.length-1?"Suivante →":"Terminé ✓"}</button></div>`;}
 function beep(){try{const c=new(window.AudioContext||window.webkitAudioContext)();[0,.35,.7].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.25,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.3);o.start(c.currentTime+t);o.stop(c.currentTime+t+.3);});}catch(e){}
   try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300]);}catch(e){}}
@@ -1262,7 +1263,7 @@ const starTxt=v=>"★".repeat(Math.round(v))+"☆".repeat(5-Math.round(v));
 function renderRecSheet(){
   const id=recSheetId, r=recipes[id]; if(!r){$("#recSheet").hidden=true;return;}
   const sl=slotsOf(id), p=viewServ[id]||(sl.length?W()[sl[0]].n:menu.people), f=p/(r.serves||4), activeSlot=recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id?W()[recMealCtx]:null;
-  const ings=(r.ing||[]).map(i=>{const[b,u]=mealIngredientBase(r,i,p,activeSlot);return`<li class="q">${esc(fmt(b,u))}</li><li>${esc(i.n)}</li>`;}).join("");
+  const ings=(r.ing||[]).map(i=>{const[b,u]=mealIngredientBase(r,i,p,activeSlot);return`<li class="q">${esc(fmt(b,u))}</li><li class="ing-row">${IngredientEmoji.html(i.n)}<span>${esc(i.n)}</span></li>`;}).join("");
   const steps=stepsFor(id).steps;
   const shBox=r.shared?`<div class="note" style="display:flex;flex-direction:column;gap:8px"><span>Recette de <b>${esc(r.sharedBy||"un proche")}</b> (lecture seule).${r.linkOnly?" Elle vient d'un site : ouvrez-la avec « Voir la recette d'origine ».":""}</span>
       <div class="row">${r.linkOnly&&r.source?`<a class="btn" href="${esc(r.source)}" target="_blank" rel="noopener">Voir la recette d'origine ↗</a>`:`<button type="button" class="btn" data-act="copyShared">Copier dans mon carnet</button>`}</div></div>`:"";
