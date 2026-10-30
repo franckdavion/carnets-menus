@@ -842,6 +842,35 @@ const mzWindowManager = {
 function mzV9ChoiceCourses() {
   return mzWindowManager.confirm(`<section class="mz-v9-dialog" aria-labelledby="mz-v9-title"><div class="mz-v9-hero" aria-hidden="true">🛒🥕</div><h2 id="mz-v9-title">Des ingrédients ont déjà été achetés pour ce repas.</h2><p>Que souhaitez-vous faire pour cette nouvelle préparation ?</p><div class="mz-v9-choices"><button type="button" data-choice="keep">✅ Conserver les achats<small>Seules les quantités manquantes seront ajoutées.</small></button><button type="button" data-choice="restart">🔄 Recommencer les courses<small>Tous les ingrédients seront ajoutés comme non achetés.</small></button></div><button type="button" class="mz-v9-cancel" data-choice="cancel">Annuler</button></section>`, {title:'Recommencer les courses'});
 }
+function mzAskLeaveCart() {
+  return new Promise(resolve => {
+    const d = document.createElement("dialog");
+    d.className = "mz-v10-modal";
+    d.setAttribute("aria-label", "Repas encore dans les courses");
+    d.innerHTML = `<section class="mz-v9-dialog" aria-labelledby="mz-term-title"><h2 id="mz-term-title">Ce repas est encore dans les courses.</h2><p>Le marquer terminé ne vide pas la liste tout seul.</p><div class="mz-v9-choices"><button type="button" data-choice="drop">Retirer ce qui n'est pas coché<small>Ce qui est déjà dans le caddie, ou partagé avec un autre repas, reste.</small></button><button type="button" data-choice="keep">Laisser la liste telle quelle<small>Le repas passe à Terminé. Les courses restent.</small></button></div><button type="button" class="mz-v9-cancel" data-choice="cancel">Annuler</button></section>`;
+    const prior = document.activeElement;
+    let done = false;
+    const finish = value => {
+      if (done) return;
+      done = true;
+      if (d.open) d.close();
+      d.remove();
+      if (prior && prior.isConnected && typeof prior.focus === "function") {
+        try { prior.focus({preventScroll:true}); } catch (_) { prior.focus(); }
+      }
+      resolve(value);
+    };
+    d.addEventListener("cancel", e => { e.preventDefault(); finish(null); });
+    d.addEventListener("click", e => {
+      const btn = e.target.closest("[data-choice]");
+      if (!btn) return;
+      finish(btn.dataset.choice === "cancel" ? null : btn.dataset.choice);
+    });
+    document.body.appendChild(d);
+    try { d.showModal(); }
+    catch (err) { d.remove(); console.error(err); resolve(null); }
+  });
+}
 
 
 /* ---------- icons ---------- */

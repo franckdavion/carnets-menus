@@ -50,28 +50,126 @@ function renderIdea(){
    ${pool.length>ideaIds.length?`<div class="row"><button type="button" class="btn ghost" data-act="reroll">Autres idées</button></div>`:""}`;
 }
 
-// Shared five-state model, compatible with Maisonnée (mealState + keep + lock).
+// Shared meal states, compatible with Maisonnée (mealState + keep + lock).
+// "Courses faites" stays the stored value and is shown as "Acheté".
+// It is set when the cart covers the meal, not by tapping it in advance.
+// "Terminé" means the meal is cooked and does not, by itself, change the list.
 const CM_MEAL_STATES=["Proposé","Gardé","En courses","Courses faites","Terminé"];
+const CM_MEAL_CHOICES=["Proposé","Gardé","En courses","Terminé"];
 function cmMealStatus(s){
   if(!s)return "Proposé";
   if(CM_MEAL_STATES.includes(s.mealState))return s.mealState;
   return s.lock?"En courses":s.keep?"Gardé":"Proposé";
 }
+function cmMealLabel(s){const st=cmMealStatus(s);return st==="Courses faites"?"Acheté":st;}
+function cmShopBought(s){return !!(s&&(s.mealState==="Courses faites"||s.shopBought));}
+function cmMealLines(s){
+  const lines=[], skip=new Set(Array.isArray(s&&s.noIng)?s.noIng:[]);
+  if(!s)return lines;
+  if(Array.isArray(s.ingCustom)){
+    for(const ing of s.ingCustom){
+      if(!ing.n||skip.has(ing.key))continue;
+      const match=String(typeof mealCustomQuantity==="function"?mealCustomQuantity(ing.qt,s):ing.qt||"").trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
+      const unit=match?match[2].trim():"";
+      const base=norm(ing.n)+"|"+toBase(match?match[1].trim():"",unit)[1];
+      lines.push({keys:[ing.key,base].filter(Boolean)});
+    }
+    return lines;
+  }
+  for(const id of [s.id,s.entree,s.dessert].filter(Boolean)){
+    const r=recipes[id];if(!r)continue;
+    for(const ing of r.ing||[]){
+      if(!ing.n)continue;
+      const base=norm(ing.n)+"|"+recipeIngredientBase(r,ing,s.n||4,"main")[1];
+      if(skip.has(base))continue;
+      lines.push({keys:[base]});
+    }
+  }
+  return lines;
+}
+function cmLineInCart(line){
+  const checked=menu.checked||{}, have=menu.have||{};
+  const known=Object.keys(checked).concat(Object.keys(have));
+  return line.keys.some(key=>{
+    const base=String(key).split("#")[0].split("|nouvelle-preparation:")[0];
+    if(checked[key]||checked[base]||have[key]||have[base])return true;
+    return known.some(k=>(checked[k]||have[k])&&(k===base||k.startsWith(base+"|nouvelle-preparation:")||k.startsWith(base+"#")));
+  });
+}
+function cmDropUnchecked(s){
+  const no=new Set(Array.isArray(s.noIng)?s.noIng:[]);
+  for(const line of cmMealLines(s)) if(!cmLineInCart(line)) line.keys.forEach(key=>no.add(key));
+  if(no.size)s.noIng=[...no];
+}
+function cmMarkBought(s){
+  if(!s)return;
+  s.shopBought=true;s.keep=true;s.lock=true;
+  if(s.mealState!=="Terminé")s.mealState="Courses faites";
+}
+function cmFinishMeal(s,mode){
+  if(!s)return;
+  const bought=cmShopBought(s);
+  if(!bought&&mode==="drop"&&s.lock)cmDropUnchecked(s);
+  s.mealState="Terminé";s.keep=true;
+  if(bought){s.shopBought=true;s.lock=true;}
+}
 function cmSetMealStatus(s,state){
   if(!s||!CM_MEAL_STATES.includes(state))return;
+  if(state==="Courses faites"){cmMarkBought(s);return;}
+  if(state==="Terminé"){cmFinishMeal(s,"keep");return;}
   s.mealState=state;
   s.keep=state!=="Proposé";
-  s.lock=["En courses","Courses faites","Terminé"].includes(state);
+  s.lock=state==="En courses";
+  delete s.shopBought;
+}
+function cmAskLeaveCart(){
+  return new Promise(resolve=>{
+    const d=document.createElement("dialog");
+    d.setAttribute("aria-label","Repas encore dans les courses");
+    d.style.cssText="border:0;border-radius:18px;padding:18px;max-width:min(92vw,420px);background:#10233f;color:#f4f8ff;";
+    d.innerHTML=`<h2 style="margin:0 0 8px;font-size:18px">Ce repas est encore dans les courses.</h2><p style="margin:0 0 14px">Le marquer terminé ne vide pas la liste tout seul.</p><div style="display:grid;gap:8px"><button type="button" data-v="drop" style="padding:10px;border-radius:12px">Retirer ce qui n'est pas coché</button><button type="button" data-v="keep" style="padding:10px;border-radius:12px">Laisser la liste telle quelle</button><button type="button" data-v="cancel" style="padding:10px;border-radius:12px">Annuler</button></div>`;
+    const finish=value=>{if(d.open)d.close();d.remove();resolve(value);};
+    d.addEventListener("cancel",e=>{e.preventDefault();finish(null);});
+    d.addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(!b)return;finish(b.dataset.v==="cancel"?null:b.dataset.v);});
+    document.body.appendChild(d);
+    try{d.showModal();}catch(e){d.remove();resolve(null);}
+  });
+}
+async function cmApplyMealState(k,state){
+  const sl=W()[k];
+  if(!sl||isPast(k)||!CM_MEAL_STATES.includes(state))return;
+  const cur=cmMealStatus(sl);
+  if(cur===state)return;
+  if(state==="Terminé"&&cur==="En courses"){
+    const mode=await cmAskLeaveCart();
+    if(!mode)return;
+    cmFinishMeal(sl,mode);
+    toast(mode==="drop"?"Repas terminé. Ce qui n'était pas coché sort de la liste.":"Repas terminé. La liste de courses reste telle quelle.");
+  }else if(state==="Terminé"){
+    cmFinishMeal(sl,"keep");
+    toast("Repas terminé. La liste de courses reste telle quelle.");
+  }else if(state==="Courses faites"){
+    cmMarkBought(sl);
+    toast((recipes[sl.id]?recipes[sl.id].name:"Ce repas")+" : ingrédients achetés.");
+  }else{
+    cmSetMealStatus(sl,state);
+    if(state==="En courses")cmEnsureShoppingDay(k);
+    toast(state==="En courses"?"Ajouté aux courses.":state==="Gardé"?"Gardé : rien n'est à acheter.":"Ce repas pourra de nouveau changer.");
+  }
+  render();saveMenu();
+  if(typeof lastRecHtml!=="undefined"&&!$("#recSheet").hidden){lastRecHtml="";renderRecSheet();}
+  if(!$("#slotSheet").hidden)renderSlotSheet();
 }
 function cmStatusChips(k,s){
   const active=cmMealStatus(s);
-  return `<div class="cm-state-box"><strong>État du repas</strong><div class="cm-state-options" role="group" aria-label="État du repas">${CM_MEAL_STATES.map((st,i)=>`<button type="button" class="cm-state-chip cm-state-${i}" data-state="${st}" disabled aria-pressed="${st===active}">${["◷","✓","🛒","✓","✓"][i]} ${st}</button>`).join("")}</div></div>`;
+  const bought=active==="Courses faites"?`<p class="cm-bought">Acheté : ses ingrédients sont comptés comme achetés. Un ingrédient partagé reste pour l'autre repas.</p>`:"";
+  const force=active==="En courses"?`<button type="button" class="btn" data-act="cmBought" data-k="${esc(k)}">Déjà acheté pour ce repas</button>`:"";
+  const tone={Proposé:0,Gardé:1,"En courses":2,Terminé:4};
+  return `<div class="cm-state-box"><strong>État du repas</strong>${bought}<div class="cm-state-options" role="group" aria-label="État du repas">${CM_MEAL_CHOICES.map(st=>`<button type="button" class="cm-state-chip cm-state-${tone[st]}" data-act="cmMealState" data-k="${esc(k)}" data-state="${st}" aria-pressed="${st===active}">${st}</button>`).join("")}</div>${force}</div>`;
 }
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
-function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(s.mealState==="Courses faites"||s.mealState==="Terminé")return["p3",s.mealState==="Terminé"?"✓ terminé":"✓ courses faites"];if(!s.lock)return["p1","🛒 à ajouter aux courses"];
-  const sel=selectedShopDates().some(x=>x.key===date);if(!sel)return["p2","✓ dans les courses"];
-  const r=recipes[s.id],dd=parseYmd(date),when=`${k.split("|")[0]} ${dd.getDate()} ${k.split("|")[1]}`;
-  const left=shopping().some(i=>i.from.some(f=>f.endsWith("("+when+")")));return left?["p2","✓ dans les courses"]:["p3","✓ courses faites"];}
+function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(s.mealState==="Courses faites"||s.shopBought)return["p3","✓ acheté"];if(s.mealState==="Terminé")return["p3","✓ terminé"];if(!s.lock)return["p1","🛒 à ajouter aux courses"];
+  return ["p2","✓ dans les courses"];}
 function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
   const side=s?[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"en plus : "+s.extra.join(", "):""].filter(Boolean):[];
   if(!r&&s&&(s.note||s.left))return`<button type="button" class="mc${past?" past":""}" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-ph mc-noph">${s.note?"✏️":"🥡"}</span><span class="mc-t"><span class="mc-m">${lab}</span><b>${s.note?esc(s.note):"Restes : "+esc(s.left)}</b><small>Sans recette · rien à acheter</small></span></button>`;
@@ -82,7 +180,7 @@ function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],da
     ${ph?`<img class="mc-ph" src="${esc(ph)}" alt=""${r&&!r.photo?` data-auto="${esc(s.id)}"`:""} loading="lazy">`:`<span class="mc-ph mc-noph">${lab==="Midi"?"☀️":"🌙"}</span>`}
     <span class="mc-t"><span class="mc-m">${lab}</span><b>${r?esc(r.name):"Plat à choisir"} ${s.n?`<span class="muted" style="font-size:.82em;font-weight:500;white-space:nowrap">· 👥 ${s.n} pers.</span>`:""}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
       ${r&&!past?`<small class="mc-info">${[showOn("nut")&&nut?esc(fmtNut(nut,true)):"",showOn("wine")?esc(drinkLine(r)):""].filter(Boolean).join(" · ")}${menu.prefs.dissoc?" "+dissocBadge(mealDissoc(s)):""}</small>`:""}</span>
-    ${st?`<span class="cm-card-state cm-state-${CM_MEAL_STATES.indexOf(cmMealStatus(s))}">${esc(cmMealStatus(s))}</span>`:""}</button>`;}
+    ${st?`<span class="cm-card-state cm-state-${CM_MEAL_STATES.indexOf(cmMealStatus(s))}">${esc(cmMealLabel(s))}</span>`:""}</button>`;}
 // the future meals of the shown week that are planned but not validated yet
 function weekToValidate(){const ws=weekStartDate(),today=ymd(new Date()),out=[];
   DAYS.forEach((d,i)=>{if(ymd(addDays(ws,i))<today)return;MEALS.forEach(([m])=>{const k=slotKey(d,m),s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k))out.push({w:curWeek,k});});});return out;}
@@ -236,7 +334,7 @@ function shopPlanHtml(sel){
       const sub=[s.entree&&recipes[s.entree]?"Entrée : "+nm(s.entree):"",s.dessert&&recipes[s.dessert]?"Dessert : "+nm(s.dessert):""].filter(Boolean).join(" · ");
       return`<div class="sp-meal${s.lock?" ok":""}"><span class="sp-m">${lab}</span><button type="button" class="sp-n" data-act="viewRec" data-id="${esc(s.id)}">${esc(nm(s.id))}${sub?`<small>${esc(sub)}</small>`:""}<small>${s.n} pers.</small></button>
         <button type="button" class="sp-swap" data-act="shopSwap" data-w="${w}" data-k="${k}" aria-label="Changer de plat">↻</button>
-        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${["Courses faites","Terminé"].includes(cmMealStatus(s))?cmMealStatus(s):s.lock?"✓ Dans les courses":"🛒 Ajouter"}</button></div>`;}).join("");
+        <button type="button" class="sp-lock${s.lock?" on":""}" data-act="shopLock" data-w="${w}" data-k="${k}" aria-pressed="${!!s.lock}">${cmShopBought(s)?"Acheté":s.mealState==="Terminé"?"Terminé":s.lock?"✓ Dans les courses":"🛒 Ajouter"}</button></div>`;}).join("");
     return`<div class="sp-day"><b>${esc(x.dn)} ${x.d.getDate()}</b>${lines}</div>`;}).join("");
   return`<details class="sp" open><summary><span class="label" style="display:inline">Au menu ces jours-là</span> <span class="muted" style="font-size:12px">${unl?`· ${unl} repas pas encore dans les courses`:"· tout est dans les courses ✓"}</span></summary>${days}
     ${unl?`<button type="button" class="btn primary" data-act="shopLockAll" style="align-self:flex-start">🛒 Tout ajouter aux courses (${unl} repas)</button><span class="muted" style="font-size:12px">Les repas avec ✓ sont dans la liste de courses. Touchez un jour ci-dessus pour ajouter ou retirer tous ses repas.</span>`:""}</details>`;

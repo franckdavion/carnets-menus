@@ -216,10 +216,12 @@ function apercuMaison(){
   if(typeof S==='undefined'||!S)return vide;
   const d=typeof today==='function'?today():'';
   if(typeof mealAt==='function'&&d){
-   const hour=new Date().getHours(),slot=hour<15?'midi':'soir';
-   const meal=mealAt(d,slot)||mealAt(d,slot==='midi'?'soir':'midi');
+   const hour=new Date().getHours();
+   let slot=hour<15?'midi':'soir';
+   let meal=typeof mealAt==='function'?mealAt(d,slot):null;
+   if(!meal&&typeof mealAt==='function'){const other=slot==='midi'?'soir':'midi';if(mealAt(d,other)){meal=mealAt(d,other);slot=other;}}
    const nom=meal&&typeof mealName==='function'?mealName(meal):'';
-   vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom||'Rien de prévu',m:nom?'Au menu':'Choisir un plat'};
+   vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom||'Rien de prévu',m:nom?'Au menu':'Choisir un plat',day:d,slot};
   }
   const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
   vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
@@ -261,6 +263,7 @@ function render(){
   const tete=`<span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>`;
   const corps=`<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}`;
   if(k==='agenda')return `<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`;
+  if(k==='repas'&&g.repas.day&&g.repas.slot)return `<div class="mn-card mn-card-repas mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="repas">${tete}</button><button type="button" class="mn-card-open" data-act="homeRepas" data-day="${esc(g.repas.day)}" data-slot="${esc(g.repas.slot)}" aria-label="${ligne&&ligne!=='Rien de prévu'?'Ouvrir la fiche de '+ligne:'Choisir le repas'}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`;
   if(k==='recettes'&&g.recette.id)return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
   return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
  }).join('');
@@ -279,7 +282,8 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
 }
 document.addEventListener('click',e=>{
- const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"]');if(!b)return;
+ const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"],[data-act="homeRepas"]');if(!b)return;
+ if(b.dataset.act==='homeRepas'){if(typeof openHomeMeal==='function')openHomeMeal(b.dataset.day,b.dataset.slot);return}
  if(b.dataset.act==='homeRecette'){const id=b.dataset.v;if(id&&typeof CARNET_URL==='string')location.assign(CARNET_URL+'?recette='+encodeURIComponent(id));return}
  if(b.dataset.act==='homeCal'){ouvrirChoixAgenda();return}
  const id=b.dataset.v;

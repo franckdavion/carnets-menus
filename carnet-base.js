@@ -127,8 +127,7 @@ function platsLine(r,p,id){const d=dishOf(r);if(!d)return"";const k=platsFor(r,p
   return`<span class="plats"><span>— ${k} ${k>1?d.many:d.one}</span><span class="ctl"><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="-1" ${k<=1?"disabled":""} aria-label="Un plat de moins">−</button><button class="step sm" data-act="vplat" data-id="${esc(id)}" data-d="1" aria-label="Un plat de plus">+</button></span></span>`;}
 /* ---------- a meal changed after its shopping was done: postpone it, keep its ingredients to use first, or cook something with them ---------- */
 let bumpCtx=null;
-function mealBought(w,k){const s=((menu.weeks||{})[w]||{})[k];if(!s||!recipes[s.id]||!s.lock)return false;const dt=ymd(addDays(parseYmd(w),DAYS.indexOf(k.split("|")[0])));
-  const st=mealState(k,s,dt);return!!st&&st[0]==="p3";}
+function mealBought(w,k){const s=((menu.weeks||{})[w]||{})[k];return !!(s&&recipes[s.id]&&typeof cmShopBought==="function"&&cmShopBought(s));}
 function bumpDo(c,v){const s=menu.weeks[c.w][c.k],r=recipes[s.id];
   if(v==="later"){const nw=ymd(addDays(parseYmd(c.w),7));menu.weeks[nw]=menu.weeks[nw]||{};const wk=menu.weeks[nw];
     const order=[c.k,...SLOT_ORDER.filter(x=>x!==c.k)],dest=order.find(x=>!wk[x]||!recipes[wk[x].id]);
@@ -157,13 +156,14 @@ function shopping(all){
     }
   };
   // Only locked meals go to the shopping list: unlocking a meal takes its ingredients off.
-  // A finished meal stays in the sum, then its own quantity is removed, so a shared ingredient keeps the other meal's share.
+  // A bought meal stays in the sum, then its own quantity is removed, so a shared ingredient keeps the other meal's share.
+  // Cooking the meal (Terminé) does not remove anything unless it was already bought.
   // Only the days chosen at the top of the shopping list count.
   for(const x of selectedShopDates())for(const[m]of MEALS){
     const sl=x.wk[slotKey(x.dn,m)]; if(!sl||!sl.lock)continue;
     const hasRecipe=!!recipes[sl.id], hasSide=!!(sl.entree||sl.dessert), hasCustom=Array.isArray(sl.ingCustom);
     if(!hasRecipe&&!hasSide&&!hasCustom)continue;
-    const done=sl.mealState==="Courses faites"||sl.mealState==="Terminé";
+    const done=sl.mealState==="Courses faites"||!!sl.shopBought;
     const when=x.dn+" "+x.d.getDate()+" "+m;
     const sk=Array.isArray(sl.noIng)?sl.noIng:null;
     if(hasCustom){

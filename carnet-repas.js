@@ -592,7 +592,7 @@ function renderSlotSheet(){
   let h="";
   if(r||hasSide(s)){
     const rx=(part,i2)=>past?"":`<button type="button" class="rx" data-act="wRm" data-k="${k}" data-part="${part}"${i2!=null?` data-i="${i2}"`:""}>✕ Retirer</button>`;
-    h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${s.lock?" · dans les courses":""}</span></button>${s.lock?"":rx("main")}</div>`
+    h+=r?`<div class="sl-line"><button type="button" class="slot-dish" data-act="viewRec" data-id="${esc(s.id)}"><strong>${esc(r.name)}&nbsp;›</strong><span class="muted" style="font-size:13px">${KIND_LABEL[kindOf(r)]}${cmShopBought(s)?" · acheté":s.lock?" · dans les courses":""}</span></button>${s.lock?"":rx("main")}</div>`
       :s.note||s.left?`<div class="sl-line"><strong>${s.note?"✏️ "+esc(s.note):"🥡 Restes : "+esc(s.left)}</strong>${rx(s.note?"note":"left")}</div><span class="muted" style="font-size:13px">Sans recette : rien à acheter, « Proposer ma semaine » ne le change pas.</span><div class="slot-acts2">${btn("freeNote","✏️ Noter autre chose")+btn("freeLeft","🥡 Restes")}${past?"":btn("pick","Choisir un plat à la place")}</div>`
       :`<div class="sl-line"><span class="muted">Plat à choisir</span>${past?"":btn("pick","+ Choisir un plat","","btn primary")}</div>`;
     ["entree","dessert"].forEach(c=>{if(s[c]&&recipes[s[c]])h+=`<div class="sl-line"><button type="button" class="slot-dish sub" data-act="viewRec" data-id="${esc(s[c])}">${c==="entree"?"Entrée":"Dessert"} : ${esc(recipes[s[c]].name)}&nbsp;›</button>${rx(c)}</div>`;});
@@ -601,7 +601,7 @@ function renderSlotSheet(){
     if(r)h+=cmStatusChips(k,s);
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
-      (r?btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary")+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
+      (r?(cmShopBought(s)?"":btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary"))+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
   }else h+=(past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:"")+`<div class="slot-acts2">${past?"":btn("pick","+ Choisir un plat")}${btn("freeNote","✏️ Noter un repas")}${btn("freeLeft","🥡 Restes")}</div>`;

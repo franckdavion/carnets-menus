@@ -8,7 +8,7 @@ let cxHaveOpen = false; // « Déjà à la maison » stays open while you put it
 let cxClearAsk = false, cxFinishAsk = false, cxUndo = false;
 // run one of the Carnet's own buttons (same code as a tap in the Carnet)
 function cxStateClass(st){return ({"Proposé":"proposed","Gardé":"saved","En courses":"shopping","Courses faites":"purchased","Terminé":"completed"})[st]||"proposed";}
-function cxStateLabel(st){return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Courses faites","Terminé":"⚑ Terminé"})[st]||"👨‍🍳 Proposé";}
+function cxStateLabel(st){return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Acheté","Terminé":"⚑ Terminé"})[st]||"👨‍🍳 Proposé";}
 function cclick(d) {
   const doc = CK.frame.contentDocument, b = doc.createElement("button");
   b.type = "button"; b.style.display = "none";
@@ -205,7 +205,8 @@ document.addEventListener("click", async e => {
     case "cxMealLock": {
       cev(`curWeek=${JSON.stringify(b.dataset.w)}`);
       const cur = mealState(cj(`((menu.weeks||{})[${JSON.stringify(b.dataset.w)}]||{})[${JSON.stringify(v)}]`));
-      const next = MEAL_LOCK_STATES.includes(cur) ? "Gardé" : "En courses";
+      if (cur === "Courses faites" || cur === "Terminé") { rWeek = b.dataset.w; mealSlotSheet(v); return; }
+      const next = cur === "En courses" ? "Gardé" : "En courses";
       const note = await writeMealStatus(v, next);
       if (!note) break;
       cev("saveMenu()");
@@ -310,15 +311,13 @@ document.addEventListener("click", e => {
   else { window.scrollTo({ top: 0, behavior: "smooth" }); LS.set("mz_cx_inlist", false); }
 });
 
-// V9.4: the same Carnet engine detects completed meals; Maisonnée displays the dialog.
+// Le Carnet marque Acheté dès que le caddie couvre le repas, puis Maisonnée l'annonce sans question.
 window.addEventListener("message", e => {
   if(e.origin!==location.origin||!CK.frame||e.source!==CK.frame.contentWindow)return;
   const data=e.data;
-  if(!data||data.type!=="maisonnee-meals-shopping-complete"||!Array.isArray(data.ids))return;
-  if(window.confirm(data.msg)){
-    cev(`window.maisonneeConfirmShoppingMeals(${JSON.stringify(data.ids)})`);
-    if(typeof softRender==="function")softRender();
-  }
+  if(!data||data.type!=="maisonnee-meals-bought"||!data.msg)return;
+  if(typeof toast==="function")toast(data.msg);
+  if(typeof softRender==="function")softRender();
 });
 
 /* Ajout reçu pendant les courses : noms, liste mise à jour, et notification si l'iPhone les autorise. */

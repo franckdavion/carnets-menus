@@ -83,10 +83,11 @@ const MEAL_LOCK_STATES = ["En courses", "Courses faites", "Terminé"];
 const MEAL_HINT = {
   "Proposé": "La proposition de semaine peut remplacer ce repas.",
   "Gardé": "Ce repas reste au menu. Rien n'est à acheter.",
-  "En courses": "Les ingrédients cochés sont dans la liste.",
-  "Courses faites": "Ces ingrédients sont comptés comme achetés. Un ingrédient partagé avec un autre repas reste à acheter pour celui-là.",
-  "Terminé": "Le repas est fait. Ses courses ne sont plus à acheter."
+  "En courses": "Les ingrédients cochés sont dans la liste. Le repas passe à Acheté quand chacun est coché ou marqué « J'ai déjà ».",
+  "Courses faites": "Acheté : ces ingrédients sont comptés comme achetés. Un ingrédient partagé avec un autre repas reste à acheter pour celui-là.",
+  "Terminé": "Le repas est cuisiné. La liste de courses ne change pas toute seule."
 };
+const MEAL_CHOICES = ["Proposé", "Gardé", "En courses", "Terminé"];
 function mealHadPurchases(k) {
   return !!cev(`(()=>{
     const s=${slotJs(k)};if(!s)return false;
@@ -129,8 +130,25 @@ async function writeMealStatus(k, state) {
   if (!MEAL_STATES.includes(state)) return null;
   const cur = mealState(cj(`W()[${JSON.stringify(k)}]`));
   if (!cur || cur === state) return null;
-  const locking = MEAL_LOCK_STATES.includes(state);
-  const wasLock = MEAL_LOCK_STATES.includes(cur);
+  if (state === "Courses faites") {
+    cev(`(()=>{const s=${slotJs(k)};if(s&&typeof cmMarkBought==="function")cmMarkBought(s);})()`);
+    shopIncludeWeek();
+    return "Déjà acheté pour ce repas : ses ingrédients sont comptés comme achetés.";
+  }
+  if (state === "Terminé") {
+    let mode = "keep";
+    if (cur === "En courses") {
+      mode = await mzAskLeaveCart();
+      if (!mode) return null;
+    }
+    cev(`(()=>{const s=${slotJs(k)};if(s&&typeof cmFinishMeal==="function")cmFinishMeal(s,${JSON.stringify(mode)});})()`);
+    shopIncludeWeek();
+    return mode === "drop"
+      ? "Repas terminé. Ce qui n'était pas coché sort de la liste."
+      : "Repas terminé. La liste de courses reste telle quelle.";
+  }
+  const locking = state === "En courses";
+  const wasLock = !!cj(`!!(${slotJs(k)}&&${slotJs(k)}.lock)`);
   let restart = false;
   if (locking && !wasLock) {
     if (mealHadPurchases(k)) {
@@ -142,9 +160,8 @@ async function writeMealStatus(k, state) {
   }
   const leaving = !locking && wasLock ? slotIngredients(k) : null;
   cev(`(()=>{const s=${slotJs(k)};if(!s)return;
-    s.mealState=${JSON.stringify(state)};
-    s.keep=${state !== "Proposé"};
-    s.lock=${locking};
+    if(typeof cmSetMealStatus==="function")cmSetMealStatus(s,${JSON.stringify(state)});
+    else{s.mealState=${JSON.stringify(state)};s.keep=${state !== "Proposé"};s.lock=${locking};delete s.shopBought;}
     if(${locking && !wasLock}){
       if(${restart})s.freshShopKey="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
       else delete s.freshShopKey;
@@ -159,8 +176,6 @@ async function writeMealStatus(k, state) {
     if (n.kept) bits.push(n.kept + " déjà coché" + (n.kept > 1 ? "s" : "") + " ou partagé" + (n.kept > 1 ? "s" : "") + " " + (n.kept > 1 ? "restent" : "reste"));
     msg = bits.length ? "Retiré des courses : " + bits.join(". ") + "." : "Retiré des courses.";
   } else if (state === "En courses") msg = restart ? "Nouvelle préparation : ingrédients à acheter." : "Ajouté aux courses : les achats existants sont conservés.";
-  else if (state === "Courses faites") msg = "Courses faites : ces ingrédients sont comptés comme achetés.";
-  else if (state === "Terminé") msg = "Repas terminé.";
   else if (state === "Gardé") msg = "Gardé : la proposition de semaine ne le changera plus.";
   else if (state === "Proposé") msg = "Ce repas pourra de nouveau changer.";
   shopIncludeWeek();
@@ -179,7 +194,7 @@ function mealPortionFactor(slot) {
 }
 function mealState(s) { return s && MEAL_STATES.includes(s.mealState) ? s.mealState : s && s.lock ? "En courses" : s && s.keep ? "Gardé" : "Proposé"; }
 function mealBadgeClass(st) { return ({"Proposé":"proposed","Gardé":"saved","En courses":"shopping","Courses faites":"purchased","Terminé":"completed"})[st] || "proposed"; }
-function mealBadgeLabel(st) { return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Courses faites","Terminé":"⚑ Terminé"})[st] || "Proposé"; }
+function mealBadgeLabel(st) { return ({"Proposé":"👨‍🍳 Proposé","Gardé":"✓ Gardé","En courses":"🛒 En courses","Courses faites":"🧺 Acheté","Terminé":"⚑ Terminé"})[st] || "Proposé"; }
 const RDAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 function weekSlots(wk) {
   cev(`curWeek=${JSON.stringify(wk)}`);
@@ -203,7 +218,7 @@ VIEWS.repas = function () {
     <div class="btns" style="margin-top:10px"><button class="btn primary" data-act="rPropose" style="flex:1">✨ Proposer ma semaine</button><button class="btn" data-act="rPrefs" aria-label="Réglages de la proposition">⚙️ Réglages</button></div>
     <details class="r-legend-fold"><summary>États des repas</summary>
     <div class="r-legend" aria-label="Légende des états des repas">
-      ${MEAL_STATES.map(st=>`<span class="r-legend-item"><i class="r-meal-badge ${mealBadgeClass(st)}">${mealBadgeLabel(st)}</i><small>${({"Proposé":"À valider","Gardé":"Confirmé","En courses":"À acheter","Courses faites":"Achetés","Terminé":"Réalisé"})[st]}</small></span>`).join("")}
+      ${MEAL_STATES.map(st=>`<span class="r-legend-item"><i class="r-meal-badge ${mealBadgeClass(st)}">${mealBadgeLabel(st)}</i><small>${({"Proposé":"À valider","Gardé":"Confirmé","En courses":"À acheter","Courses faites":"Coché au caddie","Terminé":"Cuisiné"})[st]}</small></span>`).join("")}
     </div></details>`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(rWeek, i), dn = RDAYS[i];
@@ -255,6 +270,20 @@ function rPrefsSheet() {
       <div class="sheet-sticky btns"><button class="btn primary block" type="submit">Enregistrer</button></div>
     </form>`, { veg: p.veg, fish: p.fish });
 }
+// Depuis l'accueil : le plat affiché (ce midi, ou ce soir après 15 h) ouvre sa fiche.
+function openHomeMeal(day, slot) {
+  if (!day || (slot !== "midi" && slot !== "soir")) return;
+  if (mode !== "cloud") { mealSheet(day, slot); return; }
+  const open = () => {
+    rWeek = mondayOf(day);
+    mealSlotSheet(RDAYS[isoDay(day) - 1] + "|" + slot);
+  };
+  carnetBoot();
+  if (CK.ready) { open(); return; }
+  if (CK.err) { toast(CK.err); return; }
+  toast("Ouverture du repas…");
+  CK.waiters.push(() => { if (CK.ready) open(); });
+}
 function mealSlotSheet(k) {
   cev(`curWeek=${JSON.stringify(rWeek)}`);
   const x = weekSlots(rWeek)[k], s = x.s, [dn, m] = k.split("|"), day = addDays(rWeek, RDAYS.indexOf(dn));
@@ -276,7 +305,9 @@ function mealSlotSheet(k) {
             <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rFav" data-v="${esc(k)}" aria-pressed="${favorite}">${favorite ? "★ Favori" : "☆ Favori"}</button><button class="btn meal-cook-launch" data-act="rCook" data-v="${esc(k)}">👨‍🍳 Cuisiner pas à pas</button></div>
           </div>
         </div>
-        <div class="meal-status" role="group" aria-label="État du repas">${MEAL_STATES.map(st => `<button type="button" class="meal-status-btn${mealState(s)===st ? " is-on" : ""}" data-act="rState" data-v="${esc(k)}" data-state="${esc(st)}" aria-pressed="${mealState(s)===st}">${esc(st)}</button>`).join("")}</div>
+        <div class="meal-status" role="group" aria-label="État du repas">${MEAL_CHOICES.map(st => `<button type="button" class="meal-status-btn${mealState(s)===st ? " is-on" : ""}" data-act="rState" data-v="${esc(k)}" data-state="${esc(st)}" aria-pressed="${mealState(s)===st}">${esc(st)}</button>`).join("")}</div>
+        ${mealState(s)==="Courses faites" ? `<p class="meal-bought">Acheté : ses ingrédients sont comptés comme achetés. Un ingrédient partagé reste pour l'autre repas.</p>` : ""}
+        ${mealState(s)==="En courses" ? `<button type="button" class="btn meal-bought-btn" data-act="rBought" data-v="${esc(k)}">Déjà acheté pour ce repas</button>` : ""}
         <p class="muted small meal-status-hint">${MEAL_HINT[mealState(s)] || ""}</p>
       </div>
       <div class="meal-section-card meal-ingredients-card"><h3>🛒 Ingrédients et courses</h3><div class="meal-ingredient-controls"><div class="meal-persons"><span>👥 Personnes</span><div class="meal-stepper"><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="-1" aria-label="Une personne de moins">−</button><strong>${s.n || 4}</strong><button class="icon-btn" data-act="rServ" data-v="${esc(k)}" data-d="1" aria-label="Une personne de plus">+</button></div></div>
@@ -572,7 +603,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rPortion": case "rPortionCustom": {
@@ -680,8 +711,9 @@ document.addEventListener("click", async e => {
       else cev(`(()=>{const s=W()[${JSON.stringify(k)}];if(s)s[${JSON.stringify(role)}]=${JSON.stringify(v)};})()`);
       carnetSave(); mealSlotSheet(k); break;
     }
-    case "rState": {
-      const msg = await writeMealStatus(v, b.dataset.state);
+    case "rState":
+    case "rBought": {
+      const msg = await writeMealStatus(v, act === "rBought" ? "Courses faites" : b.dataset.state);
       if (msg) { carnetSave(msg); mealSlotSheet(v); }
       else mealSlotSheet(v);
       break;

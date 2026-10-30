@@ -494,7 +494,7 @@ document.addEventListener("click",e=>{
   else if(a==="cmToggleCourses"){
     const k=b.dataset.k,sl=W()[k];
     if(sl&&sl.id===recSheetId&&!isPast(k)){
-      if(["Courses faites","Terminé"].includes(cmMealStatus(sl))){toast("Ce repas est déjà finalisé : ses achats sont conservés.");return;}
+      if(cmShopBought(sl)){toast("Ce repas est déjà acheté : ses achats sont conservés.");return;}
       const next=sl.lock?"Gardé":"En courses";
       if(next==="En courses"){
         // V7: explicit choice only when an earlier purchase covers ingredients.
@@ -522,16 +522,9 @@ document.addEventListener("click",e=>{
       toast(next==="En courses"?"Repas envoyé aux courses":"Repas retiré des courses");
     }
   }
-  else if(a==="cmMealState"){
-    const k=b.dataset.k,state=b.dataset.state,sl=W()[k];
-    if(sl&&!isPast(k)&&CM_MEAL_STATES.includes(state)){
-      cmSetMealStatus(sl,state);if(state==="En courses")cmEnsureShoppingDay(k);render();saveMenu();
-      if(!$("#recSheet").hidden){lastRecHtml="";renderRecSheet();}
-      if(!$("#slotSheet").hidden)renderSlotSheet();
-      toast("État du repas : "+state);
-    }
-  }
-  else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(["Courses faites","Terminé"].includes(cmMealStatus(s))){toast("Repas déjà finalisé");}else if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
+  else if(a==="cmMealState"){cmApplyMealState(b.dataset.k,b.dataset.state);return;}
+  else if(a==="cmBought"){cmApplyMealState(b.dataset.k,"Courses faites");return;}
+  else if(a==="shopLock"){const s=((menu.weeks||{})[b.dataset.w]||{})[b.dataset.k];if(s){if(cmShopBought(s)){toast("Repas déjà acheté");}else if(s.lock)lockPreview([{w:b.dataset.w,k:b.dataset.k}],true);else lockPreview([{w:b.dataset.w,k:b.dataset.k}]);}}
   else if(a==="shopSwap"&&!b.dataset.go&&mealBought(b.dataset.w,b.dataset.k)){bumpCtx={w:b.dataset.w,k:b.dataset.k};const s=menu.weeks[bumpCtx.w][bumpCtx.k];
     $("#bumpTxt").textContent=`« ${recipes[s.id].name} » (${slotLabel(bumpCtx.k)}) : ses ingrédients ont déjà été achetés. Que voulez-vous en faire ?`;$("#bumpSheet").hidden=false;}
   else if(a==="bumpClose"){$("#bumpSheet").hidden=true;bumpCtx=null;}
@@ -598,7 +591,7 @@ document.addEventListener("click",e=>{
   else if(a==="wStockL"){const w=(menu.wines||[]).find(x=>x.id===b.dataset.id);if(w){w.stock=Math.max(0,(w.stock||0)+Number(b.dataset.d));saveMenu();renderWines();if(!w.stock&&b.dataset.d==="-1")toast("Plus de bouteille de ce vin en cave");}}
   else if(a==="closeWines"){$("#winesSheet").hidden=true;}
   else if(a==="wcell"){const k=b.dataset.k;slotK=k;slotFree=null;if(!W()[k]&&!isPast(k)){openPick(k,"main",true);return;}renderSlotSheet();const panel=$("#slotSheet");panel.hidden=false;panel.querySelector(".sheet-in").scrollTop=0;const planned=W()[k];if(planned&&planned.id&&recipes[planned.id]){$("#slotSheet").hidden=true;openRecSheet(planned.id,k);}}
-  else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){$("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
+  else if(a==="slotValidate"){const k=b.dataset.k,s=W()[k];if(s){if(cmShopBought(s)){toast("Ce repas est déjà acheté : ses achats sont conservés.");return;} $("#slotSheet").hidden=true;lockPreview([{w:curWeek,k}],!!s.lock);}}
   else if(a==="weekMode"){LS.set("cm_wmode",b.dataset.v);render();}
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
   else if(a==="weekValidate"){const t=weekToValidate();if(t.length)lockPreview(t);}

@@ -455,29 +455,12 @@ document.addEventListener("click",e=>{
     const result=[];
     for(const day of selectedShopDates()) for(const [meal] of MEALS){
       const slot=day.wk[slotKey(day.dn,meal)];
-      if(!slot||!slot.lock||!recipes[slot.id]||["Courses faites","Terminé"].includes(slot.mealState))continue;
-      let keys=[];
-      if(Array.isArray(slot.ingCustom)){
-        for(const ing of slot.ingCustom){
-          if(!ing.n||(slot.noIng||[]).includes(ing.key))continue;
-          const match=String(customIngredientQuantity(ing.qt,slot)).trim().match(/^([\d.,\/ ]+)\s*(.*)$/);
-          const unit=match?match[2].trim():"";
-          keys.push(norm(ing.n)+"|"+toBase(match?match[1].trim():"",unit)[1]);
-        }
-      }else{
-        for(const id of [slot.id,slot.entree,slot.dessert].filter(Boolean)){
-          for(const ing of (recipes[id]?.ing||[])){
-            if(!ing.n)continue;
-            const key=norm(ing.n)+"|"+toBase(ing.q,ing.u)[1];
-            if(!(slot.noIng||[]).includes(key))keys.push(key);
-          }
-        }
-      }
-      keys=[...new Set(keys)];
-      if(!keys.length)continue; // Never automatically validate an empty recipe.
+      if(!slot||!slot.lock||!recipes[slot.id]||slot.mealState==="Courses faites"||slot.shopBought)continue;
+      const lines=typeof cmMealLines==="function"?cmMealLines(slot):[];
+      if(!lines.length)continue;
       const id=ymd(mondayOf(day.d))+"|"+slotKey(day.dn,meal);
       result.push({id,week:ymd(mondayOf(day.d)),slot:slotKey(day.dn,meal),name:recipes[slot.id].name,
-        complete:keys.every(key=>!!(menu.checked||{})[key]||!!(menu.have||{})[key])});
+        complete:lines.every(line=>cmLineInCart(line))});
     }
     return result;
   }
@@ -490,29 +473,31 @@ document.addEventListener("click",e=>{
       const split=id.indexOf("|");if(split<0)continue;
       const week=id.slice(0,split),key=id.slice(split+1);
       const slot=(menu.weeks||{})[week]?.[key];
-      if(!slot||!slot.lock||!recipes[slot.id]||["Courses faites","Terminé"].includes(slot.mealState))continue;
-      slot.mealState="Courses faites";slot.keep=true;slot.lock=true;changed++;
+      if(!slot||!slot.lock||!recipes[slot.id]||slot.mealState==="Courses faites"||slot.shopBought)continue;
+      if(typeof cmMarkBought==="function")cmMarkBought(slot);
+      else{slot.mealState="Courses faites";slot.keep=true;slot.lock=true;slot.shopBought=true;}
+      changed++;
     }
     return changed;
   };
   function offer(completed){
     const ids=completed.map(x=>x.id);
-    const names=completed.map(x=>"• "+x.name).join("\n");
-    const msg=completed.length===1?"Courses terminées pour ce repas ?\n\n"+names+"\n\nValider le statut « Courses faites » ?":
-      "Courses terminées pour ces "+completed.length+" repas ?\n\n"+names+"\n\nValider le statut « Courses faites » pour tous ?";
-    // The Carnet is a hidden iframe inside Maisonnée. Its parent must show the confirmation.
-    if(window.parent!==window){window.parent.postMessage({type:"maisonnee-meals-shopping-complete",ids,msg},location.origin);return;}
-    if(window.confirm(msg))window.maisonneeConfirmShoppingMeals(ids);
+    window.maisonneeConfirmShoppingMeals(ids);
+    const msg=completed.length===1?completed[0].name+" : ingrédients achetés.":completed.map(x=>x.name).join(", ")+" : ingrédients achetés.";
+    if(window.parent!==window){window.parent.postMessage({type:"maisonnee-meals-bought",msg},location.origin);return;}
+    if(typeof toast==="function")toast(msg);
   }
   window.maisonneeConfirmShoppingMeals=function(ids){
     let changed=0;
     for(const x of eligible()){
       if(!ids.includes(x.id)||!x.complete)continue;
       const slot=(menu.weeks||{})[x.week]?.[x.slot];
-      if(!slot||["Courses faites","Terminé"].includes(slot.mealState))continue;
-      slot.mealState="Courses faites";slot.keep=true;slot.lock=true;changed++;
+      if(!slot||slot.mealState==="Courses faites"||slot.shopBought)continue;
+      if(typeof cmMarkBought==="function")cmMarkBought(slot);
+      else{slot.shopBought=true;slot.keep=true;slot.lock=true;if(slot.mealState!=="Terminé")slot.mealState="Courses faites";}
+      changed++;
     }
-    if(changed){render();saveMenu();toast(changed+" repas : courses faites");}
+    if(changed){render();saveMenu();}
     return changed;
   };
   // Observe only explicit check actions, never day navigation or meal display.
