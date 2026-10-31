@@ -8,6 +8,8 @@
 //     repas du soir, anniversaires du jour, documents qui expirent.
 //  4. Anniversaires : la veille à 19 h (et dans le résumé du matin le jour même).
 //  5. Ajouts aux courses : un autre membre a ajouté un article dans les trois dernières minutes.
+//  5b. Nouveaux événements Maisonnée créés par un autre membre dans les trois dernières minutes.
+//      Les modifications et les retraits se voient tout de suite quand l'application est ouverte.
 //  6. Toutes les 5 minutes : les tâches des foyers qui l'ont demandé sont recopiées dans Google Agenda
 //     (households.google_tasks, script supabase/migrations/0012_taches_google.sql ; secrets GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).
 // Chaque personne choisit ce qu'elle reçoit (table maison_push_prefs, réglée depuis la cloche).
@@ -27,6 +29,7 @@ interface MaisonCalApi {
   digestClaim(day: string, userId: string): string;
   birthdayEveClaim(id: string, day: string, userId: string): string;
   shoppingClaim(ids: string, userId: string): string;
+  agendaClaim(eventId: string, userId: string): string;
 }
 const MaisonCal = (globalThis as unknown as { MaisonCal: MaisonCalApi }).MaisonCal;
 const { addDays, diffDays, nextDue, startsBetween } = MaisonCal;
@@ -40,8 +43,8 @@ const DAY = 86400000;
 const MAX_DELAY = 40320; // 4 semaines, en minutes
 const zone = "Europe/Paris";
 
-type Prefs = { messages: boolean; reminders: boolean; digest: boolean; digest_at: string; birthdays: boolean; shopping: boolean };
-const DEFAULT_PREFS: Prefs = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true };
+type Prefs = { messages: boolean; reminders: boolean; digest: boolean; digest_at: string; birthdays: boolean; shopping: boolean; agenda: boolean };
+const DEFAULT_PREFS: Prefs = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true };
 
 /* ---------- dates à l'heure de Paris ---------- */
 function parisDateParts(d: Date) {
@@ -249,6 +252,19 @@ Deno.serve(async req => {
       if (prefs(m.user_id).shopping === false) continue;
       await pushOnce(MaisonCal.shoppingClaim(ids, m.user_id), m.user_id, {
         title: "🛒 Courses", body, tag: "shop-" + g.by, url: "./?v=courses"
+      });
+    }
+  }
+
+  /* ===== 2c. Nouveaux événements Maisonnée (les modifications se voient l'application ouverte) ===== */
+  const { data: newEvents } = await supabase.from("events").select("id,household_id,title,created_by,day,start_time").gte("created_at", new Date(now - 3 * MINUTE).toISOString()).limit(80);
+  for (const ev of newEvents || []) {
+    const title = String(ev.title || "Événement").trim();
+    const when = ev.day ? `${ev.day}${ev.start_time ? " · " + String(ev.start_time).slice(0, 5) : ""}` : "";
+    for (const m of (byHousehold.get(ev.household_id) || []).filter(x => x.user_id !== ev.created_by)) {
+      if (prefs(m.user_id).agenda === false) continue;
+      await pushOnce(MaisonCal.agendaClaim(ev.id, m.user_id), m.user_id, {
+        title: "📅 Agenda", body: when ? `${title} — ${when}` : title, tag: "agenda-" + ev.id, url: "./?v=agenda"
       });
     }
   }

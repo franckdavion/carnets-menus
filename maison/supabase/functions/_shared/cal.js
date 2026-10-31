@@ -94,10 +94,13 @@
   function shoppingClaim(ids, userId) {
     return "shop:" + ids + ":" + userId;
   }
+  function agendaClaim(eventId, userId) {
+    return "agenda:" + eventId + ":" + userId;
+  }
 
   const api = {
     addDays, diffDays, isoDay, repeatRule, recurrenceDate, startsBetween, nextDue,
-    reminderClaim, messageClaim, digestClaim, birthdayEveClaim, shoppingClaim
+    reminderClaim, messageClaim, digestClaim, birthdayEveClaim, shoppingClaim, agendaClaim
   };
   root.MaisonCal = api;
   if (typeof module !== "undefined" && module && module.exports) module.exports = api;

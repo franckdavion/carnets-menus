@@ -80,20 +80,27 @@ async function showPushSettings() {
     try { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, ko) => setTimeout(ko, 1500))]); current = await reg.pushManager.getSubscription(); } catch (_) {}
   }
   // what this person wants to receive (shared by all their devices, read by the server)
-  let pr = { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true }, prOk = false;
-  if (mode === "cloud" && user && sb) { try { const { data, error } = await sb.from("maison_push_prefs").select("prefs").eq("user_id", user.id).maybeSingle(); if (!error) { prOk = true; pr = { ...pr, ...((data && data.prefs) || {}) }; } } catch (_) {} }
-  const sw = (k, t, d) => `<label class="switch" style="margin:0"><span><strong>${t}</strong><br><span class="muted small">${d}</span></span><input type="checkbox" data-pref="${k}" ${pr[k] ? "checked" : ""} ${prOk ? "" : "disabled"}></label>`;
+  let pr = mzNoticeDefaults(), prOk = false;
+  if (mode === "cloud" && user && sb) { try { const { data, error } = await sb.from("maison_push_prefs").select("prefs").eq("user_id", user.id).maybeSingle(); if (!error) { prOk = true; pr = { ...mzNoticeDefaults(), ...((data && data.prefs) || {}) }; mzNoticeSaveLocal(pr); } } catch (_) {} }
+  const sw = (k, t, d, on) => `<label class="switch" style="margin:0"><span><strong>${t}</strong><br><span class="muted small">${d}</span></span><input type="checkbox" data-pref="${k}" ${pr[k] !== false && pr[k] !== "false" ? "checked" : ""} ${on ? "" : "disabled"}></label>`;
   openSheet("Notifications", `<div style="display:grid;gap:14px">
     <p>${esc(status)}</p>
     <p class="muted small">Chaque téléphone doit activer les notifications séparément. Ces choix valent pour tous vos appareils.</p>
     <div class="card" style="display:grid;gap:14px">
-      ${sw("messages", "Messages", "un nouveau message du foyer")}
-      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre. Écran allumé : tout de suite. iPhone verrouillé : dans la minute, si les notifications sont activées sur cet appareil.")}
-      ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)")}
-      ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent")}
+      <p style="margin:0"><strong>Ce qui m'arrive</strong></p>
+      ${sw("messages", "Messages", "un nouveau message du foyer", prOk)}
+      ${sw("shopping", "Ajouts aux courses", "un article ajouté par un autre membre. Écran allumé : tout de suite. iPhone verrouillé : dans la minute, si les notifications sont activées sur cet appareil.", prOk)}
+      ${sw("agenda", "Agenda du foyer", "un événement ajouté, modifié ou retiré par un autre membre. Écran allumé : tout de suite. iPhone verrouillé : les nouveaux événements, dans la minute.", prOk)}
+      ${sw("reminders", "Rappels de rendez-vous", "rendez-vous Maisonnée, même répétés (ceux de Google sont rappelés par Google Agenda)", prOk)}
+      ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent", prOk)}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
-      ${sw("birthdays", "Anniversaires", "la veille à 19 h, et le jour même dans le résumé")}
-      ${prOk ? "" : `<p class="muted small" style="margin:0">Pour choisir, collez d'abord le script supabase/migrations/0011_push_prefs.sql dans Supabase.</p>`}
+      ${sw("birthdays", "Anniversaires", "la veille à 19 h, et le jour même dans le résumé", prOk)}
+      <p style="margin:6px 0 0"><strong>Après mes actions</strong></p>
+      <p class="muted small" style="margin:0">La fenêtre qui confirme ce que vous venez de faire. L'enregistrement a lieu dans tous les cas. Un échec s'affiche toujours.</p>
+      ${sw("confirm_agenda", "Agenda", "événement ajouté, modifié ou retiré, y compris dans Google Agenda", true)}
+      ${sw("confirm_courses", "Courses et repas", "liste de courses, ingrédients achetés, repas retiré des courses", true)}
+      ${sw("confirm_tasks", "Tâches", "tâche ajoutée, faite ou supprimée", true)}
+      ${prOk ? "" : `<p class="muted small" style="margin:0">Les alertes qui arrivent se règlent une fois le compte relié. Les confirmations de vos actions se règlent déjà sur cet appareil.</p>`}
     </div>
     <button class="btn primary block" type="button" data-act="pushEnable" ${mode !== "cloud" || !pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC ? "disabled" : ""}>${current ? "Réactiver cet appareil" : "Activer sur cet iPhone"}</button>
     ${current ? '<button class="btn block" type="button" data-act="pushDisable">Désactiver sur cet appareil</button>' : ""}
@@ -162,6 +169,7 @@ function saveLocal() {
 
 async function add(key, row) {
   row = { id: uuid(), household_id: S.hh.id, ...row };
+  if (key === "events") mzMarkOwnWrite(row.id);
   S[key].push(row); saveLocal(); render();
   if (mode === "cloud") {
     const { error } = await sb.from(TABLES[key]).insert(row);
@@ -181,6 +189,7 @@ async function upsert(key, row) {
   return true;
 }
 async function patch(key, id, p) {
+  if (key === "events") mzMarkOwnWrite(id);
   const r = S[key].find(x => x.id === id); if (!r) return false;
   const before = { ...r }; Object.assign(r, p); saveLocal(); render();
   if (mode === "cloud") {
@@ -190,6 +199,7 @@ async function patch(key, id, p) {
   return true;
 }
 async function remove(key, id) {
+  if (key === "events") mzMarkOwnWrite(id);
   const r = S[key].find(x => x.id === id); if (!r) return;
   S[key] = S[key].filter(x => x.id !== id); saveLocal(); render();
   if (mode === "cloud") {
@@ -343,7 +353,7 @@ function mzNoticeShopInsert(row) {
   clearTimeout(mzIncomingShopTimer);
   mzIncomingShopTimer = setTimeout(() => {
     const items = [...mzIncomingShop.values()]; mzIncomingShop.clear();
-    if (!items.length || screen !== 'app') return;
+    if (!items.length || screen !== 'app' || mzNoticePrefs().shopping === false) return;
     const names = items.map(x => x.name);
     const notice = mzStoreNotice(items);
     const msg = names.length === 1 ? 'Nouvel article ajouté : ' + names[0]
@@ -361,6 +371,7 @@ function listen(hid) {
     if (key === "photos" && !S.v4) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
       if (key === "shop" && p.eventType === "INSERT") mzNoticeShopInsert(p.new);
+      if (key === "events") mzNoticeAgenda(p);
       if (p.eventType === "DELETE") { S[key] = S[key].filter(x => x.id !== p.old.id); }
       else {
         const row = p.new; if (row.household_id !== hid) return;
@@ -429,7 +440,7 @@ async function enterCloud() {
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
-  listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll();
+  listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll(); mzLoadNoticePrefs();
   loadRecipes().then(() => softRender());
 }
 
@@ -472,7 +483,7 @@ async function doneTask(id, by = S.me) {
   await patch("tasks", id, p);
   const nm = member(p.assignee);
   const msg = nd ? `C'est fait. Prochaine fois : ${dayLabel(nd).toLowerCase().replace(/\.$/, "")}${p.assignee && p.assignee !== t.assignee && nm ? ", au tour de " + nm.name : ""}.` : "C'est fait.";
-  toast(msg, "Annuler", () => undoLog(row.id, t));
+  toast(msg, "Annuler", () => undoLog(row.id, t), null, "tasks");
 }
 async function undoLog(logId, snapshot) {
   const l = S.log.find(x => x.id === logId); if (!l) return;
@@ -572,7 +583,7 @@ async function menuToShopping(wk) {
   await removeMany("shop", old);
   await addMany("shop", [...agg.values()].map(x => ({ name: x.name, qty: fmtQty(x.q, x.u), aisle: AISLES.includes(x.aisle) ? x.aisle : "Divers", done: false, source: src, added_by: S.me, created_at: new Date().toISOString() })));
   view = "courses"; render();
-  toast(`${agg.size} ingrédients ajoutés aux courses.`);
+  toast(`${agg.size} ingrédients ajoutés aux courses.`, null, null, null, "courses");
 }
 
 /* ---------- messages ---------- */
@@ -913,7 +924,58 @@ function mzToastHint(node) {
   if (node.closest(".field")) return ".field";
   return "";
 }
-function toast(msg, label, fn, anchor) {
+const MZ_NOTICE_KEY = "mz_notice_choices";
+function mzNoticeDefaults() {
+  return { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true, confirm_agenda: true, confirm_courses: true, confirm_tasks: true };
+}
+function mzNoticePrefs() {
+  try { return { ...mzNoticeDefaults(), ...JSON.parse(localStorage.getItem(MZ_NOTICE_KEY) || "{}") }; }
+  catch (_) { return mzNoticeDefaults(); }
+}
+function mzNoticeSaveLocal(pr) {
+  try { localStorage.setItem(MZ_NOTICE_KEY, JSON.stringify(pr)); } catch (_) {}
+}
+async function mzLoadNoticePrefs() {
+  if (mode !== "cloud" || !user || !sb) return;
+  try {
+    const { data, error } = await sb.from("maison_push_prefs").select("prefs").eq("user_id", user.id).maybeSingle();
+    if (!error && data && data.prefs) mzNoticeSaveLocal({ ...mzNoticeDefaults(), ...data.prefs });
+  } catch (_) {}
+}
+const mzOwnWrites = new Map();
+function mzMarkOwnWrite(id) {
+  if (!id) return;
+  mzOwnWrites.set(id, Date.now());
+  setTimeout(() => { if (Date.now() - (mzOwnWrites.get(id) || 0) >= 4000) mzOwnWrites.delete(id); }, 5000);
+}
+function mzEventSig(e) {
+  if (!e) return "";
+  return [e.title, e.day, e.end_day, e.start_time, e.end_time, e.place, e.notes, e.repeat, ...(e.members || [])].join("|");
+}
+function mzNoticeAgenda(p) {
+  if (mzNoticePrefs().agenda === false || screen !== "app") return;
+  const id = (p.new && p.new.id) || (p.old && p.old.id);
+  if (!id || (mzOwnWrites.has(id) && Date.now() - mzOwnWrites.get(id) < 5000)) return;
+  const before = (S.events || []).find(x => x.id === id);
+  let msg = "";
+  if (p.eventType === "INSERT") msg = "Agenda : " + (p.new.title || "un événement") + " a été ajouté.";
+  else if (p.eventType === "DELETE") msg = "Agenda : " + ((before && before.title) || "un événement") + " a été retiré.";
+  else if (p.eventType === "UPDATE") {
+    if (before && mzEventSig(before) === mzEventSig(p.new)) return;
+    msg = "Agenda : " + ((p.new && p.new.title) || "un événement") + " a été modifié.";
+  }
+  if (msg) toast(msg);
+}
+function mzToastAllowed(kind, msg) {
+  if (!kind) return true;
+  const message = String(msg || "");
+  if (/impossible|erreur|refus|introuvable|pas de connexion|échou|non enregistrée|n'a pas été enregistrée/i.test(message)) return true;
+  const key = { agenda: "confirm_agenda", courses: "confirm_courses", tasks: "confirm_tasks" }[kind];
+  if (!key) return true;
+  return mzNoticePrefs()[key] !== false;
+}
+function toast(msg, label, fn, anchor, kind) {
+  if (!mzToastAllowed(kind, msg)) return;
   let node = anchor && anchor.nodeType === 1 ? anchor : null;
   const active = document.activeElement;
   if (!node && active && active.closest && active !== document.body) node = active;
@@ -1712,8 +1774,8 @@ document.addEventListener("click", async e => {
     case "undo": undoLog(v); break;
     case "newTask": taskSheet(null); break;
     case "editTask": taskSheet(S.tasks.find(t => t.id === v)); break;
-    case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t)); } break;
-    case "idea": { const x = TASK_IDEAS[+v]; await add("tasks", { title: x.title, room: x.room, assignee: null, rotate: !!x.rotate, freq: x.freq, every_n: x.every_n || 1, weekdays: x.weekdays || [], next_due: today(), effort: x.effort, notes: "", archived: false, created_by: user ? user.id : null }); toast(`« ${x.title} » ajoutée.`); break; }
+    case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t), null, "tasks"); } break;
+    case "idea": { const x = TASK_IDEAS[+v]; await add("tasks", { title: x.title, room: x.room, assignee: null, rotate: !!x.rotate, freq: x.freq, every_n: x.every_n || 1, weekdays: x.weekdays || [], next_due: today(), effort: x.effort, notes: "", archived: false, created_by: user ? user.id : null }); toast(`« ${x.title} » ajoutée.`, null, null, null, "tasks"); break; }
     case "newEvent": eventSheet(null); break;
     case "addReminder": {
       const target = $("#appointmentReminderRows");
@@ -1729,7 +1791,7 @@ document.addEventListener("click", async e => {
         if (!(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
         const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "DELETE", headers: { Authorization: "Bearer " + G.tok.t } });
         if (!r.ok && r.status !== 410) throw new Error("Erreur Google (" + r.status + ")");
-        G.ev.items = G.ev.items.filter(x => x.id !== g.id); closeSheet(); render(); toast("Supprimé de Google Agenda."); gFetch();
+        G.ev.items = G.ev.items.filter(x => x.id !== g.id); closeSheet(); render(); toast("Supprimé de Google Agenda.", null, null, null, "agenda"); gFetch();
       } catch (err) { toast("Suppression impossible : " + (err.message || "réseau ?")); }
       break;
     }
@@ -1747,7 +1809,7 @@ document.addEventListener("click", async e => {
       break;
     }
     case "editEvent": eventSheet(S.events.find(x => x.id === v)); break;
-    case "delEvent": closeSheet(); { const ev = S.events.find(x => x.id === v); await remove("events", v); if (ev) toast("Événement supprimé.", "Annuler", () => add("events", ev)); } break;
+    case "delEvent": closeSheet(); { const ev = S.events.find(x => x.id === v); await remove("events", v); if (ev) toast("Événement supprimé.", "Annuler", () => add("events", ev), null, "agenda"); } break;
     case "weekA": weekA = addDays(weekA, +v); render(); break;
     case "weekR": weekR = addDays(weekR, +v); render(); break;
     case "repasTab": repasTab = v; render(); break;
@@ -1815,9 +1877,12 @@ document.addEventListener("change", e => {
   if (e.target.matches('[name="reminder_mode"]')) reminderVisibility(e.target.closest("form"));
 });
 document.addEventListener("change", async e => {
-  if (!e.target.matches("[data-pref]") || mode !== "cloud" || !user) return;
-  const box = e.target.closest(".card"), pr = {};
-  box.querySelectorAll("[data-pref]").forEach(el => { pr[el.dataset.pref] = el.type === "checkbox" ? el.checked : el.value; });
+  if (!e.target.matches("[data-pref]") || e.target.disabled) return;
+  const box = e.target.closest("dialog") || e.target.closest(".card");
+  const pr = mzNoticePrefs();
+  if (box) box.querySelectorAll("[data-pref]").forEach(el => { if (!el.disabled) pr[el.dataset.pref] = el.type === "checkbox" ? el.checked : el.value; });
+  mzNoticeSaveLocal(pr);
+  if (mode !== "cloud" || !user || !sb) { toast("Réglage enregistré sur cet appareil."); return; }
   const { error } = await sb.from("maison_push_prefs").upsert({ user_id: user.id, prefs: pr, updated_at: new Date().toISOString() });
   toast(error ? "Réglage non enregistré (réseau ?)." : "Réglage enregistré.");
 });
@@ -1841,7 +1906,7 @@ document.addEventListener("submit", async e => {
       if (freq !== "every") row.every_n = 1;
       const id = sheetCtx && sheetCtx.id; closeSheet();
       if (id) await patch("tasks", id, row);
-      else { await add("tasks", { ...row, archived: false, created_by: user ? user.id : null, created_at: new Date().toISOString() }); toast("Tâche ajoutée."); }
+      else { await add("tasks", { ...row, archived: false, created_by: user ? user.id : null, created_at: new Date().toISOString() }); toast("Tâche ajoutée.", null, null, null, "tasks"); }
       break;
     }
     case "remOnly": {
@@ -1857,12 +1922,12 @@ document.addEventListener("submit", async e => {
           const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(ctx.g.cal) + "/events/" + encodeURIComponent(ctx.g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
           if (!r.ok) throw new Error(r.status === 403 ? "Google refuse : cet agenda est en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
           for (const x of G.ev.items) if (x.id === ctx.g.id) x.rem = body.reminders;
-          closeSheet(); toast("Rappels enregistrés dans Google Agenda."); render();
+          closeSheet(); toast("Rappels enregistrés dans Google Agenda.", null, null, null, "agenda"); render();
         } else {
           const e0 = S.events.find(x => x.id === ctx.id);
           const ok = await patch("events", ctx.id, { reminders: rem, kind: rem.length || (e0 && e0.kind === "appointment") ? "appointment" : "event" });
           if (!ok) throw new Error("vérifie la connexion");
-          closeSheet(); toast(rem.length ? "Rappels enregistrés." : "Plus de rappel pour ce rendez-vous.");
+          closeSheet(); toast(rem.length ? "Rappels enregistrés." : "Plus de rappel pour ce rendez-vous.", null, null, null, "agenda");
         }
       } catch (err) { eventFormFeedback(f, "Rappels non enregistrés : " + (err.message || "réseau ?")); }
       finally { btn.disabled = false; }
@@ -1901,7 +1966,7 @@ document.addEventListener("submit", async e => {
           if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
           const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (!r.ok) throw new Error(r.status === 403 ? "Google refuse la modification : cet agenda est peut-être en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
-          closeSheet(); toast("Modifié dans Google Agenda."); if (typeof gFetch === "function") gFetch();
+          closeSheet(); toast("Modifié dans Google Agenda.", null, null, null, "agenda"); if (typeof gFetch === "function") gFetch();
         } catch (err) { eventFormFeedback(f, "Modification impossible : " + (err.message || "réseau ?")); }
         finally { btn.disabled = false; }
         break;
@@ -1913,7 +1978,7 @@ document.addEventListener("submit", async e => {
           await saveGoogleEvent(destination, { ...row, colorId: chipVal(f, "gcolor") || null });
           closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
-          toast("Rendez-vous enregistré dans Google Agenda.");
+          toast("Rendez-vous enregistré dans Google Agenda.", null, null, null, "agenda");
         } catch (err) { console.error("Enregistrement Google Agenda", err); eventFormFeedback(f, "Enregistrement Google impossible : " + (err?.message || "Erreur inconnue")); }
         finally { btn.disabled = false; }
         break;
@@ -1923,7 +1988,7 @@ document.addEventListener("submit", async e => {
       try {
         const ok = id ? await patch("events", id, row) : !!(await add("events", { ...row, created_by: user ? user.id : null, created_at: new Date().toISOString() }));
         if (!ok) { eventFormFeedback(f, row.kind ? "Le rendez-vous n'a pas été enregistré. Si le message persiste, collez le script supabase/migrations/0007_rappels.sql dans Supabase (colonnes des rappels)." : "L'événement n'a pas été enregistré. Vérifiez la connexion et réessayez."); return; }
-        closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.");
+        closeSheet(); returnToTodayAgenda(); toast(id ? "Événement modifié." : "Événement ajouté.", null, null, null, "agenda");
       } catch (err) { console.error("Enregistrement rendez-vous", err); eventFormFeedback(f, "Échec de l’enregistrement : " + (err?.message || "vérifie la connexion")); }
       finally { btn.disabled = false; }
       break;

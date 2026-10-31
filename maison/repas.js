@@ -69,7 +69,7 @@ function carnetLive() {
     .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
   ckLive = { owner, ch };
 }
-function carnetSave(msg) { cev("saveMenu()"); render(); if (msg) toast(msg); }
+function carnetSave(msg, kind) { cev("saveMenu()"); render(); if (msg) toast(msg, null, null, null, kind); }
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {
   cev(`(()=>{const all=shopDates(),cur=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
@@ -774,7 +774,7 @@ document.addEventListener("click", async e => {
     case "rLockAll": {
       const n = cev(`(()=>{let n=0;for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id]&&!s.lock&&!isPast(k)&&s.mealState!=="Courses faites"&&s.mealState!=="Terminé"){s.lock=true;s.keep=true;s.mealState="En courses";n++;}}return n;})()`);
       shopIncludeWeek();
-      carnetSave(`${n} repas validé${n > 1 ? "s" : ""} : les ingrédients partent dans les courses.`); break;
+      carnetSave(`${n} repas validé${n > 1 ? "s" : ""} : les ingrédients partent dans les courses.`, "courses"); break;
     }
     case "rReroll": {
       const id = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k];const nb=bestFor(k,s&&s.id?[s.id]:[]);if(!nb)return "";W()[k]=Object.assign({},s||{},{id:nb,n:s&&s.n?s.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}return nb;})()`);
@@ -793,7 +793,7 @@ document.addEventListener("click", async e => {
       const msg = await writeMealStatus(v, act === "rBought" ? "Courses faites" : b.dataset.state);
       if (msg) carnetSave();
       mealSlotSheet(v);
-      if (msg) toast(msg, null, null, $("#sheet .meal-status") || b);
+      if (msg) toast(msg, null, null, $("#sheet .meal-status") || b, "courses");
       break;
     }
     case "rQuickIng": {
@@ -814,19 +814,25 @@ document.addEventListener("click", async e => {
           return {n:i.n,qt:i.qt||"",key:norm(i.n)+"|"+u.toLowerCase()+"#"+j};
         });
       })()`);
-      carnetSave(onCourses ? "Ajouté à ce repas et à la liste de courses." : "Ajouté à ce repas.");
+      carnetSave(onCourses ? "Ajouté à ce repas et à la liste de courses." : "Ajouté à ce repas.", "courses");
       mealSlotSheet(v); break;
     }
     case "rLock": {
       const cur = mealState(cj(`${slotJs(v)}`));
       const msg = await writeMealStatus(v, MEAL_LOCK_STATES.includes(cur) ? "Gardé" : "En courses");
-      if (msg) { carnetSave(msg); mealSlotSheet(v); }
+      if (!msg) break;
+      carnetSave();
+      mealSlotSheet(v);
+      toast(msg, null, null, $("#sheet .meal-status"), "courses");
       break;
     }
     case "rKeep": {
       const cur = mealState(cj(`${slotJs(v)}`));
       const msg = await writeMealStatus(v, cur === "Gardé" ? "Proposé" : "Gardé");
-      if (msg) { carnetSave(msg); if (b.closest("#sheet")) mealSlotSheet(v); }
+      if (!msg) break;
+      carnetSave();
+      if (b.closest("#sheet")) mealSlotSheet(v);
+      toast(msg, null, null, $("#sheet .meal-status") || b, "courses");
       break;
     }
     case "rIng": cev(`(()=>{const s=${slotJs(v)};if(!s)return;const k=${JSON.stringify(b.dataset.k)},l=Array.isArray(s.noIng)?s.noIng.slice():[];
@@ -852,7 +858,7 @@ document.addEventListener("click", async e => {
         carnetSave();
         rRemoveContext=null;
         closeSheet();
-        toast(locked ? "Repas retiré. Les ingrédients pas encore achetés sortent de la liste. Ce qui est déjà coché, ou partagé, reste." : "Repas retiré.");
+        toast(locked ? "Repas retiré. Les ingrédients pas encore achetés sortent de la liste. Ce qui est déjà coché, ou partagé, reste." : "Repas retiré.", null, null, null, "courses");
         break;
       }else if(part==="main"){
         const locked = !!(x.s && x.s.lock);
@@ -867,11 +873,11 @@ document.addEventListener("click", async e => {
       }
       const left=weekSlots(rWeek)[v];
       const still=left&&left.s&&(left.name||left.s.entree||left.s.dessert);
-      if(!still){rRemoveContext=null;closeSheet();toast("Repas retiré.");}
+      if(!still){rRemoveContext=null;closeSheet();toast("Repas retiré.", null, null, null, "courses");}
       else rRemoveChooseSheet(v);
       break;
     }
-    case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré."); break;
+    case "rRemove": cev(`delete ${slotJs(v)}`); closeSheet(); carnetSave("Repas retiré.", "courses"); break;
     case "rLeft": rLeftSheet(v); break;
     case "rNote": rNoteSheet(v); break;
     case "rNotePut": {
@@ -886,7 +892,7 @@ document.addEventListener("click", async e => {
       const t = String(b.dataset.t != null ? b.dataset.t : (inp && inp.value.trim()) || "du frigo").slice(0, 80);
       const was = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k]||{},was=!!s.lock;W()[k]=Object.assign({},s,{left:${JSON.stringify(t)},keep:true,n:s.n||menu.people});delete W()[k].id;delete W()[k].lock;delete W()[k].noIng;delete W()[k].note;return was;})()`);
       if (was) shopIncludeWeek();
-      closeSheet(); carnetSave(`🥡 Restes (${t}) : rien à acheter pour ce repas.`); break;
+      closeSheet(); carnetSave(`🥡 Restes (${t}) : rien à acheter pour ce repas.`, "courses"); break;
     }
     case "rNum": {
       const [k, d] = v.split(":"), el = $("#rp-" + k); if (!el || !sheetCtx) break;
@@ -955,7 +961,7 @@ document.addEventListener("submit", e => {
     closeSheet();
     const held = cev(`SLOT_ORDER.filter(k=>W()[k]&&recipes[W()[k].id]&&!isPast(k)&&(W()[k].lock||W()[k].keep)).length`);
     const kept = all && held && !lock ? ` (${held} repas gardés ou déjà dans les courses n'ont pas été changés)` : "";
-    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée : tous les repas sont dans les courses 🛒.` : `${n} repas proposés${kept}. Touchez un repas pour le garder ou l'ajouter aux courses.`);
+    carnetSave(after === before && !all ? "Rien à remplir : toutes les cases sont prises." : lock ? `Semaine proposée : tous les repas sont dans les courses 🛒.` : `${n} repas proposés${kept}. Touchez un repas pour le garder ou l'ajouter aux courses.`, "courses");
   } else {
     const fd = Object.fromEntries(new FormData(f).entries()), days = {};
     for (const d of RDAYS) if (fd["st-" + d]) days[d] = fd["st-" + d];
@@ -992,7 +998,7 @@ document.addEventListener("change", e => {
   const k=el.dataset.mealState, state=el.value;
   if(!MEAL_STATES.includes(state)) return;
   cev(`curWeek=${JSON.stringify(rWeek)}`);
-  writeMealStatus(k, state).then(msg => { if (msg) { carnetSave(msg); mealSlotSheet(k); } else mealSlotSheet(k); });
+  writeMealStatus(k, state).then(msg => { if (msg) carnetSave(); mealSlotSheet(k); if (msg) toast(msg, null, null, $("#sheet .meal-status"), "courses"); else mealSlotSheet(k); });
 });
 
 // Mode cuisine local à Maisonnée : aucun changement de page ni de données Carnet.

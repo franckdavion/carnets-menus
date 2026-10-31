@@ -259,7 +259,7 @@ document.addEventListener("click", async e => {
     case "cxClearNo": cxClearAsk = false; break;
     case "cxClearYes": cclick({ act: "shopClearYes" }); cxClearAsk = false; msg = "Liste vidée."; break;
   }
-  render(); if (msg) toast(msg);
+  render(); if (msg) toast(msg, null, null, null, "courses");
 });
 document.addEventListener("submit", e => {
   const f = e.target.closest("form[data-form=cxAdd]"); if (!f || !CK.ready) return;
@@ -316,7 +316,7 @@ window.addEventListener("message", e => {
   if(e.origin!==location.origin||!CK.frame||e.source!==CK.frame.contentWindow)return;
   const data=e.data;
   if(!data||data.type!=="maisonnee-meals-bought"||!data.msg)return;
-  if(typeof toast==="function")toast(data.msg);
+  if(typeof toast==="function")toast(data.msg, null, null, null, "courses");
   if(typeof softRender==="function")softRender();
 });
 
@@ -336,19 +336,20 @@ window.addEventListener('message', function(event){
   const items=names.map((name,i)=>({id:"live"+Date.now()+"-"+i, name}));
   const msg=names.length===1?"Nouvel article dans la liste : "+names[0]
     :n+" nouveaux articles dans la liste : "+names.slice(0,3).join(", ")+(names.length>3?"…":"");
+  const quiet=typeof mzNoticePrefs==="function" && mzNoticePrefs().shopping===false;
   let notice=null;
-  if(items.length && typeof mzStoreNotice==="function") notice=mzStoreNotice(items);
+  if(!quiet && items.length && typeof mzStoreNotice==="function") notice=mzStoreNotice(items);
   const go=()=>{
     if(notice && typeof mzMarkRead==="function") mzMarkRead(notice.id);
     if(items.length && typeof mzGoToItems==="function") mzGoToItems(items);
   };
-  if(typeof toast==="function") toast(msg, items.length?"Voir":"", items.length?go:null);
+  if(!quiet && typeof toast==="function") toast(msg, items.length?"Voir":"", items.length?go:null);
   try{ if(view==="courses" && typeof softRender==="function") softRender(); }catch(e){}
   if(view==="courses" && items.length){
     window.mzCourseTargets=items.slice();
     setTimeout(()=>{ if(typeof mzFocusCourseItems==="function") mzFocusCourseItems(); }, 180);
   }
-  mzPingCourses(msg);
+  if(!quiet) mzPingCourses(msg);
 });
 
 /* V9.8 : navigation vers les articles reçus, sans toucher au moteur des courses. */
