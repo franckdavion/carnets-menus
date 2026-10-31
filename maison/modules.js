@@ -72,7 +72,7 @@ const DOM_DEFAULT = [
   { name: "Volets étage", zone: "etage", type: "volet", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" }
 ];
 const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
-let domZone = "", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domFormLoading = false;
+let domZone = "", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domFormLoading = false;
 document.addEventListener("click", e => {
   if (e.target.closest('[data-act="go"][data-v="domotique"]')) domZone = "";
 }, true);
@@ -123,12 +123,17 @@ window.domVoletLine = domVoletLine;
 async function domRefreshState(force) {
   if (!domConnected() || mode !== "cloud") return false;
   if (!force && Date.now() - domStateAt < 8000) return false;
+  domStateLoading = true;
+  if (view === "domotique") render();
   try {
     const r = await shellyServer("state");
     domState = r.states || {};
     domStateAt = Date.now();
     return true;
   } catch (_) { return false; }
+  finally {
+    domStateLoading = false;
+  }
 }
 window.domRefreshState = domRefreshState;
 async function shellyServer(action, body) {
@@ -156,11 +161,26 @@ function domLinkLine(x) {
   if (!domConnected()) return "Shelly Cloud n'est pas encore relié";
   if (!x.shelly_id) return "Identifiant Shelly à associer dans les réglages";
   const st = domState[x.id];
+  if (domStateLoading && !st) return "Lecture de l'état…";
   const bits = [];
   if (st && st.label) bits.push(st.label);
   if (st && typeof st.temp === "number") bits.push(st.temp.toFixed(1).replace(".", ",") + " °C");
   if (bits.length) return bits.join(" · ");
   return "Prêt";
+}
+function domZoneVolets(zone) {
+  return domRead().filter(x => x.zone === zone && x.type === "volet" && x.shelly_id);
+}
+function domZoneBatchCard(zone) {
+  if (zone !== "rdc" && zone !== "etage") return "";
+  const n = domZoneVolets(zone).length;
+  if (!n || !domConnected()) return "";
+  const busyKey = z => a => domBusy === "zone-" + z + "-" + a;
+  const btn = (lab, act, cls) => {
+    const b = busyKey(zone)(act);
+    return `<button type="button" class="btn${cls ? " " + cls : ""}" data-dom-zone-batch="${esc(zone)}" data-dom-action="${esc(act)}" ${domBusy && !b ? "disabled" : ""} ${b ? "aria-busy=true" : ""}>${lab}</button>`;
+  };
+  return `<article class="dom-device dom-zone-batch"><div class="dom-device-head"><strong>▤ Tous les volets</strong><span class="muted">${n} volet(s)</span></div><p class="muted">Ferme ou ouvre tous les volets de ${esc(DOM_ZONES[zone].replace(/^Maison /, ""))}.</p><div class="dom-actions">${btn("Tout ouvrir", "Monter")}${btn("Stop", "Stop")}${btn("Tout fermer", "Descendre", "primary")}</div></article>`;
 }
 function domSettings(zone) {
   const rows = domRead().filter(x => !zone || x.zone === zone);
@@ -176,7 +196,8 @@ function domPage() {
   const items = domRead();
   if (!domZone) return `<section class="dom-page"><div class="dom-page-heading"><h2>🏠 Domotique</h2><button class="btn dom-settings-button" data-dom-settings="" aria-label="Réglages Domotique" title="Réglages Domotique">⚙️</button></div><p class="muted">${domConnected() ? "Compte Shelly relié. Choisissez une zone." : "Choisissez une zone, puis reliez Shelly Cloud dans les réglages."}</p><div class="dom-zones">${Object.entries(DOM_ZONES).map(([id, title]) => `<button class="dom-zone" data-dom-zone="${id}"><strong>${title}</strong><span>${items.filter(x => x.zone === id).length} équipement(s) ›</span></button>`).join("")}</div></section>`;
   const devices = items.filter(x => x.zone === domZone);
-  return `<section class="dom-page"><button class="btn" data-dom-back>← Domotique</button><div class="dom-page-heading"><h2>${DOM_ZONES[domZone]}</h2><button class="btn dom-settings-button" data-dom-settings="${domZone}" aria-label="Réglages ${DOM_ZONES[domZone]}" title="Réglages ${DOM_ZONES[domZone]}">⚙️</button></div><div class="dom-devices">${devices.map(x => {
+  const batch = domZoneBatchCard(domZone);
+  return `<section class="dom-page"><button class="btn" data-dom-back>← Domotique</button><div class="dom-page-heading"><h2>${DOM_ZONES[domZone]}</h2><button class="btn dom-settings-button" data-dom-settings="${domZone}" aria-label="Réglages ${DOM_ZONES[domZone]}" title="Réglages ${DOM_ZONES[domZone]}">⚙️</button></div><div class="dom-devices">${batch}${devices.map(x => {
     const ready = domConnected() && x.shelly_id;
     const st = domState[x.id];
     const pos = x.type === "volet" && st && typeof st.pos === "number" ? Math.round(Math.max(0, Math.min(100, st.pos))) : null;
@@ -244,6 +265,22 @@ document.addEventListener("click", e => {
     if (S.vShelly && mode === "cloud") remove("shelly", domEdit);
     else { domWriteLocal(domRead().filter(x => x.id !== domEdit)); render(); }
     closeSheet();
+    return;
+  }
+  const zb = e.target.closest("[data-dom-zone-batch]");
+  if (zb) {
+    const zone = zb.dataset.domZoneBatch, action = zb.dataset.domAction;
+    if (!zone || !action || zb.disabled) return;
+    domBusy = "zone-" + zone + "-" + action;
+    render();
+    const labels = { Monter: "Tout ouvrir", Descendre: "Tout fermer", Stop: "Stop" };
+    shellyServer("command-zone", { zone, action }).then(r => {
+      const n = r.sent || r.total || domZoneVolets(zone).length;
+      toast("Commande envoyée : " + (labels[action] || action) + " (" + n + " volet(s))", null, null, null, "domotique");
+    }).catch(err => toast(err.message)).finally(() => {
+      domBusy = "";
+      domRefreshState(true).finally(() => render());
+    });
     return;
   }
   const cmd = e.target.closest("[data-dom-cmd]");

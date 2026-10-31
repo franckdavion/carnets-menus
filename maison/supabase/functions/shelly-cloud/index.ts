@@ -127,6 +127,26 @@ function errMsg(body: unknown, fallback: string) {
   return fallback;
 }
 
+function voletPosition(label: string) {
+  return label === "Monter" ? "open" : label === "Descendre" ? "close" : label === "Stop" ? "stop" : "";
+}
+
+async function commandVolet(
+  cred: { server_uri: string; auth_key: string },
+  row: Record<string, unknown>,
+  label: string
+) {
+  const sid = String(row.shelly_id || "").trim().toLowerCase();
+  if (!sid) return { ok: false, error: "Identifiant Shelly manquant" };
+  const pos = voletPosition(label);
+  if (!pos) return { ok: false, error: "Commande volet inconnue" };
+  const body = { id: sid, channel: Number(row.channel) || 0, position: pos };
+  const r = await shelly(cred.server_uri, "/v2/devices/api/set/cover", cred.auth_key, body);
+  return { ok: r.ok, error: r.ok ? undefined : errMsg(r.body, "Commande refusée par Shelly Cloud") };
+}
+
+const shellyPause = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
 function num(v: unknown) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -218,12 +238,26 @@ function flagOnline(v: unknown) {
   if (v === false || v === 0 || v === "0" || v === "false" || v === "offline") return false;
   return null;
 }
-function deviceOnline(d: Record<string, unknown> | undefined) {
-  if (!d) return false;
-  const info = asRecord(d._dev_info);
-  const flagged = flagOnline(d.online ?? d.cloud_online ?? info?.online ?? info?.cloud_online);
+function deviceOnline(d: Record<string, unknown> | undefined, st: Record<string, unknown> | null) {
+  if (!d && !st) return false;
+  const info = d ? asRecord(d._dev_info) : null;
+  const flagged = flagOnline(d?.online ?? d?.cloud_online ?? info?.online ?? info?.cloud_online);
+  if (flagged === true) return true;
+  if (st) {
+    const wifiG1 = asRecord(st.wifi_sta);
+    if (wifiG1?.connected === true) return true;
+    const wifiG2 = asRecord(st.wifi);
+    if (wifiG2?.status === "got ip" || wifiG2?.sta_ip) return true;
+    const cloud = asRecord(st.cloud);
+    if (cloud?.connected === true) return true;
+    const updated = String(st._updated || "");
+    if (updated) {
+      const ts = Date.parse(updated.includes("T") ? updated : updated.replace(" ", "T") + "Z");
+      if (Number.isFinite(ts) && Date.now() - ts < 20 * 60 * 1000) return true;
+    }
+  }
   if (flagged === false) return false;
-  return true;
+  return !!(d || st);
 }
 function deviceId(d: Record<string, unknown>) {
   const id = String(d.id || d.device_id || (asRecord(d._dev_info)?.id) || "").toLowerCase();
@@ -302,13 +336,23 @@ Deno.serve(async req => {
       const states: Record<string, { online: boolean; pos: number | null; state: string; on: boolean | null; temp: number | null; label: string }> = {};
       if (!ids.length) return json(req, { states });
       const list: Record<string, unknown>[] = [];
+      const found = new Set<string>();
       for (let i = 0; i < ids.length; i += 10) {
         const chunk = ids.slice(i, i + 10);
         const got = await shelly(cred.server_uri, "/v2/devices/api/get", cred.auth_key, { ids: chunk, select: ["status"] });
-        if (got.ok) list.push(...unwrapDevices(got.body));
+        if (got.ok) {
+          for (const dev of unwrapDevices(got.body)) {
+            list.push(dev);
+            const id = deviceId(dev);
+            if (id) found.add(id);
+          }
+        }
       }
-      const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
-      if (stAll.ok) list.push(...unwrapDevices(stAll.body));
+      const missing = ids.filter(id => !found.has(id));
+      if (missing.length) {
+        const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
+        if (stAll.ok) list.push(...unwrapDevices(stAll.body));
+      }
       const byId = new Map<string, Record<string, unknown>>();
       for (const d of list) {
         const id = deviceId(d);
@@ -321,8 +365,8 @@ Deno.serve(async req => {
       for (const row of linked) {
         const sid = String(row.shelly_id).trim().toLowerCase();
         const d = byId.get(sid);
-        const online = deviceOnline(d);
         const st = statusOf(d);
+        const online = deviceOnline(d, st);
         const info = coverFromStatus(st, Number(row.channel) || 0);
         info.online = online;
         const temp = tempFromStatus(st) ?? tempFromStatus(d);
@@ -341,26 +385,44 @@ Deno.serve(async req => {
       const sid = String(row.shelly_id || "").trim().toLowerCase();
       if (!sid) return json(req, { error: "Associez un identifiant Shelly à cet équipement" }, 400);
       const pulse = Math.max(0.5, Math.min(30, Number(row.pulse_sec) || 1));
-      let path = "";
-      let body: Record<string, unknown> = { id: sid, channel: Number(row.channel) || 0 };
       if (row.type === "volet") {
-        path = "/v2/devices/api/set/cover";
-        const pos = label === "Monter" ? "open" : label === "Descendre" ? "close" : label === "Stop" ? "stop" : "";
-        if (!pos) return json(req, { error: "Commande volet inconnue" }, 400);
-        body.position = pos;
-      } else {
-        path = "/v2/devices/api/set/switch";
-        if (label === "Allumer") body.on = true;
-        else if (label === "Éteindre") body.on = false;
-        else if (label === "Piéton" || label === "Voiture" || label === "Ouvrir" || label === "Ouvrir / Fermer") {
-          body.on = true;
-          body.toggle_after = pulse;
-          if (label === "Voiture" && row.channel_b != null) body.channel = Number(row.channel_b);
-        } else return json(req, { error: "Commande inconnue" }, 400);
+        const r = await commandVolet(cred, row, label);
+        if (!r.ok) return json(req, { error: r.error || "Commande refusée par Shelly Cloud" }, 400);
+        return json(req, { ok: true });
       }
+      const path = "/v2/devices/api/set/switch";
+      const body: Record<string, unknown> = { id: sid, channel: Number(row.channel) || 0 };
+      if (label === "Allumer") body.on = true;
+      else if (label === "Éteindre") body.on = false;
+      else if (label === "Piéton" || label === "Voiture" || label === "Ouvrir" || label === "Ouvrir / Fermer") {
+        body.on = true;
+        body.toggle_after = pulse;
+        if (label === "Voiture" && row.channel_b != null) body.channel = Number(row.channel_b);
+      } else return json(req, { error: "Commande inconnue" }, 400);
       const r = await shelly(cred.server_uri, path, cred.auth_key, body);
       if (!r.ok) return json(req, { error: errMsg(r.body, "Commande refusée par Shelly Cloud") }, r.status >= 500 ? 502 : 400);
       return json(req, { ok: true });
+    }
+
+    if (action === "command-zone" && req.method === "POST") {
+      const zone = String(payload.zone || "");
+      const label = String(payload.action || "");
+      if (zone !== "rdc" && zone !== "etage") return json(req, { error: "Zone invalide" }, 400);
+      if (!voletPosition(label)) return json(req, { error: "Commande volet inconnue" }, 400);
+      const { data: rows, error } = await admin.from("shelly_devices").select("*").eq("household_id", hid).eq("zone", zone).eq("type", "volet");
+      if (error) throw error;
+      const linked = (rows || []).filter(x => String(x.shelly_id || "").trim()).sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+      if (!linked.length) return json(req, { error: "Aucun volet Shelly dans cette zone" }, 400);
+      let sent = 0;
+      let lastErr = "Commande refusée par Shelly Cloud";
+      for (let i = 0; i < linked.length; i++) {
+        const r = await commandVolet(cred, linked[i], label);
+        if (r.ok) sent++;
+        else if (r.error) lastErr = r.error;
+        if (i < linked.length - 1) await shellyPause(1100);
+      }
+      if (!sent) return json(req, { error: lastErr }, 400);
+      return json(req, { ok: true, sent, total: linked.length });
     }
 
     return json(req, { error: "Not found" }, 404);

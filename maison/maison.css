@@ -2222,7 +2222,9 @@ details.r-legend-fold .r-legend{margin-top:0;}
 .dom-zone span{font-size:.86em;opacity:.8}.dom-device-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dom-pos{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:10px 0 4px}
 .dom-pos span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7ec8ff,#d7ecff)}
-.dom-actions{display:flex;flex-wrap:wrap;gap:8px}.dom-actions .btn{flex:1 1 auto}.dom-form{display:grid;gap:14px}.dom-form label{display:grid;gap:6px}
+.dom-actions{display:flex;flex-wrap:wrap;gap:8px}.dom-actions .btn{flex:1 1 auto}
+.dom-zone-batch{grid-column:1/-1;border-color:rgba(126,200,255,.35);background:linear-gradient(165deg,rgba(22,58,96,.85),rgba(12,32,58,.88))}
+.dom-form{display:grid;gap:14px}.dom-form label{display:grid;gap:6px}
 .dom-form input,.dom-form select{width:100%;min-width:0}
 
 /* Domotique : réglages centralisés, réutilisation des boutons et de la feuille commune. */
