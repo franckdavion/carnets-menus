@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031l";
+const FN_REV = "20261101a";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -559,10 +559,6 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
       cleaning_mode = decoded.mode;
       cleaning_mode_raw = decoded.raw;
     }
-    if (row.siid === 2 && row.piid === 6 && cleaning_mode == null) {
-      const decoded = decodeCleaningMode(row.value);
-      cleaning_mode = decoded.mode;
-    }
   }
   return { status, battery, suction, water, cleaning_mode, cleaning_mode_raw };
 }
@@ -933,6 +929,14 @@ export async function dreameHandler(req: Request): Promise<Response> {
         }
         if (!updates.length) return json(req, { error: "Aucun réglage à appliquer" }, 400);
         await dreameSetPropRows(cred, did, updates);
+        await new Promise(r => setTimeout(r, 400));
+        const afterPrefs = await readState(cred);
+        const overlay = settingsLabels({
+          suction: payload.suction !== undefined ? clampInt(payload.suction, 0, 3, 1) : afterPrefs.suction,
+          water: payload.water !== undefined ? clampInt(payload.water, 1, 3, 2) : afterPrefs.water,
+          cleaning_mode: payload.cleaning_mode !== undefined ? clampInt(payload.cleaning_mode, 0, 3, 2) : afterPrefs.cleaning_mode
+        });
+        return json(req, { ok: true, ...afterPrefs, ...overlay });
       } else if (act === "clean_room") {
         const segmentId = clampInt(payload.segment_id, 1, 99, 0);
         if (!segmentId) return json(req, { error: "Pièce Dreame invalide" }, 400);

@@ -144,6 +144,7 @@ let domMelLastCmdAt = 0, domMelStatusAt = 0;
 let domDreameStatus = { connected: false, device_id: null, device_name: null };
 let domDreameState = null, domDreameStateAt = 0, domDreameStateInflight = null, domDreameDevices = [], domDreameBusy = "";
 let domDreamePrefAt = 0;
+let domDreameWanted = { cleaning_mode: null, suction: null, water: null };
 let domDreameTask = "";
 let domDreameRooms = [], domDreameRoomsAt = 0, domDreameRoomsHint = "", domDreameRoomsInflight = null;
 let domDreamePrograms = [];
@@ -270,6 +271,41 @@ function domDreameSummary() {
 function domDreameCommandable() {
   return !!(domDreameLinked() && (domDreameStatus.device_id || (S.hh && S.hh.dreame_device_id)));
 }
+function domDreameWantedNum(key) {
+  const raw = domDreameWanted[key];
+  if (raw == null || raw === "") return null;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : null;
+}
+function domDreamePrefNum(key, fallback) {
+  const wanted = domDreameWantedNum(key);
+  if (wanted != null) return wanted;
+  const st = domDreameState || {};
+  if (st[key] == null || st[key] === "") return fallback;
+  const v = Number(st[key]);
+  return Number.isFinite(v) ? v : fallback;
+}
+function domDreameApplyWanted(out) {
+  const mode = domDreameWantedNum("cleaning_mode");
+  if (mode != null) {
+    out.cleaning_mode = mode;
+    const lab = (domDreameModeOpts().find(o => o.v === mode) || {}).t;
+    if (lab) out.cleaning_mode_label = lab;
+  }
+  const suction = domDreameWantedNum("suction");
+  if (suction != null) {
+    out.suction = suction;
+    const lab = (domDreameSuctionOpts().find(o => o.v === suction) || {}).t;
+    if (lab) out.suction_label = lab;
+  }
+  const water = domDreameWantedNum("water");
+  if (water != null) {
+    out.water = water;
+    const lab = (domDreameWaterOpts().find(o => o.v === water) || {}).t;
+    if (lab) out.water_label = lab;
+  }
+  return out;
+}
 function domDreameMergeState(next) {
   if (!next || typeof next !== "object") return domDreameState;
   const prev = domDreameState || {};
@@ -278,20 +314,7 @@ function domDreameMergeState(next) {
   for (const k of keys) {
     if (next[k] == null && prev[k] != null) out[k] = prev[k];
   }
-  if (domDreamePrefAt && Date.now() - domDreamePrefAt < 25000) {
-    if (prev.cleaning_mode != null) {
-      out.cleaning_mode = prev.cleaning_mode;
-      if (prev.cleaning_mode_label) out.cleaning_mode_label = prev.cleaning_mode_label;
-    }
-    if (prev.suction != null) {
-      out.suction = prev.suction;
-      if (prev.suction_label) out.suction_label = prev.suction_label;
-    }
-    if (prev.water != null) {
-      out.water = prev.water;
-      if (prev.water_label) out.water_label = prev.water_label;
-    }
-  }
+  domDreameApplyWanted(out);
   domDreameState = out;
   return out;
 }
@@ -437,7 +460,7 @@ function domDreameModeLabel(m) {
 function domDreameChipGroup(label, prefKey, options, current, form) {
   const attr = form ? "data-dom-dreame-form-chip" : "data-dom-dreame-pref";
   const chips = options.map(o => {
-    const on = current === o.v;
+    const on = Number(current) === o.v;
     return `<button type="button" class="btn dom-dreame-choice${on ? " primary" : ""}" ${attr}="${esc(prefKey)}" data-value="${o.v}" aria-pressed="${on ? "true" : "false"}">${esc(o.t)}</button>`;
   }).join("");
   return `<p class="muted small" style="margin:12px 0 6px">${esc(label)}</p><div class="dom-dreame-choices" role="group" aria-label="${esc(label)}">${chips}</div>`;
@@ -482,14 +505,13 @@ function domDreameTransportBtns() {
 function domDreameStatusHtml() {
   const st = domDreameState || {};
   const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
-  const mode = st.cleaning_mode != null ? st.cleaning_mode : 2;
+  const mode = domDreamePrefNum("cleaning_mode", 2);
   return `<strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}${st.water_label && mode !== 0 ? " · eau " + esc(st.water_label) : ""}</span>` : ""}`;
 }
 function domDreamePrefsHtml() {
-  const st = domDreameState || {};
-  const mode = st.cleaning_mode != null ? st.cleaning_mode : 2;
-  const suction = st.suction != null ? st.suction : 1;
-  const water = st.water != null ? st.water : 2;
+  const mode = domDreamePrefNum("cleaning_mode", 2);
+  const suction = domDreamePrefNum("suction", 1);
+  const water = domDreamePrefNum("water", 2);
   return domDreameChipGroup("Mode de nettoyage", "cleaning_mode", domDreameModeOpts(), mode)
     + (mode !== 1 ? domDreameChipGroup("Aspiration", "suction", domDreameSuctionOpts(), suction) : "")
     + (mode !== 0 ? domDreameChipGroup("Eau (serpillière)", "water", domDreameWaterOpts(), water) : "");
@@ -509,12 +531,11 @@ function domDreameFillHosts() {
   if (progs) progs.innerHTML = domDreameProgramsBlock(domDreameCommandable());
 }
 function domDreameStartPayload() {
-  const st = domDreameState || {};
   return {
     action: "start",
-    cleaning_mode: st.cleaning_mode != null ? st.cleaning_mode : 2,
-    suction: st.suction != null ? st.suction : 1,
-    water: st.water != null ? st.water : 2,
+    cleaning_mode: domDreamePrefNum("cleaning_mode", 2),
+    suction: domDreamePrefNum("suction", 1),
+    water: domDreamePrefNum("water", 2),
     segment_ids: (domDreamePickRooms || []).map(Number).filter(n => n > 0)
   };
 }
@@ -1059,8 +1080,7 @@ function domHouseView() {
     { id: "dreame", t: "Aspirateur", ico: "🤖", line: domDreameSummary(), dreame: true }
   ];
   return `<article class="dom-house-art">
-    <span class="dom-hero-photo" role="img" aria-label="Illustration générique d'une maison, non représentative du plan réel"></span>
-    <p class="muted small">Illustration générique. Elle ne représente pas le plan de l'habitation.</p>
+    <span class="dom-hero-photo" role="img" aria-label="Illustration d'une maison"></span>
   </article>
   <div class="dom-house-list">${rooms.map(r => `<button type="button" class="dom-house-row" data-dom-room="${esc(r.id)}"><span class="dom-eq-ico">${esc(r.ico)}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.items.length ? r.items.length + " équipement(s)" + (r.sub ? " · " + r.sub : "") : "Aucun équipement associé")}</small></span><span aria-hidden="true">›</span></button>`).join("")}${extras.map(r => r.mel
     ? `<button type="button" class="dom-house-row${domMelLinked() ? "" : " is-pending"}" data-dom-mel-open><span class="dom-eq-ico">${r.ico}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.line)}</small></span><span aria-hidden="true">›</span></button>`
@@ -1342,6 +1362,7 @@ document.addEventListener("click", e => {
     dreameServer("disconnect", {}).then(() => {
       domDreameStatus = { connected: false, device_id: null, device_name: null };
       domDreameState = null;
+      domDreameWanted = { cleaning_mode: null, suction: null, water: null };
       domDreameStateAt = 0;
       domDreameRooms = [];
       domDreameRoomsAt = 0;
@@ -1374,7 +1395,9 @@ document.addEventListener("click", e => {
     body[key] = value;
     if (!domDreameState) domDreameState = {};
     domDreamePrefAt = Date.now();
+    domDreameWanted[key] = value;
     domDreameState = { ...domDreameState, [key]: value };
+    domDreameApplyWanted(domDreameState);
     if (key === "cleaning_mode") {
       const lab = (domDreameModeOpts().find(o => o.v === value) || {}).t;
       if (lab) domDreameState.cleaning_mode_label = lab;
