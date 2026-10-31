@@ -10,10 +10,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Maisonnée">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<link rel="stylesheet" href="maison.css?v=20261031drag">
+<link rel="stylesheet" href="maison.css?v=20261031d3">
 
 </head>
 <body>
@@ -23,8 +24,11 @@
 <script src="espace.js"></script>
 <script src="push-config.js"></script>
 <script src="supabase/functions/_shared/cal.js"></script>
-<script src="app.js?v=20261031boot"></script>
-<script src="modules.js?v=20261031domfix"></script>
+<script src="app.js?v=20261031d3"></script>
+<script src="modules.js?v=20261031d3"></script>
+<script>
+if (window.MAISONNEE_DOM_BUILD !== "20261031d3") location.replace("./ouvrir-frais.html");
+</script>
 <script src="../ingredient-arts.js"></script>
 <script src="../ingredient-emojis.js"></script>
 <script src="repas.js?v=20261031choix"></script>

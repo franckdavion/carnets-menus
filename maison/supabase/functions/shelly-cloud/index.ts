@@ -106,6 +106,9 @@ async function shelly(host: string, path: string, auth: string, body?: unknown) 
   const text = await r.text();
   let parsed: unknown = null;
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text.slice(0, 400) }; }
+  if (r.status === 429) {
+    return { ok: false, status: 429, body: parsed };
+  }
   return { ok: r.ok, status: r.status, body: parsed };
 }
 
@@ -142,6 +145,7 @@ async function commandVolet(
   if (!pos) return { ok: false, error: "Commande volet inconnue" };
   const body = { id: sid, channel: Number(row.channel) || 0, position: pos };
   const r = await shelly(cred.server_uri, "/v2/devices/api/set/cover", cred.auth_key, body);
+  if (r.status === 429) return { ok: false, error: "Shelly Cloud : trop de requêtes. Attendez 15–20 secondes." };
   return { ok: r.ok, error: r.ok ? undefined : errMsg(r.body, "Commande refusée par Shelly Cloud") };
 }
 
@@ -280,6 +284,13 @@ function statusOf(d: Record<string, unknown> | undefined) {
   return null;
 }
 
+const stateCache = new Map<string, { at: number; payload: Record<string, unknown> }>();
+const STATE_CACHE_MS = 9000;
+
+function invalidateStateCache(hid: string) {
+  stateCache.delete(hid);
+}
+
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
   try {
@@ -329,6 +340,8 @@ Deno.serve(async req => {
     }
 
     if (action === "state") {
+      const cached = stateCache.get(hid);
+      if (cached && Date.now() - cached.at < STATE_CACHE_MS) return json(req, cached.payload);
       const { data: rows, error } = await admin.from("shelly_devices").select("id, type, shelly_id, channel").eq("household_id", hid);
       if (error) throw error;
       const linked = (rows || []).filter(x => String(x.shelly_id || "").trim());
@@ -349,7 +362,7 @@ Deno.serve(async req => {
         }
       }
       const missing = ids.filter(id => !found.has(id));
-      if (missing.length) {
+      if (missing.length && found.size === 0) {
         const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
         if (stAll.ok) list.push(...unwrapDevices(stAll.body));
       }
@@ -373,10 +386,13 @@ Deno.serve(async req => {
         const label = row.type === "volet" ? labelCover(info.pos, info.state, online) : (online ? (info.on === true ? "Allumé" : info.on === false ? "Éteint" : "En ligne") : "Hors ligne");
         states[row.id] = { ...info, temp, label };
       }
-      return json(req, { states });
+      const payloadOut = { states };
+      stateCache.set(hid, { at: Date.now(), payload: payloadOut });
+      return json(req, payloadOut);
     }
 
     if (action === "command" && req.method === "POST") {
+      invalidateStateCache(hid);
       const id = String(payload.id || "");
       const label = String(payload.action || "");
       const { data: row, error } = await admin.from("shelly_devices").select("*").eq("id", id).eq("household_id", hid).maybeSingle();
@@ -405,6 +421,7 @@ Deno.serve(async req => {
     }
 
     if (action === "command-zone" && req.method === "POST") {
+      invalidateStateCache(hid);
       const zone = String(payload.zone || "");
       const label = String(payload.action || "");
       if (zone !== "rdc" && zone !== "etage") return json(req, { error: "Zone invalide" }, 400);

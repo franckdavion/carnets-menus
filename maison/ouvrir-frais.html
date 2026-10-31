@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>Maisonnée — chargement à jour</title>
+<style>body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#0f1c2e;color:#e8f4ff}</style>
+</head>
+<body>
+<p id="msg">Mise à jour de Maisonnée…</p>
+<script>
+(async function () {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(k => /maison|carnet-archive/i.test(k)).map(k => caches.delete(k)));
+    }
+  } catch (e) {
+    document.getElementById("msg").textContent = "Nettoyage partiel, ouverture…";
+  }
+  location.replace("./index.html?v=20261031d3&maj=ok&_=" + Date.now());
+})();
+</script>
+</body>
+</html>
