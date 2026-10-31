@@ -1458,7 +1458,7 @@ function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
 $("#sheet").addEventListener("close", () => {
   const d = $("#sheet");
   resetSheetViewport(d);
-  d.classList.remove("sheet-snap-top", "dom-tesla-sheet");
+  d.classList.remove("sheet-snap-top");
   unlockSheetBackground();
   sheetCtx = null;
   if (pending) render();

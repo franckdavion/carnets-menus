@@ -6,5 +6,3 @@ inbox/
 photos/
 node_modules/
 maison/supabase/.temp/
-maison/tesla-fleet/*.pem
-maison/tesla-fleet/tesla-command-private.pem

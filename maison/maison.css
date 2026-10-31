@@ -1970,7 +1970,7 @@ dialog.mz-toast-front::backdrop{background:transparent;}
 .mz-toast-front.mz-v9-warning .mz-v9-icon{background:linear-gradient(135deg,#ffb53e,#8e5613);}
 .toast.mz-v9-toast.mz-toast-near{top:var(--mz-near-top)!important;left:var(--mz-near-left)!important;right:auto!important;transform:none!important;}
 dialog.sheet[open]{top:auto;bottom:0;height:auto;width:min(640px,100%);margin:0 auto;overflow:auto;}
-/* Sous-fenêtre (ex. choix véhicule Tesla depuis les réglages) : ancrée en haut, pas en bas de l’écran. */
+/* Sous-fenêtre (choix d’appareil depuis les réglages) : ancrée en haut. */
 dialog.sheet[open].sheet-snap-top{
   top:max(8px,env(safe-area-inset-top));
   bottom:auto;
@@ -2307,27 +2307,6 @@ dialog.sheet .dom-mel-panel .dom-mel-step span{display:block;font-size:32px;line
 .dom-dreame-actions .btn{width:100%}
 .dom-dreame-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;width:100%}
 .dom-eq-dreame .dom-dreame-card-btn{min-height:44px;font-size:22px;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
-.dom-tesla-gauge{--tesla-pct:0;width:152px;height:152px;margin:0 auto 14px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#3DB972 calc(var(--tesla-pct)*1%),rgba(255,255,255,.1) 0);box-shadow:inset 0 0 0 10px rgba(8,22,42,.85),0 8px 24px rgba(0,0,0,.25)}
-.dom-tesla-gauge-inner{width:118px;height:118px;border-radius:50%;display:grid;place-content:center;gap:2px;text-align:center;background:linear-gradient(165deg,rgba(22,58,96,.95),rgba(12,32,58,.98));border:1px solid rgba(126,200,255,.25)}
-.dom-tesla-gauge-inner strong{font-size:34px;font-weight:800;color:#f4fbff;line-height:1}
-.dom-tesla-gauge-inner strong span{font-size:18px;font-weight:700;opacity:.85}
-.dom-tesla-status{margin:0 0 12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(126,200,255,.2);text-align:center}
-.dom-tesla-temps{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 12px}
-.dom-tesla-temps div{display:grid;gap:4px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(126,200,255,.2);text-align:center}
-.dom-tesla-temps strong{font-size:22px;font-weight:700;color:#f4fbff}
-.dom-tesla-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.dom-tesla-actions .btn{width:100%;min-height:48px}
-.dom-tesla-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;width:100%}
-.dom-eq-tesla .dom-tesla-card-btn{min-height:44px;font-size:22px;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
-dialog.sheet.dom-tesla-sheet:not(.sheet-snap-top){margin:auto auto 0;max-height:min(85vh,calc(var(--maison-vh,100dvh) - 24px))}
-@media (min-width:768px){
-  dialog.sheet.dom-tesla-sheet{margin:auto;max-width:480px;border-radius:var(--r-lg);max-height:min(70vh,560px)}
-}
-.dom-tesla-sheet-body{padding:4px 0 8px;display:grid;gap:12px}
-.dom-tesla-sheet-body .dom-tesla-alert{color:#ffd4d4;font-weight:600;line-height:1.45;margin:0}
-.dom-tesla-sheet-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
-.dom-tesla-sheet-actions .btn{flex:1 1 auto;min-width:120px}
-.dom-tesla-status-line{margin:0}
 @media(min-width:750px){
   .dom-eq-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .dom-hero-media img{height:190px}

@@ -136,7 +136,6 @@ const DOM_DEFAULT = [
 const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
 const MELCLOUD_ENDPOINT = SB_URL + "/functions/v1/melcloud";
 const DREAME_ENDPOINT = SB_URL + "/functions/v1/dreame";
-const TESLA_ENDPOINT = SB_URL + "/functions/v1/tesla";
 let domZone = "", domTab = "board", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domStateInflight = null, domFormLoading = false;
 let domMelStatus = { connected: false, device_id: null, device_name: null };
 let domMelState = null, domMelStateAt = 0, domMelStateInflight = null, domMelDevices = [], domMelBusy = "";
@@ -147,17 +146,10 @@ let domDreameState = null, domDreameStateAt = 0, domDreameStateInflight = null, 
 let domDreameRooms = [], domDreameRoomsAt = 0, domDreameRoomsHint = "", domDreameRoomsInflight = null;
 let domDreameChain = Promise.resolve();
 let domDreameLastCmdAt = 0, domDreameStatusAt = 0;
-let domTeslaStatus = { connected: false, configured: true, device_id: null, device_name: null, region: "eu" };
-let domTeslaState = null, domTeslaStateAt = 0, domTeslaStateInflight = null, domTeslaDevices = [], domTeslaBusy = "";
-let domTeslaChain = Promise.resolve();
-let domTeslaLastCmdAt = 0, domTeslaStatusAt = 0, domTeslaViewPollAt = 0, domTeslaStateErr = "";
 const DOM_MEL_STATE_MIN_MS = 90000;
 const DOM_MEL_CMD_DEBOUNCE_MS = 2500;
 const DOM_DREAME_STATE_MIN_MS = 45000;
 const DOM_DREAME_CMD_DEBOUNCE_MS = 2500;
-const DOM_TESLA_STATE_MIN_MS = 120000;
-const DOM_TESLA_VIEW_POLL_MS = 90000;
-const DOM_TESLA_CMD_DEBOUNCE_MS = 3500;
 const DOM_HERO = "assets/domotique/ma-maison-hero.jpg";
 document.addEventListener("click", e => {
   if (e.target.closest('[data-act="go"][data-v="domotique"]')) {
@@ -165,7 +157,6 @@ document.addEventListener("click", e => {
     setTimeout(domPollOnView, 0);
     setTimeout(domMelPollOnView, 0);
     setTimeout(domDreamePollOnView, 0);
-    setTimeout(() => domTeslaPollOnView(true), 0);
   }
 }, true);
 function domConnected() { return !!(S.hh && S.hh.shelly_host); }
@@ -329,156 +320,6 @@ function domDreamePollOnView() {
   if (view !== "domotique") return;
   const force = domDreameLinked() && !domDreameStateAt;
   domDreameRefreshStatus().then(() => domDreameRefreshState(force)).then(changed => { if (changed) softRender(); }).catch(() => {});
-}
-function domTeslaLinked() {
-  return !!domTeslaStatus.connected;
-}
-function domTeslaHasVehicle() {
-  return !!(domTeslaStatus.device_id || (S.hh && S.hh.tesla_vehicle_id));
-}
-function domTeslaFmtKm(km) {
-  if (km == null || !Number.isFinite(Number(km))) return "—";
-  return Math.round(Number(km)) + " km";
-}
-function domTeslaSummary() {
-  if (!domTeslaLinked()) return "Non connecté";
-  if (!domTeslaHasVehicle()) return "Choisissez un véhicule";
-  const st = domTeslaState;
-  if (domTeslaStateInflight) return "Lecture de l'état…";
-  if (domTeslaStateErr && Date.now() - domTeslaStateAt < DOM_TESLA_STATE_MIN_MS) return domTeslaStateErr;
-  if (st && st.label) {
-    if (st.battery_level != null && st.battery_range_km != null) {
-      return Math.round(st.battery_level) + " % · " + domTeslaFmtKm(st.battery_range_km);
-    }
-    return st.label;
-  }
-  return domTeslaStatus.device_name || "Tesla";
-}
-function domTeslaGauge(st) {
-  const pct = st && st.battery_level != null ? Math.max(0, Math.min(100, Math.round(st.battery_level))) : 0;
-  const range = st && st.battery_range_km != null ? domTeslaFmtKm(st.battery_range_km) : "—";
-  const charge = st && st.charging_state && /charging/i.test(st.charging_state) ? "En charge" : (st && st.asleep ? "Veille" : "Autonomie");
-  return `<div class="dom-tesla-gauge" style="--tesla-pct:${pct}" role="img" aria-label="Batterie ${pct} pour cent"><div class="dom-tesla-gauge-inner"><strong>${pct}<span>%</span></strong><span class="muted small">${esc(charge)}</span><span>${esc(range)}</span></div></div>`;
-}
-async function teslaServer(action, body, opts) {
-  const timeoutMs = opts && opts.timeoutMs ? opts.timeoutMs : (action === "state" && !(opts && opts.wake) ? 28000 : 45000);
-  const skipQueue = !!(opts && opts.skipQueue);
-  const wake = !!(opts && opts.wake);
-  const run = async () => {
-    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-    try {
-      if (mode !== "cloud") throw new Error("Connectez-vous au compte du foyer (pas le mode démo).");
-      if (!sb) await loadSb();
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) throw new Error("Connexion Maisonnée requise");
-      let url = TESLA_ENDPOINT + "/" + action;
-      if (action === "state" && wake) url += "?wake=1";
-      const res = await fetch(url, {
-        method: body ? "POST" : "GET",
-        headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY, "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: ctrl ? ctrl.signal : undefined
-      });
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 404 || out.code === "NOT_FOUND") {
-          throw new Error("La fonction Supabase « tesla » n'est pas déployée. Lancez ./supabase/deploy-tesla.sh depuis le dossier maison/.");
-        }
-        const fn = out.fn ? ` · serveur ${out.fn}` : "";
-        throw new Error(String(out.error || out.message || "Erreur Tesla") + fn);
-      }
-      return out;
-    } catch (e) {
-      if (e && e.name === "AbortError") throw new Error("Délai dépassé en contactant le serveur Tesla. Réessayez.");
-      if (e instanceof TypeError && /fetch/i.test(String(e.message))) {
-        throw new Error("Impossible de joindre Supabase (fonction « tesla »). Vérifiez la connexion réseau.");
-      }
-      throw e;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  };
-  if (skipQueue) return run();
-  const p = domTeslaChain.then(() => run());
-  domTeslaChain = p.catch(() => {});
-  return p;
-}
-async function domTeslaRefreshStatus(force) {
-  if (mode !== "cloud" || !S.hh) return;
-  const now = Date.now();
-  if (!force && now - domTeslaStatusAt < 60000 && domTeslaStatus.connected) return;
-  try {
-    const r = await teslaServer("status");
-    domTeslaStatus = {
-      connected: !!r.connected,
-      configured: r.configured !== false,
-      device_id: r.device_id ?? null,
-      device_name: r.device_name || null,
-      region: r.region === "na" ? "na" : "eu"
-    };
-    if (S.hh && r.device_id != null) S.hh.tesla_vehicle_id = r.device_id;
-    domTeslaStatusAt = Date.now();
-  } catch (_) {}
-}
-async function domTeslaRefreshState(force, opts) {
-  if (!domTeslaLinked() || mode !== "cloud") return false;
-  if (!domTeslaHasVehicle()) {
-    domTeslaState = { label: "Choisissez un véhicule Tesla" };
-    domTeslaStateAt = Date.now();
-    domTeslaStateErr = "";
-    return false;
-  }
-  const now = Date.now();
-  const wake = !!(opts && opts.wake);
-  if (!force && !wake && now - domTeslaStateAt < DOM_TESLA_STATE_MIN_MS) return false;
-  if (domTeslaStateInflight) return domTeslaStateInflight;
-  domTeslaStateInflight = teslaServer("state", null, { wake }).then(r => {
-    domTeslaState = r;
-    domTeslaStateAt = Date.now();
-    domTeslaStateErr = "";
-    if (r.device_name) domTeslaStatus.device_name = r.device_name;
-    return true;
-  }).catch(err => {
-    domTeslaStateAt = Date.now();
-    domTeslaStateErr = (err && err.message ? String(err.message) : "État Tesla indisponible").slice(0, 120);
-    return false;
-  }).finally(() => { domTeslaStateInflight = null; });
-  return domTeslaStateInflight;
-}
-function domTeslaPollOnView(forceNow) {
-  if (view !== "domotique") return;
-  const now = Date.now();
-  if (!forceNow && now - domTeslaViewPollAt < DOM_TESLA_VIEW_POLL_MS) return;
-  domTeslaViewPollAt = now;
-  const force = domTeslaLinked() && domTeslaHasVehicle() && !domTeslaStateAt;
-  domTeslaRefreshStatus().then(() => domTeslaRefreshState(force)).then(changed => { if (changed) softRender(); }).catch(() => {});
-}
-async function domRunTeslaCommand(fn) {
-  const now = Date.now();
-  if (now - domTeslaLastCmdAt < DOM_TESLA_CMD_DEBOUNCE_MS) return null;
-  domTeslaLastCmdAt = now;
-  return fn();
-}
-function domTeslaHandleOAuthReturn() {
-  const q = new URLSearchParams(location.search);
-  const t = q.get("tesla");
-  if (!t) return;
-  history.replaceState({}, "", location.pathname + (location.hash || ""));
-  if (t === "connected") {
-    domTeslaStatusAt = 0;
-    domTeslaStateAt = 0;
-    setTimeout(() => {
-      domTeslaRefreshStatus(true).then(() => domTeslaRefreshState(true, { wake: true })).then(changed => {
-        if (changed) softRender();
-        toast("Compte Tesla relié.");
-        if (view !== "domotique") return;
-        domTeslaSheet();
-      }).catch(() => toast("Compte Tesla relié — ouvrez Domotique pour l'état du véhicule."));
-    }, 400);
-  } else if (t === "cancelled") toast("Connexion Tesla annulée.");
-  else if (t === "not_configured") toast("Tesla : configurez TESLA_CLIENT_ID et TESLA_CLIENT_SECRET sur Supabase.");
-  else toast("Connexion Tesla impossible. Réessayez depuis Domotique › Tesla.");
 }
 async function domDreameEnsureRooms(force) {
   if (!domDreameLinked() || mode !== "cloud") return [];
@@ -742,15 +583,10 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  const tes = !zone && cloud ? (domTeslaLinked()
-    ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Tesla</h4><p class="muted">Compte relié${domTeslaStatus.device_name ? " · " + esc(domTeslaStatus.device_name) : ""}. Jetons côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-tesla-devices>Choisir un véhicule</button><button class="btn ghost danger" data-dom-tesla-disconnect>Délier Tesla</button></div>`
-    : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Tesla</h4><p class="muted">Reliez votre compte Tesla (OAuth Fleet API) pour batterie, autonomie et commandes.</p><button class="btn primary" data-dom-tesla-connect>Relier Tesla</button>`)
-    : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}${tes}<p class="muted small">Version domotique · build 20261031d3</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031d3</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
-    domTeslaRefreshStatus().catch(() => {});
   }
 }
 function domRoomsManageSheet() {
@@ -1037,145 +873,6 @@ function domDreameDevicePickerSheet() {
     openSheet("Aspirateur Dreame", "<div class=\"dom-settings\"><p class=\"muted\">Choisissez l'aspirateur à piloter depuis Maisonnée.</p><div class=\"dom-settings-list\">" + rows + "</div></div>");
   }).catch(err => toast(err.message));
 }
-function domTeslaEqCard() {
-  if (!domTeslaLinked()) {
-    return `<article class="dom-eq-card dom-eq-tesla is-pending"><button type="button" class="dom-eq-open" data-dom-tesla-open>${domEqCardTop("🚗", "Tesla")}<small>Non connecté</small></button></article>`;
-  }
-  const st = domTeslaState || {};
-  const line = domTeslaStateInflight ? "Lecture…" : domTeslaSummary();
-  const hasDev = !!(domTeslaStatus.device_id || (S.hh && S.hh.tesla_vehicle_id));
-  const busyLock = domTeslaBusy === "door_lock" || domTeslaBusy === "door_unlock";
-  const busyClim = domTeslaBusy === "climate_on" || domTeslaBusy === "climate_off";
-  const lockCmd = st.locked ? "door_unlock" : "door_lock";
-  const lockLab = st.locked ? "🔓" : "🔒";
-  const climCmd = st.climate_on ? "climate_off" : "climate_on";
-  const climLab = st.climate_on ? "❄️" : "🌡";
-  const actions = hasDev
-    ? `<div class="dom-tesla-card-actions" role="group" aria-label="Commandes rapides"><button type="button" class="btn dom-tesla-card-btn" data-dom-tesla-cmd="${esc(lockCmd)}" ${busyLock ? "aria-busy=true" : ""} aria-label="${st.locked ? "Déverrouiller" : "Verrouiller"}">${lockLab}</button><button type="button" class="btn dom-tesla-card-btn" data-dom-tesla-cmd="${esc(climCmd)}" ${busyClim ? "aria-busy=true" : ""} aria-label="Climatisation">${climLab}</button></div>`
-    : "";
-  const title = esc(st.device_name || domTeslaStatus.device_name || "Tesla");
-  return `<article class="dom-eq-card dom-eq-tesla"><button type="button" class="dom-eq-open" data-dom-tesla-open>${domEqCardTop("🚗", title)}<small>${esc(line)}</small></button>${actions}</article>`;
-}
-function domTeslaSheet(fromRefresh) {
-  if (!domTeslaLinked()) {
-    openSheet("Tesla", `<div class="dom-pending"><p class="muted">Compte Tesla non relié</p><p>Connectez votre compte Tesla (Fleet API) pour afficher batterie, autonomie et envoyer des commandes depuis Maisonnée.</p><button type="button" class="btn primary" data-dom-tesla-connect>Relier mon compte Tesla</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
-    return;
-  }
-  const st = domTeslaState || {};
-  const title = st.device_name || domTeslaStatus.device_name || "Tesla";
-  const line = st.label || (st.asleep ? "En veille" : "État en attente…");
-  const inside = st.inside_temp != null ? domMelFmtTemp(st.inside_temp) : "—";
-  const outside = st.outside_temp != null ? domMelFmtTemp(st.outside_temp) : "—";
-  const chargeLine = st.charging_state && /charging/i.test(st.charging_state)
-    ? (st.charger_power_kw != null ? `En charge · ${st.charger_power_kw} kW` : "En charge")
-    : (st.charge_limit != null ? `Limite ${Math.round(st.charge_limit)} %` : "");
-  const busy = a => domTeslaBusy === a;
-  openSheet(title, `<article class="dom-device dom-tesla-panel">
-    ${domTeslaGauge(st)}
-    <p class="dom-tesla-status" aria-live="polite"><strong>${esc(line)}</strong>${chargeLine ? `<br><span class="muted small">${esc(chargeLine)}</span>` : ""}${st.locked != null ? `<br><span class="muted small">${st.locked ? "Verrouillée" : "Déverrouillée"}${st.climate_on ? " · Clim active" : ""}${st.sentry_mode ? " · Sentinelle" : ""}</span>` : ""}</p>
-    <div class="dom-tesla-temps">
-      <div><span class="muted">Intérieur</span><strong>${esc(inside)}</strong></div>
-      <div><span class="muted">Extérieur</span><strong>${esc(outside)}</strong></div>
-    </div>
-    <div class="dom-actions dom-tesla-actions">
-      <button type="button" class="btn primary" data-dom-tesla-cmd="${st.locked ? "door_unlock" : "door_lock"}" ${busy("door_lock") || busy("door_unlock") ? "aria-busy=true" : ""}>${st.locked ? "Déverrouiller" : "Verrouiller"}</button>
-      <button type="button" class="btn" data-dom-tesla-cmd="${st.climate_on ? "climate_off" : "climate_on"}" ${busy("climate_on") || busy("climate_off") ? "aria-busy=true" : ""}>${st.climate_on ? "Clim off" : "Préconditionner"}</button>
-      <button type="button" class="btn" data-dom-tesla-cmd="charge_start" ${busy("charge_start") ? "aria-busy=true" : ""}>Démarrer charge</button>
-      <button type="button" class="btn" data-dom-tesla-cmd="charge_stop" ${busy("charge_stop") ? "aria-busy=true" : ""}>Stop charge</button>
-    </div>
-    <p class="muted small">Données et commandes via Tesla Fleet API (serveur Maisonnée). Certaines actions exigent une clé virtuelle appairée sur le véhicule.</p>
-    <button type="button" class="btn ghost" data-act="closeSheet">Fermer</button>
-  </article>`);
-  if (!fromRefresh) domTeslaRefreshState(true, { wake: true }).then(changed => { if (changed) domTeslaSheet(true); }).catch(() => {});
-}
-function domTeslaOpenSheet(title, body) {
-  openSheet(title, body);
-  const d = document.getElementById("sheet");
-  if (d) d.classList.add("dom-tesla-sheet");
-}
-function domTeslaSheetAlert(msg, hint, retryAttr) {
-  const retry = retryAttr
-    ? `<button type="button" class="btn primary" ${retryAttr}>Réessayer</button>`
-    : "";
-  return `<div class="dom-tesla-sheet-body"><p class="dom-tesla-alert" role="alert">${esc(msg)}</p>${hint ? `<p class="muted small">${esc(hint)}</p>` : ""}<div class="dom-tesla-sheet-actions">${retry}<button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div></div>`;
-}
-function domTeslaConnectSheet() {
-  if (mode !== "cloud") {
-    domTeslaOpenSheet("Relier Tesla", `<div class="dom-pending"><p class="muted">Mode démo ou hors ligne</p><p>Connectez-vous avec le compte du foyer pour relier Tesla.</p><button type="button" class="btn" data-act="closeSheet">Fermer</button></div>`);
-    return;
-  }
-  domTeslaOpenSheet("Relier Tesla", `<div class="dom-form dom-tesla-connect" id="dom-tesla-connect-wrap">
-    <p class="muted dom-tesla-oauth-pending" id="dom-tesla-oauth-status">Préparation du lien Tesla…</p>
-    <label>Région du compte<select id="dom-tesla-region" disabled><option value="eu">Europe</option><option value="na">Amérique du Nord</option></select></label>
-  </div>`);
-  domTeslaFillOAuthLink(domTeslaStatus.region === "na" ? "na" : "eu");
-}
-function domTeslaOAuthShowErr(wrap, sel, msg) {
-  const st = document.getElementById("dom-tesla-oauth-status");
-  if (st) st.textContent = "Échec";
-  wrap.querySelector(".dom-tesla-oauth-go")?.remove();
-  wrap.querySelector(".dom-tesla-oauth-err")?.remove();
-  wrap.insertAdjacentHTML("beforeend", `<p class="dom-tesla-oauth-err" role="alert">${esc(msg)}</p><button type="button" class="btn ghost" data-dom-tesla-retry>Réessayer</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button>`);
-  if (sel) sel.disabled = false;
-  toast(msg);
-}
-function domTeslaFillOAuthLink(region) {
-  const wrap = document.getElementById("dom-tesla-connect-wrap");
-  const sel = document.getElementById("dom-tesla-region");
-  const st = document.getElementById("dom-tesla-oauth-status");
-  if (!wrap) return;
-  wrap.querySelector(".dom-tesla-oauth-err")?.remove();
-  wrap.querySelector("[data-dom-tesla-retry]")?.remove();
-  wrap.querySelector(".dom-tesla-oauth-go")?.remove();
-  if (st) st.textContent = "Préparation du lien Tesla…";
-  if (sel) sel.disabled = true;
-  teslaServer("oauth_begin", { region: region === "na" ? "na" : "eu" }, { skipQueue: true, timeoutMs: 20000 }).then(r => {
-    if (!document.getElementById("dom-tesla-connect-wrap")) return;
-    if (sel) {
-      sel.disabled = false;
-      sel.value = region === "na" ? "na" : "eu";
-      if (!sel.dataset.domTeslaBound) {
-        sel.dataset.domTeslaBound = "1";
-        sel.addEventListener("change", () => domTeslaFillOAuthLink(sel.value === "na" ? "na" : "eu"));
-      }
-    }
-    const url = String(r.url || "");
-    if (!url.startsWith("https://auth.tesla.com/")) {
-      domTeslaOAuthShowErr(wrap, sel, "Réponse serveur invalide.");
-      return;
-    }
-    if (st) st.textContent = "Lien prêt — ouvrez Tesla pour autoriser Maisonnée.";
-    wrap.insertAdjacentHTML("beforeend", `<p class="muted">Autorisez Maisonnée sur le site Tesla. Les jetons restent sur le serveur du foyer.</p>
-      <a class="btn primary dom-tesla-oauth-go" href="${esc(url)}">Continuer vers Tesla ›</a>
-      <button type="button" class="btn ghost" data-act="closeSheet">Annuler</button>`);
-  }).catch(err => {
-    const w = document.getElementById("dom-tesla-connect-wrap");
-    if (!w) return;
-    domTeslaOAuthShowErr(w, sel, err && err.message ? err.message : "Erreur Tesla");
-  });
-}
-function domTeslaDevicePickerSheet() {
-  domTeslaOpenSheet("Véhicule Tesla", `<div class="dom-tesla-sheet-body"><p class="muted dom-tesla-status-line" aria-live="polite"><strong>Chargement de la liste…</strong></p><p class="muted small">Pas besoin de réveiller la voiture pour choisir un véhicule. Si rien n'apparaît sous 30 s, un message d'erreur s'affichera ici.</p></div>`);
-  teslaServer("devices", null, { skipQueue: true, timeoutMs: 28000 }).then(r => {
-    domTeslaDevices = r.devices || [];
-    if (!domTeslaDevices.length) {
-      domTeslaOpenSheet("Véhicule Tesla", domTeslaSheetAlert("Aucun véhicule sur ce compte Tesla.", "Vérifiez que la bonne adresse e-mail a été utilisée lors de l'autorisation.", "data-dom-tesla-devices"));
-      return;
-    }
-    const cur = domTeslaStatus.device_id || (S.hh && S.hh.tesla_vehicle_id);
-    const rows = domTeslaDevices.map(d => {
-      const mark = cur === d.id ? "✓" : "Choisir ›";
-      const extra = d.state && d.state !== "online" ? " · " + d.state : "";
-      const asleep = d.state === "asleep" ? " · en veille (normal)" : "";
-      return `<button type="button" class="btn dom-settings-row" data-dom-tesla-pick="${esc(String(d.id))}"><span>${esc(d.name)}${extra || asleep ? `<small class="muted">${esc((extra || asleep).replace(/^ · /, ""))}</small>` : ""}</span><span>${mark}</span></button>`;
-    }).join("");
-    domTeslaOpenSheet("Véhicule Tesla", `<div class="dom-tesla-sheet-body dom-settings"><p class="muted">Choisissez le véhicule à afficher dans Maisonnée.</p><div class="dom-settings-list">${rows}</div><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
-  }).catch(err => {
-    const msg = err && err.message ? err.message : "Liste des véhicules inaccessible.";
-    domTeslaOpenSheet("Véhicule Tesla", domTeslaSheetAlert(msg, "Région Europe, facturation Fleet API (developer.tesla.com), ou enregistrement de l'app si Tesla le demande.", "data-dom-tesla-devices"));
-    toast(msg);
-  });
-}
 function domPlaceholderCard(kind, title, ico, sub) {
   return `<article class="dom-eq-card is-pending"><button type="button" class="dom-eq-open" data-dom-placeholder="${kind}">${domEqCardTop(ico, esc(title))}<small>${esc(sub)}</small></button></article>`;
 }
@@ -1185,7 +882,6 @@ function domBoard() {
   const eq = rooms.map(r => `<article class="dom-eq-card"><button type="button" class="dom-eq-open" data-dom-room="${esc(r.id)}">${domEqCardTop(esc(r.ico), esc(r.t))}<small>${esc(domRoomSummary(r))}</small></button></article>`);
   const pending = mode === "demo" ? "Mode démo — ouvrez le vrai foyer" : "Non connecté";
   eq.push(domMelLinked() ? domMelEqCard() : domPlaceholderCard("mitsu", "Chauffage Mitsubishi", "♨️", pending));
-  eq.push(domTeslaLinked() ? domTeslaEqCard() : domPlaceholderCard("tesla", "Tesla", "🚗", pending));
   eq.push(domDreameLinked() ? domDreameEqCard() : domPlaceholderCard("dreame", "Dreame D20 Ultra", "🤖", pending));
   return `<article class="dom-hero">
     <button type="button" class="dom-hero-media" data-dom-tab="house" aria-label="Ouvrir la vue maison">
@@ -1212,8 +908,7 @@ function domHouseView() {
   const rooms = domRoomList();
   const extras = [
     { id: "chauffage", t: "Chauffage", ico: "♨️", line: domMelSummary(), mel: true },
-    { id: "dreame", t: "Aspirateur", ico: "🤖", line: domDreameSummary(), dreame: true },
-    { id: "garage", t: "Garage", ico: "🚗", line: domTeslaSummary(), tesla: true }
+    { id: "dreame", t: "Aspirateur", ico: "🤖", line: domDreameSummary(), dreame: true }
   ];
   return `<article class="dom-house-art">
     <img src="${DOM_HERO}" alt="Illustration générique d'une maison, non représentative du plan réel">
@@ -1223,8 +918,6 @@ function domHouseView() {
     ? `<button type="button" class="dom-house-row${domMelLinked() ? "" : " is-pending"}" data-dom-mel-open><span class="dom-eq-ico">${r.ico}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.line)}</small></span><span aria-hidden="true">›</span></button>`
     : r.dreame
     ? `<button type="button" class="dom-house-row${domDreameLinked() ? "" : " is-pending"}" data-dom-dreame-open><span class="dom-eq-ico">${r.ico}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.line)}</small></span><span aria-hidden="true">›</span></button>`
-    : r.tesla
-    ? `<button type="button" class="dom-house-row${domTeslaLinked() ? "" : " is-pending"}" data-dom-tesla-open><span class="dom-eq-ico">${r.ico}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.line)}</small></span><span aria-hidden="true">›</span></button>`
     : `<button type="button" class="dom-house-row is-pending" data-dom-placeholder="${esc(r.id)}"><span class="dom-eq-ico">${r.ico}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.line)}</small></span><span aria-hidden="true">›</span></button>`).join("")}
   <button type="button" class="btn ghost" data-dom-rooms-manage>Gérer les pièces</button></div>`;
 }
@@ -1242,7 +935,6 @@ function domDeviceSheet(id) {
 }
 function domPlaceholderSheet(kind) {
   const copy = {
-    tesla: ["Tesla", "<p>Compte Tesla non relié à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-tesla-connect>Relier mon compte Tesla</button>"],
     mitsu: ["Chauffage Mitsubishi", "<p>MELCloud n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-mel-connect>Relier MELCloud</button>"],
     dreame: ["Dreame D20 Ultra", "<p>Dreame Home n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-dreame-connect>Relier Dreame Home</button>"]
   }[kind] || ["Équipement", "<p>Intégration à réaliser.</p>"];
@@ -1275,7 +967,6 @@ VIEWS.domotique = function () {
     domPollOnView();
     domMelPollOnView();
     domDreamePollOnView();
-    domTeslaPollOnView();
   }, 0);
   return domPage();
 };
@@ -1446,52 +1137,6 @@ document.addEventListener("click", e => {
       toast("Nettoyage de la pièce lancé", null, null, null, "domotique");
       if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
-    return;
-  }
-  if (e.target.closest("[data-dom-tesla-open]")) { domTeslaSheet(); return; }
-  if (e.target.closest("[data-dom-tesla-connect]")) { domTeslaConnectSheet(); return; }
-  if (e.target.closest("[data-dom-tesla-retry]")) {
-    const sel = document.getElementById("dom-tesla-region");
-    domTeslaFillOAuthLink(sel && sel.value === "na" ? "na" : "eu");
-    return;
-  }
-  if (e.target.closest("[data-dom-tesla-devices]")) { domTeslaDevicePickerSheet(); return; }
-  if (e.target.closest("[data-dom-tesla-disconnect]")) {
-    if (!confirm("Délier Tesla de ce foyer ? Les commandes véhicule seront coupées.")) return;
-    teslaServer("disconnect", {}).then(() => {
-      domTeslaStatus = { connected: false, configured: true, device_id: null, device_name: null, region: "eu" };
-      domTeslaState = null;
-      domTeslaStateAt = 0;
-      if (S.hh) S.hh.tesla_vehicle_id = null;
-      closeSheet(); render(); toast("Tesla délié.");
-    }).catch(err => toast(err.message));
-    return;
-  }
-  const tesPick = e.target.closest("[data-dom-tesla-pick]");
-  if (tesPick) {
-    const device_id = tesPick.dataset.domTeslaPick;
-    teslaServer("pick_device", { device_id }).then(r => {
-      domTeslaStatus.device_id = r.device_id;
-      domTeslaStatus.device_name = r.device_name;
-      if (S.hh) S.hh.tesla_vehicle_id = r.device_id;
-      toast("Véhicule Tesla sélectionné.");
-      domTeslaRefreshState(true).then(() => { closeSheet(); render(); domTeslaDevicePickerSheet(); }).catch(() => { closeSheet(); render(); });
-    }).catch(err => toast(err.message));
-    return;
-  }
-  const tesCmd = e.target.closest("[data-dom-tesla-cmd]");
-  if (tesCmd) {
-    const action = tesCmd.dataset.domTeslaCmd;
-    if (!action || tesCmd.disabled) return;
-    domTeslaBusy = action;
-    render();
-    domRunTeslaCommand(() => teslaServer("command", { action })).then(r => {
-      if (!r) return;
-      domTeslaState = r;
-      domTeslaStateAt = Date.now();
-      toast("Commande Tesla envoyée", null, null, null, "domotique");
-      if (document.querySelector(".dom-tesla-panel")) domTeslaSheet(true);
-    }).catch(err => { if (err) toast(err.message); }).finally(() => { domTeslaBusy = ""; render(); });
     return;
   }
   const z = e.target.closest("[data-dom-zone]"); if (z) { domZone = z.dataset.domZone; render(); return; }
@@ -2643,8 +2288,4 @@ document.addEventListener("change", e => {
   toast("Agenda par défaut : " + e.target.options[e.target.selectedIndex].text + ".");
 });
 
-document.getElementById("sheet")?.addEventListener("close", () => {
-  document.getElementById("sheet")?.classList.remove("dom-tesla-sheet");
-}, true);
-domTeslaHandleOAuthReturn();
 init();

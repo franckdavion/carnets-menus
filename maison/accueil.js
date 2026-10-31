@@ -481,7 +481,7 @@ function render(){
  }).join('');
  const editing=window.maisonneeModuleGrid?.editing?.();
  main.classList.toggle('mn-home-editing',!!editing);
- const houseEdit=editing?`<div class="mn-house-editbar"><p class="mn-house-hint">Maintenez une carte, puis déplacez-la à l’emplacement voulu.</p><button type="button" class="umod-edit mn-house-done" data-umod="edit">✓ Terminer</button></div>`:`<div class="mn-house-editbar"><button type="button" class="umod-edit mn-house-personalize" data-act="homePersonalize">Personnaliser mon accueil</button></div>`;
+ const houseEdit=editing?`<div class="mn-house-editbar"><p class="mn-house-hint">Maintenez une carte, puis déplacez-la à l’emplacement voulu.</p><button type="button" class="umod-edit mn-house-done" data-umod="edit">✓ Terminer</button></div>`:'';
  const band=(window.mnJour&&mnJour.at(now))||{id:'matin',hello:'Bonjour la famille ! ☀️'};
  const meAcc=(typeof meM==='function'?meM():null);
  const bandHello=meAcc&&meAcc.name?({matin:`Bonjour ${meAcc.name} ! ☀️`,aprem:`Bel après-midi ${meAcc.name} ! ☀️`,soir:`Bonsoir ${meAcc.name} ! 🌙`,nuit:`Bonne nuit ${meAcc.name} ! 🌙`}[band.id]||band.hello):band.hello;
@@ -564,11 +564,6 @@ function sync(){
  if(ico.dataset.sharedIcon===key)return;
  ico.dataset.sharedIcon=key;ico.textContent=icons[key];ico.classList.add('v3-shared-icon');
  });
- const family=document.querySelector('main.view-foyer');
- if(family&&!family.querySelector('#ultimate-family-personalize')){
-  const btn=document.createElement('button');btn.type='button';btn.id='ultimate-family-personalize';btn.textContent='⚙️ Personnaliser mon accueil';
-  family.prepend(btn);
- }
  const home=document.querySelector('main.view-home');
  const head=home?.querySelector('#ultimate-module-grid .umod-heading');
  const fab=document.querySelector('button.fab[data-act="quickAdd"]');
