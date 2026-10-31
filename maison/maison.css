@@ -2312,6 +2312,9 @@ dialog.sheet .dom-mel-panel .dom-mel-step span{display:block;font-size:32px;line
 .dom-dreame-status{margin:0 0 12px;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(126,200,255,.2)}
 .dom-dreame-actions{display:grid;gap:8px}
 .dom-dreame-actions .btn{width:100%}
+.dom-dreame-choices{display:grid;gap:8px;margin:0 0 8px}
+.dom-dreame-choice{width:100%;min-height:48px;touch-action:manipulation;pointer-events:auto;position:relative;z-index:1}
+dialog.sheet .dom-dreame-choice,dialog.sheet .dom-dreame-panel .btn,dialog.sheet .chip{touch-action:manipulation;pointer-events:auto}
 .dom-dreame-rooms-pick{display:grid;gap:8px}
 .dom-form label.dom-dreame-check{display:flex;flex-direction:row;align-items:center;gap:12px;margin:0;font-weight:600;min-height:44px}
 .dom-form label.dom-dreame-check input[type=checkbox]{width:22px;min-width:22px;max-width:22px;height:22px;margin:0;flex:none;align-self:center}
