@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<link rel="stylesheet" href="maison.css?v=20261031move">
+<link rel="stylesheet" href="maison.css?v=20261031drag">
 
 </head>
 <body>
@@ -77,7 +77,7 @@
 })();
 </script>
 <script src="bandeau-jour.js"></script>
-<script src="accueil.js?v=20261031ext"></script>
+<script src="accueil.js?v=20261031drag"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>

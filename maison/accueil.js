@@ -63,9 +63,9 @@ function openEditor(){
  if(homeBtn)homeBtn.click();
  else{
   const main=document.querySelector('main.view-home');
-  if(main)mount(main);
+  if(main){syncEditChrome(main);mount(main)}
  }
- requestAnimationFrame(()=>document.querySelector('#ultimate-module-grid')?.scrollIntoView({block:'nearest'}));
+ requestAnimationFrame(()=>document.querySelector('.mn-house')?.scrollIntoView({block:'start'}));
 }
 function load(){const h=window.maisonHomeStore.read();if(h.order&&h.order.length)return {order:h.order.slice(),hidden:(h.hidden||[]).slice()};return {order:items.map(x=>x[0]),hidden:[]}}
 let config=load();
@@ -85,6 +85,95 @@ function move(id, delta){
  [order[i],order[j]]=[order[j],order[i]];
  config.order=order;
 }
+function reorderModules(fromId,toId){
+ if(!fromId||fromId===toId)return;
+ const order=sorted().map(x=>x[0]);
+ const a=order.indexOf(fromId),b=order.indexOf(toId);
+ if(a<0||b<0)return;
+ order.splice(a,1);
+ order.splice(b,0,fromId);
+ config.order=order;
+ save();
+ if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();
+}
+function syncEditChrome(main){
+ if(!main)return;
+ main.classList.toggle('mn-home-editing',edit);
+}
+function repaint(){
+ if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();
+ else{
+  const host=document.querySelector('#ultimate-module-grid');
+  if(host)render(host);
+ }
+}
+const LONG_MS=480;
+let suppressClick=false,pressTimer=null,pressTarget=null,pressPointer=null,pressStart=null,drag=null;
+function clearPress(){
+ if(pressTimer){clearTimeout(pressTimer);pressTimer=null}
+ pressTarget=null;pressPointer=null;pressStart=null;
+}
+function endDrag(){
+ if(!drag)return;
+ drag.item.classList.remove('mn-house-lift','mn-house-drop-target');
+ drag.ghost?.remove();
+ drag=null;
+}
+function startDrag(item,e){
+ endDrag();clearPress();
+ const r=item.getBoundingClientRect();
+ const ghost=item.cloneNode(true);
+ ghost.classList.add('mn-house-ghost');
+ ghost.style.width=r.width+'px';
+ ghost.style.height=r.height+'px';
+ document.body.appendChild(ghost);
+ item.classList.add('mn-house-lift');
+ drag={id:item.dataset.module,item,ghost,offsetX:e.clientX-r.left,offsetY:e.clientY-r.top,pointerId:e.pointerId};
+ moveGhost(e.clientX,e.clientY);
+ if(typeof navigator.vibrate==='function')navigator.vibrate(14);
+ try{item.setPointerCapture(e.pointerId)}catch(err){}
+}
+function moveGhost(x,y){
+ if(!drag)return;
+ drag.ghost.style.transform=`translate3d(${x-drag.offsetX}px,${y-drag.offsetY}px,0)`;
+ document.querySelectorAll('.mn-house-item.mn-house-drop-target').forEach(el=>el.classList.remove('mn-house-drop-target'));
+ const hit=document.elementFromPoint(x,y)?.closest('.mn-house-item');
+ if(hit&&hit.dataset.module!==drag.id)hit.classList.add('mn-house-drop-target');
+ drag.over=hit&&hit.dataset.module!==drag.id?hit.dataset.module:null;
+}
+function finishDrag(){
+ if(!drag)return;
+ const from=drag.id,to=drag.over;
+ suppressClick=true;
+ endDrag();
+ if(to)reorderModules(from,to);
+ setTimeout(()=>{suppressClick=false},400);
+}
+document.addEventListener('pointerdown',e=>{
+ if(!edit||e.button!==0)return;
+ const item=e.target.closest('.mn-house-grid .mn-house-item');
+ if(!item)return;
+ clearPress();
+ pressTarget=item;pressPointer=e.pointerId;pressStart={x:e.clientX,y:e.clientY};
+ pressTimer=setTimeout(()=>{if(pressTarget===item)startDrag(item,e)},LONG_MS);
+},{passive:true});
+document.addEventListener('pointermove',e=>{
+ if(drag&&drag.pointerId===e.pointerId){e.preventDefault();moveGhost(e.clientX,e.clientY);return}
+ if(!pressTimer||pressPointer!==e.pointerId||!pressStart)return;
+ if(Math.hypot(e.clientX-pressStart.x,e.clientY-pressStart.y)>12)clearPress();
+},{passive:false});
+document.addEventListener('pointerup',e=>{
+ if(drag&&drag.pointerId===e.pointerId){finishDrag();clearPress();return}
+ clearPress();
+});
+document.addEventListener('pointercancel',()=>{endDrag();clearPress()});
+document.addEventListener('click',e=>{
+ if(!edit)return;
+ if(suppressClick){e.preventDefault();e.stopPropagation();return}
+ if(e.target.closest('.mn-house-grid')&&e.target.closest('[data-act],[data-dom-cmd]')){
+  e.preventDefault();e.stopPropagation();
+ }
+},true);
 function render(host){
  if(!host)return;
  const visible=sorted().filter(x=>!config.hidden.includes(x[0])),hidden=sorted().filter(x=>config.hidden.includes(x[0]));
@@ -103,6 +192,7 @@ function render(host){
 }
 function mount(main){
  const dashboard=main.querySelector('#ultimate-dashboard');if(!dashboard)return;
+ syncEditChrome(main);
  if(!edit)config=load();
  let host=dashboard.querySelector('#ultimate-module-grid');
  if(!host){host=document.createElement('section');host.id='ultimate-module-grid';host.setAttribute('aria-label','Modules personnalisables');dashboard.appendChild(host)}
@@ -110,10 +200,10 @@ function mount(main){
 }
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-umod]');if(!b)return;
- const host=b.closest('#ultimate-module-grid');if(!host)return;
+ const host=b.closest('#ultimate-module-grid, .mn-house');if(!host)return;
  e.preventDefault();e.stopPropagation();
  const action=b.dataset.umod,id=b.dataset.id;
- if(action==='edit')edit=!edit;
+ if(action==='edit'){edit=!edit;syncEditChrome(document.querySelector('main.view-home'))}
  if(action==='hide'&&!config.hidden.includes(id))config.hidden.push(id);
  if(action==='show')config.hidden=config.hidden.filter(k=>k!==id);
  if(action==='reset'){config={order:items.map(x=>x[0]),hidden:[]}}
@@ -125,12 +215,11 @@ document.addEventListener('click',e=>{
  if(action==='up')move(id,-1);
  if(action==='down')move(id,1);
  save();
- if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();
- else render(host);
+ repaint();
 });
 document.addEventListener('dragstart',e=>{const slot=e.target.closest('.umod-slot');if(edit&&slot){dragId=slot.dataset.module;e.dataTransfer.effectAllowed='move'}});
 document.addEventListener('dragover',e=>{if(edit&&dragId&&e.target.closest('.umod-slot'))e.preventDefault()});
-document.addEventListener('drop',e=>{const slot=e.target.closest('.umod-slot');if(!edit||!slot||!dragId)return;e.preventDefault();const order=sorted().map(x=>x[0]);const a=order.indexOf(dragId),b=order.indexOf(slot.dataset.module);if(a>=0&&b>=0){order.splice(a,1);order.splice(b,0,dragId);config.order=order;save();if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();else render(slot.closest('#ultimate-module-grid'))}dragId=null});
+document.addEventListener('drop',e=>{const slot=e.target.closest('.umod-slot');if(!edit||!slot||!dragId)return;e.preventDefault();reorderModules(dragId,slot.dataset.module);dragId=null});
 function setVisible(key, visible){
  if(!items.some(x=>x[0]===key))return;
  config.hidden=config.hidden.filter(k=>k!==key);
@@ -139,7 +228,7 @@ function setVisible(key, visible){
  const host=document.querySelector('#ultimate-module-grid');
  if(host)render(host);
 }
-window.maisonneeModuleGrid={mount,openEditor,setVisible,editing:()=>edit};
+window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:()=>edit};
 })();
 
 /* Maisonnée Ultimate : ajout non destructif sur l'accueil uniquement. */
@@ -290,15 +379,16 @@ function render(){
  const ton=k=>k==='agenda'?'cal':k==='recettes'?'recette':k;
  let pins=typeof homePins==='function'?homePins():['agenda','repas','courses','recettes'];
  try{const order=window.maisonHomeStore&&window.maisonHomeStore.read().order;if(Array.isArray(order)&&order.length)pins=[...pins].sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib)})}catch(e){}
+ const wrap=(k,html)=>`<div class="mn-house-item" data-module="${k}">${html}</div>`;
  const cartes=pins.map(k=>{
   const mod=typeof modOf==='function'?modOf(k):null;if(!mod)return '';
   let ligne='',meta='',kicker='';
   try{const extra=plus[k];if(extra){kicker=extra.k;ligne=extra.t;meta=extra.m}else if(typeof mod.sub==='function')ligne=mod.sub()}catch(e){ligne=mod.t}
   const tete=`<span class="mn-card-h"><img src="assets/modules3d/${k}.svg" alt="" width="46" height="46"><span>${esc(mod.t)}</span><span class="mn-chev" aria-hidden="true">›</span></span>`;
   const corps=`<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}`;
-  if(k==='agenda')return `<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`;
-  if(k==='repas'&&g.repas.day&&g.repas.slot)return `<div class="mn-card mn-card-repas mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="repas">${tete}</button><button type="button" class="mn-card-open" data-act="homeRepas" data-day="${esc(g.repas.day)}" data-slot="${esc(g.repas.slot)}" aria-label="${ligne&&ligne!=='Rien de prévu'?'Ouvrir la fiche de '+ligne:'Choisir le repas'}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`;
-  if(k==='recettes'&&g.recette.id)return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
+  if(k==='agenda')return wrap(k,`<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`);
+  if(k==='repas'&&g.repas.day&&g.repas.slot)return wrap(k,`<div class="mn-card mn-card-repas mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="repas">${tete}</button><button type="button" class="mn-card-open" data-act="homeRepas" data-day="${esc(g.repas.day)}" data-slot="${esc(g.repas.slot)}" aria-label="${ligne&&ligne!=='Rien de prévu'?'Ouvrir la fiche de '+ligne:'Choisir le repas'}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`);
+  if(k==='recettes'&&g.recette.id)return wrap(k,`<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`);
   if(k==='domotique'){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
     if(typeof window.domRefreshState==='function')window.domRefreshState().then(ok=>{if(ok)render()});
@@ -306,15 +396,18 @@ function render(){
     const probe=typeof gates.voiture?.temp==='number'
       ?`<strong>Extérieur ${String(gates.voiture.temp).replace('.',',')} °C</strong>`
       :`<strong>Extérieur</strong><small>Sonde du portail</small>`;
-    return `<div class="mn-card mn-card-domotique mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="domotique">${tete}${probe}</button><div class="mn-card-gates">${btn(gates.pieton,'Piéton')}${btn(gates.voiture,'Voiture')}</div></div>`;
+    return wrap(k,`<div class="mn-card mn-card-domotique mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="domotique">${tete}${probe}</button><div class="mn-card-gates">${btn(gates.pieton,'Piéton')}${btn(gates.voiture,'Voiture')}</div></div>`);
   }
-  return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
+  return wrap(k,`<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`);
  }).join('');
+ const editing=window.maisonneeModuleGrid?.editing?.();
+ main.classList.toggle('mn-home-editing',!!editing);
+ const houseEdit=editing?`<div class="mn-house-editbar"><p class="mn-house-hint">Maintenez une carte, puis déplacez-la à l’emplacement voulu.</p><button type="button" class="umod-edit mn-house-done" data-umod="edit">✓ Terminer</button></div>`:'';
  const band=(window.mnJour&&mnJour.at(now))||{id:'matin',hello:'Bonjour la famille ! ☀️'};
  const jourLabel=date().replace(/^./,c=>c.toUpperCase());
  el.innerHTML=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${band.hello}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
 <section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div><div class="ultimate-dayline">🌙 Lever ${heure(d?.moonrise?.[0])} · Coucher ${heure(d?.moonset?.[0])}</div></div></div></section></section>
-<section class="mn-house" aria-label="Notre maison"><h2><svg class="mn-house-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="#f7fcff" d="M16 3.2 3.2 14.4h3V28h6.4v-7.8h6.8V28H25.8v-13.6h3L16 3.2z"/></svg><span class="mn-house-label">Notre maison</span><span class="mn-house-line" aria-hidden="true"></span></h2><div class="mn-house-grid">
+<section class="mn-house" aria-label="Notre maison">${houseEdit}<h2><svg class="mn-house-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="#f7fcff" d="M16 3.2 3.2 14.4h3V28h6.4v-7.8h6.8V28H25.8v-13.6h3L16 3.2z"/></svg><span class="mn-house-label">Notre maison</span><span class="mn-house-line" aria-hidden="true"></span></h2><div class="mn-house-grid">
 ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
 </div></section>
 <button type="button" class="ultimate-classic-button" id="ultimate-toggle-classic" aria-expanded="${main.classList.contains('ultimate-classic')}">${main.classList.contains('ultimate-classic')?'Masquer':'Afficher'} l’accueil classique et tous ses raccourcis</button>`;

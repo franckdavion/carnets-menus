@@ -1401,7 +1401,7 @@ function openSheet(title, body, ctx = {}) {
   const spotSel = live && live.dataset.spot;
   if (live) live.remove();
   sheetCtx = ctx;
-  $("#sheetIn").innerHTML = `<div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div>${body}`;
+  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div></div>${body}`;
   if (live && mzToastActive) {
     const again = spotSel && d.querySelector(spotSel);
     if (again) again.insertAdjacentElement("afterend", live);
@@ -1413,9 +1413,22 @@ function openSheet(title, body, ctx = {}) {
   d.scrollTop = 0;
   // Do not focus an input when opening: iOS must keep the keyboard closed.
   if (document.activeElement?.matches?.("input, textarea, select")) document.activeElement.blur();
+  resetSheetDrag();
+}
+function resetSheetDrag() {
+  const d = $("#sheet");
+  if (!d) return;
+  d.classList.remove("sheet-dragging", "sheet-dismissing");
+  d.style.removeProperty("transform");
+  d.style.removeProperty("transition");
+}
+function sheetDismissClose() {
+  const btn = $("#sheetIn")?.querySelector(".sheet-top [data-act='closeSheet']");
+  if (btn) btn.click();
+  else closeSheet();
 }
 function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
-$("#sheet").addEventListener("close", () => { unlockSheetBackground(); sheetCtx = null; if (pending) render(); });
+$("#sheet").addEventListener("close", () => { resetSheetDrag(); unlockSheetBackground(); sheetCtx = null; if (pending) render(); });
 // A tap on non-interactive space inside any sheet dismisses the iPhone keyboard.
 $("#sheet").addEventListener("pointerdown", e => {
   if (!document.activeElement?.matches?.("input, textarea, select, [contenteditable=true]")) return;
@@ -1423,6 +1436,57 @@ $("#sheet").addEventListener("pointerdown", e => {
   document.activeElement.blur();
 });
 $("#sheet").addEventListener("click", e => { if (e.target === $("#sheet")) closeSheet(); });
+
+const SHEET_DISMISS_PX = 80;
+let sheetDrag = null;
+function sheetDragEnd(finish) {
+  if (!sheetDrag) return;
+  const d = $("#sheet");
+  const drag = sheetDrag;
+  sheetDrag = null;
+  try { d.releasePointerCapture(drag.pid); } catch (_) {}
+  if (!finish || !drag.active) {
+    resetSheetDrag();
+    return;
+  }
+  if (drag.dy >= SHEET_DISMISS_PX) {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) { resetSheetDrag(); sheetDismissClose(); return; }
+    d.classList.add("sheet-dismissing");
+    d.style.transition = "transform .22s ease";
+    d.style.transform = `translateY(${Math.min(window.innerHeight, d.offsetHeight + 48)}px)`;
+    setTimeout(() => { resetSheetDrag(); sheetDismissClose(); }, 230);
+    return;
+  }
+  d.classList.remove("sheet-dragging");
+  d.style.transition = "transform .2s ease";
+  d.style.transform = "";
+  setTimeout(resetSheetDrag, 220);
+}
+$("#sheet").addEventListener("pointerdown", e => {
+  const d = $("#sheet");
+  if (!d.open || d.classList.contains("maison-keyboard") || sheetDrag) return;
+  if (!e.target.closest(".sheet-top") || e.target.closest("button, a, input, textarea, select, label")) return;
+  sheetDrag = { y0: e.clientY, x0: e.clientX, dy: 0, active: false, pid: e.pointerId };
+  try { d.setPointerCapture(e.pointerId); } catch (_) {}
+});
+$("#sheet").addEventListener("pointermove", e => {
+  if (!sheetDrag || e.pointerId !== sheetDrag.pid) return;
+  const d = $("#sheet");
+  const dy = Math.max(0, e.clientY - sheetDrag.y0);
+  const dx = e.clientX - sheetDrag.x0;
+  if (!sheetDrag.active) {
+    if (dy < 8 && Math.abs(dx) > Math.abs(dy) + 4) { sheetDragEnd(false); return; }
+    if (dy < 10) return;
+    sheetDrag.active = true;
+  }
+  sheetDrag.dy = dy;
+  d.classList.add("sheet-dragging");
+  d.style.transform = `translateY(${dy}px)`;
+  e.preventDefault();
+}, { passive: false });
+$("#sheet").addEventListener("pointerup", e => { if (sheetDrag && e.pointerId === sheetDrag.pid) sheetDragEnd(true); });
+$("#sheet").addEventListener("pointercancel", e => { if (sheetDrag && e.pointerId === sheetDrag.pid) sheetDragEnd(false); });
 
 const chipsHtml = (name, opts, cur, multi) => `<div class="chips" role="group">${opts.map(([v, l, pre]) => `<button type="button" class="chip" data-chip="${name}" data-v="${esc(v)}" ${multi ? "data-multi" : ""} aria-pressed="${multi ? (cur || []).map(String).includes(String(v)) : String(cur) === String(v)}">${pre || ""}${esc(l)}</button>`).join("")}</div>`;
 const chipVal = (form, name) => { const b = form.querySelector(`[data-chip="${name}"][aria-pressed="true"]`); return b ? b.dataset.v : null; };
