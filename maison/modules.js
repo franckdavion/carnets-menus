@@ -309,6 +309,11 @@ async function domDreameRefreshStatus() {
     const r = await dreameServer("status");
     domDreameStatus = { connected: !!r.connected, device_id: r.device_id ?? null, device_name: r.device_name || null };
     if (S.hh && r.device_id != null) S.hh.dreame_device_id = r.device_id;
+    if (Array.isArray(r.rooms) && r.rooms.length) {
+      domDreameRooms = r.rooms;
+      domDreameRoomsHint = r.hint || "";
+      domDreameRoomsAt = Date.now();
+    }
     domDreameStatusAt = Date.now();
   } catch (_) {
     domDreameStatusAt = Date.now();
@@ -334,9 +339,9 @@ function domDreamePollOnView() {
 }
 async function domDreameEnsureRooms(force) {
   if (!domDreameLinked() || mode !== "cloud") return [];
-  if (domDreameState && domDreameCommandable() === false) {
-    domDreameRoomsHint = "Commandes indisponibles : le robot ne répond pas. La charge affichée vient du cloud. Réveillez-le dans Dreame Home, puis rouvrez cette fiche.";
-    return [];
+  if (domDreameState && domDreameCommandable() === false && !domDreameRooms.length) {
+    await domDreameRefreshStatus();
+    if (domDreameRooms.length) return domDreameRooms;
   }
   const now = Date.now();
   if (!force && now - domDreameRoomsAt < 120000 && (domDreameRooms.length || domDreameRoomsHint)) return domDreameRooms;
@@ -593,7 +598,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031d9</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e1</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031e";
+const FN_REV = "20261031f";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -128,6 +128,7 @@ type DreameCred = {
   device_id: string | null;
   device_name: string | null;
   device_model: string | null;
+  map_rooms?: { id: number; name: string }[] | null;
 };
 
 type DreameDevice = { did: string; name: string; model: string; online: boolean; battery: number | null; status: number | null };
@@ -698,10 +699,12 @@ Deno.serve(async req => {
     if (action === "status") {
       const cred = await getCred(hid);
       const { data: hh } = await admin.from("households").select("dreame_device_id").eq("id", hid).maybeSingle();
+      const rooms = Array.isArray(cred?.map_rooms) ? cred.map_rooms : [];
       return json(req, {
         connected: !!cred,
         device_id: hh?.dreame_device_id ?? cred?.device_id ?? null,
-        device_name: cred?.device_name || null
+        device_name: cred?.device_name || null,
+        rooms
       });
     }
 
@@ -784,10 +787,21 @@ Deno.serve(async req => {
     }
 
     if (action === "rooms") {
+      const cached = Array.isArray(cred.map_rooms) ? cred.map_rooms : [];
       const did = cred.device_id;
-      if (!did) return json(req, { error: "Aucun aspirateur Dreame sélectionné" }, 400);
-      const map = await dreameFetchMapRooms(cred, did);
-      return json(req, map);
+      if (!did) return json(req, { rooms: cached, hint: cached.length ? null : "Aucun aspirateur Dreame sélectionné", live_ok: false });
+      try {
+        const map = await dreameFetchMapRooms(cred, did);
+        if (map.rooms?.length) {
+          await admin.from("household_dreame").update({ map_rooms: map.rooms, updated_at: new Date().toISOString() }).eq("household_id", hid);
+          return json(req, map);
+        }
+        if (cached.length) return json(req, { rooms: cached, hint: map.hint, live_ok: map.live_ok });
+        return json(req, map);
+      } catch (e) {
+        if (cached.length) return json(req, { rooms: cached, hint: e instanceof Error ? e.message : null, live_ok: false });
+        throw e;
+      }
     }
 
     if (action === "command" && req.method === "POST") {
