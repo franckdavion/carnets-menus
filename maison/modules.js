@@ -450,7 +450,7 @@ function domDreamePickedNames() {
 }
 function domDreamePickSummary() {
   const names = domDreamePickedNames();
-  if (!names.length) return "Aucune pièce cochée : Lecture fera toute la maison, avec le mode choisi.";
+  if (!names.length) return "Aucune pièce sélectionnée : Lecture fera toute la maison, avec le mode choisi.";
   return "Sélection : " + names.join(", ") + ". Lecture n’ira que dans ces pièces, avec le mode choisi.";
 }
 function domDreameRoomsBlock(rooms, hint) {
@@ -461,12 +461,12 @@ function domDreameRoomsBlock(rooms, hint) {
   const picked = new Set((domDreamePickRooms || []).map(Number));
   const rows = list.map(r => {
     const on = picked.has(Number(r.id));
-    return `<label class="dom-dreame-check${on ? " is-on" : ""}" data-dom-dreame-pick-room="${esc(String(r.id))}"><input type="checkbox" name="pick_room" value="${esc(String(r.id))}" ${on ? "checked" : ""}><span>${esc(r.name)}</span></label>`;
+    return `<button type="button" class="btn dom-dreame-choice${on ? " primary" : ""}" data-dom-dreame-pick-room="${esc(String(r.id))}" aria-pressed="${on ? "true" : "false"}">${esc(r.name)}</button>`;
   }).join("");
   return `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Pièces à nettoyer</h4>
     <p class="muted small" data-dom-dreame-pick-sum>${esc(domDreamePickSummary())}</p>
-    <div class="btns" style="margin:0 0 8px"><button type="button" class="btn ghost" data-dom-dreame-pick-all>Tout cocher</button><button type="button" class="btn ghost" data-dom-dreame-pick-none>Tout décocher</button></div>
-    <div class="dom-dreame-rooms-pick">${rows}</div>`;
+    <div class="btns" style="margin:0 0 8px"><button type="button" class="btn ghost" data-dom-dreame-pick-all>Toutes</button><button type="button" class="btn ghost" data-dom-dreame-pick-none>Aucune</button></div>
+    <div class="dom-dreame-choices">${rows}</div>`;
 }
 function domDreameTransportBtns() {
   const busyStart = domDreameBusy === "start";
@@ -478,7 +478,6 @@ function domDreameTransportBtns() {
       <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="pause" ${busyPause ? "aria-busy=true" : ""}>⏸ Pause</button>
       <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="stop" ${busyStop ? "aria-busy=true" : ""}>⏹ Stop</button>
       <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""}>🏠 Retour base</button>
-      <button type="button" class="btn primary dom-dreame-choice" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""}>▶ Lecture</button>
     </div>`;
 }
 function domDreameStartPayload() {
@@ -739,7 +738,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e10</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e11</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -1234,20 +1233,13 @@ document.addEventListener("click", e => {
   if (drePickRoom) {
     const id = Number(drePickRoom.dataset.domDreamePickRoom);
     if (!Number.isFinite(id) || id <= 0) return;
-    const input = drePickRoom.querySelector("input[type=checkbox]");
     const set = new Set((domDreamePickRooms || []).map(Number));
-    let on;
-    if (input && e.target === input) {
-      on = input.checked;
-    } else {
-      e.preventDefault();
-      on = !set.has(id);
-      if (input) input.checked = on;
-    }
-    if (on) set.add(id);
-    else set.delete(id);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
     domDreamePickRooms = [...set];
-    drePickRoom.classList.toggle("is-on", on);
+    const on = set.has(id);
+    drePickRoom.classList.toggle("primary", on);
+    drePickRoom.setAttribute("aria-pressed", on ? "true" : "false");
     const sum = document.querySelector("[data-dom-dreame-pick-sum]");
     if (sum) sum.textContent = domDreamePickSummary();
     return;
