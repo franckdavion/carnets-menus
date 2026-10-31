@@ -1200,8 +1200,7 @@ body:has(main.view-home) .ultimate-forecast-button,#ultimate-family-personalize{
 body:has(main.view-home) .ultimate-forecast-button{margin-top:12px;}
 body:has(main.view-home) #ultimate-header-controls .stack,body:has(main.view-home) #ultimate-header-controls [aria-label="Localisation"],body:has(main.view-home) #ultimate-header-controls .hh-name{display:none!important;}
 body:has(main.view-home) button.fab[data-act="quickAdd"],body:has(main.view-home) button.fab.v3-fab-in-grid{display:none!important;}
-body:has(main.view-home) .umod-heading .umod-edit{display:none;}
-body:has(main.view-home) .umod-heading .umod-edit[aria-pressed="true"]{display:inline-flex;}
+body:has(main.view-home) .umod-heading .umod-edit{display:inline-flex;}
 #ultimate-family-personalize{margin:12px 0 18px;width:100%;max-width:450px;}
 #ultimate-forecast-dialog{width:min(680px,94vw);max-height:85dvh;overflow:auto;border:1px solid #68cfff;border-radius:22px;padding:22px;background:#091d37;color:white;box-shadow:0 0 40px #00aaff77;}
 #ultimate-forecast-dialog::backdrop{background:#010916aa;}
@@ -2204,6 +2203,8 @@ details.r-legend-fold .r-legend{margin-top:0;}
 .dom-zone,.dom-device{border:1px solid var(--line,rgba(150,190,255,.25));border-radius:18px;background:rgba(15,39,76,.72);color:inherit;padding:18px;text-align:left;min-width:0}
 .dom-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:100px;cursor:pointer}
 .dom-zone span{font-size:.86em;opacity:.8}.dom-device-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dom-pos{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:10px 0 4px}
+.dom-pos span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7ec8ff,#d7ecff)}
 .dom-actions{display:flex;flex-wrap:wrap;gap:8px}.dom-actions .btn{flex:1 1 auto}.dom-form{display:grid;gap:14px}.dom-form label{display:grid;gap:6px}
 .dom-form input,.dom-form select{width:100%;min-width:0}
 

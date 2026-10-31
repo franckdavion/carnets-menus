@@ -138,18 +138,22 @@ function coverFromStatus(status: Record<string, unknown> | null, channel: number
   const rollers = status.rollers as unknown[] | undefined;
   const c = (status[key] || (Array.isArray(covers) ? covers[channel] : null) || (Array.isArray(rollers) ? rollers[channel] : null) || status[`roller:${channel}`]) as Record<string, unknown> | undefined;
   const sw = (status[`switch:${channel}`] || (Array.isArray(status.relays) ? (status.relays as Record<string, unknown>[])[channel] : null) || (Array.isArray(status.lights) ? (status.lights as Record<string, unknown>[])[channel] : null)) as Record<string, unknown> | undefined;
-  const pos = c ? num(c.current_pos ?? c.current_position ?? c.position) : null;
+  const rawPos = c ? num(c.current_pos ?? c.current_position ?? c.position) : null;
+  const pos = rawPos != null && rawPos >= 0 && rawPos <= 100 ? rawPos : null;
   const state = c ? String(c.state || "") : "";
   const on = sw ? (sw.output === true || sw.ison === true) : null;
   return { online: true, pos, state, on };
 }
 function labelCover(pos: number | null, state: string, online: boolean) {
-  if (!online) return "Hors ligne";
-  const moving = /ing$|moving/i.test(state);
-  if (pos == null) return moving ? "En mouvement" : "Position inconnue";
-  if (pos <= 2) return moving ? "En mouvement · fermé" : "Fermé";
-  if (pos >= 98) return moving ? "En mouvement · ouvert" : "Ouvert";
-  return (moving ? "En mouvement · " : "") + Math.round(pos) + " % ouvert";
+  const moving = /opening|closing|calibrating|moving/i.test(state);
+  if (pos == null) {
+    if (!online) return "Hors ligne";
+    return moving ? "En mouvement" : "Position inconnue";
+  }
+  const pct = Math.round(pos);
+  const word = pct <= 2 ? "fermé" : "ouvert";
+  const text = moving ? "En mouvement · " + pct + " %" : pct + " % · " + word;
+  return online ? text : text + " · hors ligne";
 }
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null;
@@ -189,9 +193,19 @@ function deviceOnline(d: Record<string, unknown> | undefined) {
   if (flagged === false) return false;
   return true;
 }
+function deviceId(d: Record<string, unknown>) {
+  const id = String(d.id || d.device_id || (asRecord(d._dev_info)?.id) || "").toLowerCase();
+  return /^[a-f0-9]{6,16}$/.test(id) ? id : "";
+}
 function statusOf(d: Record<string, unknown> | undefined) {
   if (!d) return null;
   const nested = asRecord(d.status);
+  if (typeof d.status === "string") {
+    try {
+      const parsed = asRecord(JSON.parse(d.status));
+      if (parsed) return parsed;
+    } catch { /* statut déjà objet ou illisible */ }
+  }
   if (nested) return nested;
   if (d["cover:0"] || d["switch:0"] || d.relays || d.covers || d.rollers) return d;
   return null;
@@ -249,25 +263,29 @@ Deno.serve(async req => {
       const { data: rows, error } = await admin.from("shelly_devices").select("id, type, shelly_id, channel").eq("household_id", hid);
       if (error) throw error;
       const linked = (rows || []).filter(x => String(x.shelly_id || "").trim());
-      const ids = [...new Set(linked.map(x => String(x.shelly_id).trim().toLowerCase()))].slice(0, 10);
+      const ids = [...new Set(linked.map(x => String(x.shelly_id).trim().toLowerCase()))];
       const states: Record<string, { online: boolean; pos: number | null; state: string; on: boolean | null; label: string }> = {};
       if (!ids.length) return json(req, { states });
-      let got = await shelly(cred.server_uri, "/v2/devices/api/get", cred.auth_key, { ids, select: ["status", "online"] });
-      let list = unwrapDevices(got.body);
+      const list: Record<string, unknown>[] = [];
+      for (let i = 0; i < ids.length; i += 10) {
+        const chunk = ids.slice(i, i + 10);
+        const got = await shelly(cred.server_uri, "/v2/devices/api/get", cred.auth_key, { ids: chunk, select: ["status"] });
+        if (got.ok) list.push(...unwrapDevices(got.body));
+      }
       if (!list.length) {
         const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
-        list = unwrapDevices(stAll.body);
+        if (stAll.ok) list.push(...unwrapDevices(stAll.body));
       }
       const byId = new Map<string, Record<string, unknown>>();
       for (const d of list) {
-        const id = String(d.id || d.device_id || (asRecord(d._dev_info)?.id) || "").toLowerCase();
+        const id = deviceId(d);
         if (id) byId.set(id, d);
       }
       for (const row of linked) {
         const sid = String(row.shelly_id).trim().toLowerCase();
         const d = byId.get(sid);
         const online = deviceOnline(d);
-        const info = coverFromStatus(online ? statusOf(d) : null, Number(row.channel) || 0);
+        const info = coverFromStatus(statusOf(d), Number(row.channel) || 0);
         info.online = online;
         const label = row.type === "volet" ? labelCover(info.pos, info.state, online) : (online ? (info.on === true ? "Allumé" : info.on === false ? "Éteint" : "En ligne") : "Hors ligne");
         states[row.id] = { ...info, label };

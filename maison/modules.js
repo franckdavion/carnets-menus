@@ -171,7 +171,10 @@ function domPage() {
   const devices = items.filter(x => x.zone === domZone);
   return `<section class="dom-page"><button class="btn" data-dom-back>← Domotique</button><div class="dom-page-heading"><h2>${DOM_ZONES[domZone]}</h2><button class="btn dom-settings-button" data-dom-settings="${domZone}" aria-label="Réglages ${DOM_ZONES[domZone]}" title="Réglages ${DOM_ZONES[domZone]}">⚙️</button></div><div class="dom-devices">${devices.map(x => {
     const ready = domConnected() && x.shelly_id;
-    return `<article class="dom-device"><div class="dom-device-head"><strong>${domIcon(x.type)} ${esc(x.name)}</strong></div><p class="muted">${esc(domLinkLine(x))}</p><div class="dom-actions">${domActions(x).map(t => `<button class="btn" data-dom-cmd="${esc(x.id)}" data-dom-action="${esc(t)}" ${ready ? "" : "disabled"} ${domBusy === x.id + t ? "aria-busy=true" : ""}>${t}</button>`).join("")}</div></article>`;
+    const st = domState[x.id];
+    const pos = x.type === "volet" && st && typeof st.pos === "number" ? Math.round(Math.max(0, Math.min(100, st.pos))) : null;
+    const meter = pos == null ? "" : `<div class="dom-pos" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pos}" aria-label="Position ${pos} %"><span style="width:${pos}%"></span></div>`;
+    return `<article class="dom-device"><div class="dom-device-head"><strong>${domIcon(x.type)} ${esc(x.name)}</strong></div>${meter}<p class="muted">${esc(domLinkLine(x))}</p><div class="dom-actions">${domActions(x).map(t => `<button class="btn" data-dom-cmd="${esc(x.id)}" data-dom-action="${esc(t)}" ${ready ? "" : "disabled"} ${domBusy === x.id + t ? "aria-busy=true" : ""}>${t}</button>`).join("")}</div></article>`;
   }).join("") || '<p class="muted">Aucun équipement dans cette zone.</p>'}</div></section>`;
 }
 VIEWS.domotique = function () {

@@ -57,7 +57,16 @@ const items=[
 ];
 const KEY='maisonnee_ultimate_v3_grid_v1';
 let edit=false,dragId=null;
-function openEditor(){edit=true;document.querySelector('[data-act=go][data-v=home]')?.click();setTimeout(()=>{const main=document.querySelector('main.view-home');if(main){mount(main);main.querySelector('#ultimate-module-grid')?.scrollIntoView({block:'nearest'})}},150)}
+function openEditor(){
+ edit=true;
+ const homeBtn=document.querySelector('[data-act=go][data-v=home]');
+ if(homeBtn)homeBtn.click();
+ else{
+  const main=document.querySelector('main.view-home');
+  if(main)mount(main);
+ }
+ requestAnimationFrame(()=>document.querySelector('#ultimate-module-grid')?.scrollIntoView({block:'nearest'}));
+}
 function load(){const h=window.maisonHomeStore.read();if(h.order&&h.order.length)return {order:h.order.slice(),hidden:(h.hidden||[]).slice()};return {order:items.map(x=>x[0]),hidden:[]}}
 let config=load();
 function save(){window.maisonHomeStore.write({order:config.order,hidden:config.hidden})}
@@ -83,6 +92,7 @@ function mount(main){
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-umod]');if(!b)return;
  const host=b.closest('#ultimate-module-grid');if(!host)return;
+ e.preventDefault();e.stopPropagation();
  const action=b.dataset.umod,id=b.dataset.id;
  if(action==='edit')edit=!edit;
  if(action==='hide'&&!config.hidden.includes(id))config.hidden.push(id);
@@ -92,11 +102,13 @@ document.addEventListener('click',e=>{
   const order=sorted().map(x=>x[0]);const i=order.indexOf(id),j=i+(action==='up'?-1:1);
   if(j>=0&&j<order.length){[order[i],order[j]]=[order[j],order[i]];config.order=order}
  }
- save();render(host);
+ save();
+ if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();
+ else render(host);
 });
 document.addEventListener('dragstart',e=>{const slot=e.target.closest('.umod-slot');if(edit&&slot){dragId=slot.dataset.module;e.dataTransfer.effectAllowed='move'}});
 document.addEventListener('dragover',e=>{if(edit&&dragId&&e.target.closest('.umod-slot'))e.preventDefault()});
-document.addEventListener('drop',e=>{const slot=e.target.closest('.umod-slot');if(!edit||!slot||!dragId)return;e.preventDefault();const order=sorted().map(x=>x[0]);const a=order.indexOf(dragId),b=order.indexOf(slot.dataset.module);if(a>=0&&b>=0){order.splice(a,1);order.splice(b,0,dragId);config.order=order;save();render(slot.closest('#ultimate-module-grid'))}dragId=null});
+document.addEventListener('drop',e=>{const slot=e.target.closest('.umod-slot');if(!edit||!slot||!dragId)return;e.preventDefault();const order=sorted().map(x=>x[0]);const a=order.indexOf(dragId),b=order.indexOf(slot.dataset.module);if(a>=0&&b>=0){order.splice(a,1);order.splice(b,0,dragId);config.order=order;save();if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();else render(slot.closest('#ultimate-module-grid'))}dragId=null});
 function setVisible(key, visible){
  if(!items.some(x=>x[0]===key))return;
  config.hidden=config.hidden.filter(k=>k!==key);
@@ -105,7 +117,7 @@ function setVisible(key, visible){
  const host=document.querySelector('#ultimate-module-grid');
  if(host)render(host);
 }
-window.maisonneeModuleGrid={mount,openEditor,setVisible};
+window.maisonneeModuleGrid={mount,openEditor,setVisible,editing:()=>edit};
 })();
 
 /* Maisonnée Ultimate : ajout non destructif sur l'accueil uniquement. */
@@ -285,7 +297,9 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  const toggle=el.querySelector('#ultimate-toggle-classic');
  toggle.addEventListener('click',()=>{main.classList.toggle('ultimate-classic');toggle.setAttribute('aria-expanded',String(main.classList.contains('ultimate-classic')));toggle.textContent=(main.classList.contains('ultimate-classic')?'Masquer':'Afficher')+' l’accueil classique et tous ses raccourcis';});
  const cityBtn=el.querySelector('#ultimate-city');if(cityBtn)cityBtn.addEventListener('click',()=>{void changeCity()});
+ if(window.maisonneeModuleGrid?.editing?.())window.maisonneeModuleGrid.mount(main);
 }
+window.maisonneeHomePaint=render;
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"],[data-act="homeRepas"]');if(!b)return;
  if(b.dataset.act==='homeRepas'){if(typeof openHomeMeal==='function')openHomeMeal(b.dataset.day,b.dataset.slot);return}
