@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<link rel="stylesheet" href="maison.css?v=20261031d3">
+<link rel="stylesheet" href="maison.css?v=20261031d5">
 
 </head>
 <body>
@@ -24,29 +24,9 @@
 <script src="espace.js"></script>
 <script src="push-config.js"></script>
 <script src="supabase/functions/_shared/cal.js"></script>
-<script src="app.js?v=20261031d3"></script>
-<script src="modules.js?v=20261031d3"></script>
-<script>
-(function () {
-  const BUILD = "20261031d3";
-  if (window.MAISONNEE_DOM_BUILD === BUILD) {
-    try { sessionStorage.removeItem("mz_maj_attempts"); } catch (_) {}
-    return;
-  }
-  const KEY = "mz_maj_attempts";
-  let n = 0;
-  try { n = Number(sessionStorage.getItem(KEY) || 0) + 1; sessionStorage.setItem(KEY, String(n)); } catch (_) { n = 1; }
-  if (n > 4) {
-    try { sessionStorage.removeItem(KEY); } catch (_) {}
-    const app = document.getElementById("app");
-    if (app) {
-      app.innerHTML = "<div style=\"padding:24px;max-width:420px;margin:0 auto;font-family:system-ui,sans-serif;line-height:1.5\"><h1 style=\"font-size:1.25rem\">Mise à jour bloquée</h1><p>Le navigateur garde une ancienne copie de Maisonnée et recharge la page en boucle.</p><p><strong>Sur iPhone :</strong> Réglages → Safari → Avancé → Données de sites → supprimer <em>github.io</em>, ou désinstallez l’icône Maisonnée puis rouvrez le lien.</p><p><strong>Sur ordinateur :</strong> ouvrez cette page en navigation privée, ou videz les données du site pour <em>franckdavion.github.io</em>.</p><p><a href=\"./ouvrir-frais.html\">Réessayer le nettoyage automatique</a></p></div>";
-    }
-    return;
-  }
-  location.replace("./ouvrir-frais.html");
-})();
-</script>
+<script src="app.js?v=20261031d5"></script>
+<script src="modules.js?v=20261031d5"></script>
+<script>try{sessionStorage.removeItem("mz_maj_attempts")}catch(e){}</script>
 <script src="../ingredient-arts.js"></script>
 <script src="../ingredient-emojis.js"></script>
 <script src="repas.js?v=20261031choix"></script>

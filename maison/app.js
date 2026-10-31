@@ -1116,6 +1116,11 @@ function render() {
   if (view === "messages") renderMsgs();
   if (view === "carte") mountMap();
   if (typeof afterRender === "function") afterRender();
+  if (view === "home" && typeof window.maisonneeHomePaint === "function") {
+    requestAnimationFrame(() => {
+      if (view === "home" && document.querySelector("main.view-home") && typeof window.maisonneeHomePaint === "function") window.maisonneeHomePaint();
+    });
+  }
   updateBadge();
 }
 
@@ -1403,6 +1408,7 @@ function openSheet(title, body, ctx = {}) {
   const live = d.querySelector(".mz-toast-in-sheet");
   const spotSel = live && live.dataset.spot;
   if (live) live.remove();
+  const wasOpen = d.open;
   sheetCtx = ctx;
   $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div></div>${body}`;
   if (live && mzToastActive) {
@@ -1410,13 +1416,14 @@ function openSheet(title, body, ctx = {}) {
     if (again) again.insertAdjacentElement("afterend", live);
     else d.insertBefore(live, $("#sheetIn"));
   }
-  const raised = !d.open;
+  const raised = !wasOpen;
+  d.classList.toggle("sheet-snap-top", !!(ctx.snapTop || wasOpen));
+  resetSheetViewport(d);
   if (raised) { lockSheetBackground(); d.showModal(); }
   if (raised) mzRaiseFrontToast();
-  d.scrollTop = 0;
+  scrollSheetToTop(d);
   // Do not focus an input when opening: iOS must keep the keyboard closed.
   if (document.activeElement?.matches?.("input, textarea, select")) document.activeElement.blur();
-  resetSheetDrag();
 }
 function resetSheetDrag() {
   const d = $("#sheet");
@@ -1425,13 +1432,37 @@ function resetSheetDrag() {
   d.style.removeProperty("transform");
   d.style.removeProperty("transition");
 }
+function resetSheetViewport(d) {
+  if (!d) return;
+  d.classList.remove("maison-keyboard");
+  d.style.removeProperty("top");
+  d.style.removeProperty("height");
+  d.style.removeProperty("max-height");
+  resetSheetDrag();
+}
+function scrollSheetToTop(d) {
+  const si = $("#sheetIn");
+  d.scrollTop = 0;
+  if (si) si.scrollTop = 0;
+  requestAnimationFrame(() => {
+    d.scrollTop = 0;
+    if (si) si.scrollTop = 0;
+  });
+}
 function sheetDismissClose() {
   const btn = $("#sheetIn")?.querySelector(".sheet-top [data-act='closeSheet']");
   if (btn) btn.click();
   else closeSheet();
 }
 function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
-$("#sheet").addEventListener("close", () => { resetSheetDrag(); unlockSheetBackground(); sheetCtx = null; if (pending) render(); });
+$("#sheet").addEventListener("close", () => {
+  const d = $("#sheet");
+  resetSheetViewport(d);
+  d.classList.remove("sheet-snap-top", "dom-tesla-sheet");
+  unlockSheetBackground();
+  sheetCtx = null;
+  if (pending) render();
+});
 // A tap on non-interactive space inside any sheet dismisses the iPhone keyboard.
 $("#sheet").addEventListener("pointerdown", e => {
   if (!document.activeElement?.matches?.("input, textarea, select, [contenteditable=true]")) return;

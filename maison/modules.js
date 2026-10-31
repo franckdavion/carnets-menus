@@ -1,7 +1,7 @@
 "use strict";
 /* Maisonnée : accueil en modules, Explorer, calendrier du mois, et les modules
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
-window.MAISONNEE_DOM_BUILD = "20261031d3";
+window.MAISONNEE_DOM_BUILD = "20261031d5";
 
 Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule", shelly: "shelly_devices" });
 const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
@@ -67,7 +67,7 @@ let exploreEdit = false;
 function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0003_anniversaires_budget_documents.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
 
 /* Domotique : commandes via Edge Function, clé Shelly uniquement côté serveur. */
-// MAISONNEE_DOM_BUILD=20261031d3
+// MAISONNEE_DOM_BUILD=20261031d5
 const DOM_ZONES = { exterieur: "Extérieur", rdc: "Maison RDC", etage: "Maison étage" };
 const DOM_KEY = "maisonnee_domotique_zones_v1";
 const DOM_ROOMS_LS = "maisonnee_dom_rooms_v1";
