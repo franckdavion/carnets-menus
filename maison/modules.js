@@ -72,7 +72,7 @@ const DOM_DEFAULT = [
   { name: "Volets étage", zone: "etage", type: "volet", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" }
 ];
 const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
-let domZone = "", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domFormLoading = false;
+let domZone = "", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domStateInflight = null, domFormLoading = false;
 document.addEventListener("click", e => {
   if (e.target.closest('[data-act="go"][data-v="domotique"]')) domZone = "";
 }, true);
@@ -123,19 +123,27 @@ window.domVoletLine = domVoletLine;
 async function domRefreshState(force) {
   if (!domConnected() || mode !== "cloud") return false;
   if (!force && Date.now() - domStateAt < 8000) return false;
+  if (domStateInflight) return domStateInflight;
   domStateLoading = true;
-  if (view === "domotique") render();
-  try {
-    const r = await shellyServer("state");
+  domStateInflight = shellyServer("state").then(r => {
     domState = r.states || {};
     domStateAt = Date.now();
     return true;
-  } catch (_) { return false; }
-  finally {
+  }).catch(() => false).finally(() => {
     domStateLoading = false;
-  }
+    domStateInflight = null;
+  });
+  return domStateInflight;
+}
+function domScheduleState(force, after) {
+  domRefreshState(force).then(changed => {
+    if (!changed) return;
+    if (typeof after === "function") after();
+    else if (view === "domotique") softRender();
+  }).catch(() => {});
 }
 window.domRefreshState = domRefreshState;
+window.domScheduleState = domScheduleState;
 async function shellyServer(action, body) {
   if (!sb) await loadSb();
   const { data: { session } } = await sb.auth.getSession();
@@ -206,7 +214,7 @@ function domPage() {
   }).join("") || '<p class="muted">Aucun équipement dans cette zone.</p>'}</div></section>`;
 }
 VIEWS.domotique = function () {
-  Promise.resolve(domEnsureDefaults()).then(() => domRefreshState()).then(changed => { if (changed && view === "domotique") render(); }).catch(() => {});
+  Promise.resolve(domEnsureDefaults()).then(() => domScheduleState(false)).catch(() => {});
   return domPage();
 };
 function domCloudOptions(selected) {
@@ -279,7 +287,7 @@ document.addEventListener("click", e => {
       toast("Commande envoyée : " + (labels[action] || action) + " (" + n + " volet(s))", null, null, null, "domotique");
     }).catch(err => toast(err.message)).finally(() => {
       domBusy = "";
-      domRefreshState(true).finally(() => render());
+      domScheduleState(true);
     });
     return;
   }
@@ -291,8 +299,8 @@ document.addEventListener("click", e => {
     const row = domRead().find(x => x.id === id);
     shellyServer("command", { id, action }).then(() => toast("Commande envoyée : " + action, null, null, null, "domotique")).catch(err => toast(err.message)).finally(() => {
       domBusy = "";
-      const after = row && row.type === "volet" ? domRefreshState(true) : Promise.resolve();
-      after.finally(() => render());
+      if (row && row.type === "volet") domScheduleState(true);
+      else render();
     });
   }
 });

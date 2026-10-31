@@ -23,8 +23,8 @@
 <script src="espace.js"></script>
 <script src="push-config.js"></script>
 <script src="supabase/functions/_shared/cal.js"></script>
-<script src="app.js?v=20261031shelly2"></script>
-<script src="modules.js?v=20261031state"></script>
+<script src="app.js?v=20261031boot"></script>
+<script src="modules.js?v=20261031domfix"></script>
 <script src="../ingredient-arts.js"></script>
 <script src="../ingredient-emojis.js"></script>
 <script src="repas.js?v=20261031choix"></script>
@@ -77,7 +77,7 @@
 })();
 </script>
 <script src="bandeau-jour.js"></script>
-<script src="accueil.js?v=20261031drag"></script>
+<script src="accueil.js?v=20261031domfix"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>

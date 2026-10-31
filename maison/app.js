@@ -425,11 +425,14 @@ async function init() {
   if (mode === "cloud" && cache && cache.hh) { S = { ...blank(), ...cache, recipes: null }; screen = "app"; render(); }
   else { screen = "loading"; render(); }
   try {
-    await loadSb();
-    const { data } = await sb.auth.getSession();
-    user = data.session ? data.session.user : null;
+    const boot = (async () => {
+      await loadSb();
+      const { data } = await sb.auth.getSession();
+      user = data.session ? data.session.user : null;
+    })();
+    await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
-    if (screen !== "app") { screen = "welcome"; render(); toast("Pas de connexion pour l'instant."); }
+    if (screen !== "app") { screen = "welcome"; render(); toast(e.message === "timeout" ? "Connexion trop lente. Réessayez ou utilisez Essayer sans compte." : "Pas de connexion pour l'instant."); }
     return;
   }
   if (!user) { mode = null; LS.del("mz_mode"); screen = "welcome"; return render(); }

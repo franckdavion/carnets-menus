@@ -391,7 +391,8 @@ function render(){
   if(k==='recettes'&&g.recette.id)return wrap(k,`<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`);
   if(k==='domotique'){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
-    if(typeof window.domRefreshState==='function')window.domRefreshState().then(ok=>{if(ok)render()});
+    if(typeof window.domScheduleState==='function')window.domScheduleState(false,()=>render());
+    else if(typeof window.domRefreshState==='function')window.domRefreshState().then(ok=>{if(ok)render()});
     const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';
     const probe=typeof gates.voiture?.temp==='number'
       ?`<strong>Extérieur ${String(gates.voiture.temp).replace('.',',')} °C</strong>`
