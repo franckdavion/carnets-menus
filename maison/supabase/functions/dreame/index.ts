@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031i";
+const FN_REV = "20261031j";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -50,6 +50,7 @@ const CLEANING_MODE = { siid: 4, piid: 23 };
 const MAP_EXTEND_DATA = { siid: 6, piid: 4 };
 const CLEANING_PROPERTIES = { siid: 4, piid: 10 };
 const ACT_START = { siid: 2, aiid: 1 };
+const ACT_PAUSE = { siid: 2, aiid: 2 };
 const ACT_STOP = { siid: 4, aiid: 2 };
 const ACT_CHARGE = { siid: 3, aiid: 1 };
 const ACT_START_CUSTOM = { siid: 4, aiid: 1 };
@@ -882,8 +883,10 @@ export async function dreameHandler(req: Request): Promise<Response> {
       const did = cred.device_id;
       if (!did) return json(req, { error: "Aucun aspirateur Dreame sélectionné" }, 400);
       const act = String(payload.action || "");
-      if (act === "start") {
+      if (act === "start" || act === "play") {
         await dreameSendCommand(cred, did, "action", { did, siid: ACT_START.siid, aiid: ACT_START.aiid, in: [] });
+      } else if (act === "pause") {
+        await dreameSendCommand(cred, did, "action", { did, siid: ACT_PAUSE.siid, aiid: ACT_PAUSE.aiid, in: [] });
       } else if (act === "stop") {
         await dreameSendCommand(cred, did, "action", { did, siid: ACT_STOP.siid, aiid: ACT_STOP.aiid, in: [] });
       } else if (act === "dock" || act === "charge") {

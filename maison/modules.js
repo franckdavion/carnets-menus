@@ -672,7 +672,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e6</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e7</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -870,7 +870,7 @@ function domDreameEqCard() {
   const busyDock = domDreameBusy === "dock";
   const canCmd = domDreameCommandable();
   const actions = hasDev
-    ? `<div class="dom-dreame-card-actions" role="group" aria-label="Commandes rapides"><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>▶</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>🏠</button></div>`
+    ? `<div class="dom-dreame-card-actions" role="group" aria-label="Commandes rapides"><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""}>▶</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="pause" ${domDreameBusy === "pause" ? "aria-busy=true" : ""}>⏸</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="stop" ${domDreameBusy === "stop" ? "aria-busy=true" : ""}>⏹</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""}>🏠</button></div>`
     : "";
   return `<article class="dom-eq-card dom-eq-dreame"><button type="button" class="dom-eq-open" data-dom-dreame-open>${domEqCardTop("🤖", esc(st.device_name || domDreameStatus.device_name || "Dreame"))}<small>${esc(line)}</small></button>${actions}</article>`;
 }
@@ -899,12 +899,13 @@ function domDreameSheet(fromRefresh) {
   openSheet(title, `<article class="dom-device dom-dreame-panel">
     <p class="dom-dreame-status" aria-live="polite"><strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}${st.water_label && mode !== 0 ? " · eau " + esc(st.water_label) : ""}</span>` : ""}</p>
     ${liveNote}
-    ${prefs}
     <div class="dom-actions dom-dreame-actions">
-      <button type="button" class="btn primary" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>Toute la maison</button>
-      <button type="button" class="btn" data-dom-dreame-cmd="stop" ${busyStop ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>Pause / Stop</button>
-      <button type="button" class="btn" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>Retour base</button>
+      <button type="button" class="btn primary dom-dreame-choice" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""}>▶ Lecture</button>
+      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="pause" ${domDreameBusy === "pause" ? "aria-busy=true" : ""}>⏸ Pause</button>
+      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="stop" ${busyStop ? "aria-busy=true" : ""}>⏹ Stop</button>
+      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""}>🏠 Retour base</button>
     </div>
+    ${prefs}
     ${programsBlock}
     ${roomsBlock}
     <p class="muted small">Commandes via Dreame Home (serveur Maisonnée).</p>
@@ -1134,6 +1135,28 @@ document.addEventListener("click", e => {
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domMelBusy = ""; render(); });
     return;
   }
+  const dreCmdEarly = e.target.closest("[data-dom-dreame-cmd]");
+  if (dreCmdEarly) {
+    const action = dreCmdEarly.dataset.domDreameCmd;
+    if (!action) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const labels = { start: "Lecture", play: "Lecture", pause: "Pause", stop: "Stop", dock: "Retour base" };
+    domDreameBusy = action;
+    if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    dreameServer("command", { action }).then(r => {
+      if (r) {
+        domDreameState = { ...domDreameState, ...r };
+        domDreameStateAt = Date.now();
+      }
+      toast((labels[action] || "Commande") + " envoyée à l'aspirateur", null, null, null, "domotique");
+      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    }).catch(err => { if (err) toast(err.message); }).finally(() => {
+      domDreameBusy = "";
+      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    });
+    return;
+  }
   if (e.target.closest("[data-dom-dreame-open]")) { domDreameSheet(); return; }
   if (e.target.closest("[data-dom-dreame-connect]")) { domDreameConnectSheet(); return; }
   if (e.target.closest("[data-dom-dreame-devices]")) { domDreameDevicePickerSheet(); return; }
@@ -1234,22 +1257,6 @@ document.addEventListener("click", e => {
       toast("Aspirateur Dreame sélectionné.");
       domDreameRefreshState(true).then(() => { closeSheet(); render(); domDreameDevicePickerSheet(); }).catch(() => { closeSheet(); render(); });
     }).catch(err => toast(err.message));
-    return;
-  }
-  const dreCmd = e.target.closest("[data-dom-dreame-cmd]");
-  if (dreCmd) {
-    const action = dreCmd.dataset.domDreameCmd;
-    if (!action || dreCmd.disabled) return;
-    domDreameBusy = action;
-    render();
-    domRunDreameCommand(() => dreameServer("command", { action })).then(r => {
-      if (!r) return;
-      domDreameState = r;
-      domDreameStateAt = Date.now();
-      toast("Commande Dreame envoyée", null, null, null, "domotique");
-      const sheet = document.getElementById("sheet");
-      if (sheet && sheet.open && document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
-    }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
     return;
   }
   const drePref = e.target.closest("[data-dom-dreame-pref]");
