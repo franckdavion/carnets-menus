@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031f";
+const FN_REV = "20261031g";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -129,6 +129,17 @@ type DreameCred = {
   device_name: string | null;
   device_model: string | null;
   map_rooms?: { id: number; name: string }[] | null;
+  clean_programs?: DreameProgram[] | null;
+};
+
+type DreameProgram = {
+  id: string;
+  name: string;
+  cleaning_mode: number;
+  suction: number;
+  water: number;
+  repeats: number;
+  room_ids: number[];
 };
 
 type DreameDevice = { did: string; name: string; model: string; online: boolean; battery: number | null; status: number | null };
@@ -582,6 +593,40 @@ async function dreameCleanSegments(
   });
 }
 
+function mergeNamedRooms(
+  live: { id: number; name: string }[],
+  cached: { id: number; name: string }[] | null | undefined
+) {
+  const names = new Map((cached || []).map(r => [r.id, r.name]));
+  return live.map(r => {
+    const custom = names.get(r.id);
+    return { id: r.id, name: (custom && String(custom).trim()) || r.name };
+  });
+}
+
+function listPrograms(cred: DreameCred): DreameProgram[] {
+  return Array.isArray(cred.clean_programs) ? cred.clean_programs.filter(p => p && p.id && p.name) : [];
+}
+
+function normalizeProgram(raw: Record<string, unknown>, fallbackId?: string): DreameProgram | null {
+  const name = String(raw.name || "").trim().slice(0, 40);
+  if (!name) return null;
+  const room_ids = Array.isArray(raw.room_ids)
+    ? [...new Set(raw.room_ids.map(n => clampInt(n, 1, 99, 0)).filter(n => n > 0))]
+    : [];
+  if (!room_ids.length) return null;
+  const id = String(raw.id || fallbackId || crypto.randomUUID()).slice(0, 80);
+  return {
+    id,
+    name,
+    cleaning_mode: clampInt(raw.cleaning_mode, 0, 2, 2),
+    suction: clampInt(raw.suction, 0, 3, 1),
+    water: clampInt(raw.water, 1, 3, 2),
+    repeats: clampInt(raw.repeats, 1, 3, 1),
+    room_ids
+  };
+}
+
 function settingsLabels(settings: {
   suction: number | null;
   water: number | null;
@@ -704,7 +749,8 @@ Deno.serve(async req => {
         connected: !!cred,
         device_id: hh?.dreame_device_id ?? cred?.device_id ?? null,
         device_name: cred?.device_name || null,
-        rooms
+        rooms,
+        programs: cred ? listPrograms(cred) : []
       });
     }
 
@@ -793,8 +839,9 @@ Deno.serve(async req => {
       try {
         const map = await dreameFetchMapRooms(cred, did);
         if (map.rooms?.length) {
-          await admin.from("household_dreame").update({ map_rooms: map.rooms, updated_at: new Date().toISOString() }).eq("household_id", hid);
-          return json(req, map);
+          const rooms = mergeNamedRooms(map.rooms, cached);
+          await admin.from("household_dreame").update({ map_rooms: rooms, updated_at: new Date().toISOString() }).eq("household_id", hid);
+          return json(req, { ...map, rooms });
         }
         if (cached.length) return json(req, { rooms: cached, hint: map.hint, live_ok: map.live_ok });
         return json(req, map);
@@ -842,6 +889,38 @@ Deno.serve(async req => {
           : clampInt(cur.water, 1, 3, 2);
         const repeats = clampInt(payload.repeats, 1, 3, 1);
         await dreameCleanSegments(cred, did, [segmentId], { cleaning_mode, suction, water, repeats });
+      } else if (act === "clean_rooms" || act === "run_program") {
+        let cleaning_mode: number;
+        let suction: number;
+        let water: number;
+        let repeats: number;
+        let ids: number[];
+        if (act === "run_program") {
+          const prog = listPrograms(cred).find(p => p.id === String(payload.program_id || ""));
+          if (!prog) return json(req, { error: "Programme introuvable" }, 404);
+          cleaning_mode = prog.cleaning_mode;
+          suction = prog.suction;
+          water = prog.water;
+          repeats = prog.repeats;
+          ids = prog.room_ids;
+        } else {
+          const cur = await dreameReadSettings(cred, did);
+          cleaning_mode = payload.cleaning_mode !== undefined
+            ? clampInt(payload.cleaning_mode, 0, 2, 2)
+            : clampInt(cur.cleaning_mode, 0, 2, 2);
+          suction = payload.suction !== undefined
+            ? clampInt(payload.suction, 0, 3, 1)
+            : clampInt(cur.suction, 0, 3, 1);
+          water = payload.water !== undefined
+            ? clampInt(payload.water, 1, 3, 2)
+            : clampInt(cur.water, 1, 3, 2);
+          repeats = clampInt(payload.repeats, 1, 3, 1);
+          ids = Array.isArray(payload.segment_ids)
+            ? [...new Set(payload.segment_ids.map(n => clampInt(n, 1, 99, 0)).filter(n => n > 0))]
+            : [];
+        }
+        if (!ids.length) return json(req, { error: "Choisissez au moins une pièce" }, 400);
+        await dreameCleanSegments(cred, did, ids, { cleaning_mode, suction, water, repeats });
       } else if (act === "rooms") {
         const map = await dreameFetchMapRooms(cred, did);
         return json(req, map);
@@ -864,6 +943,44 @@ Deno.serve(async req => {
       }).eq("household_id", hid);
       await admin.from("households").update({ dreame_device_id: device.did }).eq("id", hid);
       return json(req, { ok: true, device_id: device.did, device_name: device.name });
+    }
+
+    if (action === "save_rooms" && req.method === "POST") {
+      const current = Array.isArray(cred.map_rooms) ? cred.map_rooms : [];
+      const incoming = Array.isArray(payload.rooms) ? payload.rooms as { id?: unknown; name?: unknown }[] : [];
+      if (!incoming.length && !current.length) return json(req, { error: "Aucune pièce à enregistrer" }, 400);
+      const byId = new Map(current.map(r => [r.id, r]));
+      for (const row of incoming) {
+        const id = clampInt(row.id, 1, 99, 0);
+        const name = String(row.name || "").trim().slice(0, 40);
+        if (!id || !name) continue;
+        byId.set(id, { id, name });
+      }
+      const rooms = [...byId.values()].sort((a, b) => a.id - b.id);
+      await admin.from("household_dreame").update({ map_rooms: rooms, updated_at: new Date().toISOString(), updated_by: user.id }).eq("household_id", hid);
+      return json(req, { ok: true, rooms });
+    }
+
+    if (action === "save_program" && req.method === "POST") {
+      const raw = (payload.program && typeof payload.program === "object" ? payload.program : payload) as Record<string, unknown>;
+      const prog = normalizeProgram(raw);
+      if (!prog) return json(req, { error: "Nommez le programme et choisissez au moins une pièce" }, 400);
+      const list = listPrograms(cred);
+      const idx = list.findIndex(p => p.id === prog.id);
+      if (idx >= 0) list[idx] = prog;
+      else {
+        if (list.length >= 20) return json(req, { error: "Maximum 20 programmes" }, 400);
+        list.push(prog);
+      }
+      await admin.from("household_dreame").update({ clean_programs: list, updated_at: new Date().toISOString(), updated_by: user.id }).eq("household_id", hid);
+      return json(req, { ok: true, program: prog, programs: list });
+    }
+
+    if (action === "delete_program" && req.method === "POST") {
+      const id = String(payload.id || "");
+      const list = listPrograms(cred).filter(p => p.id !== id);
+      await admin.from("household_dreame").update({ clean_programs: list, updated_at: new Date().toISOString(), updated_by: user.id }).eq("household_id", hid);
+      return json(req, { ok: true, programs: list });
     }
 
     return json(req, { error: "Not found" }, 404);
