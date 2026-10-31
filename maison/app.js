@@ -330,6 +330,7 @@ async function mzPollShopAdds() {
   try {
     const {data,error}=await sb.from("shopping_items").select("*").eq("household_id",S.hh.id);
     if(error) return;
+    const before=JSON.stringify((S.shop||[]).map(x=>[x.id,x.done,x.name,x.qty,x.updated_at||x.added_at||""]));
     const known=new Set((S.shop||[]).map(x=>x.id));
     for(const row of data||[]) {
       if(!known.has(row.id)) mzNoticeShopInsert(row);
@@ -338,6 +339,8 @@ async function mzPollShopAdds() {
     }
     const ids=new Set((data||[]).map(x=>x.id));
     S.shop=S.shop.filter(x=>ids.has(x.id));
+    const after=JSON.stringify((S.shop||[]).map(x=>[x.id,x.done,x.name,x.qty,x.updated_at||x.added_at||""]));
+    if (before===after) return;
     saveLocal(); softRender();
   } catch(e) { console.warn("Courses : vérification des ajouts",e); }
   finally {mzShopPollBusy=false;}
@@ -395,6 +398,12 @@ function softRender() {
   if (screen === "app" && view === "messages" && $("#msgList") && !$("#sheet").open) { renderMsgs(); return; }
   if (screen === "app" && view === "carte" && map && !$("#sheet").open) { drawMarkers(); refreshLocList(); return; }
   if ($("#sheet").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) { pending = true; return; }
+  if (screen === "app" && view === "home" && document.querySelector("#ultimate-dashboard") && typeof window.maisonneeHomePaint === "function") {
+    window.maisonneeHomePaint();
+    if (typeof updateBadge === "function") updateBadge();
+    renderBellOnly();
+    return;
+  }
   render();
 }
 

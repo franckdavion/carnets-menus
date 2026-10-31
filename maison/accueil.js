@@ -434,9 +434,9 @@ function restoreHeader(){
  while(parked.firstChild)source.appendChild(parked.firstChild);
  header.classList.remove('ultimate-header-moved');
 }
+let lastHomePaint='';
 function render(){
  const main=document.querySelector('main.view-home');if(!main)return;
- restoreHeader();
  let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
  el.className='';
  const w=meteo?.current,d=meteo?.daily,now=new Date();
@@ -468,7 +468,7 @@ function render(){
       const now=Date.now();
       if(!window._domHomePollAt||now-window._domHomePollAt>45000){
         window._domHomePollAt=now;
-        window.domScheduleState(false,()=>{if(document.querySelector('main.view-home'))render()});
+        window.domScheduleState(false,changed=>{if(changed&&document.querySelector('main.view-home'))render()});
       }
     }
     const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';
@@ -486,12 +486,19 @@ function render(){
  const meAcc=(typeof meM==='function'?meM():null);
  const bandHello=meAcc&&meAcc.name?({matin:`Bonjour ${meAcc.name} ! ☀️`,aprem:`Bel après-midi ${meAcc.name} ! ☀️`,soir:`Bonsoir ${meAcc.name} ! 🌙`,nuit:`Bonne nuit ${meAcc.name} ! 🌙`}[band.id]||band.hello):band.hello;
  const jourLabel=date().replace(/^./,c=>c.toUpperCase());
- el.innerHTML=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${esc(bandHello)}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
+ const html=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${esc(bandHello)}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
 <section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div><div class="ultimate-dayline">🌙 Lever ${heure(d?.moonrise?.[0])} · Coucher ${heure(d?.moonset?.[0])}</div></div></div></section></section>
 <section class="mn-house" aria-label="Notre maison">${houseEdit}<h2><svg class="mn-house-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="#f7fcff" d="M16 3.2 3.2 14.4h3V28h6.4v-7.8h6.8V28H25.8v-13.6h3L16 3.2z"/></svg><span class="mn-house-label">Notre maison</span><span class="mn-house-line" aria-hidden="true"></span></h2><div class="mn-house-grid">
 ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
 </div></section>
 <button type="button" class="ultimate-classic-button" id="ultimate-toggle-classic" aria-expanded="${main.classList.contains('ultimate-classic')}">${main.classList.contains('ultimate-classic')?'Masquer':'Afficher'} l’accueil classique et tous ses raccourcis</button>`;
+ if(html===lastHomePaint&&el.querySelector('.mn-house-grid')&&el.querySelector('.mn-band-sky svg')){
+  if(!document.querySelector('#app > header.top.ultimate-header-moved'))integrateHeader(main);
+  return;
+ }
+ lastHomePaint=html;
+ if(el.querySelector('#ultimate-header-controls')&&document.querySelector('#app > header.top.ultimate-header-moved'))restoreHeader();
+ el.innerHTML=html;
  integrateHeader(main);
  if(window.mnJour)mnJour.mount(el);
  const toggle=el.querySelector('#ultimate-toggle-classic');
