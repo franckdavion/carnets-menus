@@ -1,48 +1,121 @@
-/* Accueil : météo, éphéméride et grille.
-   La ville et la disposition vont dans households.home (migration 0017). */
+/* Accueil : météo partagée (households.home), grille par membre (home_prefs, 0023). */
 window.maisonHomeStore = (() => {
-  const KEY = "maisonnee_ultimate_v3_grid_v1";
-  function local() {
-    try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; }
+  const LEGACY_KEY = "maisonnee_ultimate_v3_grid_v1";
+  const GEO_KEY = "maisonnee_home_geo_v1";
+  function memberKey() {
+    return (typeof S !== "undefined" && S.me) ? String(S.me) : "local";
+  }
+  function gridKey() { return "maisonnee_home_grid_v1_" + memberKey(); }
+  function readJson(key) {
+    try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
   }
   function num(v, fallback) {
     const n = typeof v === "number" ? v : NaN;
     return Number.isFinite(n) ? n : fallback;
   }
-  function read() {
+  function meRecord() {
+    return typeof meM === "function" ? meM() : null;
+  }
+  function legacyHouseGrid() {
     const shared = typeof S !== "undefined" && S.hh && S.hh.home && typeof S.hh.home === "object" ? S.hh.home : null;
-    const saved = local();
-    const order = shared && Array.isArray(shared.order) && shared.order.length ? shared.order
-      : saved && Array.isArray(saved.order) ? saved.order : null;
-    const hidden = shared && Array.isArray(shared.hidden) ? shared.hidden
-      : saved && Array.isArray(saved.hidden) ? saved.hidden : [];
+    if (!shared) return null;
+    const order = Array.isArray(shared.order) && shared.order.length ? shared.order : null;
+    const hidden = Array.isArray(shared.hidden) ? shared.hidden : null;
+    if (!order && !hidden) return null;
+    return { order: order || [], hidden: hidden || [] };
+  }
+  function readGrid() {
+    const me = meRecord();
+    const fromMember = me && me.home_prefs && typeof me.home_prefs === "object" ? me.home_prefs : null;
+    if (fromMember) {
+      return {
+        order: Array.isArray(fromMember.order) && fromMember.order.length ? fromMember.order : null,
+        hidden: Array.isArray(fromMember.hidden) ? fromMember.hidden : []
+      };
+    }
+    const saved = readJson(gridKey()) || readJson(LEGACY_KEY);
+    if (saved && (Array.isArray(saved.order) || Array.isArray(saved.hidden))) {
+      return {
+        order: Array.isArray(saved.order) && saved.order.length ? saved.order : null,
+        hidden: Array.isArray(saved.hidden) ? saved.hidden : []
+      };
+    }
+    const legacy = legacyHouseGrid();
+    if (legacy) return legacy;
+    return { order: null, hidden: [] };
+  }
+  function readGeo() {
+    const shared = typeof S !== "undefined" && S.hh && S.hh.home && typeof S.hh.home === "object" ? S.hh.home : null;
+    const saved = readJson(GEO_KEY);
     return {
-      order,
-      hidden,
       city: (shared && shared.city) || (saved && saved.city) || "Doullens",
       lat: num(shared && shared.lat, num(saved && saved.lat, 50.001)),
       lon: num(shared && shared.lon, num(saved && saved.lon, 2.345))
     };
   }
-  async function write(patch) {
-    const cur = read();
-    const home = {
-      order: patch.order || cur.order || [],
-      hidden: patch.hidden || cur.hidden || [],
-      city: patch.city || cur.city,
-      lat: patch.lat != null ? patch.lat : cur.lat,
-      lon: patch.lon != null ? patch.lon : cur.lon
+  function read() {
+    const grid = readGrid();
+    const geo = readGeo();
+    return { order: grid.order, hidden: grid.hidden, ...geo };
+  }
+  function householdHomePatch(geo, dom) {
+    const prev = (typeof S !== "undefined" && S.hh && S.hh.home) || {};
+    return {
+      city: geo.city,
+      lat: geo.lat,
+      lon: geo.lon,
+      ...(dom ? { dom } : prev.dom ? { dom: prev.dom } : {})
     };
-    try { localStorage.setItem(KEY, JSON.stringify(home)); } catch (e) {}
+  }
+  async function writeGrid(prefs) {
+    const order = Array.isArray(prefs.order) ? prefs.order : readGrid().order || [];
+    const hidden = Array.isArray(prefs.hidden) ? prefs.hidden : readGrid().hidden || [];
+    const payload = { order, hidden };
+    try { localStorage.setItem(gridKey(), JSON.stringify(payload)); } catch (e) {}
+    const me = meRecord();
+    if (me && typeof S !== "undefined" && S.members) {
+      me.home_prefs = payload;
+      const i = S.members.findIndex(m => m.id === me.id);
+      if (i >= 0) S.members[i] = me;
+      if (typeof saveLocal === "function") saveLocal();
+    }
+    if (typeof mode !== "undefined" && mode === "cloud" && typeof sb !== "undefined" && sb && typeof S !== "undefined" && S.me) {
+      const { error } = await sb.from("household_members").update({ home_prefs: payload }).eq("id", S.me);
+      if (error) console.warn("Accueil personnel", error.message || error);
+    }
+    return payload;
+  }
+  async function writeGeo(geo) {
+    try { localStorage.setItem(GEO_KEY, JSON.stringify(geo)); } catch (e) {}
     if (typeof S !== "undefined" && S.hh) {
-      S.hh.home = home;
+      const dom = S.hh.home && S.hh.home.dom;
+      S.hh.home = householdHomePatch(geo, dom);
       if (typeof saveLocal === "function") saveLocal();
       if (typeof mode !== "undefined" && mode === "cloud" && typeof sb !== "undefined" && sb) {
-        const { error } = await sb.from("households").update({ home }).eq("id", S.hh.id);
-        if (error) console.warn("Disposition du foyer", error.message || error);
+        const { error } = await sb.from("households").update({ home: S.hh.home }).eq("id", S.hh.id);
+        if (error) console.warn("Météo du foyer", error.message || error);
       }
     }
-    return home;
+    return geo;
+  }
+  async function write(patch) {
+    const cur = read();
+    const tasks = [];
+    if (patch.order !== undefined || patch.hidden !== undefined) {
+      tasks.push(writeGrid({
+        order: patch.order !== undefined ? patch.order : cur.order,
+        hidden: patch.hidden !== undefined ? patch.hidden : cur.hidden
+      }));
+    }
+    if (patch.city !== undefined || patch.lat !== undefined || patch.lon !== undefined) {
+      tasks.push(writeGeo({
+        city: patch.city !== undefined ? patch.city : cur.city,
+        lat: patch.lat !== undefined ? patch.lat : cur.lat,
+        lon: patch.lon !== undefined ? patch.lon : cur.lon
+      }));
+    }
+    await Promise.all(tasks);
+    return read();
   }
   return { read, write };
 })();
@@ -188,7 +261,7 @@ function render(host){
  <button type="button" data-umod="hide" data-id="${k}" aria-label="Masquer ${t}">×</button>
  </div>`:''}
  </div>`).join('')}</div>
- ${edit?`<div class="umod-hidden"><h3>Modules masqués</h3>${hidden.length?hidden.map(([k,t])=>`<button type="button" data-umod="show" data-id="${k}">＋ ${t}</button>`).join(''):'<p>Aucun module masqué.</p>'}<button type="button" data-umod="reset">Réinitialiser la disposition</button><p>La disposition est partagée avec le foyer. Masquer un raccourci ne supprime aucune donnée.</p></div>`:''}`;
+ ${edit?`<div class="umod-hidden"><h3>Modules masqués</h3>${hidden.length?hidden.map(([k,t])=>`<button type="button" data-umod="show" data-id="${k}">＋ ${t}</button>`).join(''):'<p>Aucun module masqué.</p>'}<button type="button" data-umod="reset">Réinitialiser la disposition</button><p>Votre accueil est personnel (téléphone et compte). La météo reste partagée avec le foyer. Masquer un raccourci ne supprime aucune donnée.</p></div>`:''}`;
 }
 function mount(main){
  const dashboard=main.querySelector('#ultimate-dashboard');if(!dashboard)return;
@@ -391,8 +464,13 @@ function render(){
   if(k==='recettes'&&g.recette.id)return wrap(k,`<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`);
   if(k==='domotique'){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
-    if(typeof window.domScheduleState==='function')window.domScheduleState(false,()=>render());
-    else if(typeof window.domRefreshState==='function')window.domRefreshState().then(ok=>{if(ok)render()});
+    if(typeof window.domScheduleState==='function'){
+      const now=Date.now();
+      if(!window._domHomePollAt||now-window._domHomePollAt>45000){
+        window._domHomePollAt=now;
+        window.domScheduleState(false,()=>{if(document.querySelector('main.view-home'))render()});
+      }
+    }
     const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';
     const probe=typeof gates.voiture?.temp==='number'
       ?`<strong>Extérieur ${String(gates.voiture.temp).replace('.',',')} °C</strong>`
@@ -403,10 +481,12 @@ function render(){
  }).join('');
  const editing=window.maisonneeModuleGrid?.editing?.();
  main.classList.toggle('mn-home-editing',!!editing);
- const houseEdit=editing?`<div class="mn-house-editbar"><p class="mn-house-hint">Maintenez une carte, puis déplacez-la à l’emplacement voulu.</p><button type="button" class="umod-edit mn-house-done" data-umod="edit">✓ Terminer</button></div>`:'';
+ const houseEdit=editing?`<div class="mn-house-editbar"><p class="mn-house-hint">Maintenez une carte, puis déplacez-la à l’emplacement voulu.</p><button type="button" class="umod-edit mn-house-done" data-umod="edit">✓ Terminer</button></div>`:`<div class="mn-house-editbar"><button type="button" class="umod-edit mn-house-personalize" data-act="homePersonalize">Personnaliser mon accueil</button></div>`;
  const band=(window.mnJour&&mnJour.at(now))||{id:'matin',hello:'Bonjour la famille ! ☀️'};
+ const meAcc=(typeof meM==='function'?meM():null);
+ const bandHello=meAcc&&meAcc.name?({matin:`Bonjour ${meAcc.name} ! ☀️`,aprem:`Bel après-midi ${meAcc.name} ! ☀️`,soir:`Bonsoir ${meAcc.name} ! 🌙`,nuit:`Bonne nuit ${meAcc.name} ! 🌙`}[band.id]||band.hello):band.hello;
  const jourLabel=date().replace(/^./,c=>c.toUpperCase());
- el.innerHTML=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${band.hello}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
+ el.innerHTML=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${esc(bandHello)}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
 <section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div><div class="ultimate-dayline">🌙 Lever ${heure(d?.moonrise?.[0])} · Coucher ${heure(d?.moonset?.[0])}</div></div></div></section></section>
 <section class="mn-house" aria-label="Notre maison">${houseEdit}<h2><svg class="mn-house-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="#f7fcff" d="M16 3.2 3.2 14.4h3V28h6.4v-7.8h6.8V28H25.8v-13.6h3L16 3.2z"/></svg><span class="mn-house-label">Notre maison</span><span class="mn-house-line" aria-hidden="true"></span></h2><div class="mn-house-grid">
 ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
@@ -455,7 +535,7 @@ function integrateHeader(main){
 }
 async function changeCity(){
  const current=place().city;
- const next=window.prompt("Ville pour la météo du foyer", current);
+ const next=window.prompt("Ville pour la météo (partagée avec tout le foyer)", current);
  if(!next)return;
  const name=next.trim();
  if(!name||name===current)return;
@@ -486,7 +566,7 @@ function sync(){
  });
  const family=document.querySelector('main.view-foyer');
  if(family&&!family.querySelector('#ultimate-family-personalize')){
-  const btn=document.createElement('button');btn.type='button';btn.id='ultimate-family-personalize';btn.textContent='⚙️ Personnaliser les boutons de l’accueil';
+  const btn=document.createElement('button');btn.type='button';btn.id='ultimate-family-personalize';btn.textContent='⚙️ Personnaliser mon accueil';
   family.prepend(btn);
  }
  const home=document.querySelector('main.view-home');
@@ -497,7 +577,9 @@ function sync(){
   head.appendChild(fab);
  }
 }
-document.addEventListener('click',e=>{if(e.target.closest('#ultimate-family-personalize')){e.preventDefault();window.maisonneeModuleGrid?.openEditor()}});
+document.addEventListener('click',e=>{
+ if(e.target.closest('#ultimate-family-personalize')||e.target.closest('[data-act="homePersonalize"]')){e.preventDefault();window.maisonneeModuleGrid?.openEditor()}
+});
 let pending=false;function schedule(){if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;sync()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',schedule);else schedule();

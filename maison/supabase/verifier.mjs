@@ -29,6 +29,8 @@ const sql16 = text(path.join(maison, "supabase/migrations/0016_events_repeat_cus
 ok("répétition custom autorisée", sql16.includes("events_repeat_check") && sql16.includes("custom:"));
 const sql17 = text(path.join(maison, "supabase/migrations/0017_household_home.sql"));
 ok("colonne home accordée au foyer", sql17.includes("add column if not exists home") && sql17.includes("grant update (home)"));
+const sql23 = text(path.join(maison, "supabase/migrations/0023_member_home_prefs.sql"));
+ok("accueil personnel par membre", sql23.includes("home_prefs") && sql23.includes("grant update (home_prefs)"));
 
 const page = text(path.join(maison, "index.html"));
 ok("page Maisonnée : une feuille et l'accueil", page.includes('href="maison.css"') && page.includes('src="accueil.js"') && page.includes('src="supabase/functions/_shared/cal.js"'));

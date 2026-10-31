@@ -50,6 +50,11 @@ const MODS = [
 ];
 const modOf = k => MODS.find(m => m.k === k);
 const homePins = () => {
+  if (typeof window.maisonHomeStore !== "undefined" && window.maisonHomeStore.read) {
+    const h = window.maisonHomeStore.read();
+    const hidden = Array.isArray(h.hidden) ? h.hidden : [];
+    return MODS.map(m => m.k).filter(k => !hidden.includes(k));
+  }
   try {
     const grid = JSON.parse(localStorage.getItem("maisonnee_ultimate_v3_grid_v1"));
     if (grid && Array.isArray(grid.hidden)) return MODS.map(m => m.k).filter(k => !grid.hidden.includes(k));
@@ -368,9 +373,9 @@ VIEWS.explore = function () {
       <span class="mn-card-h"><img src="assets/modules3d/${m.k}.svg" alt="" width="46" height="46"><span>${esc(m.t)}</span>${exploreEdit ? `<i class="pin-mark">${on ? I.tick : I.plus}</i>` : `<span class="mn-chev" aria-hidden="true">›</span>`}</span>
       <strong>${esc(m.sub())}</strong></button>`;
   }).join("")}</div>`;
-  return `<p class="muted" style="margin-top:4px">${exploreEdit ? "Touchez un module pour l'afficher ou le retirer de l'accueil." : "Tous les modules du foyer."}</p>
+  return `<p class="muted" style="margin-top:4px">${exploreEdit ? "Touchez un module pour l'afficher ou le retirer de votre accueil." : "Tous les modules du foyer."}</p>
     ${sec("Essentiels")}${sec("Organisation")}
-    <div class="btns"><button class="btn ${exploreEdit ? "primary" : ""}" data-act="exploreEdit">${exploreEdit ? "Terminé" : "Personnaliser l'accueil"}</button></div>`;
+    <div class="btns"><button class="btn ${exploreEdit ? "primary" : ""}" data-act="exploreEdit">${exploreEdit ? "Terminé" : "Personnaliser mon accueil"}</button></div>`;
 };
 
 /* ---------- calendar: month grid + days ---------- */
