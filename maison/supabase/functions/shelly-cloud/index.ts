@@ -133,31 +133,35 @@ function num(v: unknown) {
 }
 function tempFromStatus(status: Record<string, unknown> | null) {
   if (!status) return null;
-  const read = (v: unknown) => {
+  const readC = (v: unknown) => {
     const r = asRecord(v);
-    const n = num(r?.tC ?? r?.tc ?? r?.value ?? (typeof v === "number" ? v : null));
-    return n != null && n > -55 && n < 125 ? Math.round(n * 10) / 10 : null;
+    if (r && (r.is_valid === false || r.is_valid === 0)) return null;
+    const n = num(r?.tC ?? r?.tc ?? r?.t_c);
+    if (n == null || n <= -55 || n >= 125) return null;
+    if (n === 0 && r?.is_valid !== true) return null;
+    return Math.round(n * 10) / 10;
   };
-  const addon: number[] = [];
-  const internal: number[] = [];
-  for (const [k, v] of Object.entries(status)) {
-    const m = k.match(/^temperature:(\d+)$/i);
-    if (!m) continue;
-    const t = read(v);
-    if (t == null) continue;
-    (Number(m[1]) >= 100 ? addon : internal).push(t);
-  }
   const ext = asRecord(status.ext_temperature);
   if (ext) {
     for (const v of Object.values(ext)) {
-      const t = read(v);
-      if (t != null) addon.push(t);
+      const t = readC(v);
+      if (t != null) return t;
     }
   }
-  if (addon.length) return addon[0];
-  const tmp = read(status.tmp) ?? read(status.temperature);
-  if (internal.length) return internal[0];
-  return tmp;
+  for (const [k, v] of Object.entries(status)) {
+    const m = k.match(/^temperature:(\d+)$/i);
+    if (!m) continue;
+    const t = readC(v);
+    if (t == null) continue;
+    if (Number(m[1]) >= 100) return t;
+  }
+  for (const [k, v] of Object.entries(status)) {
+    const m = k.match(/^temperature:(\d+)$/i);
+    if (!m || Number(m[1]) >= 100) continue;
+    const t = readC(v);
+    if (t != null) return t;
+  }
+  return null;
 }
 function coverFromStatus(status: Record<string, unknown> | null, channel: number) {
   if (!status) return { online: false, pos: null, state: "", on: null };
@@ -228,13 +232,16 @@ function deviceId(d: Record<string, unknown>) {
 function statusOf(d: Record<string, unknown> | undefined) {
   if (!d) return null;
   const nested = asRecord(d.status);
+  const legacy = asRecord(d.device_status);
   if (typeof d.status === "string") {
     try {
       const parsed = asRecord(JSON.parse(d.status));
       if (parsed) return parsed;
     } catch { /* statut déjà objet ou illisible */ }
   }
+  if (nested && legacy) return { ...legacy, ...nested };
   if (nested) return nested;
+  if (legacy) return legacy;
   if (d["cover:0"] || d["switch:0"] || d.relays || d.covers || d.rollers || d["temperature:0"] || d["temperature:100"] || d.ext_temperature || d.tmp) return d;
   return null;
 }
@@ -300,14 +307,16 @@ Deno.serve(async req => {
         const got = await shelly(cred.server_uri, "/v2/devices/api/get", cred.auth_key, { ids: chunk, select: ["status"] });
         if (got.ok) list.push(...unwrapDevices(got.body));
       }
-      if (!list.length) {
-        const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
-        if (stAll.ok) list.push(...unwrapDevices(stAll.body));
-      }
+      const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
+      if (stAll.ok) list.push(...unwrapDevices(stAll.body));
       const byId = new Map<string, Record<string, unknown>>();
       for (const d of list) {
         const id = deviceId(d);
-        if (id) byId.set(id, d);
+        if (!id) continue;
+        const prev = byId.get(id);
+        if (!prev) { byId.set(id, d); continue; }
+        const mergedStatus = { ...(statusOf(prev) || {}), ...(statusOf(d) || {}) };
+        byId.set(id, { ...prev, ...d, status: mergedStatus });
       }
       for (const row of linked) {
         const sid = String(row.shelly_id).trim().toLowerCase();
@@ -316,7 +325,7 @@ Deno.serve(async req => {
         const st = statusOf(d);
         const info = coverFromStatus(st, Number(row.channel) || 0);
         info.online = online;
-        const temp = tempFromStatus(st);
+        const temp = tempFromStatus(st) ?? tempFromStatus(d);
         const label = row.type === "volet" ? labelCover(info.pos, info.state, online) : (online ? (info.on === true ? "Allumé" : info.on === false ? "Éteint" : "En ligne") : "Hors ligne");
         states[row.id] = { ...info, temp, label };
       }
