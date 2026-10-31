@@ -144,6 +144,7 @@ let domMelLastCmdAt = 0, domMelStatusAt = 0;
 let domDreameStatus = { connected: false, device_id: null, device_name: null };
 let domDreameState = null, domDreameStateAt = 0, domDreameStateInflight = null, domDreameDevices = [], domDreameBusy = "";
 let domDreamePrefAt = 0;
+let domDreameTask = "";
 let domDreameRooms = [], domDreameRoomsAt = 0, domDreameRoomsHint = "", domDreameRoomsInflight = null;
 let domDreamePrograms = [];
 let domDreameProgEdit = "";
@@ -469,16 +470,43 @@ function domDreameRoomsBlock(rooms, hint) {
     <div class="dom-dreame-choices">${rows}</div>`;
 }
 function domDreameTransportBtns() {
-  const busyStart = domDreameBusy === "start";
-  const busyStop = domDreameBusy === "stop";
-  const busyDock = domDreameBusy === "dock";
-  const busyPause = domDreameBusy === "pause";
+  const t = domDreameTask;
+  const lit = name => `btn dom-dreame-choice${t === name ? " primary" : ""}`;
   return `<div class="dom-actions dom-dreame-actions">
-      <button type="button" class="btn primary dom-dreame-choice" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""}>▶ Lecture</button>
-      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="pause" ${busyPause ? "aria-busy=true" : ""}>⏸ Pause</button>
-      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="stop" ${busyStop ? "aria-busy=true" : ""}>⏹ Stop</button>
-      <button type="button" class="btn dom-dreame-choice" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""}>🏠 Retour base</button>
+      <button type="button" class="${lit("start")}" data-dom-dreame-cmd="start">▶ Lecture</button>
+      <button type="button" class="${lit("pause")}" data-dom-dreame-cmd="pause">⏸ Pause</button>
+      <button type="button" class="${lit("stop")}" data-dom-dreame-cmd="stop">⏹ Stop</button>
+      <button type="button" class="${lit("dock")}" data-dom-dreame-cmd="dock">🏠 Retour base</button>
     </div>`;
+}
+function domDreameStatusHtml() {
+  const st = domDreameState || {};
+  const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
+  const mode = st.cleaning_mode != null ? st.cleaning_mode : 2;
+  return `<strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}${st.water_label && mode !== 0 ? " · eau " + esc(st.water_label) : ""}</span>` : ""}`;
+}
+function domDreamePrefsHtml() {
+  const st = domDreameState || {};
+  const mode = st.cleaning_mode != null ? st.cleaning_mode : 2;
+  const suction = st.suction != null ? st.suction : 1;
+  const water = st.water != null ? st.water : 2;
+  return domDreameChipGroup("Mode de nettoyage", "cleaning_mode", domDreameModeOpts(), mode)
+    + (mode !== 1 ? domDreameChipGroup("Aspiration", "suction", domDreameSuctionOpts(), suction) : "")
+    + (mode !== 0 ? domDreameChipGroup("Eau (serpillière)", "water", domDreameWaterOpts(), water) : "");
+}
+function domDreameFillHosts() {
+  const panel = document.querySelector(".dom-dreame-panel");
+  if (!panel) return;
+  const status = panel.querySelector("[data-dom-dreame-status]");
+  if (status) status.innerHTML = domDreameStatusHtml();
+  const prefs = panel.querySelector("[data-dom-dreame-prefs]");
+  if (prefs) prefs.innerHTML = domDreamePrefsHtml();
+  const rooms = panel.querySelector("[data-dom-dreame-rooms-host]");
+  if (rooms) rooms.innerHTML = domDreameRoomsBlock(domDreameRooms, domDreameRoomsHint || (domDreameRoomsInflight ? "Lecture de la carte…" : ""));
+  const trans = panel.querySelector("[data-dom-dreame-trans]");
+  if (trans) trans.innerHTML = domDreameTransportBtns();
+  const progs = panel.querySelector("[data-dom-dreame-progs-host]");
+  if (progs) progs.innerHTML = domDreameProgramsBlock(domDreameCommandable());
 }
 function domDreameStartPayload() {
   const st = domDreameState || {};
@@ -738,7 +766,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e11</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e12</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -945,35 +973,24 @@ function domDreameSheet(fromRefresh) {
     openSheet("Dreame D20 Ultra", `<div class="dom-pending"><p class="muted">Dreame Home non relié</p><p>Reliez votre compte Dreame Home pour voir l'état et envoyer des commandes depuis Maisonnée.</p><button type="button" class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
     return;
   }
+  if (fromRefresh && document.querySelector(".dom-dreame-panel")) {
+    domDreameFillHosts();
+    return;
+  }
   const st = domDreameState || {};
   const title = st.device_name || domDreameStatus.device_name || "Dreame";
-  const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
-  const liveNote = "";
-  const canCmd = domDreameCommandable();
-  const mode = st.cleaning_mode != null ? st.cleaning_mode : 2;
-  const suction = st.suction != null ? st.suction : 1;
-  const water = st.water != null ? st.water : 2;
-  const prefs = domDreameChipGroup("Mode de nettoyage", "cleaning_mode", domDreameModeOpts(), mode)
-    + (mode !== 1 ? domDreameChipGroup("Aspiration", "suction", domDreameSuctionOpts(), suction) : "")
-    + (mode !== 0 ? domDreameChipGroup("Eau (serpillière)", "water", domDreameWaterOpts(), water) : "");
-  const roomsBlock = domDreameRoomsBlock(domDreameRooms, domDreameRoomsHint || (domDreameRoomsInflight ? "Lecture de la carte…" : ""));
-  const programsBlock = domDreameProgramsBlock(canCmd);
   openSheet(title, `<article class="dom-device dom-dreame-panel">
-    <p class="dom-dreame-status" aria-live="polite"><strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}${st.water_label && mode !== 0 ? " · eau " + esc(st.water_label) : ""}</span>` : ""}</p>
-    ${liveNote}
-    ${prefs}
-    ${roomsBlock}
-    ${domDreameTransportBtns()}
-    ${programsBlock}
+    <p class="dom-dreame-status" data-dom-dreame-status aria-live="polite">${domDreameStatusHtml()}</p>
+    <div data-dom-dreame-prefs>${domDreamePrefsHtml()}</div>
+    <div data-dom-dreame-rooms-host>${domDreameRoomsBlock(domDreameRooms, domDreameRoomsHint || (domDreameRoomsInflight ? "Lecture de la carte…" : ""))}</div>
+    <div data-dom-dreame-trans>${domDreameTransportBtns()}</div>
+    <div data-dom-dreame-progs-host>${domDreameProgramsBlock(domDreameCommandable())}</div>
     <p class="muted small">Commandes via Dreame Home (serveur Maisonnée).</p>
     <button type="button" class="btn ghost" data-act="closeSheet">Fermer</button>
   </article>`);
   if (!fromRefresh) {
-    domDreameRefreshState(true).then(() => {
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
-      return domDreameEnsureRooms(true);
-    }).then(() => {
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    Promise.all([domDreameRefreshState(true), domDreameEnsureRooms(true)]).then(() => {
+      domDreameFillHosts();
     }).catch(() => {});
   }
 }
@@ -1202,7 +1219,8 @@ document.addEventListener("click", e => {
     const body = (action === "start" || action === "play") ? domDreameStartPayload() : { action };
     const nRooms = (body.segment_ids || []).length;
     domDreameBusy = action;
-    if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    domDreameTask = action === "play" ? "start" : action;
+    domDreameFillHosts();
     dreameServer("command", body).then(r => {
       if (r) {
         domDreameMergeState(r);
@@ -1212,21 +1230,20 @@ document.addEventListener("click", e => {
         ? (nRooms ? " · " + (domDreamePickedNames().join(", ") || (nRooms + " pièce(s)")) : " · toute la maison")
         : "";
       toast((labels[action] || "Commande") + extra + " envoyée à l'aspirateur", null, null, null, "domotique");
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+      domDreameFillHosts();
     }).catch(err => { if (err) toast(err.message); }).finally(() => {
       domDreameBusy = "";
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
     });
     return;
   }
   if (e.target.closest("[data-dom-dreame-pick-all]")) {
     domDreamePickRooms = domDreameNamedRooms().map(r => Number(r.id));
-    if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    domDreameFillHosts();
     return;
   }
   if (e.target.closest("[data-dom-dreame-pick-none]")) {
     domDreamePickRooms = [];
-    if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    domDreameFillHosts();
     return;
   }
   const drePickRoom = e.target.closest("[data-dom-dreame-pick-room]");
@@ -1276,7 +1293,7 @@ document.addEventListener("click", e => {
     dreameServer("delete_program", { id }).then(r => {
       if (Array.isArray(r.programs)) domDreamePrograms = r.programs;
       toast("Programme supprimé.");
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+      domDreameFillHosts();
     }).catch(err => toast(err.message));
     return;
   }
@@ -1292,7 +1309,8 @@ document.addEventListener("click", e => {
       domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast(prog ? "Programme lancé · " + prog.name : "Programme lancé", null, null, null, "domotique");
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+      domDreameTask = "start";
+      domDreameFillHosts();
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
     return;
   }
@@ -1369,13 +1387,13 @@ document.addEventListener("click", e => {
       const lab = (domDreameWaterOpts().find(o => o.v === value) || {}).t;
       if (lab) domDreameState.water_label = lab;
     }
-    if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+    domDreameFillHosts();
     dreameServer("command", body).then(r => {
       if (!r) return;
       domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast("Réglage Dreame appliqué", null, null, null, "domotique");
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+      domDreameFillHosts();
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; });
     return;
   }
@@ -1390,7 +1408,8 @@ document.addEventListener("click", e => {
       domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast("Nettoyage de la pièce lancé", null, null, null, "domotique");
-      if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
+      domDreameTask = "start";
+      domDreameFillHosts();
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
     return;
   }
