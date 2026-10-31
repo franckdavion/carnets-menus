@@ -2316,9 +2316,11 @@ dialog.sheet .dom-mel-panel .dom-mel-step span{display:block;font-size:32px;line
 .dom-dreame-choice{width:100%;min-height:48px;touch-action:manipulation;pointer-events:auto;position:relative;z-index:1}
 dialog.sheet .dom-dreame-choice,dialog.sheet .dom-dreame-panel .btn,dialog.sheet .chip{touch-action:manipulation;pointer-events:auto}
 .dom-dreame-rooms-pick{display:grid;gap:8px}
-.dom-form label.dom-dreame-check{display:flex;flex-direction:row;align-items:center;gap:12px;margin:0;font-weight:600;min-height:44px}
+.dom-dreame-check,.dom-form label.dom-dreame-check{display:flex;flex-direction:row;align-items:center;gap:12px;margin:0;font-weight:600;min-height:48px;padding:8px 12px;border-radius:14px;border:1px solid rgba(126,200,255,.32);background:rgba(15,39,76,.55);touch-action:manipulation}
+.dom-dreame-check.is-on{border-color:rgba(155,225,255,.95);background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+.dom-dreame-check input[type=checkbox]{width:22px;min-width:22px;max-width:22px;height:22px;margin:0;flex:none}
 .dom-form label.dom-dreame-check input[type=checkbox]{width:22px;min-width:22px;max-width:22px;height:22px;margin:0;flex:none;align-self:center}
-.dom-form label.dom-dreame-check span{flex:1;min-width:0;line-height:1.3}
+.dom-dreame-check span,.dom-form label.dom-dreame-check span{flex:1;min-width:0;line-height:1.3}
 .dom-dreame-prog-row{display:grid;gap:6px;padding:10px 0;border-bottom:1px solid rgba(150,190,255,.18)}
 .dom-dreame-prog-row .btn.primary{width:100%}
 .dom-dreame-card-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;width:100%}
