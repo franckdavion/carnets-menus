@@ -2,12 +2,13 @@
 /* Maisonnée : accueil en modules, Explorer, calendrier du mois, et les modules
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
 
-Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule" });
+Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule", shelly: "shelly_devices" });
 const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
 
 /* ---------- module registry: colour, icon, home summary ---------- */
-const MC = { tasks: "#F5C451", agenda: "#A07CF5", repas: "#5B8DEF", courses: "#F2A93B", recettes: "#F39A4A", messages: "#35C9B0", carte: "#6CC4F2", foyer: "#8AD6A6", anniv: "#F2917B", budget: "#3DB972", docs: "#6A86F0", edt: "#E46CA6" };
+const MC = { domotique: "#65BDF2", tasks: "#F5C451", agenda: "#A07CF5", repas: "#5B8DEF", courses: "#F2A93B", recettes: "#F39A4A", messages: "#35C9B0", carte: "#6CC4F2", foyer: "#8AD6A6", anniv: "#F2917B", budget: "#3DB972", docs: "#6A86F0", edt: "#E46CA6" };
 const MI = {
+  domotique: '<path class="f" d="M4 15 16 5l12 10v12H4z"/><path d="M12 27v-9h8v9"/>',
   tasks: '<rect class="f" x="5" y="5" width="22" height="22" rx="6"/><circle class="s" cx="11" cy="11.5" r="1.4"/><circle class="s" cx="11" cy="16" r="1.4"/><circle class="s" cx="11" cy="20.5" r="1.4"/><path d="M15 11.5h7M15 16h7M15 20.5h7"/>',
   agenda: '<rect class="f" x="5" y="7" width="22" height="20" rx="5"/><path d="M5 13h22M11 4.5v5M21 4.5v5"/><circle class="s" cx="11" cy="18" r="1.3"/><circle class="s" cx="16" cy="18" r="1.3"/><circle class="s" cx="21" cy="18" r="1.3"/><circle class="s" cx="11" cy="22.5" r="1.3"/><circle class="s" cx="16" cy="22.5" r="1.3"/>',
   repas: '<path d="M8.5 4v8.5a3.5 3.5 0 0 0 7 0V4M12 4v24"/><path class="f" d="M24 28V4c-3.2 1.6-5 5.2-5 10v4h5"/>',
@@ -40,6 +41,7 @@ const MODS = [
   { k: "recettes", t: "Recettes", g: "Essentiels", sub() { return (S.recipes && S.recipes.length ? plural(S.recipes.length, "recette", "recettes") + " · " : "") + "ouvrir le Carnet"; } },
   { k: "galerie", t: "Galerie", g: "Essentiels", sub() { const n = S.photos.length; return n ? plural(n, "photo", "photos") : "Vos photos de famille"; } },
   { k: "foyer", t: "Ma famille", g: "Essentiels", sub() { return plural(S.members.length, "membre", "membres"); } },
+  { k: "domotique", t: "Domotique", g: "Organisation", sub() { return "Extérieur · RDC · Étage"; } },
   { k: "anniv", t: "Anniversaires", g: "Organisation", sub() { const b = nextBdays()[0]; return b ? `${b.name} ${b.days === 0 ? "aujourd'hui !" : b.days === 1 ? "demain" : "dans " + b.days + " j"}` : "Vos dates importantes"; } },
   { k: "budget", t: "Budget", g: "Organisation", sub() { const m = today().slice(0, 7); const t = S.exp.filter(e => e.kind !== "in" && String(e.day).startsWith(m)).reduce((a, e) => a + Number(e.amount), 0); return t ? `${eur(t)} ce mois-ci` : "Suivez vos dépenses"; } },
   { k: "docs", t: "Documents", g: "Organisation", sub() { const soon = S.docs.filter(d => d.expires_on && diffDays(today(), d.expires_on) <= 30).length; return soon ? `${plural(soon, "document expire", "documents expirent")} bientôt` : S.docs.length ? plural(S.docs.length, "document", "documents") : "Papiers importants"; } },
@@ -57,6 +59,179 @@ const homePins = () => {
 };
 let exploreEdit = false;
 function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0003_anniversaires_budget_documents.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
+
+/* Domotique : commandes via Edge Function, clé Shelly uniquement côté serveur. */
+const DOM_ZONES = { exterieur: "Extérieur", rdc: "Maison RDC", etage: "Maison étage" };
+const DOM_KEY = "maisonnee_domotique_zones_v1";
+const DOM_DEFAULT = [
+  { name: "Portail", zone: "exterieur", type: "portail", channel: 0, channel_b: 1, pulse_sec: 1, shelly_id: "" },
+  { name: "Atelier", zone: "exterieur", type: "portail", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" },
+  { name: "Éclairages extérieurs", zone: "exterieur", type: "lumiere", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" },
+  { name: "Volets RDC", zone: "rdc", type: "volet", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" },
+  { name: "Volets étage", zone: "etage", type: "volet", channel: 0, channel_b: null, pulse_sec: 1, shelly_id: "" }
+];
+const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
+let domZone = "", domEdit = "", domCloud = [], domBusy = "";
+document.addEventListener("click", e => {
+  if (e.target.closest('[data-act="go"][data-v="domotique"]')) domZone = "";
+}, true);
+function domConnected() { return !!(S.hh && S.hh.shelly_host); }
+function domRead() {
+  if (S.vShelly && Array.isArray(S.shelly) && S.shelly.length) return S.shelly.slice().sort((a, b) => (a.position || 0) - (b.position || 0));
+  try { const v = JSON.parse(localStorage.getItem(DOM_KEY)); if (Array.isArray(v) && v.length) return v; } catch (_) {}
+  return DOM_DEFAULT.map((x, i) => ({ ...x, id: "dom_" + i, position: i }));
+}
+function domWriteLocal(v) { localStorage.setItem(DOM_KEY, JSON.stringify(v)); }
+function domIcon(t) { return t === "volet" ? "▤" : t === "lumiere" ? "💡" : t === "prise" ? "🔌" : "🚪"; }
+function domActions(x) {
+  if (x.type === "portail") return (x.channel_b != null || /portail/i.test(x.name)) && !/atelier/i.test(x.name) ? ["Piéton", "Voiture"] : ["Ouvrir / Fermer"];
+  if (x.type === "volet") return ["Monter", "Stop", "Descendre"];
+  return ["Allumer", "Éteindre"];
+}
+async function shellyServer(action, body) {
+  if (!sb) await loadSb();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Connexion Maisonnée requise");
+  const res = await fetch(SHELLY_ENDPOINT + "/" + action, {
+    method: body ? "POST" : "GET",
+    headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || "Erreur Shelly Cloud");
+  return out;
+}
+async function domEnsureDefaults() {
+  if (mode !== "cloud" || !S.vShelly || !S.hh || (S.shelly && S.shelly.length)) return;
+  const local = (() => { try { return JSON.parse(localStorage.getItem(DOM_KEY)); } catch (_) { return null; } })();
+  const seed = Array.isArray(local) && local.length ? local.map((x, i) => ({
+    name: x.name, zone: x.zone, type: x.type, shelly_id: x.shelly_id || "", channel: x.channel || 0, channel_b: x.channel_b ?? null, pulse_sec: x.pulse_sec || 1, position: i
+  })) : DOM_DEFAULT;
+  await addMany("shelly", seed);
+}
+function domLinkLine(x) {
+  if (!domConnected()) return "Shelly Cloud n'est pas encore relié";
+  if (!x.shelly_id) return "Identifiant Shelly à associer dans les réglages";
+  return "Prêt · " + x.shelly_id;
+}
+function domSettings(zone) {
+  const rows = domRead().filter(x => !zone || x.zone === zone);
+  const heading = zone ? DOM_ZONES[zone] : "Domotique";
+  const cloud = mode === "cloud" && S.hh;
+  const connect = !zone && cloud ? (domConnected()
+    ? `<p class="muted">Compte Shelly relié (${esc((S.hh.shelly_host || "").replace(/^https:\/\//, ""))}). La clé reste sur le serveur.</p><div class="btns"><button class="btn" data-dom-cloud-list>Choisir un appareil du compte</button><button class="btn ghost danger" data-dom-disconnect>Délier Shelly Cloud</button></div>`
+    : `<p class="muted">Dans l'app Shelly : Utilisateur → Clé d'autorisation cloud. Copiez l'adresse du serveur et la clé.</p><button class="btn primary" data-dom-connect>Relier Shelly Cloud</button>`)
+    : (!cloud ? '<p class="muted">Ouvrez Maisonnée avec le compte du foyer pour relier Shelly Cloud.</p>' : "");
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}<p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones"}.</p><div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+}
+function domPage() {
+  const items = domRead();
+  if (!domZone) return `<section class="dom-page"><div class="dom-page-heading"><h2>🏠 Domotique</h2><button class="btn dom-settings-button" data-dom-settings="" aria-label="Réglages Domotique" title="Réglages Domotique">⚙️</button></div><p class="muted">${domConnected() ? "Compte Shelly relié. Choisissez une zone." : "Choisissez une zone, puis reliez Shelly Cloud dans les réglages."}</p><div class="dom-zones">${Object.entries(DOM_ZONES).map(([id, title]) => `<button class="dom-zone" data-dom-zone="${id}"><strong>${title}</strong><span>${items.filter(x => x.zone === id).length} équipement(s) ›</span></button>`).join("")}</div></section>`;
+  const devices = items.filter(x => x.zone === domZone);
+  return `<section class="dom-page"><button class="btn" data-dom-back>← Domotique</button><div class="dom-page-heading"><h2>${DOM_ZONES[domZone]}</h2><button class="btn dom-settings-button" data-dom-settings="${domZone}" aria-label="Réglages ${DOM_ZONES[domZone]}" title="Réglages ${DOM_ZONES[domZone]}">⚙️</button></div><div class="dom-devices">${devices.map(x => {
+    const ready = domConnected() && x.shelly_id;
+    return `<article class="dom-device"><div class="dom-device-head"><strong>${domIcon(x.type)} ${esc(x.name)}</strong></div><p class="muted">${esc(domLinkLine(x))}</p><div class="dom-actions">${domActions(x).map(t => `<button class="btn" data-dom-cmd="${esc(x.id)}" data-dom-action="${esc(t)}" ${ready ? "" : "disabled"} ${domBusy === x.id + t ? "aria-busy=true" : ""}>${t}</button>`).join("")}</div></article>`;
+  }).join("") || '<p class="muted">Aucun équipement dans cette zone.</p>'}</div></section>`;
+}
+VIEWS.domotique = function () { Promise.resolve(domEnsureDefaults()).catch(() => {}); return domPage(); };
+function domCloudOptions(selected) {
+  if (!domCloud.length) return `<option value="">Coller l'identifiant (app Shelly → Infos appareil)</option>`;
+  return `<option value="">Choisir…</option>` + domCloud.map(d => `<option value="${esc(d.id)}" ${selected === d.id ? "selected" : ""}>${esc(d.name)} (${esc(d.id)})</option>`).join("");
+}
+function domForm(zone, id) {
+  const item = domRead().find(x => x.id === id) || { name: "", zone: zone || "exterieur", type: "volet", id: "", shelly_id: "", channel: 0, channel_b: "", pulse_sec: 1 };
+  domEdit = item.id;
+  openSheet(id ? "Modifier un équipement" : "Ajouter un appareil", `<form id="dom-form" class="dom-form">
+    <label>Nom<input name="name" required maxlength="70" value="${esc(item.name)}" placeholder="Ex. Volet chambre"></label>
+    <label>Zone<select name="zone">${Object.entries(DOM_ZONES).map(([k, v]) => `<option value="${k}" ${item.zone === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label>Type<select name="type">${[["volet", "Volet"], ["lumiere", "Éclairage"], ["portail", "Portail / atelier"], ["prise", "Prise / relais"]].map(([k, v]) => `<option value="${k}" ${item.type === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label>Appareil Shelly<select name="shelly_id">${domCloudOptions(item.shelly_id || "")}</select></label>
+    ${domCloud.length ? "" : `<label>Identifiant Shelly<input name="shelly_id_text" value="${esc(item.shelly_id || "")}" placeholder="ex. e8db84aabbcc"></label>`}
+    <label>Canal<select name="channel">${[0, 1, 2, 3].map(n => `<option value="${n}" ${Number(item.channel) === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+    <label>Canal 2 (Voiture, optionnel)<input name="channel_b" type="number" min="0" max="7" value="${item.channel_b != null ? esc(item.channel_b) : ""}" placeholder="vide si un seul canal"></label>
+    <label>Impulsion portail (secondes)<input name="pulse_sec" type="number" min="0.5" max="30" step="0.5" value="${esc(item.pulse_sec || 1)}"></label>
+    <p class="muted">La commande passe par le serveur du foyer. Personne dans l'appli ne voit la clé Shelly.</p>
+    <button class="btn primary" type="submit">Enregistrer</button>${id ? '<button class="btn" type="button" data-dom-delete>Supprimer cet équipement</button>' : ""}
+  </form>`);
+}
+function domConnectSheet() {
+  openSheet("Relier Shelly Cloud", `<form id="dom-connect" class="dom-form">
+    <p class="muted">App Shelly → Utilisateur → Clé d'autorisation cloud. Collez les deux valeurs. Elles sont enregistrées pour le foyer, pas dans ce téléphone.</p>
+    <label>Adresse du serveur<input name="server_uri" required maxlength="120" placeholder="https://shelly-xx-eu.shelly.cloud" value="${esc((S.hh && S.hh.shelly_host) || "")}"></label>
+    <label>Clé d'autorisation<input name="auth_key" required maxlength="400" autocomplete="off"></label>
+    <button class="btn primary" type="submit">Tester et enregistrer</button>
+  </form>`);
+}
+document.addEventListener("click", e => {
+  const z = e.target.closest("[data-dom-zone]"); if (z) { domZone = z.dataset.domZone; render(); return; }
+  if (e.target.closest("[data-dom-back]")) { domZone = ""; render(); return; }
+  const settings = e.target.closest("[data-dom-settings]"); if (settings) { domSettings(settings.dataset.domSettings); return; }
+  const a = e.target.closest("[data-dom-add]"); if (a) { domForm(a.dataset.domAdd); return; }
+  const d = e.target.closest("[data-dom-edit]"); if (d) { const row = domRead().find(x => x.id === d.dataset.domEdit); domForm(row ? row.zone : domZone, d.dataset.domEdit); return; }
+  if (e.target.closest("[data-dom-connect]")) { domConnectSheet(); return; }
+  if (e.target.closest("[data-dom-disconnect]")) {
+    if (!confirm("Délier Shelly Cloud de ce foyer ? Les équipements restent, les commandes seront coupées.")) return;
+    shellyServer("disconnect", {}).then(r => { if (S.hh) S.hh.shelly_host = r.host || null; closeSheet(); render(); toast("Shelly Cloud délié."); }).catch(err => toast(err.message));
+    return;
+  }
+  if (e.target.closest("[data-dom-cloud-list]")) {
+    toast("Lecture du compte Shelly…");
+    shellyServer("devices").then(r => { domCloud = r.devices || []; toast((domCloud.length || 0) + " appareil(s) trouvés. Ouvrez un équipement pour l'associer."); }).catch(err => toast(err.message));
+    return;
+  }
+  if (e.target.closest("[data-dom-delete]")) {
+    if (!confirm("Supprimer cet équipement de la page ?")) return;
+    if (S.vShelly && mode === "cloud") remove("shelly", domEdit);
+    else { domWriteLocal(domRead().filter(x => x.id !== domEdit)); render(); }
+    closeSheet();
+    return;
+  }
+  const cmd = e.target.closest("[data-dom-cmd]");
+  if (cmd) {
+    const id = cmd.dataset.domCmd, action = cmd.dataset.domAction;
+    if (!id || !action || cmd.disabled) return;
+    domBusy = id + action; cmd.disabled = true;
+    shellyServer("command", { id, action }).then(() => toast("Commande envoyée : " + action, null, null, null, "domotique")).catch(err => toast(err.message)).finally(() => { domBusy = ""; render(); });
+  }
+});
+document.addEventListener("submit", e => {
+  if (e.target.id === "dom-connect") {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const btn = e.target.querySelector("button[type=submit]");
+    if (btn) btn.disabled = true;
+    shellyServer("connect", { server_uri: fd.get("server_uri"), auth_key: fd.get("auth_key") }).then(r => {
+      if (S.hh) S.hh.shelly_host = r.host;
+      domCloud = r.devices || [];
+      closeSheet(); render();
+      toast(domCloud.length ? "Shelly Cloud relié · " + domCloud.length + " appareil(s)." : "Shelly Cloud relié.");
+    }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
+    return;
+  }
+  if (e.target.id !== "dom-form") return;
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const name = String(fd.get("name") || "").trim();
+  if (!name) return;
+  const zone = String(fd.get("zone"));
+  const type = String(fd.get("type"));
+  const shelly_id = String(fd.get("shelly_id") || fd.get("shelly_id_text") || "").trim().toLowerCase();
+  const channel = Number(fd.get("channel") || 0);
+  const rawB = String(fd.get("channel_b") || "").trim();
+  const channel_b = rawB === "" ? null : Number(rawB);
+  const pulse_sec = Number(fd.get("pulse_sec") || 1);
+  const row = { name, zone, type, shelly_id, channel, channel_b, pulse_sec };
+  if (S.vShelly && mode === "cloud") {
+    if (domEdit) patch("shelly", domEdit, row);
+    else add("shelly", { ...row, position: domRead().length });
+  } else {
+    const rows = domRead();
+    if (domEdit) { const found = rows.find(x => x.id === domEdit); if (found) Object.assign(found, row); }
+    else rows.push({ id: "dom_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8), ...row, position: rows.length });
+    domWriteLocal(rows); render();
+  }
+  domZone = zone; closeSheet();
+});
 
 /* ---------- home and explore ---------- */
 VIEWS.home = function () {

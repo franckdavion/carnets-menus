@@ -100,6 +100,7 @@ async function showPushSettings() {
       ${sw("confirm_agenda", "Agenda", "événement ajouté, modifié ou retiré, y compris dans Google Agenda", true)}
       ${sw("confirm_courses", "Courses et repas", "liste de courses, ingrédients achetés, repas retiré des courses", true)}
       ${sw("confirm_tasks", "Tâches", "tâche ajoutée, faite ou supprimée", true)}
+      ${sw("confirm_domotique", "Domotique", "commande envoyée à un appareil Shelly", true)}
       ${prOk ? "" : `<p class="muted small" style="margin:0">Les alertes qui arrivent se règlent une fois le compte relié. Les confirmations de vos actions se règlent déjà sur cet appareil.</p>`}
     </div>
     <button class="btn primary block" type="button" data-act="pushEnable" ${mode !== "cloud" || !pushSupported() || !window.MAISON_PUSH_VAPID_PUBLIC ? "disabled" : ""}>${current ? "Réactiver cet appareil" : "Activer sur cet iPhone"}</button>
@@ -151,7 +152,7 @@ let who = null;                               // member filter on Today and Tâc
 let weekA = mondayOf(today()), weekR = mondayOf(today());
 let repasTab = "menu";
 let S = blank();
-function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null }; }
+function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null, shelly: [], vShelly: false }; }
 const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
 const V2 = ["msgs", "locs"]; // tables added by supabase/migrations/0002_messages_positions.sql
 
@@ -268,7 +269,10 @@ async function loadCloud(hid) {
   const recipes = S.recipes, favs = S.favs;
   S = { v5: "carnet_user" in hh.data, favs, hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
     msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
-    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes };
+    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes, shelly: [], vShelly: false };
+  const shly = await sb.from("shelly_devices").select("*").eq("household_id", hid).order("position");
+  S.vShelly = !shly.error;
+  S.shelly = S.vShelly ? (shly.data || []) : [];
   saveLocal();
 }
 
@@ -369,6 +373,7 @@ function listen(hid) {
     if (V2.includes(key) && !S.v2) continue;
     if (V3.includes(key) && !S.v3) continue;
     if (key === "photos" && !S.v4) continue;
+    if (key === "shelly" && !S.vShelly) continue;
     rt.on("postgres_changes", { event: "*", schema: "public", table }, p => {
       if (key === "shop" && p.eventType === "INSERT") mzNoticeShopInsert(p.new);
       if (key === "events") mzNoticeAgenda(p);
@@ -926,7 +931,7 @@ function mzToastHint(node) {
 }
 const MZ_NOTICE_KEY = "mz_notice_choices";
 function mzNoticeDefaults() {
-  return { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true, confirm_agenda: true, confirm_courses: true, confirm_tasks: true };
+  return { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true, confirm_agenda: true, confirm_courses: true, confirm_tasks: true, confirm_domotique: true };
 }
 function mzNoticePrefs() {
   try { return { ...mzNoticeDefaults(), ...JSON.parse(localStorage.getItem(MZ_NOTICE_KEY) || "{}") }; }
@@ -970,7 +975,7 @@ function mzToastAllowed(kind, msg) {
   if (!kind) return true;
   const message = String(msg || "");
   if (/impossible|erreur|refus|introuvable|pas de connexion|échou|non enregistrée|n'a pas été enregistrée/i.test(message)) return true;
-  const key = { agenda: "confirm_agenda", courses: "confirm_courses", tasks: "confirm_tasks" }[kind];
+  const key = { agenda: "confirm_agenda", courses: "confirm_courses", tasks: "confirm_tasks", domotique: "confirm_domotique" }[kind];
   if (!key) return true;
   return mzNoticePrefs()[key] !== false;
 }

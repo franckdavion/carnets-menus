@@ -2056,6 +2056,7 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
 .mn-card-docs{background:linear-gradient(165deg,#2c4a86,#121e38);}
 .mn-card-edt{background:linear-gradient(165deg,#6a3d58,#1a2038);}
 .mn-card-carte{background:linear-gradient(165deg,#1a5878,#0e243c);}
+.mn-card-domotique{background:linear-gradient(165deg,#1a5c86,#0c2748);}
 main.view-explore .mn-house-grid{max-width:760px;}
 main.view-explore .mn-card{position:relative;}
 main.view-explore .mn-card[aria-pressed="false"]{opacity:.62;}
@@ -2193,3 +2194,21 @@ details.r-legend-fold .r-legend{margin-top:0;}
 @media (min-width:900px){
   body:has(main.view-home) .mn-dayframe .ultimate-hero.mn-dayband{height:124px!important;max-height:128px!important;}
 }
+
+/* Domotique : composants spécifiques, héritant du thème et du responsive commun. */
+.dom-page{display:grid;gap:16px;max-width:1050px;margin:0 auto;padding:12px 0 32px}
+.dom-page h2{margin:0}.dom-zones,.dom-devices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}
+.dom-zone,.dom-device{border:1px solid var(--line,rgba(150,190,255,.25));border-radius:18px;background:rgba(15,39,76,.72);color:inherit;padding:18px;text-align:left;min-width:0}
+.dom-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:100px;cursor:pointer}
+.dom-zone span{font-size:.86em;opacity:.8}.dom-device-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dom-actions{display:flex;flex-wrap:wrap;gap:8px}.dom-actions .btn{flex:1 1 auto}.dom-form{display:grid;gap:14px}.dom-form label{display:grid;gap:6px}
+.dom-form input,.dom-form select{width:100%;min-width:0}
+
+/* Domotique : réglages centralisés, réutilisation des boutons et de la feuille commune. */
+.dom-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.dom-page-heading h2{min-width:0;overflow-wrap:anywhere}
+.dom-settings-button{flex:0 0 auto;min-width:44px;min-height:44px}
+.dom-settings{display:grid;gap:14px;min-width:0}
+.dom-settings-list{display:grid;gap:8px;min-width:0}
+.dom-settings-row{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;min-width:0}
+.dom-settings-row span{min-width:0;overflow-wrap:anywhere}

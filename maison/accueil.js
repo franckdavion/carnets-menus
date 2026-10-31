@@ -53,7 +53,7 @@ const items=[
 ['agenda','Calendrier','📅'],['repas','Repas','🍽️'],['courses','Courses','🛒'],['recettes','Recettes','📖'],
 ['tasks','Tâches','✅'],['messages','Messages','💬'],['presences','Présences','👧'],['foyer','Ma famille','👨‍👩‍👧'],
 ['anniv','Anniversaires','🎂'],['docs','Documents','📁'],['budget','Budget','💶'],['carte','Localisation','📍'],
-['galerie','Galerie','📸'],['edt','Emploi du temps','🗓️']
+['galerie','Galerie','📸'],['edt','Emploi du temps','🗓️'],['domotique','Domotique','🏠']
 ];
 const KEY='maisonnee_ultimate_v3_grid_v1';
 let edit=false,dragId=null;

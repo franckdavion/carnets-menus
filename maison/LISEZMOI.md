@@ -17,7 +17,7 @@ Nouvelle version du Carnet de menus, dans son propre dossier : le Carnet continu
 
 Sans le script, le bouton « Essayer sans compte » permet de tout tester (les données restent sur le téléphone).
 
-Les scripts de `supabase/migrations` se collent dans l'ordre des numéros, chacun une seule fois. Une base déjà installée jusqu'aux présences n'a plus que deux scripts à coller : `0016_events_repeat_custom.sql` (répétition du type `custom:3:weeks`) et `0017_household_home.sql` (ville de la météo et disposition de l'accueil). Les fichiers `0006` à `0015` sont les anciennes étapes, déjà décrites dans `NOTIFICATIONS_INSTALLATION.md` pour les notifications.
+Les scripts de `supabase/migrations` se collent dans l'ordre des numéros, chacun une seule fois. Une base déjà installée jusqu'aux présences n'a plus que deux scripts à coller : `0016_events_repeat_custom.sql` (répétition du type `custom:3:weeks`) et `0017_household_home.sql` (ville de la météo et disposition de l'accueil). Les fichiers `0006` à `0015` sont les anciennes étapes, déjà décrites dans `NOTIFICATIONS_INSTALLATION.md` pour les notifications. Pour relier Shelly Cloud : coller `0019_shelly.sql`, déployer la fonction `shelly-cloud`, puis dans Maisonnée › Domotique › ⚙️ coller l'adresse du serveur et la clé (app Shelly › Utilisateur › Clé d'autorisation cloud).
 
 ## Ce que contient l'appli
 
