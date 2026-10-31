@@ -265,10 +265,7 @@ function domDreameSummary() {
   return domDreameStatus.device_name || "Dreame";
 }
 function domDreameCommandable() {
-  const st = domDreameState;
-  if (!st) return true;
-  if (st.commandable === false || st.live_ok === false) return false;
-  return true;
+  return !!(domDreameLinked() && (domDreameStatus.device_id || (S.hh && S.hh.dreame_device_id)));
 }
 async function dreameServer(action, body) {
   const run = async () => {
@@ -387,7 +384,8 @@ function domDreameModeOpts() {
   return [
     { v: 0, t: "Aspiration" },
     { v: 2, t: "Aspiration + serpillière" },
-    { v: 1, t: "Serpillière" }
+    { v: 1, t: "Serpillière" },
+    { v: 3, t: "Serpillière après aspiration" }
   ];
 }
 function domDreameSuctionOpts() {
@@ -674,7 +672,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e3</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e4</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -903,7 +901,7 @@ function domDreameSheet(fromRefresh) {
   openSheet(title, `<article class="dom-device dom-dreame-panel">
     <p class="dom-dreame-status" aria-live="polite"><strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}${st.water_label && mode !== 0 ? " · eau " + esc(st.water_label) : ""}</span>` : ""}</p>
     ${liveNote}
-    ${canCmd ? prefs : ""}
+    ${prefs}
     <div class="dom-actions dom-dreame-actions">
       <button type="button" class="btn primary" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>Toute la maison</button>
       <button type="button" class="btn" data-dom-dreame-cmd="stop" ${busyStop ? "aria-busy=true" : ""} ${canCmd ? "" : "disabled"}>Pause / Stop</button>

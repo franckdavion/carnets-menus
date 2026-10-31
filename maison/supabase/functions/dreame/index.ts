@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031g";
+const FN_REV = "20261031h";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -58,7 +58,8 @@ const SEGMENT_CLEAN_MODE = 18;
 
 const SUCTION_LABELS = ["Silencieux", "Standard", "Fort", "Turbo"];
 const WATER_LABELS = ["", "Faible", "Moyen", "Fort"];
-const CLEANING_MODE_LABELS = ["Aspiration", "Serpillière", "Aspiration + serpillière"];
+const CLEANING_MODE_LABELS = ["Aspiration", "Serpillière", "Aspiration + serpillière", "Serpillière après aspiration"];
+const MOP_PADS_STATE = { siid: 2, piid: 6 };
 
 const STATE_LABELS: Record<number, string> = {
   1: "Nettoyage",
@@ -489,8 +490,19 @@ function clampInt(n: unknown, min: number, max: number, fallback: number) {
   return Math.min(max, Math.max(min, v));
 }
 
+function decodeCleaningMode(value: unknown): { mode: number | null; raw: number | null } {
+  if (typeof value !== "number" || !Number.isFinite(value)) return { mode: null, raw: null };
+  return { mode: value & 3, raw: value };
+}
+
+function encodeCleaningMode(mode: number, raw?: number | null) {
+  const m = clampInt(mode, 0, 3, 2);
+  if (raw != null && raw > 3) return (raw & ~3) | m;
+  return m;
+}
+
 function suctionWaterForClean(cleaningMode: number, suction: number, water: number) {
-  const mode = clampInt(cleaningMode, 0, 2, 2);
+  const mode = clampInt(cleaningMode, 0, 3, 2);
   const s = clampInt(suction, 0, 3, 1);
   const w = clampInt(water, 1, 3, 2);
   if (mode === 0) return { suction: s, water: 0 };
@@ -516,21 +528,31 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
     BATTERY_LEVEL,
     SUCTION_LEVEL,
     WATER_VOLUME,
-    CLEANING_MODE
+    CLEANING_MODE,
+    MOP_PADS_STATE
   ]);
   let status: number | null = null;
   let battery: number | null = null;
   let suction: number | null = null;
   let water: number | null = null;
   let cleaning_mode: number | null = null;
+  let cleaning_mode_raw: number | null = null;
   for (const row of rows) {
     if (row.siid === 2 && row.piid === 1 && typeof row.value === "number") status = row.value;
     if (row.siid === 3 && row.piid === 1 && typeof row.value === "number") battery = row.value;
     if (row.siid === 4 && row.piid === 4 && typeof row.value === "number") suction = row.value;
     if (row.siid === 4 && row.piid === 5 && typeof row.value === "number") water = row.value;
-    if (row.siid === 4 && row.piid === 23 && typeof row.value === "number") cleaning_mode = row.value;
+    if (row.siid === 4 && row.piid === 23) {
+      const decoded = decodeCleaningMode(row.value);
+      cleaning_mode = decoded.mode;
+      cleaning_mode_raw = decoded.raw;
+    }
+    if (row.siid === 2 && row.piid === 6 && cleaning_mode == null) {
+      const decoded = decodeCleaningMode(row.value);
+      cleaning_mode = decoded.mode;
+    }
   }
-  return { status, battery, suction, water, cleaning_mode };
+  return { status, battery, suction, water, cleaning_mode, cleaning_mode_raw };
 }
 
 async function dreameFetchMapRooms(cred: DreameCred, did: string): Promise<{ rooms: DreameMapRoom[]; hint: string | null; live_ok: boolean }> {
@@ -619,7 +641,7 @@ function normalizeProgram(raw: Record<string, unknown>, fallbackId?: string): Dr
   return {
     id,
     name,
-    cleaning_mode: clampInt(raw.cleaning_mode, 0, 2, 2),
+    cleaning_mode: clampInt(raw.cleaning_mode, 0, 3, 2),
     suction: clampInt(raw.suction, 0, 3, 1),
     water: clampInt(raw.water, 1, 3, 2),
     repeats: clampInt(raw.repeats, 1, 3, 1),
@@ -634,7 +656,7 @@ function settingsLabels(settings: {
 }) {
   const s = settings.suction != null ? clampInt(settings.suction, 0, 3, 1) : null;
   const w = settings.water != null ? clampInt(settings.water, 1, 3, 2) : null;
-  const m = settings.cleaning_mode != null ? clampInt(settings.cleaning_mode, 0, 2, 2) : null;
+  const m = settings.cleaning_mode != null ? clampInt(settings.cleaning_mode, 0, 3, 2) : null;
   return {
     suction: s,
     water: w,
@@ -729,7 +751,7 @@ function routeAction(url: URL, payload: Record<string, unknown>) {
   return action;
 }
 
-Deno.serve(async req => {
+export async function dreameHandler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(req) });
   try {
     const user = await userFrom(req);
@@ -870,7 +892,9 @@ Deno.serve(async req => {
           updates.push({ siid: 4, piid: 5, value: clampInt(payload.water, 1, 3, 2) });
         }
         if (payload.cleaning_mode !== undefined) {
-          updates.push({ siid: 4, piid: 23, value: clampInt(payload.cleaning_mode, 0, 2, 2) });
+          const cur = await dreameReadSettings(cred, did);
+          const encoded = encodeCleaningMode(payload.cleaning_mode, cur.cleaning_mode_raw);
+          updates.push({ siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encoded });
         }
         if (!updates.length) return json(req, { error: "Aucun réglage à appliquer" }, 400);
         await dreameSetPropRows(cred, did, updates);
@@ -879,8 +903,8 @@ Deno.serve(async req => {
         if (!segmentId) return json(req, { error: "Pièce Dreame invalide" }, 400);
         const cur = await dreameReadSettings(cred, did);
         const cleaning_mode = payload.cleaning_mode !== undefined
-          ? clampInt(payload.cleaning_mode, 0, 2, 2)
-          : clampInt(cur.cleaning_mode, 0, 2, 2);
+          ? clampInt(payload.cleaning_mode, 0, 3, 2)
+          : clampInt(cur.cleaning_mode, 0, 3, 2);
         const suction = payload.suction !== undefined
           ? clampInt(payload.suction, 0, 3, 1)
           : clampInt(cur.suction, 0, 3, 1);
@@ -906,8 +930,8 @@ Deno.serve(async req => {
         } else {
           const cur = await dreameReadSettings(cred, did);
           cleaning_mode = payload.cleaning_mode !== undefined
-            ? clampInt(payload.cleaning_mode, 0, 2, 2)
-            : clampInt(cur.cleaning_mode, 0, 2, 2);
+            ? clampInt(payload.cleaning_mode, 0, 3, 2)
+            : clampInt(cur.cleaning_mode, 0, 3, 2);
           suction = payload.suction !== undefined
             ? clampInt(payload.suction, 0, 3, 1)
             : clampInt(cur.suction, 0, 3, 1);
@@ -991,4 +1015,6 @@ Deno.serve(async req => {
     }
     return json(req, { error: e instanceof Error ? e.message : "Erreur serveur Dreame" }, 500);
   }
-});
+}
+
+if (import.meta.main) Deno.serve(dreameHandler);
