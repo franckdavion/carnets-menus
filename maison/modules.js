@@ -1,7 +1,7 @@
 "use strict";
 /* Maisonnée : accueil en modules, Explorer, calendrier du mois, et les modules
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
-window.MAISONNEE_DOM_BUILD = "20261031d5";
+window.MAISONNEE_DOM_BUILD = "20261031d8";
 
 Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule", shelly: "shelly_devices" });
 const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
@@ -67,7 +67,7 @@ let exploreEdit = false;
 function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0003_anniversaires_budget_documents.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
 
 /* Domotique : commandes via Edge Function, clé Shelly uniquement côté serveur. */
-// MAISONNEE_DOM_BUILD=20261031d5
+// MAISONNEE_DOM_BUILD=20261031d8
 const DOM_ZONES = { exterieur: "Extérieur", rdc: "Maison RDC", etage: "Maison étage" };
 const DOM_KEY = "maisonnee_domotique_zones_v1";
 const DOM_ROOMS_LS = "maisonnee_dom_rooms_v1";
@@ -150,7 +150,16 @@ const DOM_MEL_STATE_MIN_MS = 90000;
 const DOM_MEL_CMD_DEBOUNCE_MS = 2500;
 const DOM_DREAME_STATE_MIN_MS = 45000;
 const DOM_DREAME_CMD_DEBOUNCE_MS = 2500;
-const DOM_HERO = "assets/domotique/ma-maison-hero.jpg";
+let domHeroLive = null;
+let domSoftTimer = 0;
+function domSoftRender() {
+  if (view !== "domotique") return;
+  if (domSoftTimer) return;
+  domSoftTimer = setTimeout(() => {
+    domSoftTimer = 0;
+    if (view === "domotique") softRender();
+  }, 60);
+}
 document.addEventListener("click", e => {
   if (e.target.closest('[data-act="go"][data-v="domotique"]')) {
     domZone = ""; domTab = "board";
@@ -239,7 +248,7 @@ async function domMelRefreshState(force) {
 function domMelPollOnView() {
   if (view !== "domotique") return;
   const force = domMelLinked() && !domMelStateAt;
-  domMelRefreshStatus().then(() => domMelRefreshState(force)).then(changed => { if (changed) softRender(); }).catch(() => {});
+    domMelRefreshStatus().then(() => domMelRefreshState(force)).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
 }
 function domDreameLinked() {
   return !!domDreameStatus.connected;
@@ -295,13 +304,15 @@ async function dreameServer(action, body) {
 async function domDreameRefreshStatus() {
   if (mode !== "cloud" || !S.hh) return;
   const now = Date.now();
-  if (now - domDreameStatusAt < 60000 && domDreameStatus.connected) return;
+  if (now - domDreameStatusAt < 60000) return;
   try {
     const r = await dreameServer("status");
     domDreameStatus = { connected: !!r.connected, device_id: r.device_id ?? null, device_name: r.device_name || null };
     if (S.hh && r.device_id != null) S.hh.dreame_device_id = r.device_id;
     domDreameStatusAt = Date.now();
-  } catch (_) {}
+  } catch (_) {
+    domDreameStatusAt = Date.now();
+  }
 }
 async function domDreameRefreshState(force) {
   if (!domDreameLinked() || mode !== "cloud") return false;
@@ -319,7 +330,7 @@ async function domDreameRefreshState(force) {
 function domDreamePollOnView() {
   if (view !== "domotique") return;
   const force = domDreameLinked() && !domDreameStateAt;
-  domDreameRefreshStatus().then(() => domDreameRefreshState(force)).then(changed => { if (changed) softRender(); }).catch(() => {});
+    domDreameRefreshStatus().then(() => domDreameRefreshState(force)).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
 }
 async function domDreameEnsureRooms(force) {
   if (!domDreameLinked() || mode !== "cloud") return [];
@@ -468,14 +479,14 @@ function domScheduleStateAfterCmd() {
   if (domCmdStateTimer) clearTimeout(domCmdStateTimer);
   domCmdStateTimer = setTimeout(() => {
     domCmdStateTimer = null;
-    domRefreshState(true).then(changed => { if (changed && view === "domotique") softRender(); }).catch(() => {});
+    domRefreshState(true).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
   }, 12000);
 }
 function domScheduleState(force, after) {
   domRefreshState(force).then(changed => {
     if (!changed) { if (typeof after === "function") after(); return; }
     if (typeof after === "function") after();
-    else if (view === "domotique") softRender();
+    else if (view === "domotique") domSoftRender();
   }).catch(() => {});
 }
 function domPollOnView() {
@@ -583,7 +594,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031d3</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031d9</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -885,7 +896,7 @@ function domBoard() {
   eq.push(domDreameLinked() ? domDreameEqCard() : domPlaceholderCard("dreame", "Dreame D20 Ultra", "🤖", pending));
   return `<article class="dom-hero">
     <button type="button" class="dom-hero-media" data-dom-tab="house" aria-label="Ouvrir la vue maison">
-      <img src="${DOM_HERO}" alt="Illustration générique d'une maison de nuit, non représentative du plan réel">
+      <span class="dom-hero-photo" aria-hidden="true"></span>
       <span class="dom-hero-shade"></span>
       <span class="dom-hero-copy"><strong>Ma maison</strong><span class="dom-hero-status ${st.connected ? "is-on" : ""}">${st.connected ? "Maison connectée" : "Shelly non relié"}</span></span>
     </button>
@@ -911,7 +922,7 @@ function domHouseView() {
     { id: "dreame", t: "Aspirateur", ico: "🤖", line: domDreameSummary(), dreame: true }
   ];
   return `<article class="dom-house-art">
-    <img src="${DOM_HERO}" alt="Illustration générique d'une maison, non représentative du plan réel">
+    <span class="dom-hero-photo" role="img" aria-label="Illustration générique d'une maison, non représentative du plan réel"></span>
     <p class="muted small">Illustration générique. Elle ne représente pas le plan de l'habitation.</p>
   </article>
   <div class="dom-house-list">${rooms.map(r => `<button type="button" class="dom-house-row" data-dom-room="${esc(r.id)}"><span class="dom-eq-ico">${esc(r.ico)}</span><span><strong>${esc(r.t)}</strong><small>${esc(r.items.length ? r.items.length + " équipement(s)" + (r.sub ? " · " + r.sub : "") : "Aucun équipement associé")}</small></span><span aria-hidden="true">›</span></button>`).join("")}${extras.map(r => r.mel
@@ -1238,7 +1249,7 @@ document.addEventListener("submit", e => {
       domDreameStatusAt = Date.now();
       closeSheet(); render();
       toast(r.device_name ? "Dreame relié · " + r.device_name : "Dreame Home relié.");
-      domDreameRefreshState(true).then(changed => { if (changed) softRender(); }).catch(() => {});
+      domDreameRefreshState(true).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
       if ((domDreameDevices.length || 0) > 1) setTimeout(domDreameDevicePickerSheet, 400);
     }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
     return;
@@ -1255,7 +1266,7 @@ document.addEventListener("submit", e => {
       domMelStatusAt = Date.now();
       closeSheet(); render();
       toast(r.device_name ? "MELCloud relié · " + r.device_name : "MELCloud relié.");
-      domMelRefreshState(true).then(changed => { if (changed) softRender(); }).catch(() => {});
+      domMelRefreshState(true).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
       if ((domMelDevices.length || 0) > 1) setTimeout(domMelDevicePickerSheet, 400);
     }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
     return;
@@ -1862,7 +1873,13 @@ async function fillThumbs() {
   if (mode === "cloud") await signPaths(imgs.map(i => (byId[i.dataset.ph] || {}).thumb_path));
   for (const i of imgs) { const p = byId[i.dataset.ph]; if (!p || i.src) continue; const u = mode === "cloud" ? (purl[p.thumb_path] || {}).url : p.thumb; if (u) i.src = u; }
 }
-function afterRender() { if (view === "galerie") fillThumbs(); }
+function afterRender() {
+  if (view === "galerie") fillThumbs();
+  if (view !== "domotique") { domHeroLive = null; return; }
+  const slot = document.querySelector(".dom-hero-photo");
+  if (domHeroLive && slot && slot !== domHeroLive && slot.parentNode) slot.replaceWith(domHeroLive);
+  domHeroLive = document.querySelector(".dom-hero-photo");
+}
 
 /* adding photos: pick → choose album → shrink → upload */
 const phIn = document.createElement("input");
