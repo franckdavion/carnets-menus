@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031d";
+const FN_REV = "20261031e";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -90,6 +90,7 @@ function cors(req: Request) {
     "Access-Control-Allow-Origin": ALLOWED.has(origin) ? origin : "https://franckdavion.github.io",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
     Vary: "Origin"
   };
 }
@@ -683,7 +684,7 @@ function routeAction(url: URL, payload: Record<string, unknown>) {
 }
 
 Deno.serve(async req => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(req) });
   try {
     const user = await userFrom(req);
     if (!user) return json(req, { error: "Connexion Maisonnée requise" }, 401);

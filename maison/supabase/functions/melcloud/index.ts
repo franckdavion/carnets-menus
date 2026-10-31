@@ -85,33 +85,21 @@ function pickRoomTemp(src: Record<string, unknown>): number | null {
 
 function pickSetTemp(src: Record<string, unknown>): number | null {
   const deviceType = Number(src.DeviceType);
-  const direct = numTemp(
+  if (deviceType === 1) {
+    return numTemp(
+      src.SetTemperatureZone1,
+      src.SetTemperatureZone2,
+      src.SetTemperature,
+      src.TargetTemperature
+    );
+  }
+  return numTemp(
     src.SetTemperature,
     src.SetTemperatureZone1,
     src.SetTemperatureZone2,
     src.TargetTemperature,
     src.HeatingSetTemperature,
     src.SetHeatSetpoint
-  );
-  if (deviceType !== 1) return direct;
-
-  const mode1 = Number(src.OperationModeZone1);
-  if (mode1 === 1) {
-    return numTemp(src.SetHeatFlowTemperatureZone1, src.SetHeatFlowTemperatureZone2) ?? direct;
-  }
-  if (mode1 === 4) {
-    return numTemp(src.SetCoolFlowTemperatureZone1, src.SetCoolFlowTemperatureZone2) ?? direct;
-  }
-  if (mode1 === 2) {
-    return numTemp(src.SetHeatFlowTemperatureZone1, src.HeatingFlowTemperature) ?? direct;
-  }
-  const zone = numTemp(src.SetTemperatureZone1, src.SetTemperatureZone2);
-  if (zone != null) return zone;
-  if (direct != null) return direct;
-  return numTemp(
-    src.DefaultHeatingSetTemperature,
-    src.DefaultCoolingSetTemperature,
-    src.SetTankWaterTemperature
   );
 }
 
@@ -334,6 +322,7 @@ async function readState(cred: MelCred) {
 
 const FLAG_POWER = 1;
 const FLAG_SET_TEMP = 4;
+const FLAG_ATW_SET_TEMP_ZONE1 = 0x200000080;
 
 async function setAta(contextKey: string, deviceId: number, patch: { power?: boolean; set?: number }) {
   const body: Record<string, unknown> = { DeviceID: deviceId, EffectiveFlags: 0 };
@@ -357,20 +346,17 @@ async function setAta(contextKey: string, deviceId: number, patch: { power?: boo
 
 async function setAtw(contextKey: string, deviceId: number, buildingId: number, dev: Record<string, unknown>, patch: { power?: boolean; set?: number }) {
   const body: Record<string, unknown> = { ...dev, DeviceID: deviceId };
-  if (patch.power != null) body.Power = patch.power;
-  if (patch.set != null) {
-    const mode1 = Number(dev.OperationModeZone1);
-    if (mode1 === 1) body.SetHeatFlowTemperatureZone1 = patch.set;
-    else if (mode1 === 4) body.SetCoolFlowTemperatureZone1 = patch.set;
-    else if (numTemp(dev.SetTemperatureZone1, dev.SetTemperature) != null || mode1 === 0 || !Number.isFinite(mode1)) {
-      body.SetTemperatureZone1 = patch.set;
-    } else {
-      body.SetTemperatureZone1 = patch.set;
-    }
-    if (body.SetTemperature == null && numTemp(dev.SetTemperature) == null) {
-      body.SetTemperature = patch.set;
-    }
+  let flags = 0;
+  if (patch.power != null) {
+    body.Power = patch.power;
+    flags |= FLAG_POWER;
   }
+  if (patch.set != null) {
+    body.SetTemperatureZone1 = patch.set;
+    flags |= FLAG_ATW_SET_TEMP_ZONE1;
+  }
+  if (!flags) throw new Error("Rien à modifier");
+  body.EffectiveFlags = flags;
   const r = await melFetch("Device/SetAtw", {
     method: "POST",
     contextKey,
@@ -494,7 +480,7 @@ Deno.serve(async req => {
       } else if (act === "temp_up" || act === "temp_down") {
         const base = baseSet ?? baseRoom ?? 20;
         const step = 0.5;
-        const next = Math.max(10, Math.min(35, act === "temp_up" ? base + step : base - step));
+        const next = Math.max(10, Math.min(30, act === "temp_up" ? base + step : base - step));
         await melApplyPatch(key, deviceId, buildingId, got?.dev ?? null, got?.deviceType ?? null, {
           set: Math.round(next * 2) / 2,
           power: basePower !== false
