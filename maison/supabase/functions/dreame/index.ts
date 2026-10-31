@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031k";
+const FN_REV = "20261031l";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -711,12 +711,12 @@ async function readState(cred: DreameCred) {
   let live_ok = false;
   try {
     const live = await dreameReadSettings(cred, did);
-    live_ok = true;
     if (live.status != null) status = live.status;
     if (live.battery != null) battery = live.battery;
     suction = live.suction;
     water = live.water;
     cleaning_mode = live.cleaning_mode;
+    live_ok = live.status != null || live.battery != null || live.cleaning_mode != null || live.suction != null || live.water != null;
   } catch (e) {
     live_ok = false;
     if (!isUnreachable(e)) {

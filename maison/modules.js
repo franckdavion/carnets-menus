@@ -143,6 +143,7 @@ let domMelChain = Promise.resolve();
 let domMelLastCmdAt = 0, domMelStatusAt = 0;
 let domDreameStatus = { connected: false, device_id: null, device_name: null };
 let domDreameState = null, domDreameStateAt = 0, domDreameStateInflight = null, domDreameDevices = [], domDreameBusy = "";
+let domDreamePrefAt = 0;
 let domDreameRooms = [], domDreameRoomsAt = 0, domDreameRoomsHint = "", domDreameRoomsInflight = null;
 let domDreamePrograms = [];
 let domDreameProgEdit = "";
@@ -268,6 +269,31 @@ function domDreameSummary() {
 function domDreameCommandable() {
   return !!(domDreameLinked() && (domDreameStatus.device_id || (S.hh && S.hh.dreame_device_id)));
 }
+function domDreameMergeState(next) {
+  if (!next || typeof next !== "object") return domDreameState;
+  const prev = domDreameState || {};
+  const out = { ...prev, ...next };
+  const keys = ["cleaning_mode", "suction", "water", "cleaning_mode_label", "suction_label", "water_label"];
+  for (const k of keys) {
+    if (next[k] == null && prev[k] != null) out[k] = prev[k];
+  }
+  if (domDreamePrefAt && Date.now() - domDreamePrefAt < 25000) {
+    if (prev.cleaning_mode != null) {
+      out.cleaning_mode = prev.cleaning_mode;
+      if (prev.cleaning_mode_label) out.cleaning_mode_label = prev.cleaning_mode_label;
+    }
+    if (prev.suction != null) {
+      out.suction = prev.suction;
+      if (prev.suction_label) out.suction_label = prev.suction_label;
+    }
+    if (prev.water != null) {
+      out.water = prev.water;
+      if (prev.water_label) out.water_label = prev.water_label;
+    }
+  }
+  domDreameState = out;
+  return out;
+}
 async function dreameServer(action, body) {
   const run = async () => {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -327,7 +353,7 @@ async function domDreameRefreshState(force) {
   if (!force && now - domDreameStateAt < DOM_DREAME_STATE_MIN_MS) return false;
   if (domDreameStateInflight) return domDreameStateInflight;
   domDreameStateInflight = dreameServer("state").then(r => {
-    domDreameState = r;
+    domDreameMergeState(r);
     domDreameStateAt = Date.now();
     if (r.device_name) domDreameStatus.device_name = r.device_name;
     return true;
@@ -713,7 +739,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e9</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e10</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -1180,7 +1206,7 @@ document.addEventListener("click", e => {
     if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
     dreameServer("command", body).then(r => {
       if (r) {
-        domDreameState = { ...domDreameState, ...r };
+        domDreameMergeState(r);
         domDreameStateAt = Date.now();
       }
       const extra = (action === "start" || action === "play")
@@ -1271,7 +1297,7 @@ document.addEventListener("click", e => {
     render();
     domRunDreameCommand(() => dreameServer("command", { action: "run_program", program_id })).then(r => {
       if (!r) return;
-      domDreameState = r;
+      domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast(prog ? "Programme lancé · " + prog.name : "Programme lancé", null, null, null, "domotique");
       if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
@@ -1337,6 +1363,7 @@ document.addEventListener("click", e => {
     const body = { action: "set_prefs" };
     body[key] = value;
     if (!domDreameState) domDreameState = {};
+    domDreamePrefAt = Date.now();
     domDreameState = { ...domDreameState, [key]: value };
     if (key === "cleaning_mode") {
       const lab = (domDreameModeOpts().find(o => o.v === value) || {}).t;
@@ -1353,7 +1380,7 @@ document.addEventListener("click", e => {
     if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
     dreameServer("command", body).then(r => {
       if (!r) return;
-      domDreameState = { ...domDreameState, ...r };
+      domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast("Réglage Dreame appliqué", null, null, null, "domotique");
       if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
@@ -1368,7 +1395,7 @@ document.addEventListener("click", e => {
     render();
     domRunDreameCommand(() => dreameServer("command", { action: "clean_room", segment_id })).then(r => {
       if (!r) return;
-      domDreameState = r;
+      domDreameMergeState(r);
       domDreameStateAt = Date.now();
       toast("Nettoyage de la pièce lancé", null, null, null, "domotique");
       if (document.querySelector(".dom-dreame-panel")) domDreameSheet(true);
