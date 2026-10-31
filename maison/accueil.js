@@ -265,6 +265,11 @@ function render(){
   if(k==='agenda')return `<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`;
   if(k==='repas'&&g.repas.day&&g.repas.slot)return `<div class="mn-card mn-card-repas mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="repas">${tete}</button><button type="button" class="mn-card-open" data-act="homeRepas" data-day="${esc(g.repas.day)}" data-slot="${esc(g.repas.slot)}" aria-label="${ligne&&ligne!=='Rien de prévu'?'Ouvrir la fiche de '+ligne:'Choisir le repas'}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`;
   if(k==='recettes'&&g.recette.id)return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
+  if(k==='domotique'){
+    const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
+    const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';
+    return `<div class="mn-card mn-card-domotique mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="domotique">${tete}</button><div class="mn-card-gates">${btn(gates.pieton,'Piéton')}${btn(gates.voiture,'Voiture')}</div></div>`;
+  }
   return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
  }).join('');
  const band=(window.mnJour&&mnJour.at(now))||{id:'matin',hello:'Bonjour la famille ! ☀️'};

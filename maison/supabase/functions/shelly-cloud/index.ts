@@ -127,6 +127,76 @@ function errMsg(body: unknown, fallback: string) {
   return fallback;
 }
 
+function num(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function coverFromStatus(status: Record<string, unknown> | null, channel: number) {
+  if (!status) return { online: false, pos: null, state: "", on: null };
+  const key = `cover:${channel}`;
+  const covers = status.covers as unknown[] | undefined;
+  const rollers = status.rollers as unknown[] | undefined;
+  const c = (status[key] || (Array.isArray(covers) ? covers[channel] : null) || (Array.isArray(rollers) ? rollers[channel] : null) || status[`roller:${channel}`]) as Record<string, unknown> | undefined;
+  const sw = (status[`switch:${channel}`] || (Array.isArray(status.relays) ? (status.relays as Record<string, unknown>[])[channel] : null) || (Array.isArray(status.lights) ? (status.lights as Record<string, unknown>[])[channel] : null)) as Record<string, unknown> | undefined;
+  const pos = c ? num(c.current_pos ?? c.current_position ?? c.position) : null;
+  const state = c ? String(c.state || "") : "";
+  const on = sw ? (sw.output === true || sw.ison === true) : null;
+  return { online: true, pos, state, on };
+}
+function labelCover(pos: number | null, state: string, online: boolean) {
+  if (!online) return "Hors ligne";
+  const moving = /ing$|moving/i.test(state);
+  if (pos == null) return moving ? "En mouvement" : "Position inconnue";
+  if (pos <= 2) return moving ? "En mouvement · fermé" : "Fermé";
+  if (pos >= 98) return moving ? "En mouvement · ouvert" : "Ouvert";
+  return (moving ? "En mouvement · " : "") + Math.round(pos) + " % ouvert";
+}
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null;
+}
+function asList(v: unknown): Record<string, unknown>[] {
+  if (Array.isArray(v)) return v.filter(x => x && typeof x === "object") as Record<string, unknown>[];
+  const o = asRecord(v);
+  if (!o) return [];
+  return Object.entries(o).map(([k, x]) => {
+    const r = asRecord(x) || {};
+    if (!r.id && !r.device_id) r.id = k;
+    return r;
+  });
+}
+function unwrapDevices(body: unknown): Record<string, unknown>[] {
+  if (Array.isArray(body)) return asList(body);
+  const root = asRecord(body);
+  if (!root) return [];
+  if (Array.isArray(root.data)) return asList(root.data);
+  const data = asRecord(root.data) || root;
+  for (const key of ["devices", "device_status", "devices_status", "status"]) {
+    const list = asList(data[key] ?? root[key]);
+    if (list.length) return list;
+  }
+  if (asList(data).length && (data.id || data.devices)) return asList(data);
+  return [];
+}
+function flagOnline(v: unknown) {
+  if (v === true || v === 1 || v === "1" || v === "true" || v === "online") return true;
+  if (v === false || v === 0 || v === "0" || v === "false" || v === "offline") return false;
+  return null;
+}
+function deviceOnline(d: Record<string, unknown> | undefined) {
+  if (!d) return false;
+  const info = asRecord(d._dev_info);
+  const flagged = flagOnline(d.online ?? d.cloud_online ?? info?.online ?? info?.cloud_online);
+  if (flagged === false) return false;
+  return true;
+}
+function statusOf(d: Record<string, unknown> | undefined) {
+  if (!d) return null;
+  const nested = asRecord(d.status);
+  if (nested) return nested;
+  if (d["cover:0"] || d["switch:0"] || d.relays || d.covers || d.rollers) return d;
+  return null;
+}
+
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
   try {
@@ -175,6 +245,36 @@ Deno.serve(async req => {
       return json(req, { devices });
     }
 
+    if (action === "state") {
+      const { data: rows, error } = await admin.from("shelly_devices").select("id, type, shelly_id, channel").eq("household_id", hid);
+      if (error) throw error;
+      const linked = (rows || []).filter(x => String(x.shelly_id || "").trim());
+      const ids = [...new Set(linked.map(x => String(x.shelly_id).trim().toLowerCase()))].slice(0, 10);
+      const states: Record<string, { online: boolean; pos: number | null; state: string; on: boolean | null; label: string }> = {};
+      if (!ids.length) return json(req, { states });
+      let got = await shelly(cred.server_uri, "/v2/devices/api/get", cred.auth_key, { ids, select: ["status", "online"] });
+      let list = unwrapDevices(got.body);
+      if (!list.length) {
+        const stAll = await shelly(cred.server_uri, "/device/all_status?show_info=true", cred.auth_key);
+        list = unwrapDevices(stAll.body);
+      }
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const d of list) {
+        const id = String(d.id || d.device_id || (asRecord(d._dev_info)?.id) || "").toLowerCase();
+        if (id) byId.set(id, d);
+      }
+      for (const row of linked) {
+        const sid = String(row.shelly_id).trim().toLowerCase();
+        const d = byId.get(sid);
+        const online = deviceOnline(d);
+        const info = coverFromStatus(online ? statusOf(d) : null, Number(row.channel) || 0);
+        info.online = online;
+        const label = row.type === "volet" ? labelCover(info.pos, info.state, online) : (online ? (info.on === true ? "Allumé" : info.on === false ? "Éteint" : "En ligne") : "Hors ligne");
+        states[row.id] = { ...info, label };
+      }
+      return json(req, { states });
+    }
+
     if (action === "command" && req.method === "POST") {
       const id = String(payload.id || "");
       const label = String(payload.action || "");
@@ -195,7 +295,7 @@ Deno.serve(async req => {
         path = "/v2/devices/api/set/switch";
         if (label === "Allumer") body.on = true;
         else if (label === "Éteindre") body.on = false;
-        else if (label === "Piéton" || label === "Voiture" || label === "Ouvrir / Fermer") {
+        else if (label === "Piéton" || label === "Voiture" || label === "Ouvrir" || label === "Ouvrir / Fermer") {
           body.on = true;
           body.toggle_after = pulse;
           if (label === "Voiture" && row.channel_b != null) body.channel = Number(row.channel_b);

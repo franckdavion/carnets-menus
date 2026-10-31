@@ -2057,6 +2057,9 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
 .mn-card-edt{background:linear-gradient(165deg,#6a3d58,#1a2038);}
 .mn-card-carte{background:linear-gradient(165deg,#1a5878,#0e243c);}
 .mn-card-domotique{background:linear-gradient(165deg,#1a5c86,#0c2748);}
+.mn-card-gates{display:flex;gap:8px;width:100%;margin:8px 0 4px;}
+.mn-card-gates .mn-gate-btn{flex:1;min-height:42px;margin:0;border:1px solid rgba(150,210,255,.45);background:rgba(8,36,72,.55);color:#f7fbff;border-radius:14px;font:700 14px var(--sans,inherit);}
+.mn-card-gates .mn-gate-btn:disabled{opacity:.45;}
 main.view-explore .mn-house-grid{max-width:760px;}
 main.view-explore .mn-card{position:relative;}
 main.view-explore .mn-card[aria-pressed="false"]{opacity:.62;}
