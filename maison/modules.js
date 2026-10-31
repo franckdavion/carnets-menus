@@ -457,7 +457,7 @@ function domDreameProgramSheet(progId) {
   const water = Number(cur.water);
   const selected = new Set((cur.room_ids || []).map(Number));
   const roomBoxes = rooms.length
-    ? rooms.map(r => `<label class="dom-dreame-check"><input type="checkbox" name="room" value="${esc(String(r.id))}" ${selected.has(Number(r.id)) || selected.has(String(r.id)) ? "checked" : ""}> ${esc(r.name)}</label>`).join("")
+    ? rooms.map(r => `<label class="dom-dreame-check"><input type="checkbox" name="room" value="${esc(String(r.id))}" ${selected.has(Number(r.id)) || selected.has(String(r.id)) ? "checked" : ""}><span>${esc(r.name)}</span></label>`).join("")
     : `<p class="muted">Enregistrez d'abord les pièces de l'aspirateur.</p>`;
   openSheet(existing ? "Modifier le programme" : "Nouveau programme", `<form id="dom-dreame-program" class="dom-form">
     <label>Nom<input name="name" required maxlength="40" value="${esc(cur.name || "")}" placeholder="Ex. RDC le soir"></label>
@@ -674,7 +674,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e2</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e3</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
