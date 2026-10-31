@@ -710,49 +710,164 @@ function drawMarkers(fit) {
 // L'action secondaire (« Voir », « Annuler »…) reste disponible jusqu'au choix.
 const mzToastQueue = [];
 let mzToastActive = false;
+let mzToastFront = null;
+let mzToastFrontItem = null;
+let mzToastGen = 0;
+let mzFrontWatch = null;
 function mzShowNextToast() {
   const el = $("#toast");
   if (!el || mzToastActive || !mzToastQueue.length) return;
-  const {msg, label, fn, anchor} = mzToastQueue.shift();
+  const item = mzToastQueue.shift();
   mzToastActive = true;
-  // Une fiche ouverte avec showModal() occupe le calque du navigateur :
-  // un avis posé dans la page reste derrière. On le met dans la fiche,
-  // à côté du geste en cours plutôt qu'en haut.
-  const sheet = document.querySelector("dialog[open]");
-  const host = sheet ? document.createElement("div") : el;
-  if (sheet) {
-    host.className = "mz-toast-in-sheet";
-    host.setAttribute("role", "status");
-  } else if (el.parentElement !== document.body) document.body.appendChild(el);
+  const gen = ++mzToastGen;
+  // Le geste (Gardé, ingrédient…) redessine la fiche juste après l'avis.
+  // On attend la fin de ce geste : showModal() de la fiche passerait sinon devant.
+  setTimeout(() => { if (gen === mzToastGen && mzToastActive) mzPresentToast(item); }, 0);
+}
+function mzToastHtml(msg, label) {
   const message = String(msg || "");
   const error = /impossible|erreur|refus|introuvable|pas de connexion|échou|non enregistrée/i.test(message);
   const warning = !error && /attention|déjà|manquant|attente|vérifi/i.test(message);
   const success = !error && !warning && /ajouté|terminé|enregistré|activé|validé|acheté|supprimé|effectué/i.test(message);
   const icon = error ? "⚠️" : warning ? "📝" : success ? "✅" : /course|article|ingrédient/i.test(message) ? "🛒" : "🔔";
   const title = error ? "Action impossible" : warning ? "À noter" : success ? "C’est fait !" : "Maisonnée";
-  host.innerHTML = `<span class="mz-v9-icon" aria-hidden="true">${icon}</span><span class="mz-v9-copy"><strong>${title}</strong>${esc(message)}</span><span class="mz-v91-actions">${label ? `<button type="button" class="mz-v91-action">${esc(label)}</button>` : ""}<button type="button" class="mz-v91-ok">OK ✓</button></span>`;
-  host.classList.add("toast", "mz-v9-toast");
-  host.classList.toggle("mz-v9-error", error);
-  host.classList.toggle("mz-v9-warning", warning);
-  host.classList.toggle("mz-v9-success", success);
-  host.classList.toggle("mz-course-alert", Boolean(label && message.includes("article")));
-  const dismiss = (action) => {
-    if (!mzToastActive) return;
-    mzToastActive = false;
-    if (sheet) host.remove();
-    else host.hidden = true;
-    if (action && typeof fn === "function") { try { fn(); } catch (e) { console.error(e); } }
-    // Laisser la page se mettre à jour avant d'afficher la notification suivante.
-    setTimeout(mzShowNextToast, 80);
+  return {
+    error, warning, success,
+    course: Boolean(label && message.includes("article")),
+    html: `<span class="mz-v9-icon" aria-hidden="true">${icon}</span><span class="mz-v9-copy"><strong>${title}</strong>${esc(message)}</span><span class="mz-v91-actions">${label ? `<button type="button" class="mz-v91-action">${esc(label)}</button>` : ""}<button type="button" class="mz-v91-ok">OK ✓</button></span>`
   };
-  host.querySelector(".mz-v91-ok").addEventListener("click", () => dismiss(false));
-  const action = host.querySelector(".mz-v91-action");
-  if (action) action.addEventListener("click", () => dismiss(true));
-  if (sheet) mzMountSheetToast(host, sheet, anchor);
-  else {
-    mzPlacePageToast(host, anchor);
-    host.hidden = false;
+}
+function mzDismissToast(action, fn) {
+  if (!mzToastActive) return;
+  mzToastActive = false;
+  mzToastGen++;
+  const host = mzToastFront;
+  mzToastFront = null;
+  mzToastFrontItem = null;
+  mzUnwatchFront();
+  if (host) {
+    try { if (host.open) host.close(); } catch (e) {}
+    host.remove();
   }
+  const page = $("#toast");
+  if (page) page.hidden = true;
+  if (action && typeof fn === "function") { try { fn(); } catch (e) { console.error(e); } }
+  setTimeout(mzShowNextToast, 80);
+}
+function mzPresentToast(item) {
+  const sheet = mzSheetDialog();
+  if (sheet) { mzPresentFrontToast(item, sheet); return; }
+  const host = $("#toast");
+  if (!host) { mzToastActive = false; return; }
+  if (host.parentElement !== document.body) document.body.appendChild(host);
+  const built = mzToastHtml(item.msg, item.label);
+  host.innerHTML = built.html;
+  host.classList.add("toast", "mz-v9-toast");
+  host.classList.toggle("mz-v9-error", built.error);
+  host.classList.toggle("mz-v9-warning", built.warning);
+  host.classList.toggle("mz-v9-success", built.success);
+  host.classList.toggle("mz-course-alert", built.course);
+  host.querySelector(".mz-v91-ok").addEventListener("click", () => mzDismissToast(false, item.fn));
+  const action = host.querySelector(".mz-v91-action");
+  if (action) action.addEventListener("click", () => mzDismissToast(true, item.fn));
+  mzPlacePageToast(host, item.anchor);
+  host.hidden = false;
+}
+// showModal() occupe le calque du navigateur : un bandeau dans la page, même avec un grand z-index, reste derrière.
+// L'avis est donc sa propre fenêtre, ouverte après la fiche, collée au bouton qui vient d'être touché.
+function mzSheetDialog() {
+  return document.querySelector("dialog.sheet[open]") || [...document.querySelectorAll("dialog[open]")].find(d => !d.classList.contains("mz-toast-front")) || null;
+}
+function mzPresentFrontToast(item, sheet) {
+  if (mzToastFront) { try { if (mzToastFront.open) mzToastFront.close(); } catch (e) {} mzToastFront.remove(); mzToastFront = null; }
+  const host = document.createElement("dialog");
+  host.className = "mz-toast-front";
+  host.setAttribute("role", "status");
+  host.setAttribute("aria-label", "Notification");
+  const built = mzToastHtml(item.msg, item.label);
+  host.innerHTML = built.html;
+  host.classList.toggle("mz-v9-error", built.error);
+  host.classList.toggle("mz-v9-warning", built.warning);
+  host.classList.toggle("mz-v9-success", built.success);
+  host.classList.toggle("mz-course-alert", built.course);
+  document.body.appendChild(host);
+  mzToastFront = host;
+  mzToastFrontItem = item;
+  host.querySelector(".mz-v91-ok").addEventListener("click", () => mzDismissToast(false, item.fn));
+  const action = host.querySelector(".mz-v91-action");
+  if (action) action.addEventListener("click", () => mzDismissToast(true, item.fn));
+  host.addEventListener("cancel", e => { e.preventDefault(); mzDismissToast(false, item.fn); });
+  const spot = mzFrontSpot(item, sheet);
+  try { spot.scrollIntoView({block:"nearest", inline:"nearest"}); } catch (e) {}
+  const page = $("#toast");
+  if (page) page.hidden = true;
+  mzPlaceFront(host, spot);
+  try { host.showModal(); } catch (e) { mzMountSheetToast(host, sheet, item.anchor); return; }
+  mzPlaceFront(host, spot);
+  const ok = host.querySelector(".mz-v91-ok");
+  if (ok) { try { ok.focus({preventScroll:true}); } catch (err) { ok.focus(); } }
+  mzWatchFront();
+  requestAnimationFrame(() => { if (mzToastFront === host) mzPlaceFront(host, mzFrontSpot(item, mzSheetDialog() || sheet)); });
+}
+function mzFrontSpot(item, sheet) {
+  const anchor = item && item.anchor;
+  if (anchor && anchor.isConnected && sheet.contains(anchor)) return mzToastSpot(anchor, sheet) || anchor;
+  if (item && item.hint) {
+    const again = sheet.querySelector(item.hint);
+    if (again) return again;
+  }
+  return sheet.querySelector(".meal-status, .meal-quick-row, .btns, .field, .sheet-h") || sheet;
+}
+function mzPlaceFront(host, spot) {
+  if (!host || !spot || !spot.getBoundingClientRect) return;
+  const r = spot.getBoundingClientRect();
+  const width = Math.min(410, Math.max(220, window.innerWidth - 24));
+  host.style.position = "fixed";
+  host.style.inset = "auto";
+  host.style.margin = "0";
+  host.style.height = "auto";
+  host.style.maxHeight = "none";
+  host.style.width = width + "px";
+  host.style.right = "auto";
+  host.style.bottom = "auto";
+  const h = host.getBoundingClientRect().height || 96;
+  let top = r.bottom + 8;
+  if (top + h > window.innerHeight - 12) top = Math.max(12, r.top - h - 8);
+  const left = Math.max(12, Math.min(r.left, window.innerWidth - width - 12));
+  host.style.top = Math.max(12, top) + "px";
+  host.style.left = left + "px";
+}
+function mzMoveFront() {
+  const host = mzToastFront;
+  const item = mzToastFrontItem;
+  if (!host || !item || !host.isConnected) return;
+  const sheet = mzSheetDialog();
+  if (!sheet) return;
+  mzPlaceFront(host, mzFrontSpot(item, sheet));
+}
+function mzWatchFront() {
+  mzUnwatchFront();
+  const follow = () => mzMoveFront();
+  mzFrontWatch = follow;
+  const sheet = $("#sheet");
+  if (sheet) sheet.addEventListener("scroll", follow, {passive:true});
+  window.addEventListener("resize", follow);
+}
+function mzUnwatchFront() {
+  if (!mzFrontWatch) return;
+  const sheet = $("#sheet");
+  if (sheet) sheet.removeEventListener("scroll", mzFrontWatch);
+  window.removeEventListener("resize", mzFrontWatch);
+  mzFrontWatch = null;
+}
+function mzRaiseFrontToast() {
+  const host = mzToastFront;
+  if (!host || !host.isConnected || !mzToastActive) return;
+  try {
+    if (host.open) host.close();
+    host.showModal();
+  } catch (e) {}
+  mzMoveFront();
 }
 function mzToastSpot(anchor, sheet) {
   if (!anchor || !anchor.isConnected || !sheet.contains(anchor)) return null;
@@ -789,11 +904,20 @@ function mzPlacePageToast(host, anchor) {
     host.style.removeProperty("--mz-near-left");
   }
 }
+function mzToastHint(node) {
+  if (!node || !node.closest) return "";
+  if (node.closest(".meal-quick-row")) return ".meal-quick-row";
+  if (node.closest(".meal-quick-add")) return ".meal-quick-add";
+  if (node.closest(".meal-status")) return ".meal-status";
+  if (node.closest(".btns")) return ".btns";
+  if (node.closest(".field")) return ".field";
+  return "";
+}
 function toast(msg, label, fn, anchor) {
   let node = anchor && anchor.nodeType === 1 ? anchor : null;
   const active = document.activeElement;
   if (!node && active && active.closest && active !== document.body) node = active;
-  mzToastQueue.push({msg, label, fn, anchor: node});
+  mzToastQueue.push({msg, label, fn, anchor: node, hint: mzToastHint(node)});
   mzShowNextToast();
 }
 document.querySelector("#sheet").addEventListener("close", () => {
@@ -1216,7 +1340,9 @@ function openSheet(title, body, ctx = {}) {
     if (again) again.insertAdjacentElement("afterend", live);
     else d.insertBefore(live, $("#sheetIn"));
   }
-  if (!d.open) { lockSheetBackground(); d.showModal(); }
+  const raised = !d.open;
+  if (raised) { lockSheetBackground(); d.showModal(); }
+  if (raised) mzRaiseFrontToast();
   d.scrollTop = 0;
   // Do not focus an input when opening: iOS must keep the keyboard closed.
   if (document.activeElement?.matches?.("input, textarea, select")) document.activeElement.blur();

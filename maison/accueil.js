@@ -211,7 +211,7 @@ function ouvrirChoixAgenda(){
  openSheet('Quel agenda ?',`<p class="muted small" style="margin:6px 0 10px">Le prochain événement de cet agenda, sur l’accueil. Ce choix reste sur ce téléphone.</p><div class="chips">${puce('family','Agenda familial')}${list.map(c=>puce(c.id,c.name)).join('')}</div>${list.length?'':`<p class="muted small">Les agendas Google s’affichent ici lorsqu’ils sont connectés dans Ma famille.</p>`}<div class="sheet-sticky btns"><button type="button" class="btn primary block" data-act="closeSheet">Terminé</button></div>`);
 }
 function apercuMaison(){
- const vide={cal:apercuCalendrier(),repas:{k:'Ce soir',t:'Menu de la semaine',m:'Choisir un plat'},courses:{k:'Liste de courses',t:'À voir',m:''},recette:{k:'Idée du jour',t:'Livre de recettes',m:'Ouvrir le Carnet'}};
+ const vide={cal:apercuCalendrier(),repas:{k:'Ce soir',t:'Menu de la semaine',m:'Choisir un plat'},courses:{k:'Liste de courses',t:'À voir',m:''},recette:{k:'Idée du jour',t:'Livre de recettes',m:'Voir la fiche'}};
  try{
   if(typeof S==='undefined'||!S)return vide;
   const d=typeof today==='function'?today():'';
@@ -226,7 +226,7 @@ function apercuMaison(){
   const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
   vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
   const livre=(Array.isArray(S.recipes)&&S.recipes.length)?S.recipes:(typeof DEMO_RECIPES!=='undefined'?DEMO_RECIPES:[]);
-  if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Recette du foyer',id:r.legacy_id||r.id||''};}
+  if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Voir la fiche',id:r.legacy_id||r.id||''};}
  }catch(e){}
  return vide;
 }
@@ -284,7 +284,7 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"],[data-act="homeRepas"]');if(!b)return;
  if(b.dataset.act==='homeRepas'){if(typeof openHomeMeal==='function')openHomeMeal(b.dataset.day,b.dataset.slot);return}
- if(b.dataset.act==='homeRecette'){const id=b.dataset.v;if(id&&typeof CARNET_URL==='string')location.assign(CARNET_URL+'?recette='+encodeURIComponent(id));return}
+ if(b.dataset.act==='homeRecette'){if(typeof openHomeRecipe==='function')openHomeRecipe(b.dataset.v);return}
  if(b.dataset.act==='homeCal'){ouvrirChoixAgenda();return}
  const id=b.dataset.v;
  let name='Agenda familial';

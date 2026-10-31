@@ -284,6 +284,74 @@ function openHomeMeal(day, slot) {
   toast("Ouverture du repas…");
   CK.waiters.push(() => { if (CK.ready) open(); });
 }
+function homeQty(q, u) {
+  if (q == null || q === "") return "";
+  const n = String(q).replace(".", ",");
+  return !u || u === "pièce" ? n : n + " " + u;
+}
+function homeRecipeFromBook(id) {
+  const list = S.recipes || (typeof DEMO_RECIPES !== "undefined" ? DEMO_RECIPES : []);
+  const r = list.find(x => x && (x.legacy_id === id || x.id === id || ("c-" + x.id) === id));
+  if (!r) return null;
+  const steps = Array.isArray(r.steps) ? r.steps : String(r.steps || "").split("\n").map(x => x.trim()).filter(Boolean);
+  return {
+    id: r.legacy_id || r.id,
+    name: r.name || "Recette",
+    ph: r.image || "",
+    time: r.time || 0,
+    serves: r.serves || 4,
+    fav: !!r.fav,
+    ing: (r.ing || []).filter(i => i && i.n).map(i => ({ n: String(i.n).trim(), qt: homeQty(i.q, i.u) })),
+    steps
+  };
+}
+function homeRecipeFromCarnet(id) {
+  if (!CK.ready || !id) return null;
+  return cj(`(()=>{
+    const want=${JSON.stringify(id)};
+    const key=recipes[want]?want:(recipes["c-"+want]?"c-"+want:Object.keys(recipes).find(k=>recipes[k]&&(k===want||recipes[k].legacy===want))||"");
+    const r=recipes[key]; if(!r) return null;
+    let steps=[]; try{steps=stepsFor(key).steps||[];}catch(e){}
+    if(!steps.length) steps=String(r.steps||"").split("\\n").map(x=>x.trim()).filter(Boolean);
+    steps=steps.map(x=>typeof x==="string"?x:(x&&(x.t||x.text))||"").filter(Boolean);
+    const ing=(r.ing||[]).filter(i=>i&&i.n).map(i=>{const [q,u]=toBase(i.q,i.u); return {n:i.n.trim(),qt:q?fmt(q,u)||"":""};});
+    return {id:key,name:r.name||"Recette",ph:(typeof rPhotoSrc==="function"?rPhotoSrc(key):"")||"",time:r.time||0,serves:r.serves||4,fav:!!r.fav,ing,steps};
+  })()`);
+}
+function homeRecipeSheet(R) {
+  if (!R) { toast("Cette recette n'est pas disponible."); return; }
+  const ing = R.ing.length
+    ? `<div class="list">${R.ing.map(i => `<div class="cx-item"><span class="nm">${typeof IngredientEmoji !== "undefined" ? IngredientEmoji.html(i.n) : ""} ${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></div>`).join("")}</div>`
+    : `<p class="muted">Aucun ingrédient renseigné.</p>`;
+  const steps = R.steps.length
+    ? `<ol style="padding-left:22px;display:flex;flex-direction:column;gap:10px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>`
+    : `<p class="muted">Aucune étape notée.</p>`;
+  openSheet(R.name, `
+    <section class="meal-compact meal-redesign">
+      <div class="meal-top-card">
+        <div class="meal-hero">
+          ${R.ph ? `<img class="meal-photo" src="${esc(R.ph)}" alt="Photo du plat">` : `<div class="meal-photo meal-no-photo" aria-label="Aucune photo">🍽️</div>`}
+          <div class="meal-hero-text"><strong class="meal-name">${esc(R.name)}</strong>
+            <div class="meal-hero-actions"><button type="button" class="btn meal-favorite" data-act="rHomeFav" data-v="${esc(R.id)}" aria-pressed="${!!R.fav}">${R.fav ? "★ Favori" : "☆ Favori"}</button><button class="btn meal-cook-launch" data-act="rHomeCook" data-v="${esc(R.id)}">👨‍🍳 Cuisiner pas à pas</button></div>
+          </div>
+        </div>
+        <p class="muted small meal-status-hint">${R.time ? "⏱ " + R.time + " min · " : ""}${R.serves} personnes</p>
+      </div>
+      <div class="meal-section-card"><h3>🛒 Ingrédients</h3>${ing}</div>
+      <div class="meal-section-card"><h3>📝 Étapes</h3>${steps}</div>
+    </section>
+    <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
+}
+function openHomeRecipe(id) {
+  if (!id) return;
+  const show = () => homeRecipeSheet(homeRecipeFromCarnet(id) || homeRecipeFromBook(id));
+  if (mode !== "cloud") { homeRecipeSheet(homeRecipeFromBook(id)); return; }
+  carnetBoot();
+  if (CK.ready) { show(); return; }
+  if (CK.err) { show(); return; }
+  toast("Ouverture de la recette…");
+  CK.waiters.push(() => { if (CK.ready) show(); });
+}
 function mealSlotSheet(k) {
   cev(`curWeek=${JSON.stringify(rWeek)}`);
   const x = weekSlots(rWeek)[k], s = x.s, [dn, m] = k.split("|"), day = addDays(rWeek, RDAYS.indexOf(dn));
@@ -603,7 +671,7 @@ const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut"].includes(act)) return;
+  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut", "rHomeFav", "rHomeCook"].includes(act)) return;
   if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rPortion": case "rPortionCustom": {
@@ -636,6 +704,15 @@ document.addEventListener("click", async e => {
     }
 
     case "rCook": rCookStart(v); break;
+    case "rHomeCook": rCookStart("", v); break;
+    case "rHomeFav": {
+      const changed = cev(`(()=>{const id=${JSON.stringify(v)},r=recipes[id];if(!r)return null;r.fav=!r.fav;return {id,fav:r.fav};})()`);
+      if (changed) {
+        try { await cev(`saveRecipe(${JSON.stringify(changed.id)},recipes[${JSON.stringify(changed.id)}])`); } catch (err) { console.warn("Favori", err); }
+        homeRecipeSheet(homeRecipeFromCarnet(changed.id));
+      }
+      break;
+    }
     case "rCookNext": rCookMove(1); break;
     case "rCookPrev": rCookMove(-1); break;
     case "rCookRecipe": rCookShowRecipe(); break;
@@ -714,8 +791,9 @@ document.addEventListener("click", async e => {
     case "rState":
     case "rBought": {
       const msg = await writeMealStatus(v, act === "rBought" ? "Courses faites" : b.dataset.state);
-      if (msg) { carnetSave(msg); mealSlotSheet(v); }
-      else mealSlotSheet(v);
+      if (msg) carnetSave();
+      mealSlotSheet(v);
+      if (msg) toast(msg, null, null, $("#sheet .meal-status") || b);
       break;
     }
     case "rQuickIng": {
@@ -927,13 +1005,18 @@ document.querySelector("#sheet").addEventListener("close", () => {
     rCookDraw();
   }
 });
-function rCookStart(k) {
-  const data = cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];if(!r)return null;
+function rCookStart(k, recipeId) {
+  const data = recipeId
+    ? cj(`(()=>{const id=${JSON.stringify(recipeId)},r=recipes[id];if(!r)return null;
+    let steps=[];try{steps=stepsFor(id).steps||[];}catch(e){}
+    if(!steps.length)steps=String(r.steps||'').split('\\n').filter(Boolean);
+    return {name:r.name,photo:(typeof rPhotoSrc==='function'?rPhotoSrc(id):'')||'',steps:steps.map(x=>typeof x==='string'?x:(x&&(x.t||x.text||x.title))||'').filter(Boolean)};})()`)
+    : cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];if(!r)return null;
     let steps=[];try{steps=stepsFor(s.id).steps||[];}catch(e){}
     if(!steps.length)steps=String(r.steps||'').split('\\n').filter(Boolean);
     return {name:r.name,photo:rPhotoSrc(s.id)||'',steps:steps.map(x=>typeof x==='string'?x:(x&&(x.t||x.text||x.title))||'').filter(Boolean)};})()`);
   if(!data || !data.steps.length){alert('Cette recette ne possède pas encore d’étapes de préparation.');return;}
-  rCookSession={k,data,i:0};
+  rCookSession={k, id: recipeId || "", data, i:0};
   rCookRecipeVisible=false;
   closeSheet();
   if(!document.querySelector('#mzCookOverlay')){
@@ -954,7 +1037,8 @@ function rCookDraw(){
   el.hidden=false;
 }
 function rCookMove(d){if(!rCookSession)return;rCookSession.i=Math.max(0,Math.min(rCookSession.data.steps.length-1,rCookSession.i+d));rCookDraw();}
-function rCookShowRecipe(){if(!rCookSession)return;document.querySelector('#mzCookOverlay').hidden=true;rCookRecipeVisible=true;rRecipeSheet(rCookSession.k);
+function rCookShowRecipe(){if(!rCookSession)return;document.querySelector('#mzCookOverlay').hidden=true;rCookRecipeVisible=true;
+  if(rCookSession.k) rRecipeSheet(rCookSession.k); else homeRecipeSheet(homeRecipeFromCarnet(rCookSession.id));
   const holder=document.querySelector('#sheetIn .sheet-sticky');if(holder){const btn=document.createElement('button');btn.className='btn primary';btn.dataset.act='rCookBack';btn.textContent='← Revenir à la préparation';holder.prepend(btn);}}
 function rCookRestore(){if(!rCookSession)return;rCookRecipeVisible=false;closeSheet();rCookDraw();}
-function rCookExit(){if(!rCookSession)return;const k=rCookSession.k;const el=document.querySelector('#mzCookOverlay');if(el)el.hidden=true;rCookRecipeVisible=false;rCookSession=null;mealSlotSheet(k);}
+function rCookExit(){if(!rCookSession)return;const k=rCookSession.k,id=rCookSession.id;const el=document.querySelector('#mzCookOverlay');if(el)el.hidden=true;rCookRecipeVisible=false;rCookSession=null;if(k)mealSlotSheet(k);else if(id)homeRecipeSheet(homeRecipeFromCarnet(id)||homeRecipeFromBook(id));}
