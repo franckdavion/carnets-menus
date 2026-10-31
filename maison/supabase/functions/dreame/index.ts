@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031j";
+const FN_REV = "20261031k";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -884,7 +884,31 @@ export async function dreameHandler(req: Request): Promise<Response> {
       if (!did) return json(req, { error: "Aucun aspirateur Dreame sélectionné" }, 400);
       const act = String(payload.action || "");
       if (act === "start" || act === "play") {
-        await dreameSendCommand(cred, did, "action", { did, siid: ACT_START.siid, aiid: ACT_START.aiid, in: [] });
+        const cleaning_mode = payload.cleaning_mode !== undefined ? clampInt(payload.cleaning_mode, 0, 3, 2) : null;
+        const suction = payload.suction !== undefined ? clampInt(payload.suction, 0, 3, 1) : null;
+        const water = payload.water !== undefined ? clampInt(payload.water, 1, 3, 2) : null;
+        const ids = Array.isArray(payload.segment_ids)
+          ? [...new Set(payload.segment_ids.map(n => clampInt(n, 1, 99, 0)).filter(n => n > 0))]
+          : [];
+        const prefRows: { siid: number; piid: number; value: unknown }[] = [];
+        if (suction != null) prefRows.push({ siid: 4, piid: 4, value: suction });
+        if (water != null) prefRows.push({ siid: 4, piid: 5, value: water });
+        if (cleaning_mode != null) {
+          let raw: number | null = null;
+          try { raw = (await dreameReadSettings(cred, did)).cleaning_mode_raw; } catch { /* ignore */ }
+          prefRows.push({ siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encodeCleaningMode(cleaning_mode, raw) });
+        }
+        if (prefRows.length) await dreameSetPropRows(cred, did, prefRows);
+        if (ids.length) {
+          await dreameCleanSegments(cred, did, ids, {
+            cleaning_mode: cleaning_mode ?? 2,
+            suction: suction ?? 1,
+            water: water ?? 2,
+            repeats: clampInt(payload.repeats, 1, 3, 1)
+          });
+        } else {
+          await dreameSendCommand(cred, did, "action", { did, siid: ACT_START.siid, aiid: ACT_START.aiid, in: [] });
+        }
       } else if (act === "pause") {
         await dreameSendCommand(cred, did, "action", { did, siid: ACT_PAUSE.siid, aiid: ACT_PAUSE.aiid, in: [] });
       } else if (act === "stop") {
