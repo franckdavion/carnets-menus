@@ -359,22 +359,22 @@ async function domDreameEnsureRooms(force) {
   domDreameRoomsInflight = fetchRooms().then(r => {
     domDreameRooms = r.rooms || [];
     domDreameRoomsHint = r.hint || "";
-    if (r.live_ok === false && !domDreameRoomsHint) {
-      domDreameRoomsHint = "Commandes indisponibles : le robot ne répond pas. Réveillez-le dans Dreame Home.";
+    if (r.live_ok === false && !domDreameRoomsHint && !domDreameRooms.length) {
+      domDreameRoomsHint = "Carte en attente. Les commandes partent quand même vers l'aspirateur.";
     }
     if (r.fn && /^20261031a$/.test(r.fn)) {
       domDreameRoomsHint = "Serveur Dreame obsolète (" + r.fn + "). Rechargez l'app.";
     }
     if (r.live_ok === false && domDreameState) {
-      domDreameState = { ...domDreameState, live_ok: false, commandable: false };
+      domDreameState = { ...domDreameState, live_ok: domDreameState.live_ok };
     }
     domDreameRoomsAt = Date.now();
     return domDreameRooms;
   }).catch(err => {
     const msg = err && err.message ? err.message : "Impossible de lire la carte Dreame.";
     domDreameRoomsHint = msg.replace(/\s·\s*serveur\s+\S+$/i, "");
-    if (domDreameState && /ne répond pas|hors ligne|injoignable/i.test(msg)) {
-      domDreameState = { ...domDreameState, live_ok: false, commandable: false };
+    if (domDreameState && /ne répond pas|hors ligne|injoignable/i.test(msg) && !domDreameRooms.length) {
+      /* garder les commandes cliquables : le cloud Dreame accuse souvent trop tard */
     }
     return domDreameRooms;
   }).finally(() => { domDreameRoomsInflight = null; });
@@ -672,7 +672,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Compte relié${domDreameStatus.device_name ? " · " + esc(domDreameStatus.device_name) : ""}. Mot de passe côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button><button class="btn" data-dom-dreame-progs>Programmes de nettoyage ›</button><button class="btn" data-dom-dreame-devices>Choisir un aspirateur</button><button class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e4</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}<p class="muted small">Version domotique · build 20261031e5</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -882,9 +882,7 @@ function domDreameSheet(fromRefresh) {
   const st = domDreameState || {};
   const title = st.device_name || domDreameStatus.device_name || "Dreame";
   const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
-  const liveNote = st.live_ok === false
-    ? `<p class="muted small">La charge vient du cloud Dreame. Les commandes (nettoyage, pièces) nécessitent que le robot réponde : ouvrez Dreame Home pour le réveiller, puis rouvrez cette fiche.</p>`
-    : "";
+  const liveNote = "";
   const busyStart = domDreameBusy === "start";
   const busyStop = domDreameBusy === "stop";
   const busyDock = domDreameBusy === "dock";

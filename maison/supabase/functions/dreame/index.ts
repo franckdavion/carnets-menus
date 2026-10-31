@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261031h";
+const FN_REV = "20261031i";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -199,7 +199,8 @@ async function dreamePost<T extends { code?: number; msg?: string; error?: strin
   headers: Record<string, string>,
   body: string | URLSearchParams,
   ctx: string,
-  skipCode = false
+  skipCode = false,
+  allowOffline = false
 ): Promise<T> {
   const res = await fetch(url, { method: "POST", headers, body });
   const text = await res.text();
@@ -215,7 +216,10 @@ async function dreamePost<T extends { code?: number; msg?: string; error?: strin
     throw new Error(`Dreame : ${parsed.error ?? "?"} — ${parsed.error_description ?? "échec connexion"}`);
   }
   if (!skipCode && parsed.code !== undefined && parsed.code !== 0) {
-    if (parsed.code === 80001) throw new DreameUnreachableError();
+    if (parsed.code === 80001) {
+      if (allowOffline) return parsed;
+      throw new DreameUnreachableError();
+    }
     throw new Error(`${ctx} : ${parsed.msg ?? "code " + parsed.code}`);
   }
   return parsed;
@@ -376,7 +380,9 @@ async function dreameSendCommand(cred: DreameCred, did: string, method: string, 
       id,
       data: { did, id, method, params, from: FROM_FIELD }
     }),
-    method
+    method,
+    false,
+    true
   );
 }
 
@@ -398,8 +404,11 @@ async function dreameGetPropRows(cred: DreameCred, did: string, props: { siid: n
       id,
       data: { did, id, method: "get_properties", params, from: FROM_FIELD }
     }),
-    "Lecture propriétés"
+    "Lecture propriétés",
+    false,
+    true
   );
+  if (data.code === 80001) return [];
   return Array.isArray(data.data?.result) ? data.data!.result! : (Array.isArray(data.result) ? data.result : []);
 }
 
@@ -416,7 +425,9 @@ async function dreameSetPropRows(cred: DreameCred, did: string, props: { siid: n
       id,
       data: { did, id, method: "set_properties", params, from: FROM_FIELD }
     }),
-    "Réglage aspirateur"
+    "Réglage aspirateur",
+    false,
+    true
   );
 }
 
@@ -713,23 +724,17 @@ async function readState(cred: DreameCred) {
   }
   const prefs = settingsLabels({ suction, water, cleaning_mode });
   const charge = battery != null ? `${battery} %` : null;
-  const stateBit = statusLabel(status, live_ok || dev.online);
-  let label: string;
-  if (live_ok) {
-    label = charge ? `${stateBit} · ${charge}` : stateBit;
-  } else if (charge) {
-    label = `Charge ${charge} · commandes indisponibles`;
-  } else {
-    label = "Commandes indisponibles · réveillez le robot";
-  }
+  const reachable = live_ok || dev.online;
+  const stateBit = statusLabel(status, reachable);
+  const label = charge ? `${stateBit} · ${charge}` : stateBit;
   return {
     connected: true,
     device_id: did,
     device_name: dev.name || cred.device_name || "Dreame",
     device_model: dev.model || cred.device_model,
-    online: live_ok || dev.online,
-    live_ok,
-    commandable: live_ok,
+    online: reachable,
+    live_ok: live_ok || dev.online,
+    commandable: true,
     battery,
     status,
     label,
@@ -892,8 +897,11 @@ export async function dreameHandler(req: Request): Promise<Response> {
           updates.push({ siid: 4, piid: 5, value: clampInt(payload.water, 1, 3, 2) });
         }
         if (payload.cleaning_mode !== undefined) {
-          const cur = await dreameReadSettings(cred, did);
-          const encoded = encodeCleaningMode(payload.cleaning_mode, cur.cleaning_mode_raw);
+          let raw: number | null = null;
+          try {
+            raw = (await dreameReadSettings(cred, did)).cleaning_mode_raw;
+          } catch { /* 80001 : on envoie le mode nu */ }
+          const encoded = encodeCleaningMode(payload.cleaning_mode, raw);
           updates.push({ siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encoded });
         }
         if (!updates.length) return json(req, { error: "Aucun réglage à appliquer" }, 400);
@@ -901,7 +909,8 @@ export async function dreameHandler(req: Request): Promise<Response> {
       } else if (act === "clean_room") {
         const segmentId = clampInt(payload.segment_id, 1, 99, 0);
         if (!segmentId) return json(req, { error: "Pièce Dreame invalide" }, 400);
-        const cur = await dreameReadSettings(cred, did);
+        let cur = { cleaning_mode: 2 as number | null, suction: 1 as number | null, water: 2 as number | null };
+        try { cur = await dreameReadSettings(cred, did); } catch { /* défauts */ }
         const cleaning_mode = payload.cleaning_mode !== undefined
           ? clampInt(payload.cleaning_mode, 0, 3, 2)
           : clampInt(cur.cleaning_mode, 0, 3, 2);
@@ -928,7 +937,8 @@ export async function dreameHandler(req: Request): Promise<Response> {
           repeats = prog.repeats;
           ids = prog.room_ids;
         } else {
-          const cur = await dreameReadSettings(cred, did);
+          let cur = { cleaning_mode: 2 as number | null, suction: 1 as number | null, water: 2 as number | null };
+          try { cur = await dreameReadSettings(cred, did); } catch { /* défauts */ }
           cleaning_mode = payload.cleaning_mode !== undefined
             ? clampInt(payload.cleaning_mode, 0, 3, 2)
             : clampInt(cur.cleaning_mode, 0, 3, 2);
