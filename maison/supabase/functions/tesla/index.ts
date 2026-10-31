@@ -284,9 +284,51 @@ function parseState(data: Record<string, unknown>, cred: TeslaCred) {
   };
 }
 
-async function readState(cred: TeslaCred) {
+async function readState(cred: TeslaCred, wakeFull = false) {
   const vehicleId = cred.vehicle_id;
   if (!vehicleId) return { connected: true, device_id: null, label: "Choisissez un véhicule Tesla" };
+
+  const veh = await fleetFetch(cred, `/api/1/vehicles/${vehicleId}`);
+  if (veh.ok) {
+    const v = ((veh.body as { response?: Record<string, unknown> }).response || {}) as Record<string, unknown>;
+    const vehicleState = String(v.state || "");
+    const name = String(v.display_name || cred.vehicle_name || "Tesla");
+    if (vehicleState === "asleep" && !wakeFull) {
+      return {
+        connected: true,
+        device_id: vehicleId,
+        device_name: name,
+        asleep: true,
+        label: "En veille",
+        battery_level: null,
+        battery_range_km: null,
+        charging_state: "Disconnected",
+        locked: null,
+        climate_on: false,
+        sentry_mode: false,
+        inside_temp: null,
+        outside_temp: null
+      };
+    }
+    if (vehicleState === "offline") {
+      return {
+        connected: true,
+        device_id: vehicleId,
+        device_name: name,
+        asleep: false,
+        label: "Hors ligne",
+        battery_level: null,
+        battery_range_km: null,
+        charging_state: "Disconnected",
+        locked: null,
+        climate_on: false,
+        sentry_mode: false,
+        inside_temp: null,
+        outside_temp: null
+      };
+    }
+  }
+
   const r = await wakeIfNeeded(cred, vehicleId);
   if (!r.ok) throw fleetApiError(r, "État Tesla indisponible");
   const resp = r.body as { response?: Record<string, unknown> };
@@ -426,7 +468,8 @@ Deno.serve(async req => {
     }
 
     if (action === "state") {
-      const st = await readState(cred);
+      const wakeFull = url.searchParams.get("wake") === "1";
+      const st = await readState(cred, wakeFull);
       return json(req, st);
     }
 
@@ -435,7 +478,7 @@ Deno.serve(async req => {
       if (!vehicleId) return json(req, { error: "Aucun véhicule Tesla sélectionné" }, 400);
       const act = String(payload.action || "");
       await runCommand(cred, vehicleId, act);
-      const st = await readState(cred);
+      const st = await readState(cred, true);
       return json(req, { ok: true, ...st });
     }
 
