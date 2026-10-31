@@ -1247,9 +1247,13 @@ function domPage() {
 }
 VIEWS.domotique = function () {
   Promise.resolve(domEnsureDefaults()).catch(() => {});
-  Promise.resolve(domMelRefreshStatus()).then(() => domMelRefreshState(true)).then(changed => { if (changed) softRender(); }).catch(() => {});
-  Promise.resolve(domDreameRefreshStatus()).then(() => domDreameRefreshState(true)).then(changed => { if (changed) softRender(); }).catch(() => {});
-  Promise.resolve(domTeslaRefreshStatus()).then(() => domTeslaRefreshState(true)).then(changed => { if (changed) softRender(); }).catch(() => {});
+  setTimeout(() => {
+    if (view !== "domotique") return;
+    domPollOnView();
+    domMelPollOnView();
+    domDreamePollOnView();
+    domTeslaPollOnView();
+  }, 0);
   return domPage();
 };
 function domCloudOptions(selected) {
