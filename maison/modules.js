@@ -1,6 +1,7 @@
 "use strict";
 /* Maisonnée : accueil en modules, Explorer, calendrier du mois, et les modules
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
+window.MAISONNEE_DOM_BUILD = "20261031d3";
 
 Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule", shelly: "shelly_devices" });
 const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
@@ -2615,7 +2616,6 @@ document.addEventListener("change", e => {
   toast("Agenda par défaut : " + e.target.options[e.target.selectedIndex].text + ".");
 });
 
-window.MAISONNEE_DOM_BUILD = "20261031d3";
 document.getElementById("sheet")?.addEventListener("close", () => {
   document.getElementById("sheet")?.classList.remove("dom-tesla-sheet");
 }, true);
