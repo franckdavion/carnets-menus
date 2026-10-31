@@ -131,6 +131,34 @@ function num(v: unknown) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+function tempFromStatus(status: Record<string, unknown> | null) {
+  if (!status) return null;
+  const read = (v: unknown) => {
+    const r = asRecord(v);
+    const n = num(r?.tC ?? r?.tc ?? r?.value ?? (typeof v === "number" ? v : null));
+    return n != null && n > -55 && n < 125 ? Math.round(n * 10) / 10 : null;
+  };
+  const addon: number[] = [];
+  const internal: number[] = [];
+  for (const [k, v] of Object.entries(status)) {
+    const m = k.match(/^temperature:(\d+)$/i);
+    if (!m) continue;
+    const t = read(v);
+    if (t == null) continue;
+    (Number(m[1]) >= 100 ? addon : internal).push(t);
+  }
+  const ext = asRecord(status.ext_temperature);
+  if (ext) {
+    for (const v of Object.values(ext)) {
+      const t = read(v);
+      if (t != null) addon.push(t);
+    }
+  }
+  if (addon.length) return addon[0];
+  const tmp = read(status.tmp) ?? read(status.temperature);
+  if (internal.length) return internal[0];
+  return tmp;
+}
 function coverFromStatus(status: Record<string, unknown> | null, channel: number) {
   if (!status) return { online: false, pos: null, state: "", on: null };
   const key = `cover:${channel}`;
@@ -207,7 +235,7 @@ function statusOf(d: Record<string, unknown> | undefined) {
     } catch { /* statut déjà objet ou illisible */ }
   }
   if (nested) return nested;
-  if (d["cover:0"] || d["switch:0"] || d.relays || d.covers || d.rollers) return d;
+  if (d["cover:0"] || d["switch:0"] || d.relays || d.covers || d.rollers || d["temperature:0"] || d["temperature:100"] || d.ext_temperature || d.tmp) return d;
   return null;
 }
 
@@ -264,7 +292,7 @@ Deno.serve(async req => {
       if (error) throw error;
       const linked = (rows || []).filter(x => String(x.shelly_id || "").trim());
       const ids = [...new Set(linked.map(x => String(x.shelly_id).trim().toLowerCase()))];
-      const states: Record<string, { online: boolean; pos: number | null; state: string; on: boolean | null; label: string }> = {};
+      const states: Record<string, { online: boolean; pos: number | null; state: string; on: boolean | null; temp: number | null; label: string }> = {};
       if (!ids.length) return json(req, { states });
       const list: Record<string, unknown>[] = [];
       for (let i = 0; i < ids.length; i += 10) {
@@ -285,10 +313,12 @@ Deno.serve(async req => {
         const sid = String(row.shelly_id).trim().toLowerCase();
         const d = byId.get(sid);
         const online = deviceOnline(d);
-        const info = coverFromStatus(statusOf(d), Number(row.channel) || 0);
+        const st = statusOf(d);
+        const info = coverFromStatus(st, Number(row.channel) || 0);
         info.online = online;
+        const temp = tempFromStatus(st);
         const label = row.type === "volet" ? labelCover(info.pos, info.state, online) : (online ? (info.on === true ? "Allumé" : info.on === false ? "Éteint" : "En ligne") : "Hors ligne");
-        states[row.id] = { ...info, label };
+        states[row.id] = { ...info, temp, label };
       }
       return json(req, { states });
     }

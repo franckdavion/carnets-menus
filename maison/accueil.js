@@ -72,13 +72,32 @@ let config=load();
 function save(){window.maisonHomeStore.write({order:config.order,hidden:config.hidden})}
 const label=k=>items.find(x=>x[0]===k);
 function sorted(){return [...items].sort((a,b)=>{const ia=config.order.indexOf(a[0]),ib=config.order.indexOf(b[0]);return (ia<0?999:ia)-(ib<0?999:ib)})}
+function cols(host){
+ const grid=document.querySelector('.mn-house-grid')||host?.querySelector('.umod-grid');
+ if(!grid)return 2;
+ const n=getComputedStyle(grid).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+ return n||2;
+}
+function move(id, delta){
+ const order=sorted().map(x=>x[0]);
+ const i=order.indexOf(id),j=i+delta;
+ if(i<0||j<0||j>=order.length)return;
+ [order[i],order[j]]=[order[j],order[i]];
+ config.order=order;
+}
 function render(host){
  if(!host)return;
  const visible=sorted().filter(x=>!config.hidden.includes(x[0])),hidden=sorted().filter(x=>config.hidden.includes(x[0]));
  host.innerHTML=`<div class="umod-heading"><h2>🏡 Notre maison</h2>${edit?'<button type="button" class="umod-edit" data-umod="edit">✓ Terminer</button>':''}</div>
  <div class="umod-grid">${visible.map(([k,t,ico])=>`<div class="umod-slot" draggable="${edit}" data-module="${k}">
  <button type="button" class="umod-link" ${edit?'disabled':''} data-act="go" data-v="${k}"><span class="umod-ico">${ico}</span><span>${t}</span></button>
- ${edit?`<div class="umod-tools"><button type="button" data-umod="up" data-id="${k}" aria-label="Déplacer ${t} avant">←</button><button type="button" data-umod="down" data-id="${k}" aria-label="Déplacer ${t} après">→</button><button type="button" data-umod="hide" data-id="${k}" aria-label="Masquer ${t}">×</button></div>`:''}
+ ${edit?`<div class="umod-tools">
+ <button type="button" data-umod="rowup" data-id="${k}" aria-label="Remonter ${t}">↑</button>
+ <button type="button" data-umod="left" data-id="${k}" aria-label="Déplacer ${t} à gauche">←</button>
+ <button type="button" data-umod="right" data-id="${k}" aria-label="Déplacer ${t} à droite">→</button>
+ <button type="button" data-umod="rowdown" data-id="${k}" aria-label="Descendre ${t}">↓</button>
+ <button type="button" data-umod="hide" data-id="${k}" aria-label="Masquer ${t}">×</button>
+ </div>`:''}
  </div>`).join('')}</div>
  ${edit?`<div class="umod-hidden"><h3>Modules masqués</h3>${hidden.length?hidden.map(([k,t])=>`<button type="button" data-umod="show" data-id="${k}">＋ ${t}</button>`).join(''):'<p>Aucun module masqué.</p>'}<button type="button" data-umod="reset">Réinitialiser la disposition</button><p>La disposition est partagée avec le foyer. Masquer un raccourci ne supprime aucune donnée.</p></div>`:''}`;
 }
@@ -98,10 +117,13 @@ document.addEventListener('click',e=>{
  if(action==='hide'&&!config.hidden.includes(id))config.hidden.push(id);
  if(action==='show')config.hidden=config.hidden.filter(k=>k!==id);
  if(action==='reset'){config={order:items.map(x=>x[0]),hidden:[]}}
- if(action==='up'||action==='down'){
-  const order=sorted().map(x=>x[0]);const i=order.indexOf(id),j=i+(action==='up'?-1:1);
-  if(j>=0&&j<order.length){[order[i],order[j]]=[order[j],order[i]];config.order=order}
- }
+ const step=cols(host);
+ if(action==='left')move(id,-1);
+ if(action==='right')move(id,1);
+ if(action==='rowup')move(id,-step);
+ if(action==='rowdown')move(id,step);
+ if(action==='up')move(id,-1);
+ if(action==='down')move(id,1);
  save();
  if(typeof window.maisonneeHomePaint==='function')window.maisonneeHomePaint();
  else render(host);
@@ -279,8 +301,12 @@ function render(){
   if(k==='recettes'&&g.recette.id)return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
   if(k==='domotique'){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
+    if(typeof window.domRefreshState==='function')window.domRefreshState().then(ok=>{if(ok)render()});
     const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';
-    return `<div class="mn-card mn-card-domotique mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="domotique">${tete}</button><div class="mn-card-gates">${btn(gates.pieton,'Piéton')}${btn(gates.voiture,'Voiture')}</div></div>`;
+    const probe=typeof gates.voiture?.temp==='number'
+      ?`<strong>Extérieur ${String(gates.voiture.temp).replace('.',',')} °C</strong>`
+      :`<strong>Extérieur</strong><small>Sonde du portail</small>`;
+    return `<div class="mn-card mn-card-domotique mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="domotique">${tete}${probe}</button><div class="mn-card-gates">${btn(gates.pieton,'Piéton')}${btn(gates.voiture,'Voiture')}</div></div>`;
   }
   return `<button type="button" class="mn-card mn-card-${ton(k)}" data-act="go" data-v="${k}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`;
  }).join('');

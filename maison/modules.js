@@ -100,9 +100,13 @@ function domGatePair() {
 function windowDomHomeGates() {
   const { pieton, voiture } = domGatePair();
   const ready = x => !!(domConnected() && x && x.shelly_id);
+  const tempOf = x => {
+    const st = x && domState[x.id];
+    return st && typeof st.temp === "number" ? st.temp : null;
+  };
   return {
-    pieton: pieton && { id: pieton.id, name: pieton.name, ready: ready(pieton) },
-    voiture: voiture && { id: voiture.id, name: voiture.name, ready: ready(voiture) }
+    pieton: pieton && { id: pieton.id, name: pieton.name, ready: ready(pieton), temp: tempOf(pieton) },
+    voiture: voiture && { id: voiture.id, name: voiture.name, ready: ready(voiture), temp: tempOf(voiture) }
   };
 }
 window.domHomeGates = windowDomHomeGates;
@@ -152,7 +156,10 @@ function domLinkLine(x) {
   if (!domConnected()) return "Shelly Cloud n'est pas encore relié";
   if (!x.shelly_id) return "Identifiant Shelly à associer dans les réglages";
   const st = domState[x.id];
-  if (st && st.label) return st.label;
+  const bits = [];
+  if (st && st.label) bits.push(st.label);
+  if (st && typeof st.temp === "number") bits.push(st.temp.toFixed(1).replace(".", ",") + " °C");
+  if (bits.length) return bits.join(" · ");
   return "Prêt";
 }
 function domSettings(zone) {
