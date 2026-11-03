@@ -236,6 +236,8 @@ dialog.sheet[open]{animation:none;}
 .grab{width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 10px;position:relative;cursor:grab;}
 .grab::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:88px;height:36px;}
 .sheet-h{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.sheet-close-x{flex:none;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:1px solid #39769F;border-radius:50%;background:#102A46;color:#c9e8ff;font-size:18px;line-height:1;box-shadow:none;cursor:pointer;transition:background .15s}
+.sheet-close-x:active{background:#183a5c}
 dialog.sheet.sheet-dragging{transition:none!important;scroll-behavior:auto;}
 dialog.sheet.sheet-dismissing{pointer-events:none;}
 .sheet-h h2{margin:6px 0;}
@@ -2231,13 +2233,37 @@ details.r-legend-fold .r-legend{margin-top:0;}
 /* Domotique : composants spécifiques, héritant du thème et du responsive commun. */
 .dom-page{display:grid;gap:16px;max-width:1050px;margin:0 auto;padding:12px 0 32px}
 .dom-page h2{margin:0}.dom-zones,.dom-devices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}
-.dom-zone,.dom-device{border:1px solid var(--line,rgba(150,190,255,.25));border-radius:18px;background:rgba(15,39,76,.72);color:inherit;padding:18px;text-align:left;min-width:0}
+.dom-zone,.dom-device{border:1px solid #39769F;border-radius:14px;background:rgba(15,39,76,.72);color:inherit;padding:14px;text-align:left;min-width:0}
 .dom-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:100px;cursor:pointer}
 .dom-zone span{font-size:.86em;opacity:.8}.dom-device-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dom-pos{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:10px 0 4px}
 .dom-pos span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7ec8ff,#d7ecff)}
-.dom-actions{display:flex;flex-wrap:wrap;gap:8px}.dom-actions .btn{flex:1 1 auto}
-.dom-zone-batch{grid-column:1/-1;border-color:rgba(126,200,255,.35);background:linear-gradient(165deg,rgba(22,58,96,.85),rgba(12,32,58,.88))}
+.dom-actions{display:flex;flex-wrap:nowrap;gap:6px}.dom-actions .btn{flex:1 1 0;min-width:0}
+.dom-zone-batch{grid-column:1/-1;border-color:#39769F;background:linear-gradient(165deg,rgba(22,58,96,.85),rgba(12,32,58,.88))}
+/* --- Domotique : boutons modernes compacts --- */
+.dom-device .dom-actions .btn,.dom-zone-batch .dom-actions .btn{background:#102A46;border:1px solid #39769F;border-radius:13px;min-height:44px;max-height:48px;padding:8px 10px;font-size:14px;font-weight:700;color:#f4fbff;box-shadow:0 2px 6px rgba(0,20,50,.25);transition:background .15s,border-color .15s}
+.dom-device .dom-actions .btn:active,.dom-zone-batch .dom-actions .btn:active{background:#183a5c;border-color:#5aaed4}
+.dom-device .dom-actions .btn:disabled,.dom-zone-batch .dom-actions .btn:disabled{background:#0b1a2e;border-color:#263e58;color:rgba(255,255,255,.35);box-shadow:none}
+.dom-device .dom-actions .btn[aria-busy=true],.dom-zone-batch .dom-actions .btn[aria-busy=true]{position:relative;color:transparent}
+.dom-device .dom-actions .btn[aria-busy=true]::after,.dom-zone-batch .dom-actions .btn[aria-busy=true]::after{content:"";position:absolute;width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:#7ec8ff;border-radius:50%;animation:dom-spin .7s linear infinite}
+@keyframes dom-spin{to{transform:rotate(360deg)}}
+/* --- Domotique : SVG volet roulant --- */
+.dom-shutter-svg{flex:0 0 56px;width:56px;height:64px}
+.dom-shutter-svg .dom-sh-frame{fill:none;stroke:#5aaed4;stroke-width:1.5}
+.dom-shutter-svg .dom-sh-glass{fill:rgba(135,210,255,.12)}
+.dom-shutter-svg .dom-sh-blind{fill:#1a4870;stroke:#39769F;stroke-width:.6}
+.dom-shutter-svg .dom-sh-slat{stroke:#5aaed4;stroke-width:.5;opacity:.6}
+.dom-shutter-svg.is-moving .dom-sh-blind{animation:dom-blind-pulse 1.2s ease-in-out infinite}
+@keyframes dom-blind-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+/* --- Domotique : carte volet compacte --- */
+.dom-volet-card{display:flex;align-items:flex-start;gap:12px;margin-bottom:4px}
+.dom-volet-info{flex:1;min-width:0;display:grid;gap:2px}
+.dom-volet-info strong{font-size:14px;line-height:1.25;overflow-wrap:anywhere}
+.dom-volet-badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:8px;width:fit-content}
+.dom-volet-badge.is-closed{background:rgba(94,224,168,.15);color:#5ee0a8}
+.dom-volet-badge.is-open{background:rgba(126,200,255,.15);color:#7ec8ff}
+.dom-volet-badge.is-moving{background:rgba(255,174,119,.15);color:#ffae77}
+.dom-volet-badge.is-unknown{background:rgba(176,197,226,.1);color:#b0c5e2}
 .dom-form{display:grid;gap:14px}.dom-form label{display:grid;gap:6px}
 .dom-form input,.dom-form select{width:100%;min-width:0}
 
@@ -2253,7 +2279,7 @@ details.r-legend-fold .r-legend{margin-top:0;}
 main.view-domotique{max-width:720px;}
 .dom-page{gap:14px;padding:4px 0 24px}
 .dom-seg{margin:0}
-.dom-hero{border-radius:22px;overflow:hidden;border:1px solid rgba(126,200,255,.38);background:rgba(10,28,56,.72);box-shadow:0 8px 28px rgba(0,40,90,.28),inset 0 1px 0 rgba(200,236,255,.18);min-width:0;-webkit-transform:translateZ(0);transform:translateZ(0)}
+.dom-hero{border-radius:18px;overflow:hidden;border:1px solid #39769F;background:rgba(10,28,56,.72);box-shadow:0 4px 16px rgba(0,20,50,.25);min-width:0;-webkit-transform:translateZ(0);transform:translateZ(0)}
 .dom-hero-media{position:relative;display:block;width:100%;height:148px;padding:0;border:0;background:#0a1c38;color:inherit;text-align:left;overflow:hidden;-webkit-transform:translateZ(0);transform:translateZ(0)}
 .dom-hero-photo{display:block;width:100%;height:148px;background:#0a1c38 url("assets/domotique/ma-maison-hero.jpg") center 62%/cover no-repeat;-webkit-transform:translateZ(0);transform:translateZ(0);-webkit-backface-visibility:hidden;backface-visibility:hidden}
 .dom-hero-media .dom-hero-photo{position:absolute;inset:0;height:auto}
@@ -2266,12 +2292,12 @@ main.view-domotique{max-width:720px;}
 .dom-hero-stats span{display:flex;align-items:flex-start;gap:6px;min-width:0;font-size:12.5px;line-height:1.3;color:#d7ecff}
 .dom-hero-stats i{flex:none;opacity:.85}
 .dom-scenes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.dom-scenes button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;min-height:56px;padding:8px 4px;border-radius:16px;border:1px solid rgba(126,200,255,.35);background:rgba(15,39,76,.72);color:#eaf7ff;font:700 12px/1.2 var(--display);box-shadow:inset 0 1px 0 rgba(205,232,255,.16)}
+.dom-scenes button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;min-height:56px;padding:8px 4px;border-radius:14px;border:1px solid #39769F;background:#102A46;color:#eaf7ff;font:700 12px/1.2 var(--display);box-shadow:0 2px 6px rgba(0,20,50,.25)}
 .dom-scenes button span{font-weight:600;font-size:10px;color:#9ec4e6}
 .dom-eq-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
 .dom-eq-head h3{margin:0;font:700 16px var(--display)}
 .dom-eq-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.dom-eq-card,.dom-house-row{border-radius:18px;border:1px solid rgba(126,200,255,.32);background:linear-gradient(165deg,rgba(22,58,96,.78),rgba(12,32,58,.88));box-shadow:inset 0 1px 0 rgba(205,232,255,.14);min-width:0;padding:10px}
+.dom-eq-card,.dom-house-row{border-radius:14px;border:1px solid #39769F;background:linear-gradient(165deg,rgba(22,58,96,.78),rgba(12,32,58,.88));box-shadow:0 2px 8px rgba(0,20,50,.2);min-width:0;padding:10px}
 .dom-eq-card.is-pending,.dom-house-row.is-pending{opacity:.92}
 .dom-eq-open{display:grid;gap:6px;width:100%;padding:0;border:0;background:none;color:inherit;text-align:left;min-width:0;align-content:start}
 .dom-eq-top{display:flex;align-items:center;gap:8px;min-width:0;width:100%}
@@ -2281,9 +2307,10 @@ main.view-domotique{max-width:720px;}
 .dom-eq-ico{font-size:20px;line-height:1;flex:none;width:1.4em;text-align:center}
 .dom-eq-card .dom-actions-compact{margin-top:8px}
 .dom-actions-compact .btn{flex:1 1 0;min-width:0;padding:8px 6px}
-.dom-slider{display:grid;gap:6px;margin:8px 0 4px}
-.dom-slider input{width:100%;accent-color:#7ec8ff}
-.dom-house-art{border-radius:22px;overflow:hidden;border:1px solid rgba(126,200,255,.35);background:rgba(10,28,56,.7);-webkit-transform:translateZ(0);transform:translateZ(0)}
+.dom-slider{display:grid;gap:4px;margin:6px 0 4px}
+.dom-slider input{width:100%;accent-color:#7ec8ff;height:6px}
+.dom-slider .dom-slider-label{font-size:12px;color:#9ec4e6}
+.dom-house-art{border-radius:18px;overflow:hidden;border:1px solid #39769F;background:rgba(10,28,56,.7);-webkit-transform:translateZ(0);transform:translateZ(0)}
 .dom-house-art .dom-hero-photo{height:180px}
 .dom-house-art p{margin:8px 12px 12px}
 .dom-house-list{display:grid;gap:8px}
@@ -2325,6 +2352,24 @@ dialog.sheet .dom-dreame-choice,dialog.sheet .dom-dreame-panel .btn,dialog.sheet
 .dom-dreame-prog-row .btn.primary{width:100%}
 .dom-dreame-card-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;width:100%}
 .dom-eq-dreame .dom-dreame-card-btn{min-height:44px;font-size:22px;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+/* ── SmartThings TV ── */
+.dom-tv-panel{display:grid;gap:14px}
+.dom-tv-status{margin:0;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(126,200,255,.2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dom-tv-power{font-weight:700;font-size:15px;color:#9bc8ff}
+.dom-tv-power.is-on{color:#a4f4c4}
+.dom-tv-controls{display:grid;gap:10px}
+.dom-tv-row{display:grid;gap:8px}
+.dom-tv-row>strong{font-size:14px;font-weight:700;color:#d7ecff;margin-bottom:-2px}
+.dom-tv-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+dialog.sheet .dom-tv-panel .dom-tv-btn{display:inline-flex!important;visibility:visible!important;width:100%;min-height:52px;font-size:18px;font-weight:700;line-height:1;padding:0 16px;border-radius:16px;border:1px solid rgba(151,222,255,.85);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+.dom-tv-btn.is-on{border-color:rgba(155,225,255,.95);background:linear-gradient(160deg,#1b6b42,#0a3a22 72%)}
+dialog.sheet .dom-tv-panel .dom-tv-step{display:inline-flex!important;visibility:visible!important;min-width:52px;min-height:48px;font-size:24px;font-weight:800;line-height:1;padding:0;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+.dom-tv-vol-val,.dom-tv-ch-val{min-width:48px;text-align:center;font-size:20px;font-weight:700;color:#f4fbff}
+.dom-tv-card-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;width:100%}
+.dom-eq-tv .dom-tv-card-btn{min-height:44px;font-size:22px;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+.dom-eq-tv .dom-tv-card-btn.is-on{border-color:rgba(155,225,255,.95);background:linear-gradient(160deg,#1b6b42,#0a3a22 72%)}
+/* ── Picker pièce intégration ── */
+.dom-integ-room{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:12px 0 4px;padding:10px 0 0;border-top:1px solid rgba(126,200,255,.12)}
 @media(min-width:750px){
   .dom-eq-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
   .dom-hero-media{height:190px}
@@ -2335,3 +2380,33 @@ dialog.sheet .dom-dreame-choice,dialog.sheet .dom-dreame-panel .btn,dialog.sheet
   .dom-scenes button{font-size:11px;padding:8px 2px}
   .dom-hero-stats{grid-template-columns:1fr 1fr}
 }
+
+/* Présentation compacte des réglages Dreame : commandes et événements inchangés. */
+.dom-dreame-panel .dom-dreame-hero{display:flex;align-items:center;gap:12px;min-width:0;margin-bottom:12px}
+.dom-dreame-panel .dom-dreame-hero img{display:block;width:clamp(95px,30%,180px);height:auto;object-fit:contain;flex:none}
+.dom-dreame-panel .dom-dreame-hero .dom-dreame-status{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
+.dom-dreame-panel .dom-dreame-setting{margin:10px 0;padding:12px;border:1px solid rgba(85,200,255,.4);border-radius:18px;background:rgba(9,34,69,.55)}
+.dom-dreame-panel .dom-dreame-setting h4{margin:0 0 10px;font-size:1rem;color:#eef8ff}
+.dom-dreame-panel .dom-dreame-setting .dom-dreame-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.dom-dreame-panel .dom-dreame-setting .dom-dreame-choice{min-width:0;min-height:48px;padding:8px 5px;white-space:normal;overflow-wrap:break-word;font-size:clamp(12px,3.2vw,15px);line-height:1.25;border-radius:16px}
+.dom-dreame-panel .dom-dreame-setting .dom-dreame-choice.primary{border-color:#80d9ff;box-shadow:0 0 13px rgba(85,200,255,.45)}
+.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="suction"]) .dom-dreame-choices{grid-template-columns:repeat(4,minmax(0,1fr))}
+.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="water"]) .dom-dreame-choices{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dom-dreame-panel .dom-dreame-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:390px){.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="suction"]) .dom-dreame-choice{font-size:11px;padding:7px 2px}.dom-dreame-panel .dom-dreame-hero{gap:8px}}
+
+/* Pictogrammes des choix Dreame : uniquement les boutons de réglage. */
+.dom-dreame-setting .dom-dreame-choice{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.dom-dreame-setting .dom-dreame-symbols{display:inline-flex;align-items:center;justify-content:center;flex:none;gap:1px}
+.dom-dreame-setting .dom-dreame-icon{width:23px;height:23px;flex:none}
+.dom-dreame-setting [data-dom-dreame-pref="water"] .dom-dreame-icon{width:17px;height:22px}
+@media(max-width:390px){.dom-dreame-setting .dom-dreame-choice{gap:3px}.dom-dreame-setting .dom-dreame-icon{width:18px;height:18px}.dom-dreame-setting [data-dom-dreame-pref="water"] .dom-dreame-icon{width:13px;height:18px}}
+
+/* Dreame : onglets et grille de pièces, limités à sa fiche. */
+.dom-dreame-panel .dom-dreame-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 14px}
+.dom-dreame-panel .dom-dreame-tabs .btn{min-width:0;min-height:44px}
+.dom-dreame-panel .dom-dreame-room-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.dom-dreame-panel .dom-dreame-room-grid .btn{min-width:0;min-height:46px;white-space:normal;overflow-wrap:anywhere;padding:8px}
+.dom-dreame-panel .dom-dreame-placement{margin:16px 0}
+.dom-dreame-panel .dom-dreame-placement summary{cursor:pointer;color:#c6e8ff;font-weight:600;padding:8px 0}
+@media(max-width:360px){.dom-dreame-panel .dom-dreame-room-grid .btn{font-size:13px}}

@@ -1419,7 +1419,7 @@ function openSheet(title, body, ctx = {}) {
   if (live) live.remove();
   const wasOpen = d.open;
   sheetCtx = ctx;
-  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="btn ghost" data-act="closeSheet">Fermer</button></div></div>${body}`;
+  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="sheet-close-x" data-act="closeSheet" aria-label="Fermer">✕</button></div></div>${body}`;
   if (live && mzToastActive) {
     const again = spotSel && d.querySelector(spotSel);
     if (again) again.insertAdjacentElement("afterend", live);
