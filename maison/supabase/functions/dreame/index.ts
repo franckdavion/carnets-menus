@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261101a";
+const FN_REV = "20261101c";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -203,7 +203,19 @@ async function dreamePost<T extends { code?: number; msg?: string; error?: strin
   skipCode = false,
   allowOffline = false
 ): Promise<T> {
-  const res = await fetch(url, { method: "POST", headers, body });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12_000);
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST", headers, body, signal: ctrl.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`${ctx} : le cloud Dreame ne répond pas assez vite. Réessayez.`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const text = await res.text();
   let parsed: T | null = null;
   if (text) {
@@ -990,9 +1002,15 @@ export async function dreameHandler(req: Request): Promise<Response> {
         const map = await dreameFetchMapRooms(cred, did);
         return json(req, map);
       } else return json(req, { error: "Commande inconnue" }, 400);
-      await new Promise(r => setTimeout(r, 800));
-      const st = await readState(cred);
-      return json(req, { ok: true, ...st });
+      return json(req, {
+        ok: true,
+        command_sent: true,
+        connected: true,
+        device_id: did,
+        device_name: cred.device_name || "Dreame",
+        commandable: true,
+        live_ok: true
+      });
     }
 
     if (action === "pick_device" && req.method === "POST") {
