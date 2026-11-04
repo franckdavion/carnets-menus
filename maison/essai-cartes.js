@@ -205,6 +205,16 @@
       ? { x: .07, y: .15, w: .86, h: .30 }
       : { x: .06, y: .22, w: .88, h: .55 };
   }
+  function cropFit() {
+    const image = document.getElementById("mz-wallet-crop-image");
+    const stage = document.getElementById("mz-wallet-crop-stage");
+    if (!image?.naturalWidth || !image?.naturalHeight || !stage) return;
+    const maxWidth = Math.max(160, Math.min(window.innerWidth - 58, 670));
+    const maxHeight = Math.max(220, Math.min(window.innerHeight * .56, 640));
+    const scale = Math.min(maxWidth / image.naturalWidth, maxHeight / image.naturalHeight, 1);
+    stage.style.width = Math.round(image.naturalWidth * scale) + "px";
+    stage.style.height = Math.round(image.naturalHeight * scale) + "px";
+  }
   function cropPaint() {
     const region = document.getElementById("mz-wallet-crop-region");
     if (!region || !state.crop) return;
@@ -308,6 +318,7 @@
       await image.decode();
       if (!state.crop || state.crop.id !== card.id) return;
       state.crop.rect = cropDefault(image);
+      cropFit();
       cropPaint();
     } catch (e) {
       dlg.close();
@@ -508,6 +519,7 @@
       closeSheet(); await reload();
     } catch (e) { state.error = "Modification impossible : " + (e.message || e); redraw(); }
   }, true);
+  window.addEventListener("resize", () => { if (state.crop) cropFit(); });
   window.addEventListener("online", () => { decoderPromise = null; redraw(); });
   window.addEventListener("offline", redraw);
   navigator.serviceWorker?.addEventListener("controllerchange", redraw);
