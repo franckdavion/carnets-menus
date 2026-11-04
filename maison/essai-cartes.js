@@ -573,6 +573,72 @@
     cropPaint();
   }
 
+  // EAN-13 : représentation vectorielle calculée uniquement pour un numéro
+  // à 13 chiffres dont la clé de contrôle est valide. Aucune API externe.
+  function walletEan13Svg(value) {
+    const code = String(value || "").replace(/\s/g, "");
+    if (!/^\d{13}$/.test(code)) return "";
+    const sum = [...code.slice(0, 12)].reduce((n, digit, i) => n + Number(digit) * (i % 2 ? 3 : 1), 0);
+    if ((10 - sum % 10) % 10 !== Number(code[12])) return "";
+    const left = ["0001101","0011001","0010011","0111101","0100011",
+      "0110001","0101111","0111011","0110111","0001011"];
+    const middle = ["0100111","0110011","0011011","0100001","0011101",
+      "0111001","0000101","0010001","0010111","0001001"];
+    const right = ["1110010","1100110","1101100","1000010","1011100",
+      "1010000","1010100","1001000","1000100","1110100"];
+    const parity = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG",
+      "LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+    const scheme = parity[Number(code[0])];
+    let bits = "101";
+    for (let i = 1; i <= 6; i++) {
+      const digit = Number(code[i]);
+      bits += (scheme[i - 1] === "L" ? left : middle)[digit];
+    }
+    bits += "01010";
+    for (let i = 7; i <= 12; i++) bits += right[Number(code[i])];
+    bits += "101";
+    if (bits.length !== 95) return "";
+    let path = "";
+    for (let i = 0; i < bits.length; i++) {
+      if (bits[i] === "1") path += "M" + (i + 11) + " 9h1v122h-1z";
+    }
+    return '<svg class="mz-wallet-ean13" xmlns="http://www.w3.org/2000/svg" ' +
+      'viewBox="0 0 117 142" role="img" aria-label="Code-barres EAN 13 ' + h(code) + '" ' +
+      'shape-rendering="crispEdges"><rect width="117" height="142" fill="#fff"/>' +
+      '<path fill="#000" d="' + path + '"/></svg>';
+  }
+  async function walletCaptureImage(blob) {
+    if (!blob) throw new Error("Capture absente");
+    const src = typeof blob === "string" && /^data:image\//.test(blob)
+      ? blob : await blobToBase64(blob);
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.alt = "Capture de la carte de fidélité";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Image illisible"));
+      image.src = src;
+    });
+  }
+  async function walletShowCapture(card, dlg) {
+    const area = dlg?.querySelector("#mz-wallet-codearea");
+    if (!area || !card) return;
+    area.textContent = "Chargement de la capture enregistrée…";
+    const sources = [card.image, card.originalImage].filter((src, i, arr) => src && arr.indexOf(src) === i);
+    for (const source of sources) {
+      try {
+        const image = await walletCaptureImage(source);
+        if (dlg.open && dlg.dataset.cardId === String(card.id)) {
+          area.replaceChildren(image);
+          dlg.querySelector('[data-wallet="showBarcode"]')?.removeAttribute("hidden");
+        }
+        return;
+      } catch (_) { /* essayer la capture originale, si elle existe */ }
+    }
+    if (dlg.open && dlg.dataset.cardId === String(card.id)) {
+      const ean = walletEan13Svg(card.code);
+      area.innerHTML = ean || '<p class="mz-wallet-image-warning">Capture indisponible. Le numéro de la carte est conservé. Tu peux ajouter une nouvelle capture depuis Klarna.</p>';
+    }
+  }
   function fullscreen(c) {
     if (!c) return;
     let dlg = document.getElementById("mz-wallet-dialog");
@@ -583,16 +649,27 @@
       dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
       document.body.appendChild(dlg);
     }
-    const url = imageUrl(c.id, c.image);
-    dlg.innerHTML = '<div class="mz-wallet-full"><div class="mz-wallet-fulltop"><strong>' + h(c.name) + '</strong><button type="button" data-wallet="close" aria-label="Fermer">✕</button></div>' +
-      '<div class="mz-wallet-codearea">' + (url ? '<img src="' + url + '" alt="Carte de fidélité ' + h(c.name) + '">' : '<strong>' + h(c.code || "Code non disponible") + '</strong>') + '</div>' +
+    dlg.dataset.cardId = String(c.id);
+    const barcode = walletEan13Svg(c.code);
+    const hasPhoto = !!(c.image || c.originalImage);
+    dlg.innerHTML = '<div class="mz-wallet-full"><div class="mz-wallet-fulltop"><strong>' + h(c.name) +
+      '</strong><button type="button" data-wallet="close" aria-label="Fermer">✕</button></div>' +
+      '<div class="mz-wallet-codearea" id="mz-wallet-codearea">' +
+      (barcode || (hasPhoto ? 'Chargement de la capture enregistrée…' :
+        '<p class="mz-wallet-image-warning">Aucune capture disponible.</p>')) + '</div>' +
       (c.code ? '<p class="mz-wallet-number">' + h(c.code) + '</p>' : '<p class="mz-wallet-number">Présente la capture au lecteur en caisse.</p>') +
-      '<p class="mz-wallet-hint">Présente le code-barres en caisse. La luminosité se règle depuis l’iPhone.</p>' +
+      '<p class="mz-wallet-hint">' + (barcode ? "Code-barres EAN-13 généré localement depuis le numéro enregistré." :
+        "La capture est conservée sur cet iPhone.") + '</p>' +
+      (hasPhoto || barcode ? '<div class="mz-wallet-full-toggle">' +
+        (hasPhoto ? '<button type="button" data-wallet="showCapture" data-id="' + h(c.id) + '">Voir la capture</button>' : '') +
+        (barcode ? '<button type="button" data-wallet="showBarcode" data-id="' + h(c.id) +
+          '" ' + (hasPhoto ? "hidden" : "") + '>Voir le code-barres</button>' : '') + '</div>' : '') +
       '<div class="mz-wallet-full-actions"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '">' +
       (c.favorite ? "★ Retirer des favoris" : "☆ Utilisation fréquente") + '</button>' +
       '<button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier la carte</button>' +
       '<button type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button></div></div>';
     if (!dlg.open) dlg.showModal();
+    if (!barcode && hasPhoto) walletShowCapture(c, dlg);
   }
   function editCard(c) {
     if (!c) return;
@@ -685,6 +762,13 @@
     else if (cmd === "pickBackup") document.getElementById("mz-wallet-backup")?.click();
     else if (cmd === "open") fullscreen(card);
     else if (cmd === "close") document.getElementById("mz-wallet-dialog")?.close();
+    else if (cmd === "showCapture" && card) await walletShowCapture(card, document.getElementById("mz-wallet-dialog"));
+    else if (cmd === "showBarcode" && card) {
+      const dialog = document.getElementById("mz-wallet-dialog");
+      const area = dialog?.querySelector("#mz-wallet-codearea");
+      if (area) area.innerHTML = walletEan13Svg(card.code);
+      button.hidden = true;
+    }
     else if (cmd === "edit") { document.getElementById("mz-wallet-dialog")?.close(); editCard(card); }
     else if (cmd === "crop") { document.getElementById("mz-wallet-dialog")?.close(); if (button.closest("#sheet")) closeSheet(); await openCrop(card || state.drafts.find(d => d.id === button.dataset.id)); }
     else if (cmd === "recognize") { if (button.closest("#sheet")) closeSheet(); document.getElementById("mz-wallet-dialog")?.close(); await recognizeOne(button.dataset.id); }
