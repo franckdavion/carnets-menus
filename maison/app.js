@@ -1153,6 +1153,8 @@ function taskRow(t, opts = {}) {
   const bits = [];
   if (opts.when) bits.push(late ? `<span class="late">${esc(dayLabel(t.next_due))}</span>` : esc(dayLabel(t.next_due)));
   else if (late) bits.push(`<span class="late">En retard depuis ${esc(dayLabel(t.next_due).toLowerCase())}</span>`);
+  if (t.due_time) bits.push("à " + esc(hm(t.due_time)));
+  if (t.deadline_on) bits.push("limite " + esc(fmtShort(t.deadline_on)));
   bits.push(esc(t.room));
   bits.push(esc(freqLabel(t)) + (t.rotate ? " · chacun son tour" : ""));
   return `<div class="row">
