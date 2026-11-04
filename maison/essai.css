@@ -128,3 +128,66 @@ body:has(main.view-courses) #cxUp{display:none!important;}
 .mz-agenda-date{font:500 13px var(--body);color:#c5e2fb;}
 .mz-agenda-scope{line-height:1.45;margin:11px 3px 0;}
 #mzAgendaNormal[hidden]{display:none!important;}
+
+
+/* TV SAMSUNG — prévisualisation dans essai.html uniquement. Aucun style officiel modifié. */
+dialog.sheet .mz-tv{--mz-tv-blue:#55c8ff;color:#e9f7ff;gap:12px;min-width:0}
+dialog.sheet .mz-tv .mz-tv-hero{display:flex;align-items:center;gap:11px;min-width:0;padding:12px 9px 14px;background:linear-gradient(125deg,#133c6d,#081a33);border-radius:18px}
+dialog.sheet .mz-tv .mz-tv-screen{display:grid;place-items:center;width:48px;height:40px;border-radius:8px;border:1px solid #69cef9;background:linear-gradient(135deg,#2878c0,#071f46);font-size:28px;color:#d8f4ff;flex:none}
+dialog.sheet .mz-tv .mz-tv-hero-text{flex:1;min-width:0;display:grid;gap:4px}
+dialog.sheet .mz-tv .mz-tv-hero-text>strong{font-size:clamp(17px,5vw,22px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dialog.sheet .mz-tv .mz-tv-hero-text>span{font-size:12px;color:#c2def3}
+dialog.sheet .mz-tv .mz-tv-dot{display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:#7898aa}
+dialog.sheet .mz-tv .mz-tv-dot.is-on{background:#6cf1ab;box-shadow:0 0 8px #6cf1ab}
+dialog.sheet .mz-tv .mz-tv-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:5px;border:1px solid #35658e;border-radius:17px;background:#081b36}
+dialog.sheet .mz-tv .mz-tv-tabs button{display:grid;justify-items:center;gap:5px;min-width:0;padding:10px 2px;border:1px solid transparent;border-radius:12px;background:transparent;color:#b5d3ee;font-size:clamp(10px,2.7vw,13px);font-weight:700;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-tabs button b{font-size:24px;font-weight:500;line-height:1}
+dialog.sheet .mz-tv .mz-tv-tabs button.is-active{border-color:#91e7ff;background:linear-gradient(150deg,#236d9e,#123359);box-shadow:0 0 12px #50c8ff77;color:white}
+dialog.sheet .mz-tv .mz-tv-status{font-size:13px;min-height:38px;padding:9px 11px}
+dialog.sheet .mz-tv .mz-tv-content{gap:12px}
+dialog.sheet .mz-tv .mz-tv-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-mini>span{display:grid;gap:5px;padding:11px;border:1px solid #386d99;border-radius:14px;background:#102b4c;min-width:0}
+dialog.sheet .mz-tv .mz-tv-mini small{color:#9abfe0;font-size:12px}
+dialog.sheet .mz-tv .mz-tv-mini strong{color:#f4faff;font-size:14px;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-key,dialog.sheet .mz-tv .mz-tv-app{min-width:0;min-height:46px;border:1px solid #5da6d4;border-radius:15px;background:linear-gradient(155deg,#234a74,#0a2347 78%);color:#f4faff;box-shadow:inset 0 1px 1px #ffffff22,0 0 7px #46b7ff33;font-weight:750;cursor:pointer;touch-action:manipulation}
+dialog.sheet .mz-tv .mz-tv-key:active:not(:disabled){background:#2274ac}
+dialog.sheet .mz-tv .mz-tv-key:disabled,dialog.sheet .mz-tv .mz-tv-app:disabled{cursor:default;opacity:.7}
+dialog.sheet .mz-tv .mz-tv-topkeys{display:grid;grid-template-columns:1fr 62px 1fr;align-items:center;gap:8px}
+dialog.sheet .mz-tv .mz-tv-power-key{height:62px;border-radius:50%;font-size:28px;border-color:#93ebff;box-shadow:0 0 13px #45d4ff88}
+dialog.sheet .mz-tv .mz-tv-hero-power{height:45px;min-height:45px;width:45px;flex:none;border-radius:50%;font-size:23px;border-color:#8fe7ff}
+dialog.sheet .mz-tv .mz-tv-remote{display:grid;grid-template-columns:minmax(57px,1fr) minmax(140px,2.5fr) minmax(57px,1fr);gap:8px;align-items:stretch}
+dialog.sheet .mz-tv .mz-tv-side{display:grid;grid-template-rows:22px 1fr 1fr auto;align-items:stretch;gap:6px}
+dialog.sheet .mz-tv .mz-tv-side>strong{font-size:12px;color:#b6d4ef;text-align:center}
+dialog.sheet .mz-tv .mz-tv-lg{font-size:24px}
+dialog.sheet .mz-tv .mz-tv-dpad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(50px,1fr));gap:4px;padding:6px;border-radius:25px;border:1px solid #4b94c6;background:linear-gradient(145deg,#154575,#08284f)}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-up{grid-column:2;grid-row:1}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-left{grid-column:1;grid-row:2}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-ok{grid-column:2;grid-row:2;border-color:#85defc;border-radius:50%;background:#17568e;opacity:1}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-right{grid-column:3;grid-row:2}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-down{grid-column:2;grid-row:3}
+dialog.sheet .mz-tv .mz-tv-bottomkeys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-apps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-favorites{display:flex;overflow-x:auto;gap:8px;padding:4px 1px 8px}
+dialog.sheet .mz-tv .mz-tv-app{display:grid;justify-items:center;align-content:center;gap:7px;min-height:88px;padding:7px 4px;font-size:clamp(10px,2.7vw,13px);overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-favorites .mz-tv-app{flex:0 0 78px}
+dialog.sheet .mz-tv .mz-tv-app-mark{font-size:25px;font-weight:900;color:#e7f7ff}
+dialog.sheet .mz-tv .mz-tv-app-0{color:#ff2b3b}
+dialog.sheet .mz-tv .mz-tv-app-1{color:#ff4646}
+dialog.sheet .mz-tv .mz-tv-app-2{color:#62c9ff;font-size:17px}
+dialog.sheet .mz-tv .mz-tv-app-3{color:#cde8ff}
+dialog.sheet .mz-tv .mz-tv-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:5px}
+dialog.sheet .mz-tv .mz-tv-section-head>strong{font-size:15px}
+dialog.sheet .mz-tv .mz-tv-section-head>span{font-size:12px;color:#91cbee}
+dialog.sheet .mz-tv .mz-tv-section-head button{border:0;background:transparent;color:#86d9ff;font-size:13px}
+dialog.sheet .mz-tv .mz-tv-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-source.is-active{border-color:#89e5ff;background:linear-gradient(155deg,#246ea7,#113b64);box-shadow:0 0 12px #51cbff77}
+dialog.sheet .mz-tv .mz-tv-info{display:grid;gap:7px;padding:13px;border:1px solid #38719f;border-radius:15px;background:#102d51;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-info small{color:#b8d5ec}
+dialog.sheet .mz-tv .mz-tv-note{margin:0;color:#bdd9ed;font-size:12px;line-height:1.45}
+dialog.sheet .mz-tv .mz-tv-close{width:100%}
+@media(max-width:385px){
+ dialog.sheet .mz-tv .mz-tv-remote{grid-template-columns:minmax(51px,1fr) minmax(123px,2.4fr) minmax(51px,1fr);gap:5px}
+ dialog.sheet .mz-tv .mz-tv-dpad{padding:4px;gap:3px}
+ dialog.sheet .mz-tv .mz-tv-tabs{gap:2px}
+ dialog.sheet .mz-tv .mz-tv-apps{gap:5px}
+}
