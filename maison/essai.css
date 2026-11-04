@@ -345,3 +345,12 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   .mz-dset-glyph{font-size:19px}
   .mz-dset-service-status{font-size:10px}
 }
+
+/* Test Poêle : quatre scénarios lisibles sur iPhone, sans toucher au CSS commun. */
+.dom-page .dom-scenes{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.dom-page .dom-scenes button{min-height:69px;padding:8px 2px;font-size:clamp(10px,2.7vw,12px);overflow-wrap:anywhere}
+.dom-page .dom-scenes button span{font-size:clamp(9px,2.35vw,10px)}
+.dom-page .dom-scenes button[data-dom-scenario="poele"][aria-pressed="true"]{
+  border-color:#ffc578;background:linear-gradient(150deg,#70441d,#2c2c45);box-shadow:0 0 12px #ffab5255;color:#fff4e5
+}
+.dom-page .dom-scenes button[data-dom-scenario="poele"][aria-busy="true"]{opacity:.7}
