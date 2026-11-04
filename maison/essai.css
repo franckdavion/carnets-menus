@@ -634,3 +634,53 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   .mz-wallet-family{gap:8px;padding:10px}
   .mz-wallet-family .btn{max-width:44%;white-space:normal;line-height:1.3}
 }
+
+/* Test — mode magasin sans réseau. Réutilise les cartes, entêtes et couleurs existants. */
+.mz-shop-offline-banner{
+  display:grid;gap:5px;margin:11px 0 16px;padding:12px 14px;
+  border:1px solid rgba(85,200,255,.45);background:rgba(15,53,82,.78);
+  border-radius:15px;color:#eef8ff;
+}
+.mz-shop-offline-banner strong{font-size:14px}
+.mz-shop-offline-banner small{font-size:12px;color:#bddaf3;line-height:1.4}
+.mz-shop-offline-error{margin:4px 0 0;font-size:12px;line-height:1.5;color:#ffd2ad}
+.mz-shop-saved-status{
+  margin:10px 4px 16px;font-size:12px;line-height:1.5;
+  color:#94d2ee;text-align:center
+}
+.mz-shop-offline-list{display:grid;gap:13px}
+.mz-shop-offline-group{
+  display:grid;gap:6px;padding:10px;border:1px solid rgba(126,200,255,.23);
+  border-radius:16px;background:rgba(8,30,56,.62)
+}
+.mz-shop-offline-group h3{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  margin:0;padding:3px 5px 9px;font-size:14px;color:#e8f6ff
+}
+.mz-shop-offline-group h3 small{font-size:11px;color:#a9c3dd;font-weight:500}
+.mz-shop-offline-row{
+  display:flex;align-items:center;gap:11px;min-height:55px;
+  border:1px solid rgba(126,200,255,.25);border-radius:12px;
+  background:rgba(17,52,86,.82);color:#f0f8ff;
+  padding:9px 11px;text-align:left;width:100%;font:inherit
+}
+.mz-shop-offline-row.is-checked{background:rgba(15,74,77,.4);opacity:.83}
+.mz-shop-offline-row[hidden],.mz-shop-offline-group[hidden]{display:none!important}
+.mz-shop-offline-check{
+  display:grid;place-items:center;flex:none;width:27px;height:27px;
+  border:2px solid #7ec8ff;border-radius:8px;font-size:18px;font-weight:700
+}
+.mz-shop-offline-row.is-checked .mz-shop-offline-check{background:#4cc8b5;border-color:#4cc8b5;color:#06302d}
+.mz-shop-offline-name{display:grid;gap:3px;flex:1;min-width:0;overflow-wrap:anywhere}
+.mz-shop-offline-name strong{font-size:14px;font-weight:650}
+.mz-shop-offline-name small{font-size:11px;color:#a7c5db;line-height:1.3}
+.mz-shop-offline-qty{flex:none;max-width:34%;font-size:12px;font-weight:650;color:#d9edff;text-align:right}
+.mz-shop-offline-footer{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:10px;padding:12px 4px;color:#afc9dd;font-size:12px;line-height:1.4
+}
+.mz-shop-offline-footer .btn{min-height:42px}
+@media(max-width:390px){
+  .mz-shop-offline-row{gap:8px;padding:8px}
+  .mz-shop-offline-name strong{font-size:13px}
+}

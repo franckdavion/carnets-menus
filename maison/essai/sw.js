@@ -1,7 +1,7 @@
 "use strict";
 /* Cache exclusivement la version de test sous /maison/essai/.
    Ne jamais supprimer ni remplacer le cache/PWA de la Maisonnée officielle. */
-const CACHE = "maisonnee-essai-cartes-v9";
+const CACHE = "maisonnee-essai-cartes-v10";
 const SHELL = [
   "./", "./index.html", "./manifest.json",
   "../maison.css", "../essai.css", "../essai-app.js", "../essai-modules.js", "../essai-cartes.js",
@@ -45,13 +45,17 @@ self.addEventListener("fetch", event => {
       }
       return response;
     } catch (_) {
-      const backup = await caches.match(request, { ignoreSearch: true });
+      // Les caches du Carnet et de Maisonnée officielle partagent le domaine.
+      // Donner systématiquement priorité à la coque de la PWA de test.
+      const testCache = await caches.open(CACHE);
+      const backup = await testCache.match(request, { ignoreSearch: true });
       if (backup) return backup;
       if (request.mode === "navigate") {
-        const shell = await caches.match(new URL("./index.html", self.location).href);
+        const shell = await testCache.match(new URL("./index.html", self.location).href,
+          { ignoreSearch: true });
         if (shell) return shell;
       }
-      return Response.error();
+      return (await caches.match(request, { ignoreSearch: true })) || Response.error();
     }
   })());
 });

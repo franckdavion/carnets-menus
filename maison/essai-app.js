@@ -441,6 +441,18 @@ async function loadRecipes() {
   return S.recipes;
 }
 
+/* Test uniquement : ne jamais confondre absence de réseau et absence de foyer.
+   La liste offline est chargée par essai-modules.js depuis IndexedDB. */
+function mzTestOfflineStartup(message) {
+  const cached = LS.get("mz_cache", null);
+  if (cached?.hh) S = { ...blank(), ...cached, recipes:null };
+  else {
+    S = { ...blank(), hh:{id:"portefeuille-local", name:"Maisonnée hors ligne"} };
+    if (view !== "courses") view = "fidelite";
+  }
+  screen = "app"; render();
+  if (message) toast(message);
+}
 /* ---------- startup ---------- */
 async function init() {
   const url = new URL(location.href), code = url.searchParams.get("code");
@@ -451,15 +463,20 @@ async function init() {
   // Entrée autonome du portefeuille de test : aucun appel réseau avant l'affichage des cartes.
   const walletTest = /\/essai\/(?:index\.html)?$/.test(location.pathname);
   const walletCache = LS.get("mz_cache", null);
-  if (walletTest && (url.searchParams.get("cartes") === "1" || (navigator.onLine === false && !walletCache))) {
+  if (walletTest && url.searchParams.get("cartes") === "1") {
     S = walletCache && walletCache.hh ? { ...blank(), ...walletCache, recipes: null } : { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes" } };
     view = "fidelite"; screen = "app"; render(); return;
   }
   if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
   // show the last known state straight away, then refresh from the cloud
   const cache = LS.get("mz_cache", null);
-  if (mode === "cloud" && cache && cache.hh) { S = { ...blank(), ...cache, recipes: null }; screen = "app"; render(); }
-  else { screen = "loading"; render(); }
+  if (mode === "cloud" && cache && cache.hh) {
+    S = { ...blank(), ...cache, recipes: null }; screen = "app"; render();
+  } else if (navigator.onLine === false) {
+    mzTestOfflineStartup("Mode avion : liste et cartes conservées sur cet iPhone.");
+    return;
+  } else { screen = "loading"; render(); }
+  if (navigator.onLine === false) return;
   try {
     const boot = (async () => {
       await loadSb();
@@ -468,19 +485,39 @@ async function init() {
     })();
     await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
-    if (screen !== "app") { screen = "welcome"; render(); toast(e.message === "timeout" ? "Connexion trop lente. Réessayez ou utilisez Essayer sans compte." : "Pas de connexion pour l'instant."); }
+    mzTestOfflineStartup("Connexion indisponible : dernières données locales.");
     return;
   }
-  if (!user) { mode = null; LS.del("mz_mode"); screen = "welcome"; return render(); }
-  await enterCloud();
+  if (!user) {
+    if (mode === "cloud" || LS.get("mz_hh", null)) {
+      mzTestOfflineStartup("Session non vérifiable : données locales conservées.");
+      return;
+    }
+    mode = null; screen = "welcome"; return render();
+  }
+  try { await enterCloud(); }
+  catch (err) {
+    console.warn("Test : foyer non vérifiable", err);
+    mzTestOfflineStartup("Foyer non vérifiable : connexion différée.");
+  }
 }
 
 async function enterCloud() {
   const { data: mine, error } = await sb.from("household_members").select("household_id").eq("user_id", user.id);
-  if (error) { screen = "setup"; setupErr = /relation|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase/migrations/0001_foyer.sql (voir maison/LISEZMOI.md)." : ""; return render(); }
+  if (error || !Array.isArray(mine)) {
+    mzTestOfflineStartup("Liste des foyers indisponible : accès local conservé.");
+    return;
+  }
   const ids = mine.map(r => r.household_id);
   const join = LS.get("mz_join", null);
-  if (!ids.length || join) { screen = "setup"; if (join) await previewJoin(join); return render(); }
+  if (join) { screen = "setup"; await previewJoin(join); return render(); }
+  if (!ids.length) {
+    if (LS.get("mz_hh", null) || LS.get("mz_cache", null)?.hh) {
+      mzTestOfflineStartup("Foyer non confirmé : ne pas en créer de nouveau.");
+      return;
+    }
+    screen = "setup"; return render();
+  }
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }

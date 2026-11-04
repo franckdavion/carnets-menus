@@ -4401,6 +4401,386 @@ document.addEventListener('DOMContentLoaded', function () {
   if (view === 'courses') render();
 });
 
+/* MODE MAGASIN HORS LIGNE V1 — test uniquement.
+   Photo instantanée des courses dans IndexedDB ; coche locale puis relecture
+   du Carnet partagé avant toute synchronisation. Aucun changement du moteur
+   des recettes, du catalogue, des états ou des règles de Courses Ultimate. */
+document.addEventListener("DOMContentLoaded", function () {
+  if (typeof VIEWS.courses !== "function") return;
+  const previousCourses = VIEWS.courses;
+  const DB_NAME = "maisonnee-magasin-hors-ligne-v1", DB_STORE = "lists";
+  const LAST_HOUSE = "mz_shop_offline_last_household_v1";
+  const state = { record: null, household: "", loading: false, saving: Promise.resolve(),
+    syncing: false, searching: "", notice: "", offlineError: "", captureTimer: null,
+    lastCaptureSignature: "", syncTimer: null, retryPaused: false };
+  const normalize = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+  const canNetwork = () => navigator.onLine !== false;
+  const liveHouse = () => S?.hh?.id && S.hh.id !== "portefeuille-local" && S.hh.id !== "demo" ? S.hh.id : null;
+  const house = () => liveHouse() || LS.get("mz_hh", null) || (mode === "cloud" ? LS.get(LAST_HOUSE, null) : null);
+  const entries = () => Object.values(state.record?.pending || {});
+  const rowId = item => item.kind === "recipe" ? "k:" + item.key : "x:" + item.index + ":" + normalize(item.name);
+  const displayRows = rec => (rec?.rows || []).map(row => ({
+    ...row, checked: typeof rec?.pending?.[row.ref]?.desired === "boolean"
+      ? rec.pending[row.ref].desired : !!row.checked
+  }));
+  const asRows = D => {
+    if (!D || !Array.isArray(D.items) || !Array.isArray(D.extras)) throw new Error("Liste du Carnet invalide.");
+    const items = D.items.map(i => ({
+      ref: "k:" + String(i.key), kind: "recipe", key: String(i.key),
+      name: String(i.n || ""), qty: String(i.qt || ""), category: String(i.r || "Divers"),
+      checked: !!i.on, from: Array.isArray(i.from) ? i.from.slice(0, 8) : []
+    }));
+    const extras = D.extras.map(i => ({
+      ref: "x:" + Number(i.ix) + ":" + normalize(i.t), kind: "extra",
+      index: Number(i.ix), name: String(i.t || ""), qty: "",
+      category: typeof cxGuess === "function" ? cxGuess(String(i.t || ""), D.learn || {}) : "En plus",
+      checked: !!i.on, from: []
+    }));
+    const order = Array.isArray(D.order) ? D.order.map(String).slice(0, 35) : [];
+    return {rows: [...items, ...extras], order};
+  };
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error("Stockage IndexedDB indisponible."));
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DB_STORE))
+          req.result.createObjectStore(DB_STORE, {keyPath:"householdId"});
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error("Ouverture du stockage impossible."));
+    });
+  }
+  async function readDB(id) {
+    const db = await openDB();
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readonly");
+        const req = tx.objectStore(DB_STORE).get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } finally { db.close(); }
+  }
+  async function writeDB(record) {
+    const db = await openDB();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put(record);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } finally { db.close(); }
+  }
+  function persist() {
+    const snap = structuredClone(state.record);
+    state.saving = state.saving.catch(() => {}).then(() => writeDB(snap));
+    return state.saving;
+  }
+  function redrawIfShown() {
+    if (view === "courses" && screen === "app") render();
+  }
+  async function loadForHouse() {
+    const id = house();
+    if (!id || state.loading || id === state.household) return;
+    state.loading = true;
+    state.record = null; // Jamais montrer les courses d’un autre foyer pendant le chargement.
+    state.lastCaptureSignature = "";
+    state.retryPaused = false;
+    try {
+      const found = await readDB(id);
+      if (house() !== id) return;
+      state.record = found && found.householdId === id ? found : null;
+      state.household = id;
+      state.offlineError = "";
+      redrawIfShown();
+      if (entries().length && canNetwork()) planSync(800);
+    } catch (err) {
+      state.offlineError = "Impossible de lire la copie locale : " + (err.message || err);
+      redrawIfShown();
+    } finally { state.loading = false; }
+  }
+  function planSync(delay = 1500) {
+    if (!entries().length || !canNetwork() || state.syncing || state.retryPaused) return;
+    clearTimeout(state.syncTimer);
+    state.syncTimer = setTimeout(() => { state.syncTimer = null; syncPending(); }, delay);
+  }
+  async function captureList() {
+    state.captureTimer = null;
+    const id = liveHouse();
+    if (!id || state.loading || mode !== "cloud" || !canNetwork() || !CK.ready || !isLinked() ||
+        !S.hh?.carnet_user || (state.household && state.household !== id)) return;
+    try {
+      const data = asRows(cxData());
+      const signature = JSON.stringify(data);
+      if (entries().length) return;
+      // Une liste inchangée est néanmoins reconfirmée au plus toutes les 5 min
+      // lorsque le Carnet et Supabase sont bien accessibles.
+      if (signature === state.lastCaptureSignature &&
+          state.record && Date.now() - state.record.savedAt < 300000) return;
+      const old = state.record;
+      const record = {householdId:id, ownerId:String(S.hh.carnet_user),
+        userId:user?.id || null, savedAt:Date.now(), ...data, pending:{},
+        lastWarning:""};
+      state.record = record;
+      state.household = id;
+      state.lastCaptureSignature = signature;
+      await persist();
+      LS.set(LAST_HOUSE, id);
+      if (!old && view === "courses") redrawIfShown();
+    } catch (err) {
+      state.offlineError = "Copie hors ligne non confirmée : " + (err.message || err);
+      redrawIfShown();
+    }
+  }
+  function scheduleCapture() {
+    if (state.captureTimer || !canNetwork() || entries().length || !CK.ready) return;
+    state.captureTimer = setTimeout(captureList, 180);
+  }
+  async function toggle(ref) {
+    const record = state.record;
+    if (!record) return;
+    const row = (record.rows || []).find(i => i.ref === ref);
+    if (!row) return;
+    const before = structuredClone(record.pending || {});
+    const current = typeof record.pending?.[ref]?.desired === "boolean"
+      ? record.pending[ref].desired : !!row.checked;
+    const wanted = !current;
+    if (wanted === !!row.checked) delete record.pending[ref];
+    else record.pending[ref] = {
+      ref, kind:row.kind, key:row.key || null, name:row.name, qty:row.qty,
+      base:!!row.checked, desired:wanted, changedAt:Date.now()
+    };
+    try {
+      await persist();
+      state.offlineError = "";
+      state.retryPaused = false;
+      state.notice = entries().length + " achat(s) à synchroniser."
+      redrawIfShown();
+      if (canNetwork()) planSync(400);
+    } catch (err) {
+      record.pending = before;
+      state.offlineError = "Coche non enregistrée sur l'iPhone : " + (err.message || err);
+      redrawIfShown();
+    }
+  }
+  function offlineView() {
+    const rec = state.record;
+    const waiting = entries().length;
+    const disconnected = !canNetwork();
+    const banner = '<div class="mz-shop-offline-banner" role="status">' +
+      '<strong>' + (disconnected ? "Mode magasin hors ligne" :
+        waiting ? "Achats en attente de synchronisation" : "Liste sauvegardée sur cet iPhone") +
+      '</strong>' +
+      '<small>' + (rec ? "Liste du " + new Date(rec.savedAt).toLocaleString("fr-FR", {
+        day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "Aucune liste enregistrée") +
+      (waiting ? " · " + waiting + " coche(s) en attente" : "") + '</small>' +
+      (state.offlineError ? '<p class="mz-shop-offline-error">' + esc(state.offlineError) + '</p>' : '') +
+      (rec?.lastWarning ? '<p class="mz-shop-offline-error">' + esc(rec.lastWarning) + '</p>' : '') + '</div>';
+    if (!rec) return '<section class="mz-shop-screen mz-shop-store mz-shop-offline">' +
+      '<h2>Courses hors ligne</h2>' + banner +
+      '<p class="muted">Aucune copie de la liste sur cet appareil. Avec Internet, ouvre Courses et attends que la liste du Carnet soit chargée pour la sauvegarder automatiquement.</p>' +
+      '</section>';
+    const rows = displayRows(rec);
+    const remaining = rows.filter(x => !x.checked), bought = rows.filter(x => x.checked);
+    const categories = [...new Set([...(rec.order||[]), ...rows.map(r=>r.category)])];
+    const item = x => '<button type="button" class="mz-shop-offline-row' +
+      (x.checked ? ' is-checked' : '') +
+      '" data-mz-shop-offline="toggle" data-ref="' + esc(x.ref) +
+      '" aria-pressed="' + x.checked + '"><span class="mz-shop-offline-check" aria-hidden="true">' +
+      (x.checked ? '✓' : '') + '</span><span class="mz-shop-offline-name"><strong>' +
+      esc(x.name) + '</strong>' +
+      (x.from?.length ? '<small>Pour : ' + esc(x.from.join(" · ")) + '</small>' : '') +
+      '</span><span class="mz-shop-offline-qty">' + esc(x.qty || "") + '</span></button>';
+    const groups = categories.map(category => {
+      const list = remaining.filter(i=>i.category===category);
+      return list.length ? '<section class="mz-shop-offline-group" data-mz-shop-offline-group="' +
+        esc(category) + '"><h3>' + esc(category) + '<small>' + list.length +
+        ' à prendre</small></h3>' + list.map(item).join("") + '</section>' : '';
+    }).join("");
+    const done = bought.length ? '<section class="mz-shop-offline-group"><h3>Dans le panier<small>' +
+      bought.length + '</small></h3>' + bought.map(item).join("") + '</section>' : '';
+    return '<section class="mz-shop-screen mz-shop-store mz-shop-offline">' +
+      '<header class="mz-shop-store-header"><h2>En magasin</h2><p>' +
+      bought.length + ' / ' + rows.length + ' acheté(s) · ' + remaining.length + ' à prendre</p></header>' +
+      banner +
+      '<label class="mz-shop-search"><span aria-hidden="true">⌕</span>' +
+      '<input type="search" class="input" id="mzShopOfflineSearch" autocomplete="off" ' +
+      'aria-label="Rechercher un article" placeholder="Rechercher un article" value="' +
+      esc(state.searching) + '"></label>' +
+      '<div class="mz-shop-offline-list">' +
+      (groups || (!remaining.length ? '<p class="muted">Tout est dans le panier.</p>' : '')) + done +
+      '</div>' +
+      '<div class="mz-shop-offline-footer"><small>' +
+      (disconnected ? "Les coches restent sur cet iPhone jusqu'au retour du réseau." :
+        state.syncing ? "Synchronisation de vos achats…" :
+        state.retryPaused ? "Un article doit être vérifié avant de synchroniser." :
+        waiting ? "Garde cette page ouverte pour synchroniser les achats." :
+        "Liste disponible en mode avion.") + '</small>' +
+      (waiting && canNetwork() ?
+        '<button type="button" class="btn" data-mz-shop-offline="retry">↻ Synchroniser</button>' : '') +
+      '</div></section>';
+  }
+  function filterOffline() {
+    const root = document.querySelector(".mz-shop-offline");
+    if (!root) return;
+    const q = normalize(state.searching);
+    root.querySelectorAll(".mz-shop-offline-row").forEach(row => {
+      row.hidden = !!q && !normalize(row.textContent).includes(q);
+    });
+    root.querySelectorAll("[data-mz-shop-offline-group]").forEach(group => {
+      group.hidden = !!q && !Array.from(group.querySelectorAll(".mz-shop-offline-row"))
+        .some(row=>!row.hidden);
+    });
+  }
+  const oldAfterRender = afterRender;
+  afterRender = function () {
+    if (typeof oldAfterRender === "function") oldAfterRender();
+    filterOffline();
+  };
+  VIEWS.courses = function () {
+    if (house() && house() !== state.household && !state.loading) loadForHouse();
+    if (mode === "demo") return previousCourses();
+    // Ne jamais risquer de perdre les coches en attente avec une liste réseau
+    // qui n'aurait pas encore intégré les modifications de cet iPhone.
+    if (!canNetwork() || entries().length) return offlineView();
+    const html = previousCourses();
+    if (mode === "cloud" && CK.ready && isLinked()) scheduleCapture();
+    return html + (state.record ? '<p class="mz-shop-saved-status">✓ Liste magasin conservée hors ligne sur cet iPhone</p>' :
+      '<p class="mz-shop-saved-status">Préparation du mode magasin hors ligne après chargement du Carnet…</p>');
+  };
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-mz-shop-offline]");
+    if (!button || view !== "courses" || !button.closest(".mz-shop-offline")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const action = button.dataset.mzShopOffline;
+    if (action === "toggle") await toggle(button.dataset.ref);
+    if (action === "retry") { state.retryPaused = false; planSync(0); }
+  }, true);
+  document.addEventListener("input", event => {
+    if (event.target.id !== "mzShopOfflineSearch") return;
+    state.searching = event.target.value;
+    filterOffline();
+  });
+  async function syncPending() {
+    const rec = state.record, id = liveHouse();
+    if (!rec || !entries().length || !canNetwork() || state.syncing || mode !== "cloud" ||
+        !sb || !user || !S.hh?.carnet_user || id !== rec.householdId ||
+        String(S.hh.carnet_user) !== rec.ownerId) return;
+    if (!CK.ready) {
+      if (CK.err && CK.frame) {
+        try { CK.frame.remove(); CK.frame = null; CK.err = ""; } catch (_) {}
+      }
+      carnetBoot();
+      planSync(8000);
+      return;
+    }
+    state.syncing = true;
+    redrawIfShown();
+    try {
+      // Autorisation et état en ligne vérifiés AVANT d'envoyer les coches.
+      const owner = rec.ownerId;
+      const remoteCheck = await sb.from("user_state").select("menu")
+        .eq("user_id", owner).maybeSingle();
+      if (remoteCheck.error || !remoteCheck.data?.menu?.menu)
+        throw new Error("Impossible de relire le Carnet familial.");
+      await cev("cloudPull()");
+      const now = cxData();
+      const changes = entries().map(x=>({...x}));
+      const applied = [];
+      let missing = 0;
+      for (const operation of changes) {
+        let found, ref;
+        if (operation.kind === "recipe") {
+          found = now.items.find(x => String(x.key) === String(operation.key));
+          ref = "k:" + operation.key;
+        } else {
+          const matches = now.extras.filter(x => normalize(x.t) === normalize(operation.name));
+          if (matches.length === 1) {
+            found = matches[0];
+            ref = "x:" + Number(found.ix);
+          }
+        }
+        if (!found) { missing++; continue; }
+        // Une liste réorganisée ne doit pas marquer acheté un autre article.
+        // Le nom et la quantité doivent encore correspondre à la capture.
+        if (normalize(found.n || found.t) !== normalize(operation.name) ||
+            (operation.kind === "recipe" &&
+              String(found.qt || "") !== String(operation.qty || ""))) {
+          missing++; continue;
+        }
+        const current = !!found.on;
+        if (current !== operation.desired) {
+          if (current !== operation.base) { missing++; continue; }
+          cclick({act:"storeTick",s:ref});
+        }
+        applied.push(operation);
+      }
+      if (applied.length) {
+        await new Promise(resolve=>setTimeout(resolve, 420));
+        await cev("cloudSync(true)");
+      }
+      const res = await sb.from("user_state").select("menu")
+        .eq("user_id", owner).maybeSingle();
+      if (res.error || !res.data?.menu?.menu)
+        throw new Error("Vérification du partage impossible.");
+      const remoteMenu = res.data.menu.menu;
+      let confirmed = 0;
+      for (const op of applied) {
+        let cloudValue;
+        if (op.kind === "recipe") {
+          cloudValue = !!(remoteMenu.checked || {})[op.key];
+        } else {
+          const matches = (remoteMenu.extras || []).filter(x=>normalize(x.t)===normalize(op.name));
+          if (matches.length !== 1) continue;
+          cloudValue = !!matches[0].done;
+        }
+        if (cloudValue !== op.desired) continue;
+        if (state.record?.pending?.[op.ref]?.changedAt !== op.changedAt) continue;
+        delete state.record.pending[op.ref];
+        confirmed++;
+      }
+      state.retryPaused = missing > 0;
+      state.offlineError = "";
+      state.record.lastWarning = missing
+        ? missing + " article(s) ont changé ou disparu du Carnet : coche conservée sur cet iPhone."
+        : entries().length ? "Certaines coches restent en attente : retente la synchronisation."
+        : "";
+      if (!entries().length) {
+        const refreshed = asRows(cxData());
+        state.record.rows = refreshed.rows;
+        state.record.order = refreshed.order;
+        state.record.savedAt = Date.now();
+        state.lastCaptureSignature = JSON.stringify(refreshed);
+      }
+      await persist();
+      state.notice = confirmed + " coche(s) synchronisée(s).";
+      redrawIfShown();
+    } catch (err) {
+      state.offlineError = "Synchronisation reportée : " + (err.message || err);
+      redrawIfShown();
+    } finally {
+      state.syncing = false;
+      redrawIfShown();
+    }
+  }
+  window.addEventListener("online", () => { state.retryPaused = false; planSync(1300); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (!state.household) loadForHouse();
+      state.retryPaused = false;
+      planSync(1000);
+    }
+  });
+  setInterval(() => {
+    if (canNetwork() && entries().length && !state.syncing) planSync(600);
+  }, 12000);
+  loadForHouse();
+});
+
 /* AGENDA SEARCH TEST 2026-11-04 : recherche de données affichables, actions originales. */
 document.addEventListener("DOMContentLoaded", function () {
   if (typeof VIEWS.agenda !== "function") return;
