@@ -1345,8 +1345,10 @@ function mzDsetDevices(){
     const label=x.type==="volet"?"Volet":x.type==="lumiere"?"Éclairage":x.type==="portail"?"Accès":"Prise";
     const icon=x.type==="volet"?"▤":x.type==="lumiere"?"💡":x.type==="portail"?"🚪":"🔌";
     const zone=mzDomDisplayZone(x);
+    const searchValue=mzDsetSearch.trim().toLocaleLowerCase("fr");
+    const visible=(mzDsetFilter==="all"||mzDsetFilter===zone)&&(!searchValue||x.name.toLocaleLowerCase("fr").includes(searchValue));
     const options=rooms.map(r=>`<option value="${esc(r.id)}" ${r.id===domRoomIdOf(x)?"selected":""}>${esc(r.t)}</option>`).join("");
-    return `<div class="mz-dom-shelly-row mz-dset-device" data-mz-dset-device data-mz-dset-zone="${zone}" data-mz-dset-name="${esc(x.name.toLocaleLowerCase("fr"))}">
+    return `<div class="mz-dom-shelly-row mz-dset-device" data-mz-dset-device data-mz-dset-zone="${zone}" data-mz-dset-name="${esc(x.name.toLocaleLowerCase("fr"))}" ${visible?"":"hidden"}>
       <span class="mz-dset-glyph" aria-hidden="true">${icon}</span>
       <span class="mz-dset-device-info"><strong>${esc(x.name)}</strong><small>${label}</small></span>
       <select data-mz-dom-room-select="${esc(x.id)}" aria-label="Changer la pièce de ${esc(x.name)}">${options}</select>
@@ -1354,6 +1356,10 @@ function mzDsetDevices(){
       <small class="mz-dom-shelly-feedback" aria-live="polite"></small>
     </div>`;
   };
+  const shown=physical.filter(x=>{
+    const inZone=mzDsetFilter==="all"||mzDomDisplayZone(x)===mzDsetFilter;
+    return inZone&&x.name.toLocaleLowerCase("fr").includes(mzDsetSearch.trim().toLocaleLowerCase("fr"));
+  }).length;
   const unused=unlinked.length?`<details class="mz-dset-unused"><summary>${unlinked.length} regroupement${unlinked.length>1?"s":""} sans Shelly associé</summary>
     ${unlinked.map(x=>`<div><span>${esc(x.name)}</span><button type="button" class="btn ghost small" data-dom-edit="${esc(x.id)}">Configurer</button></div>`).join("")}
     </details>`:"";
@@ -1363,7 +1369,7 @@ function mzDsetDevices(){
     <div class="mz-dset-filters" role="group" aria-label="Filtrer par zone">
       ${filters.map(([key,label])=>`<button type="button" data-mz-dset-filter="${key}" aria-pressed="${mzDsetFilter===key}">${label}</button>`).join("")}
     </div>
-    <p class="mz-dset-results" data-mz-dset-results aria-live="polite">${physical.length} appareils</p>
+    <p class="mz-dset-results" data-mz-dset-results aria-live="polite">${shown} appareil${shown>1?"s":""} affiché${shown>1?"s":""}</p>
     <div class="mz-dset-list">${physical.map(item).join("")||'<p class="muted">Aucun appareil associé.</p>'}</div>
     ${unused}
     <button type="button" class="mz-dset-add" data-dom-add="exterieur"><span aria-hidden="true">＋</span> Ajouter un Shelly</button>
@@ -1513,7 +1519,9 @@ async function mzDomMoveShellyRoom(select){
   }finally{select.disabled=false;mzDomRoomMoving=false;}
 }
 function domSettings(zone) {
-  return zone ? domSettingsLegacy(zone) : mzDsetEnter("devices");
+  if(zone)return domSettingsLegacy(zone);
+  mzDsetFilter="all";mzDsetSearch="";
+  return mzDsetEnter("devices");
 }
 function domRoomsManageSheet() {
   const { rooms } = domHomeRead();
@@ -3064,7 +3072,7 @@ document.addEventListener("submit", e => {
       render();
     }
     try { await saveRoom(deviceId); } catch (err) { toast(err.message); return; }
-    domZone = zone; closeSheet();
+    if(domTab!=="settings")domZone=zone; closeSheet();
   })();
 });
 
