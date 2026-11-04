@@ -4412,7 +4412,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const LAST_HOUSE = "mz_shop_offline_last_household_v1";
   const state = { record: null, household: "", loading: false, saving: Promise.resolve(),
     syncing: false, searching: "", notice: "", offlineError: "", captureTimer: null,
-    lastCaptureSignature: "", syncTimer: null, retryPaused: false };
+    lastCaptureSignature: "", syncTimer: null, retryPaused: false, manualOffline: false };
   const normalize = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
   const canNetwork = () => navigator.onLine !== false;
   const liveHouse = () => S?.hh?.id && S.hh.id !== "portefeuille-local" && S.hh.id !== "demo" ? S.hh.id : null;
@@ -4580,7 +4580,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const disconnected = !canNetwork();
     const banner = '<div class="mz-shop-offline-banner" role="status">' +
       '<strong>' + (disconnected ? "Mode magasin hors ligne" :
-        waiting ? "Achats en attente de synchronisation" : "Liste sauvegardée sur cet iPhone") +
+        waiting ? "Achats en attente de synchronisation" :
+        state.manualOffline ? "Copie locale du mode magasin" : "Liste sauvegardée sur cet iPhone") +
       '</strong>' +
       '<small>' + (rec ? "Liste du " + new Date(rec.savedAt).toLocaleString("fr-FR", {
         day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "Aucune liste enregistrée") +
@@ -4628,7 +4629,9 @@ document.addEventListener("DOMContentLoaded", function () {
         waiting ? "Garde cette page ouverte pour synchroniser les achats." :
         "Liste disponible en mode avion.") + '</small>' +
       (waiting && canNetwork() ?
-        '<button type="button" class="btn" data-mz-shop-offline="retry">↻ Synchroniser</button>' : '') +
+        '<button type="button" class="btn" data-mz-shop-offline="retry">↻ Synchroniser</button>' :
+        state.manualOffline && canNetwork() ?
+        '<button type="button" class="btn" data-mz-shop-offline="close">Revenir en ligne</button>' : '') +
       '</div></section>';
   }
   function filterOffline() {
@@ -4653,20 +4656,24 @@ document.addEventListener("DOMContentLoaded", function () {
     if (mode === "demo") return previousCourses();
     // Ne jamais risquer de perdre les coches en attente avec une liste réseau
     // qui n'aurait pas encore intégré les modifications de cet iPhone.
-    if (!canNetwork() || entries().length) return offlineView();
+    if (!canNetwork() || state.manualOffline || entries().length) return offlineView();
     const html = previousCourses();
     if (mode === "cloud" && CK.ready && isLinked()) scheduleCapture();
     const confirmed = state.record && state.record.householdId === liveHouse() &&
       !state.offlineError;
-    return (confirmed ? '<p class="mz-shop-saved-status">✓ Liste magasin conservée hors ligne sur cet iPhone</p>' :
+    return (confirmed ? '<div class="mz-shop-saved-status">✓ Liste magasin conservée hors ligne sur cet iPhone ' +
+      '<button type="button" class="btn" data-mz-shop-offline="open">Voir la copie locale</button></div>' :
       '<p class="mz-shop-saved-status">Préparation du mode magasin hors ligne après chargement du Carnet…</p>') + html;
   };
   document.addEventListener("click", async event => {
     const button = event.target.closest("[data-mz-shop-offline]");
-    if (!button || view !== "courses" || !button.closest(".mz-shop-offline")) return;
+    if (!button || view !== "courses") return;
+    const action = button.dataset.mzShopOffline;
+    if (action !== "open" && !button.closest(".mz-shop-offline")) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    const action = button.dataset.mzShopOffline;
+    if (action === "open") { state.manualOffline = true; redrawIfShown(); return; }
+    if (action === "close") { state.manualOffline = false; redrawIfShown(); return; }
     if (action === "toggle") await toggle(button.dataset.ref);
     if (action === "retry") { state.retryPaused = false; planSync(0); }
   }, true);

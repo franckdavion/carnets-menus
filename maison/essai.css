@@ -684,3 +684,7 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   .mz-shop-offline-row{gap:8px;padding:8px}
   .mz-shop-offline-name strong{font-size:13px}
 }
+.mz-shop-saved-status{
+  display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px
+}
+.mz-shop-saved-status .btn{min-height:36px;padding:6px 11px;font-size:12px}
