@@ -1707,6 +1707,7 @@ function domTvSheet(fromRefresh) {
 
 function domTvStatusHtml() {
   const st = domStState || {};
+  if (st.label === "État indisponible") return '<span class="dom-tv-power">État SmartThings indisponible</span>';
   if (st.power === false) return `<span class="dom-tv-power">Éteinte</span>`;
   if (st.power !== true) return `<span class="dom-tv-power">Chargement…</span>`;
   return `<span class="dom-tv-power is-on">Allumée</span>${st.volume!=null?`<span>Volume ${esc(String(st.volume))}${st.mute?" · Muet":""}</span>`:""}${st.input?`<span>${esc(st.input)}</span>`:""}`;
