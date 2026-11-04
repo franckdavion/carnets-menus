@@ -4520,14 +4520,22 @@ document.addEventListener("DOMContentLoaded", function () {
       // lorsque le Carnet et Supabase sont bien accessibles.
       if (signature === state.lastCaptureSignature &&
           state.record && Date.now() - state.record.savedAt < 300000) return;
-      const old = state.record;
+      const old = state.record, oldSignature = state.lastCaptureSignature;
       const record = {householdId:id, ownerId:String(S.hh.carnet_user),
         userId:user?.id || null, savedAt:Date.now(), ...data, pending:{},
         lastWarning:""};
       state.record = record;
       state.household = id;
       state.lastCaptureSignature = signature;
-      await persist();
+      try {
+        await persist();
+      } catch (err) {
+        // Un cache non écrit ne doit jamais être annoncé comme disponible.
+        state.record = old;
+        state.lastCaptureSignature = oldSignature;
+        throw err;
+      }
+      state.offlineError = "";
       LS.set(LAST_HOUSE, id);
       if (!old && view === "courses") redrawIfShown();
     } catch (err) {
@@ -4648,8 +4656,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!canNetwork() || entries().length) return offlineView();
     const html = previousCourses();
     if (mode === "cloud" && CK.ready && isLinked()) scheduleCapture();
-    return html + (state.record ? '<p class="mz-shop-saved-status">✓ Liste magasin conservée hors ligne sur cet iPhone</p>' :
-      '<p class="mz-shop-saved-status">Préparation du mode magasin hors ligne après chargement du Carnet…</p>');
+    const confirmed = state.record && state.record.householdId === liveHouse() &&
+      !state.offlineError;
+    return (confirmed ? '<p class="mz-shop-saved-status">✓ Liste magasin conservée hors ligne sur cet iPhone</p>' :
+      '<p class="mz-shop-saved-status">Préparation du mode magasin hors ligne après chargement du Carnet…</p>') + html;
   };
   document.addEventListener("click", async event => {
     const button = event.target.closest("[data-mz-shop-offline]");
