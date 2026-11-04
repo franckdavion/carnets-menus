@@ -50,6 +50,10 @@
 .mz-round-btn--lg{--mz-round-size:62px;--mz-round-icon-size:42px;}
 .mz-round-btn svg{display:block;width:var(--mz-round-icon-size);height:var(--mz-round-icon-size);stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .mz-round-btn:focus-visible{outline:2px solid #a8eeff;outline-offset:3px;}
+ /* Variante fermer : même base et même dimension standard (44 px), finition bleu nuit discrète. */
+.sheet-top .sheet-close-x.mz-round-btn--close{display:grid;place-items:center;min-width:44px;min-height:44px;border:2px solid #58baf2;background:linear-gradient(150deg,#204f79,#0a213f 75%);color:#cdefff;box-shadow:inset 0 1px 2px rgba(255,255,255,.22),0 0 11px rgba(58,183,255,.45);}
+.sheet-top .sheet-close-x.mz-round-btn--close svg{width:24px;height:24px;stroke-width:2.7;}
+.sheet-top .sheet-close-x.mz-round-btn--close:active{background:#285b87;}
 /* Agenda : le chevron est une pastille visuelle ; le bouton entier du mois reste cliquable. */
 .cal .cal-month-toggle{display:flex;flex:1;align-items:center;justify-content:space-between;gap:5px;min-width:0;min-height:74px;padding:6px 4px 6px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(85,200,255,.09);color:var(--ink);cursor:pointer;}
 .cal .cal-month-toggle-copy{display:flex;flex:1;align-items:center;justify-content:center;min-width:0;}
