@@ -104,12 +104,12 @@ Deno.serve(async (req: Request) => {
     const healthDenied = !health.ok && (health.status === 401 || health.status === 403);
     const accessIssue = readDenied ? (expired ? "token" : "permissions") : healthDenied ? "health" : null;
     const label =
+      accessIssue === "token" ? "Jeton SmartThings expiré ou invalide" :
+      accessIssue === "permissions" ? "Autorisations SmartThings insuffisantes" :
       healthValue === "OFFLINE" ? "Hors ligne · TV probablement éteinte" :
       healthValue === "UNHEALTHY" ? "Connexion instable · état incertain" :
       power === false ? "Éteinte" :
       power === true ? "Allumée" :
-      accessIssue === "token" ? "Jeton SmartThings expiré ou invalide" :
-      accessIssue === "permissions" ? "Autorisations SmartThings insuffisantes" :
       accessIssue === "health" ? "Lecture de disponibilité refusée" :
       healthValue === "ONLINE" ? "Connectée · état inconnu" :
       "État SmartThings indisponible";
