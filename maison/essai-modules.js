@@ -343,7 +343,7 @@ function domPoeleButton() {
   const active = domPoeleActive(), busy = domMelBusy === "poele";
   return '<button type="button" data-dom-scenario="poele" aria-label="Poêle : diminuer la consigne Mitsubishi de deux degrés ou rétablir la température précédente" aria-pressed="' +
     String(active) + '"' + (busy ? ' aria-busy="true" disabled' : '') +
-    '>🔥 Poêle<span>' + (busy ? "En cours…" : active ? "Actif · −2 °C" : "−2 °C / retour") + '</span></button>';
+    '><span class="dom-poele-title"><span class="dom-poele-flame" aria-hidden="true">🔥</span> Poêle</span><span>' + (busy ? "En cours…" : active ? "Actif · −2 °C" : "−2 °C / retour") + '</span></button>';
 }
 async function domPoeleToggle() {
   if (domMelBusy) return;
