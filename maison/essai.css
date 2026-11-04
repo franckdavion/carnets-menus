@@ -191,3 +191,61 @@ dialog.sheet .mz-tv .mz-tv-close{width:100%}
  dialog.sheet .mz-tv .mz-tv-tabs{gap:2px}
  dialog.sheet .mz-tv .mz-tv-apps{gap:5px}
 }
+
+
+/* MAISONNÉE TEST — zones iPhone. Styles strictement locaux, barre PWA inchangée. */
+.mz-dom-compact{display:grid;gap:13px;min-width:0;padding-bottom:20px}
+.mz-dom-compact .mz-dom-pulse{display:flex;flex-wrap:wrap;gap:6px}
+.mz-dom-compact .mz-dom-pulse span{padding:7px 9px;border:1px solid #417aa7;border-radius:99px;background:#123457;color:#d0e9fb;font:650 11px/1.25 var(--body)}
+.mz-dom-compact .mz-dom-section-head{display:flex;justify-content:space-between;align-items:baseline;gap:7px}
+.mz-dom-compact .mz-dom-section-head h3{margin:0;color:#f0faff;font:800 16px var(--display)}
+.mz-dom-compact .mz-dom-section-head span{color:#9ccbe9;text-align:right;font:600 11px var(--body)}
+.mz-dom-compact .mz-dom-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mz-dom-compact .mz-dom-fav{display:grid;align-content:center;justify-items:center;gap:8px;min-width:0;min-height:88px;padding:9px 5px;border:1px solid #7acaff;border-radius:17px;background:linear-gradient(155deg,#245988,#092246);color:#e9f9ff;box-shadow:inset 0 1px 2px #ffffff31,0 0 12px #349de260;font:800 clamp(11px,3vw,14px)/1.17 var(--body);text-align:center;overflow-wrap:anywhere;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-fav:focus-visible,.mz-dom-compact .mz-dom-zone-toggle:focus-visible{outline:2px solid #a8eeff;outline-offset:3px}
+.mz-dom-compact .mz-dom-fav-icon{font-size:27px;line-height:1;color:#a3e3ff}
+.mz-dom-compact .mz-dom-zones{display:grid;gap:10px}
+.mz-dom-compact .mz-dom-zone{min-width:0;border:1px solid #417da9;border-radius:18px;background:linear-gradient(150deg,rgba(29,68,111,.9),rgba(5,27,61,.95));overflow:hidden}
+.mz-dom-compact .mz-dom-zone.is-open{border-color:#78c9f7;box-shadow:0 0 12px #3caeff4b}
+.mz-dom-compact .mz-dom-zone-toggle{display:flex;align-items:center;gap:11px;min-width:0;width:100%;padding:14px 12px;border:0;background:transparent;color:#f2faff;text-align:left;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-zone-ico{font-size:25px;min-width:29px;text-align:center}
+.mz-dom-compact .mz-dom-zone-heading{display:grid;gap:4px;flex:1;min-width:0}
+.mz-dom-compact .mz-dom-zone-heading strong{font:800 16px/1.2 var(--display)}
+.mz-dom-compact .mz-dom-zone-heading small{font:500 12px/1.3 var(--body);color:#bdd8ef;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-chevron{font-size:28px;line-height:1;color:#a6dfff}
+.mz-dom-compact .mz-dom-zone-body[hidden]{display:none!important}
+.mz-dom-compact .mz-dom-zone-content{display:grid;gap:9px;padding:0 10px 12px}
+.mz-dom-compact .mz-dom-items{display:grid;gap:9px}
+.mz-dom-compact .mz-dom-items-ext{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mz-dom-compact .mz-dom-device{display:grid;gap:9px;min-width:0;padding:11px 9px;border:1px solid #397db4;border-radius:15px;background:linear-gradient(155deg,rgba(28,68,116,.94),rgba(7,29,64,.95))}
+.mz-dom-compact .mz-dom-device-top{display:flex;align-items:center;gap:7px;min-width:0}
+.mz-dom-compact .mz-dom-device-icon{display:flex;align-items:center;justify-content:center;flex:0 0 37px;min-width:0;color:#a9e2ff;font-size:23px}
+.mz-dom-compact .mz-dom-items-ext .mz-dom-device-icon{flex:0 0 24px;font-size:20px}
+.mz-dom-compact .mz-dom-device-icon .dom-shutter-svg{width:37px;height:46px;flex:0 0 37px}
+.mz-dom-compact .mz-dom-device-info{display:grid;gap:4px;min-width:0}
+.mz-dom-compact .mz-dom-device-info strong{font:750 13px/1.26 var(--body);color:#f1faff;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device-info .dom-volet-badge,.mz-dom-compact .mz-dom-device-state{font:600 11px/1.2 var(--body);color:#a9cee8;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device .dom-pos{margin:0}
+.mz-dom-compact .mz-dom-device .dom-actions{width:100%;min-width:0;gap:5px}
+.mz-dom-compact .mz-dom-device .dom-actions .btn{min-width:0;min-height:44px;padding:7px 3px;border:1px solid #77c9f6;border-radius:12px;background:linear-gradient(155deg,#245b90,#0b2b57);color:#fff;box-shadow:0 0 9px #45baff58;font:750 12px/1.15 var(--body);overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device-volet .dom-actions .btn{font-size:22px;border-radius:99px;min-height:46px}
+.mz-dom-compact .mz-dom-items-ext .dom-actions .btn{font-size:11px}
+.mz-dom-compact .mz-dom-linked{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 12px;border:1px solid #397eae;border-radius:14px;background:#123456;color:#eef9ff;text-align:left}
+.mz-dom-compact .mz-dom-linked>span:first-child{font-size:24px}
+.mz-dom-compact .mz-dom-linked>span:nth-child(2){display:grid;gap:3px;min-width:0;flex:1}
+.mz-dom-compact .mz-dom-linked small{font-size:11px;color:#b1d2e9}
+.mz-dom-compact .mz-dom-details{min-width:0;border:1px solid #4279a3;border-radius:15px;background:rgba(12,43,81,.74);overflow:hidden}
+.mz-dom-compact .mz-dom-details>summary{padding:13px;min-height:50px;font:750 14px var(--body);color:#f0faff;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-more{display:block;margin-top:4px;font:500 11px var(--body);color:#a7cce9}
+.mz-dom-compact .mz-dom-details>.dom-eq-grid,.mz-dom-compact .mz-dom-details>.dom-scenes{padding:0 10px 12px}
+.mz-dom-compact .mz-dom-other{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mz-dom-compact .mz-dom-allrooms{width:100%;min-height:48px}
+.dom-page .mz-dom-return{margin-bottom:10px}
+@media(max-width:360px){
+ .mz-dom-compact .mz-dom-zone-content{padding-inline:7px}
+ .mz-dom-compact .mz-dom-items-ext{gap:6px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device{padding:8px 6px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-top{gap:3px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-icon{flex-basis:17px;font-size:18px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-info strong{font-size:11px}
+}
