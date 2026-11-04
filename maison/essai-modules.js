@@ -2650,7 +2650,6 @@ VIEWS.agenda = function () {
         <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Réduire" : "Afficher"} le calendrier du mois">
           <span class="cal-month-toggle-copy">
             <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
-            <span class="cal-month-toggle-hint" aria-hidden="true">${calMonthOpen ? "Réduire le mois" : "Afficher le mois"}</span>
           </span>
           <span class="cal-month-toggle-chevron" aria-hidden="true">${I.right}</span>
         </button>
@@ -2940,8 +2939,6 @@ document.addEventListener("click", async e => {
       if (toggle) {
         toggle.setAttribute("aria-expanded", String(calMonthOpen));
         toggle.setAttribute("aria-label", (calMonthOpen ? "Réduire" : "Afficher") + " le calendrier du mois");
-        const hint = toggle.querySelector(".cal-month-toggle-hint");
-        if (hint) hint.textContent = calMonthOpen ? "Réduire le mois" : "Afficher le mois";
       }
       break;
     }
