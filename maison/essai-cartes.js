@@ -356,7 +356,7 @@
     state.error = "";
     const existing = new Set(state.cards.map(c => c.hash).filter(Boolean).concat(state.drafts.map(c => c.hash).filter(Boolean)));
     const knownCodes = new Set(state.cards.map(c => c.code).filter(Boolean).concat(state.drafts.map(c => c.code).filter(Boolean)));
-    let duplicates = 0, failures = 0;
+    let duplicates = 0, failures = 0, lastAdded = null;
     try {
       for (const file of images) {
         state.status = "Analyse des captures : " + (duplicates + failures + state.drafts.length + 1) + " / " + images.length;
@@ -369,7 +369,8 @@
           existing.add(hash); if (found.code) knownCodes.add(found.code);
           const fileName = nameFromFile(file.name, state.cards.length + state.drafts.length + 1);
           const detectedBrand = brandFromText(fileName);
-          state.drafts.push({ id: uid(), name: detectedBrand?.name || fileName, brandId: detectedBrand?.id || "", code: found.code, format: found.format, hash, image: file, originalImage: file, favorite: false, savedAt: Date.now() });
+          lastAdded = uid();
+          state.drafts.push({ id: lastAdded, name: detectedBrand?.name || fileName, brandId: detectedBrand?.id || "", code: found.code, format: found.format, hash, image: file, originalImage: file, favorite: false, savedAt: Date.now() });
         } catch (e) { failures++; }
       }
       state.status = state.drafts.length + " capture(s) à vérifier" + (duplicates ? " · " + duplicates + " doublon(s) ignoré(s)" : "") + (failures ? " · " + failures + " erreur(s)" : "") + ".";
@@ -377,6 +378,10 @@
       state.busy = false;
       redraw();
     }
+    // Pour une carte seule, essayer de lire le nom de l’enseigne tout de suite.
+    // Sur un lot (ex. 20 captures), laisser le lancement de l’OCR à l’utilisateur.
+    if (images.length === 1 && lastAdded && navigator.onLine &&
+        !brandOf(state.drafts.find(d => d.id === lastAdded))) await recognizeOne(lastAdded);
   }
   async function saveDrafts() {
     if (state.busy || !state.drafts.length) return;
