@@ -3012,7 +3012,7 @@ document.addEventListener("submit", e => {
           if (returnTo === "tv") domTvSheet(true);
           else if (returnTo === "settings") mzDomServiceSettingsSheet("tv");
         });
-      if ((domStDevices.length || 0) > 1) setTimeout(domStDevicePickerSheet, 400);
+      if (!returnTo && (domStDevices.length || 0) > 1) setTimeout(domStDevicePickerSheet, 400);
     }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
     return;
   }
