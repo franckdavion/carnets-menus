@@ -3808,3 +3808,130 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   if (view === 'courses') render();
 });
+
+/* AGENDA SEARCH TEST 2026-11-04 : recherche de données affichables, actions originales. */
+document.addEventListener("DOMContentLoaded", function () {
+  if (typeof VIEWS.agenda !== "function") return;
+  const originalAgenda = VIEWS.agenda;
+  const magnifier = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.6"/><path d="m15.8 15.8 5.3 5.3"/></svg>';
+  let opened = false, search = "", previousY = 0;
+  const fold = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+  const found = (q, ...args) => args.some(s => fold(s).includes(q));
+  const result = (date, name, kind, location, action, id, extra = "") => ({date,name,kind,location,action,id,extra});
+
+  function allResults(input) {
+    const q = fold(input.trim()), out = [];
+    if (!q) return out;
+    const min = addDays(today(), -365), max = addDays(today(), 730);
+    // Événements Maisonnée, sur toutes les dates enregistrées.
+    for (const e of S.events || []) {
+      if (!found(q, e.title, e.place, e.notes)) continue;
+      const add = day => out.push(result(day, e.title || "Événement", e.kind === "appointment" ? "Rendez-vous" : "Événement", e.place || "", "editEvent", e.id));
+      if (!e.repeat || e.repeat === "none") { if (e.day) add(e.day); continue; }
+      const rule = MaisonCal.repeatRule(e.repeat);
+      if (!rule) { if (e.day) add(e.day); continue; }
+      // La recherche des occurrences récurrentes est volontairement bornée.
+      for (let i = 0; i < 800; i++) {
+        const day = recurrenceDate(e.day, i, rule.unit, rule.interval);
+        if (day > max) break;
+        if (day >= min) add(day);
+      }
+    }
+    // Même règle anti-doublon que l'agenda quand les tâches locales sont copiées sur Google.
+    if (!(typeof gtConf === "function" && gtConf().on)) {
+      for (const t of S.tasks || []) {
+        if (t.archived || !t.next_due || !found(q, t.title, t.notes, t.room)) continue;
+        out.push(result(t.next_due, t.title || "Tâche", "Tâche familiale", t.room || "", "editTask", t.id));
+      }
+    }
+    // Le prochain anniversaire est proposé, et ouvre la fiche d'origine.
+    for (const b of S.bdays || []) {
+      if (!found(q, b.name, "anniversaire")) continue;
+      const d = year => ymd(new Date(year, b.month - 1, b.day === 29 && b.month === 2 && new Date(year, 1, 29).getMonth() !== 1 ? 28 : b.day));
+      const year = parse(today()).getFullYear();
+      let date = d(year);
+      if (date < today()) date = d(year + 1);
+      out.push(result(date, "Anniversaire de " + b.name, "Anniversaire", "", "editBday", b.id));
+    }
+    // Google : uniquement les événements déjà présents dans le cache de lecture de Maisonnée.
+    const used = new Set();
+    for (const g of G.ev.items || []) {
+      if (G.cals && !G.cals.includes(g.cal)) continue;
+      const key = g.cal + ":" + g.id;
+      if (used.has(key) || !found(q, g.title, g.place, g.desc, g.calName)) continue;
+      used.add(key);
+      out.push(result(g.day, g.title || "Événement Google", "Agenda Google", [g.place,g.calName].filter(Boolean).join(" · "), "gEvent", g.id, g.day));
+    }
+    if (GTASKS.enabled && user && GTASKS.userId === user.id) {
+      for (const t of GTASKS.items || []) {
+        const day = gTasksDay(t);
+        if (!day || !found(q, t.title, t.notes, t.listName)) continue;
+        out.push(result(day, t.title || "Tâche", "Google Tasks", t.listName || "", "gTaskEdit", t.id, t.listId));
+      }
+    }
+    const now = today();
+    return out.sort((a,b) => (a.date >= now ? 0 : 1) - (b.date >= now ? 0 : 1)
+      || (a.date >= now ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date))
+      || String(a.name).localeCompare(String(b.name), "fr"));
+  }
+
+  function resultMarkup() {
+    if (!search.trim()) return '<p class="muted small mz-agenda-hint">Recherche par nom, lieu, événement, tâche ou description.</p>';
+    const all = allResults(search), limit = 60;
+    if (!all.length) return '<p class="mz-agenda-empty">Aucun résultat parmi les éléments actuellement disponibles.</p>';
+    return '<p class="mz-agenda-count">' + all.length + ' résultat' + (all.length > 1 ? 's' : '') + (all.length > limit ? ' · 60 premiers affichés' : '') + '</p>' +
+      '<div class="mz-agenda-results-list">' + all.slice(0,limit).map(x =>
+        '<button type="button" class="mz-agenda-result" data-act="' + x.action + '" data-v="' + esc(x.id) + '"' +
+        (x.action === "gEvent" ? ' data-day="' + esc(x.extra) + '"' : '') +
+        (x.action === "gTaskEdit" ? ' data-list="' + esc(x.extra) + '"' : '') +
+        '><span class="mz-agenda-type">' + esc(x.kind) + '</span><strong>' + esc(x.name) + '</strong>' +
+        '<span class="mz-agenda-date">' + esc(dayLabel(x.date)) + (x.location ? ' · ' + esc(x.location) : '') + '</span></button>'
+      ).join('') + '</div>';
+  }
+
+  VIEWS.agenda = function () {
+    const base = originalAgenda();
+    return '<div class="mz-agenda-search-toolbar"><strong>Mon agenda</strong>' +
+      '<button type="button" class="mz-round-btn mz-round-btn--sm mz-agenda-magnifier" data-act="mzAgendaSearchToggle" aria-label="Rechercher dans l’agenda" aria-expanded="' + opened + '">' + magnifier + '</button></div>' +
+      (opened ? '<section class="mz-agenda-search-panel" aria-label="Rechercher dans l’agenda">' +
+        '<div class="mz-agenda-search-inputrow"><input id="mzAgendaSearchInput" class="input" type="search" autocomplete="off" enterkeyhint="search" placeholder="Nom, événement, lieu, tâche…" aria-label="Rechercher dans l’agenda" value="' + esc(search) + '">' +
+        '<button type="button" class="mz-round-btn mz-round-btn--sm mz-agenda-search-x" data-act="mzAgendaSearchClose" aria-label="Fermer la recherche">' + I.close + '</button></div>' +
+        '<div id="mzAgendaSearchResults" aria-live="polite">' + resultMarkup() + '</div>' +
+        '<p class="muted small mz-agenda-scope">Recherche dans les éléments Maisonnée et Google déjà chargés. Les résultats Google Agenda sont limités à la période synchronisée (environ 40 jours passés et 150 jours à venir). Les occurrences répétées Maisonnée couvrent une période limitée.</p></section>' : '') +
+      '<div id="mzAgendaNormal"' + (opened && search.trim() ? ' hidden' : '') + '>' + base + '</div>';
+  };
+
+  document.addEventListener("click", function (e) {
+    if (view !== "agenda") return;
+    const btn = e.target.closest('[data-act="mzAgendaSearchToggle"],[data-act="mzAgendaSearchClose"]');
+    if (!btn) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!opened && btn.dataset.act === "mzAgendaSearchToggle") {
+      previousY = window.scrollY;
+      opened = true;
+    } else {
+      opened = false;
+      search = "";
+    }
+    render();
+    requestAnimationFrame(() => {
+      window.scrollTo(0,previousY);
+      if (opened) document.getElementById("mzAgendaSearchInput")?.focus({preventScroll:true});
+    });
+  }, true);
+
+  document.addEventListener("input", function (e) {
+    if (view !== "agenda" || e.target.id !== "mzAgendaSearchInput") return;
+    search = e.target.value;
+    const results = document.getElementById("mzAgendaSearchResults");
+    if (results) results.innerHTML = resultMarkup();
+    const original = document.getElementById("mzAgendaNormal");
+    if (original) original.hidden = !!search.trim();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (view !== "agenda" || e.key !== "Escape" || !opened || !e.target.closest(".mz-agenda-search-panel")) return;
+    e.preventDefault();
+    document.querySelector('[data-act="mzAgendaSearchClose"]')?.click();
+  });
+});
