@@ -582,16 +582,31 @@
     dlg.innerHTML = '<div class="mz-wallet-full"><div class="mz-wallet-fulltop"><strong>' + h(c.name) + '</strong><button type="button" data-wallet="close" aria-label="Fermer">✕</button></div>' +
       '<div class="mz-wallet-codearea">' + (url ? '<img src="' + url + '" alt="Carte de fidélité ' + h(c.name) + '">' : '<strong>' + h(c.code || "Code non disponible") + '</strong>') + '</div>' +
       (c.code ? '<p class="mz-wallet-number">' + h(c.code) + '</p>' : '<p class="mz-wallet-number">Présente la capture au lecteur en caisse.</p>') +
-      '<p class="mz-wallet-hint">Agrandis l’image si nécessaire. La luminosité se règle depuis l’iPhone.</p></div>';
+      '<p class="mz-wallet-hint">Présente le code-barres en caisse. La luminosité se règle depuis l’iPhone.</p>' +
+      '<div class="mz-wallet-full-actions"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '">' +
+      (c.favorite ? "★ Retirer des favoris" : "☆ Utilisation fréquente") + '</button>' +
+      '<button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier la carte</button>' +
+      '<button type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button></div></div>';
     if (!dlg.open) dlg.showModal();
   }
   function editCard(c) {
     if (!c) return;
-    openSheet("Modifier la carte", '<form data-wallet-edit="' + h(c.id) + '">' +
-      '<label class="field"><span class="label">Nom du magasin</span><input class="input" name="name" maxlength="60" required value="' + h(c.name) + '"></label>' +
-      '<label class="field"><span class="label">Numéro ou contenu du code (facultatif)</span><input class="input" name="code" maxlength="256" value="' + h(c.code || "") + '"></label>' +
-      '<p class="muted small">Modifier le numéro ne remplace pas le code-barres présent sur la capture.</p>' +
-      '<div class="sheet-sticky btns"><button class="btn primary" type="submit">Enregistrer</button><button class="btn danger" type="button" data-wallet="delete" data-id="' + h(c.id) + '">Supprimer</button></div></form>');
+    openSheet("Personnaliser la carte", '<form data-wallet-edit="' + h(c.id) + '">' +
+      '<div class="mz-wallet-edit-brand">' + brandTile(c, true) + '</div>' +
+      '<label class="field"><span class="label">Choisir l’enseigne</span><select class="input" name="brand" data-wallet-edit-brand>' +
+      brandOptions(c) + '</select></label>' +
+      '<p class="muted small">Choisir une enseigne applique ses couleurs à la vignette et peut renseigner le nom.</p>' +
+      '<label class="field"><span class="label">Nom de la carte</span><input class="input" name="name" maxlength="60" required value="' +
+      h(c.name) + '"></label>' +
+      '<label class="field"><span class="label">Numéro ou contenu du code (facultatif)</span>' +
+      '<input class="input" name="code" maxlength="256" value="' + h(c.code || "") + '"></label>' +
+      '<p class="muted small">Modifier le numéro ne remplace pas les barres présentes sur la capture.</p>' +
+      '<div class="mz-wallet-edit-actions"><button class="btn" type="button" data-wallet="recognize" data-id="' +
+      h(c.id) + '">⌕ Rechercher le nom sur la capture</button>' +
+      '<button class="btn" type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button></div>' +
+      '<div class="sheet-sticky btns"><button class="btn primary" type="submit">Enregistrer</button>' +
+      '<button class="btn danger" type="button" data-wallet="delete" data-id="' + h(c.id) +
+      '">Supprimer</button></div></form>');
   }
   function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
@@ -665,13 +680,16 @@
     else if (cmd === "pickBackup") document.getElementById("mz-wallet-backup")?.click();
     else if (cmd === "open") fullscreen(card);
     else if (cmd === "close") document.getElementById("mz-wallet-dialog")?.close();
-    else if (cmd === "edit") editCard(card);
-    else if (cmd === "crop") await openCrop(card || state.drafts.find(d => d.id === button.dataset.id));
+    else if (cmd === "edit") { document.getElementById("mz-wallet-dialog")?.close(); editCard(card); }
+    else if (cmd === "crop") { document.getElementById("mz-wallet-dialog")?.close(); if (button.closest("#sheet")) closeSheet(); await openCrop(card || state.drafts.find(d => d.id === button.dataset.id)); }
+    else if (cmd === "recognize") { if (button.closest("#sheet")) closeSheet(); document.getElementById("mz-wallet-dialog")?.close(); await recognizeOne(button.dataset.id); }
+    else if (cmd === "recognizeDrafts") await recognizeDrafts();
+    else if (cmd === "manageToggle") { state.manage = !state.manage; redraw(); }
     else if (cmd === "cropSave") await applyCrop();
     else if (cmd === "cropReset") resetCrop();
     else if (cmd === "cropClose") document.getElementById("mz-wallet-crop")?.close();
     else if (cmd === "favorite" && card) {
-      try { await putMany([{ ...card, favorite: !card.favorite }]); await reload(); }
+      try { document.getElementById("mz-wallet-dialog")?.close(); await putMany([{ ...card, favorite: !card.favorite }]); await reload(); }
       catch (e) { state.error = "Modification impossible."; redraw(); }
     } else if (cmd === "delete" && card) {
       if (!confirm("Supprimer « " + card.name + " » de cet iPhone ?")) return;
@@ -687,6 +705,25 @@
   document.addEventListener("change", async event => {
     if (event.target.id === "mz-wallet-files") await addImages(event.target.files);
     else if (event.target.id === "mz-wallet-backup") await importBackup(event.target.files?.[0]);
+    else if (event.target.hasAttribute("data-wallet-brand")) {
+      const draft = state.drafts.find(d => d.id === event.target.dataset.walletBrand);
+      if (!draft) return;
+      applyBrand(draft, event.target.value);
+      const row = event.target.closest(".mz-wallet-draft");
+      const input = row?.querySelector("[data-wallet-name]");
+      if (input) input.value = draft.name;
+      const thumb = row?.querySelector(".mz-wallet-brand-tile");
+      if (thumb) thumb.outerHTML = brandTile(draft, true);
+    } else if (event.target.hasAttribute("data-wallet-edit-brand")) {
+      const form = event.target.closest("form[data-wallet-edit]");
+      const card = lookup(form?.dataset.walletEdit);
+      if (!card || !form) return;
+      const temp = applyBrand({ ...card, name: form.querySelector('[name="name"]')?.value || card.name }, event.target.value);
+      const field = form.querySelector('[name="name"]');
+      if (field) field.value = temp.name;
+      const preview = form.querySelector(".mz-wallet-edit-brand");
+      if (preview) preview.innerHTML = brandTile(temp, true);
+    }
   });
   document.addEventListener("input", event => {
     if (event.target.hasAttribute("data-wallet-name")) {
@@ -709,7 +746,7 @@
     const name = String(fields.get("name") || "").trim();
     if (!name) return;
     try {
-      await putMany([{ ...card, name: name.slice(0, 60), code: String(fields.get("code") || "").slice(0, 256) }]);
+      await putMany([{ ...card, brandId: brandById(fields.get("brand"))?.id || brandFromText(name)?.id || "", name: name.slice(0, 60), code: String(fields.get("code") || "").slice(0, 256) }]);
       closeSheet(); await reload();
     } catch (e) { state.error = "Modification impossible : " + (e.message || e); redraw(); }
   }, true);
