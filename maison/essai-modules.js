@@ -137,6 +137,8 @@ const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
 const MELCLOUD_ENDPOINT = SB_URL + "/functions/v1/melcloud";
 const DREAME_ENDPOINT = SB_URL + "/functions/v1/dreame";
 const SMARTTHINGS_ENDPOINT = SB_URL + "/functions/v1/smartthings";
+// Lecture alternative isolée : version de test uniquement, sans modifier la commande officielle.
+const SMARTTHINGS_TV_TEST_ENDPOINT = SB_URL + "/functions/v1/smartthings-tv-test";
 let domZone = "", domTab = "board", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domStateInflight = null, domFormLoading = false;
 let domMelStatus = { connected: false, device_id: null, device_name: null };
 let domMelState = null, domMelStateAt = 0, domMelStateInflight = null, domMelDevices = [], domMelBusy = "";
@@ -354,12 +356,34 @@ async function domStRefreshStatus() {
     domStStatusAt = Date.now();
   } catch (_) {}
 }
+// Lire l'alimentation ET la disponibilité : une TV hors ligne n'est pas forcément éteinte.
+async function domStTestReadState() {
+  if (!sb) await loadSb();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Connexion Maisonnée requise");
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 22000) : null;
+  try {
+    const res = await fetch(SMARTTHINGS_TV_TEST_ENDPOINT, {
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY },
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(out.error || "Diagnostic TV indisponible"));
+    return out;
+  } catch (_) {
+    // En cas de panne de la fonction expérimentale, l'ancienne lecture reste accessible.
+    return smartthingsServer("state");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 async function domStRefreshState(force) {
   if (!domStLinked() || mode !== "cloud") return false;
   const now = Date.now();
   if (!force && now - domStStateAt < DOM_ST_STATE_MIN_MS) return false;
   if (domStStateInflight) return domStStateInflight;
-  domStStateInflight = smartthingsServer("state").then(r => {
+  domStStateInflight = domStTestReadState().then(r => {
     domStState = r;
     domStStateAt = Date.now();
     if (r.device_name) domStStatus.device_name = r.device_name;
@@ -1685,10 +1709,10 @@ function domTvPanelHtml() {
       <div class="mz-tv-section-head"><strong>Emplacement</strong></div>${domIntegRoomPicker("_st")}
       <p class="mz-tv-note">Menus Image, Son et Mode jeu : raccourcis à connecter après validation technique.</p>`;
   }
-  return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":"État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
+  return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":st.label || "État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
     <nav class="mz-tv-tabs" aria-label="Fonctions téléviseur">${tabs.map(([id,ico,label])=>`<button type="button" data-dom-tv-tab="${id}" class="${domTvTab===id?"is-active":""}" aria-current="${domTvTab===id?"page":"false"}"><b aria-hidden="true">${ico}</b><span>${label}</span></button>`).join("")}</nav>
     <p class="dom-tv-status mz-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
-    ${st.label === "État indisponible" ? '<div class="mz-tv-info"><span>SmartThings ne répond pas pour le moment. La TV peut néanmoins être commandée si Samsung accepte les ordres.</span><button type="button" class="btn ghost" data-dom-st-retry>↻ Réessayer de lire l’état</button></div>' : ""}
+    ${st.power == null && st.label && st.label !== "Chargement…" ? '<div class="mz-tv-info"><span>' + (st.health === "OFFLINE" ? "Samsung signale la télévision hors ligne. Elle est peut-être éteinte, mais une coupure réseau donnerait le même résultat." : "SmartThings ne confirme pas l’état d’alimentation. Vous pouvez réessayer la lecture.") + '</span><button type="button" class="btn ghost" data-dom-st-retry>↻ Réessayer de lire l’état</button></div>' : ""}
     <div class="dom-tv-controls mz-tv-content" data-dom-tv-controls>${page}</div>
     <button type="button" class="btn ghost mz-tv-close" data-act="closeSheet">Fermer</button>`;
 }
@@ -1707,9 +1731,9 @@ function domTvSheet(fromRefresh) {
 
 function domTvStatusHtml() {
   const st = domStState || {};
-  if (st.label === "État indisponible") return '<span class="dom-tv-power">État SmartThings indisponible</span>';
+  if (st.power == null && st.label && st.label !== "Chargement…") return `<span class="dom-tv-power">${esc(st.label)}</span>`;
   if (st.power === false) return `<span class="dom-tv-power">Éteinte</span>`;
-  if (st.power !== true) return `<span class="dom-tv-power">Chargement…</span>`;
+  if (st.power !== true) return `<span class="dom-tv-power">État non confirmé</span>`;
   return `<span class="dom-tv-power is-on">Allumée</span>${st.volume!=null?`<span>Volume ${esc(String(st.volume))}${st.mute?" · Muet":""}</span>`:""}${st.input?`<span>${esc(st.input)}</span>`:""}`;
 }
 
