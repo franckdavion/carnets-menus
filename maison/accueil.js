@@ -311,22 +311,56 @@ function place(){const h=window.maisonHomeStore.read();return {city:h.city||'Dou
 const date=()=>new Intl.DateTimeFormat('fr-FR',{dateStyle:'full'}).format(new Date());
 // Éphéméride : données indépendantes de la météo et de la navigation.
 const ephemeride={saint:'',evenement:''};
-const saintsConnus={'01-01':'Marie, Mère de Dieu','02-14':'Valentin','03-19':'Joseph','05-01':'Joseph artisan','06-24':'Jean-Baptiste','07-14':'Camille','08-15':'Assomption','09-29':'Michel','10-27':'Émeline','10-28':'Simon et Jude','10-29':'Narcisse','10-30':'Bienvenue','10-31':'Quentin','11-01':'Toussaint','11-11':'Martin','12-06':'Nicolas','12-25':'Noël'};
+const saintsConnus={'01-01':'Marie, Mère de Dieu','02-14':'Valentin','03-19':'Joseph','05-01':'Joseph artisan','06-24':'Jean-Baptiste','07-14':'Camille','08-15':'Assomption','09-29':'Michel','10-27':'Émeline','10-28':'Simon et Jude','10-29':'Narcisse','10-30':'Bienvenue','10-31':'Quentin','11-01':'Toussaint','11-02':'Commémoration des défunts','11-03':'Hubert','11-04':'Charles Borromée','11-11':'Martin','12-06':'Nicolas','12-25':'Noël'};
 const evenementsConnus={'10-28':'1886 : inauguration de la statue de la Liberté à New York.'};
+// Calendrier de fêtes français disponible hors ligne, 366 dates (29 février inclus).
+// Noms et dates : faits calendaires ; référence de vérification :
+// https://github.com/archidote/api_fetes_prenoms_france (database/calendrier.json).
+// Les fêtes mobiles et les saisons ne sont pas figées à une date arbitraire.
+const fetesParMois = [
+ null,
+ ["Jour de l'an","Basile","Geneviève","Odilon","Edouard","Mélaine","Raymond","Lucien","Alix","Guillaume","Pauline","Tatiana","Yvette","Nina","Rémi","Marcel","Roseline","Prisca","Marius","Sébastien","Agnès","Vincent","Banard","François de Sales","Conversion de Paul","Paule","Angèle","Thomas d'Aquin","Gildas","Martine","Marcelle"],
+ ["Ella","Présentation","Blaise","Véronique","Agathe","Gaston","Eugènie","Jacqueline","Apolline","Arnaud","Notre Dame de Lourdes","Félix","Béatrice","Valentin","Claude","Julienne","Alexis","Bernadette","Gabin","Aimée","Pierre-Damien","Isabelle","Lazare","Modeste","Roméo","Nestor","Honorine","Romain","Auguste"],
+ ["Aubin","Charles le Bon","Guénolé","Casimir","Olive","Colette","Félicité","Jean de Dieu","Françoise","Vivien","Rosine","Justine","Rodrigue","Mathilde","Louise","Bénédicte","Patrice","Cyrille","Joseph","Herbert","Clémence","Léa","Victorien","Catherine","Annonciation","Larissa","Habib","Gontran","Gwladys","Amédée","Benjamin"],
+ ["Hugues","Sandrine","Richard","Isidore","Irène","Marcellin","Jean-Baptiste de la Salle","Julie","Gautier","Fulbert","Stanislas","Jules","Ida","Maxime","Paterne","Benoît-Joseph","Anicet","Parfait","Emma","Odette","Anselme","Alexandre","Georges","Fidèle","Marc","Alida","Zita","Valérie","Catherine de Sienne","Robert"],
+ ["Fête du travail","Boris","Philippe, Jacques","Sylvain","Judith","Prudence","Gisèle","Armistice 1945","Pacôme","Solange","Estelle","Achille","Rolande","Matthias","Denise","Honoré","Pascal","Eric","Yves","Bernardin","Constantin","Emile","Didier","Donatien","Sophie","Bérenger","Augustin","Germain","Aymar","Ferdinand","Visitation de la Sainte Vierge"],
+ ["Justin","Blandine","Kévin","Clotilde","Igor","Norbert","Gilbert","Médard","Diane","Landry","Barnabé","Guy","Antoine de Padoue","Elisée","Germaine","Jean-François Régis","Hervé","Léonce","Romuald","Silvère","Rodolphe","Alban","Audrey","Jean-Baptiste","Prosper","Anthelme","Fernand","Irénée","Pierre, Paul","Martial"],
+ ["Thierry","Martinien","Thomas","Florent","Antoine","Mariette","Raoul","Thibault","Amandine","Ulrich","Benoît","Olivier","Henri, Joël","Fête Nationale","Donald","Notre Dame du Mont Carmel","Charlotte","Frédéric","Arsène","Marina","Victor","Marie-Madeleine","Brigitte","Christine","Jacques","Anne, Joachin","Nathalie","Samson","Marthe","Juliette","Ignace de Loyola"],
+ ["Alphonse","Julien Eymard","Lydie","Jean-Marie Vianney","Abel","Transfiguration","Gaétan","Dominique","Amour","Laurent","Claire","Clarisse","Hippolyte","Evrard","Assomption","Armel","Hyacinthe","Hélène","Jean-Eudes","Bernard","Christophe","Fabrice","Rose de Lima","Barthélémy","Louis","Natacha","Monique","Augustin","Sabine","Fiacre","Aristide"],
+ ["Gilles","Ingrid","Grégoire","Rosalie","Raïssa","Bertrand","Reine","Nativité","Alain","Inès","Adelphe","Apollinaire","Aimé","Croix Glorieuse","Roland","Edith","Renaud","Nadège","Emilie","Davy","Matthieu","Maurice","Constant","Thècle","Hermann","Côme, Damien","Vincent de Paul","Venceslas","Michel, Gabriel, Raphaël","Jérôme"],
+ ["Thérèse de l'Enfant Jésus","Léger","Gérard","François d'Assise","Fleur","Bruno","Serge","Pélagie","Denis","Ghislain","Firmin","Wilfried","Géraud","Juste","Thérèse d'Avila","Edwige","Baudoin","Luc","René","Adeline","Céline","Elodie","Jean de Capistran","Florentin","Crépin","Dimitri","Emeline","Jude","Narcisse","Bienvenu","Quentin"],
+ ["Toussaint","Défunts","Hubert","Charles","Sylvie","Bertille","Carine","Geoffroy","Théodore","Léon","Armistice 1918","Christian","Brice","Sidoine","Albert","Marguerite","Elisabeth","Aude","Tanguy","Edmond","Présence de Marie","Cécile","Clément","Flora","Catherine","Delphine","Sévrin","Jacques de la Marche","Saturnin","André"],
+ ["Florence","Viviane","François-Xavier","Barbara","Gérald","Nicolas","Ambroise","Immaculée Conception","Pierre Fourier","Romaric","Daniel","Jeanne-Françoise de Chantal","Lucie","Odile","Ninon","Alice","Gaël","Gatien","Urbain","Théophile","Pierre Canisius","Françoise-Xavière","Armand","Adèle","Noël","Etienne","Jean","Innocents","David","Roger","Sylvestre"]
+];
+function cleEphemeride(d){return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function feteEphemeride(d){
+ const key=cleEphemeride(d);
+ return saintsConnus[key]||fetesParMois[d.getMonth()+1]?.[d.getDate()-1]||'Fête du jour';
+}
 function jourAnnee(d){const debut=Date.UTC(d.getFullYear(),0,1),jour=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate());return Math.floor((jour-debut)/86400000)+1}
 function texteSur(s){return String(s||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()}
 async function chargerEphemeride(){
- const now=new Date(),key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
- ephemeride.saint=saintsConnus[key]||'';
+ const now=new Date(),key=cleEphemeride(now);
+ // Afficher immédiatement les informations locales, même si les API échouent.
+ ephemeride.saint=feteEphemeride(now);
  ephemeride.evenement=evenementsConnus[key]||'';
- // Cache quotidien : conserver les dernières informations valides pour cette date.
- try{const saved=JSON.parse(localStorage.getItem('mn_ephemeride_'+key)||'null');if(saved){ephemeride.saint ||= saved.saint||'';ephemeride.evenement ||= saved.evenement||''}}catch(e){}
- // Wikipédia fournit des événements datés, sans modifier les autres modules.
- try{const r=await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/${now.getMonth()+1}/${now.getDate()}`,{headers:{Accept:'application/json'}});if(r.ok){const data=await r.json();const events=(data.events||[]).filter(x=>x.year&&x.text);if(events.length){const e=events.find(x=>x.year>=1800&&x.year<=2000)||events[0];ephemeride.evenement=`${e.year} : ${texteSur(e.text)}`.slice(0,145)}}}catch(e){}
- // API du calendrier des prénoms : si indisponible, ne jamais inventer de saint.
- if(!ephemeride.saint){try{const r=await fetch('https://nameday.abalin.net/api/V2/today?country=fr');if(r.ok){const data=await r.json();const value=data?.data?.namedays?.fr||data?.namedays?.fr;if(typeof value==='string')ephemeride.saint=texteSur(value)}}catch(e){}}
- try{if(ephemeride.saint||ephemeride.evenement)localStorage.setItem('mn_ephemeride_'+key,JSON.stringify(ephemeride))}catch(e){}
+ try{const saved=JSON.parse(localStorage.getItem('mn_ephemeride_'+key)||'null');if(saved&&typeof saved.evenement==='string'&&!ephemeride.evenement)ephemeride.evenement=saved.evenement}catch(e){}
  render();
+ // L'actualité historique reste facultative, limitée à cinq secondes.
+ const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+ const timer=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
+ try{
+  const r=await fetch(`https://fr.wikipedia.org/api/rest_v1/feed/onthisday/events/${now.getMonth()+1}/${now.getDate()}`,{headers:{Accept:'application/json'},signal:ctrl?ctrl.signal:undefined});
+  if(!r.ok)return;
+  const data=await r.json();
+  if(key!==cleEphemeride(new Date()))return;
+  const events=(data.events||[]).filter(x=>x.year&&x.text);
+  if(!events.length)return;
+  const e=events.find(x=>x.year>=1800&&x.year<=2000)||events[0];
+  ephemeride.evenement=`${e.year} : ${texteSur(e.text)}`.slice(0,145);
+  try{localStorage.setItem('mn_ephemeride_'+key,JSON.stringify({saint:ephemeride.saint,evenement:ephemeride.evenement}))}catch(e){}
+  render();
+ }catch(e){}finally{if(timer)clearTimeout(timer)}
 }
 
 const directionVent=deg=>Number.isFinite(Number(deg))&&deg!==null&&deg!==undefined?['N','NE','E','SE','S','SO','O','NO'][Math.round(((Number(deg)%360)+360)%360/45)%8]:null;
@@ -487,7 +521,7 @@ function render(){
  const bandHello=meAcc&&meAcc.name?({matin:`Bonjour ${meAcc.name} ! ☀️`,aprem:`Bel après-midi ${meAcc.name} ! ☀️`,soir:`Bonsoir ${meAcc.name} ! 🌙`,nuit:`Bonne nuit ${meAcc.name} ! 🌙`}[band.id]||band.hello):band.hello;
  const jourLabel=date().replace(/^./,c=>c.toUpperCase());
  const html=`<section class="mn-dayframe mn-dayband" data-mn-band="${band.id}"><section class="ultimate-hero mn-dayband" data-mn-band="${band.id}"><div class="mn-band-sky" aria-hidden="true"></div><div class="ultimate-greeting mn-band-copy"><div id="ultimate-header-controls" class="ultimate-header-controls" aria-label="Commandes du foyer"></div><h1 class="mn-band-hello">${esc(bandHello)}</h1><p class="mn-band-date"><svg class="mn-band-cal" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2 6.5h12M5 2.2v2.6M11 2.2v2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span>${jourLabel}</span></p></div></section>
-<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${saint==='Émeline'?'Sainte Émeline':saint}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${ephemeride.evenement||'Événement du jour indisponible'}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div><div class="ultimate-dayline">🌙 Lever ${heure(d?.moonrise?.[0])} · Coucher ${heure(d?.moonset?.[0])}</div></div></div></section></section>
+<section class="ultimate-grid"><div class="ultimate-card ultimate-today mn-weather-panel"><div class="mn-meteo-col"><div class="ultimate-today-weather"><div class="mn-weather-art" aria-hidden="true">${iconImage(w?.weather_code)}</div><div class="mn-weather-main"><h2><button type="button" id="ultimate-city">📍 ${place().city}</button></h2>${weather}</div></div><div class="mn-week" aria-label="Prévisions météo sur sept jours">${dailyCards}</div></div><div class="ultimate-today-date"><h2 class="mn-ephemeris-heading"><img class="mn-3d-calendar" src="assets/weather3d/calendar.svg" alt="" onerror="this.hidden=true"><span>Éphéméride</span></h2><div class="ultimate-dayline">🌸 ${esc(saint==='Émeline'?'Sainte Émeline':saint)}</div><div class="ultimate-dayline">📅 ${jourAnnee(now)}ᵉ jour de l’année</div><div class="ultimate-dayline">📜 ${esc(ephemeride.evenement||'Événement du jour indisponible')}</div><div class="ultimate-dayline">🍂 ${saisonDe(now.getMonth())}</div><div class="ultimate-dayline">🌅 Lever ${d?.sunrise?.[0]?.slice(11)||'—'} · Coucher ${d?.sunset?.[0]?.slice(11)||'—'}</div><div class="ultimate-dayline">🌙 ${esc(lune.nom)} · ${lune.illum} %</div><div class="ultimate-dayline">🌙 Lever ${heure(d?.moonrise?.[0])} · Coucher ${heure(d?.moonset?.[0])}</div></div></div></section></section>
 <section class="mn-house" aria-label="Notre maison">${houseEdit}<h2><svg class="mn-house-mark" viewBox="0 0 32 32" aria-hidden="true"><path fill="#f7fcff" d="M16 3.2 3.2 14.4h3V28h6.4v-7.8h6.8V28H25.8v-13.6h3L16 3.2z"/></svg><span class="mn-house-label">Notre maison</span><span class="mn-house-line" aria-hidden="true"></span></h2><div class="mn-house-grid">
 ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en depuis Explorer, avec Personnaliser l’accueil.</p>'}
 </div></section>
