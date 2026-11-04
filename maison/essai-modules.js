@@ -1647,6 +1647,7 @@ function domTvPanelHtml() {
   let page = "";
   if (domTvTab === "remote") {
     page = `<div class="mz-tv-mini"><span><small>Source active</small><strong>${info(st.input,"Non communiquée")}</strong></span><span><small>Chaîne</small><strong>${info(channel,"Non communiquée")}</strong></span></div>
+    <div class="mz-tv-info mz-tv-now"><strong>En cours sur la TV</strong><span>${info(st.programTitle,"Programme non communiqué")}</span><small>Chaîne : ${info(channel,"non communiquée")} · Titre détaillé possible après connexion d'un guide TV.</small></div>
     <div class="mz-tv-topkeys">${preview("⌂ Accueil")}${btn("power_toggle","⏻","mz-tv-power-key")}${preview("↶ Retour")}</div>
     <div class="mz-tv-remote">
       <div class="mz-tv-side"><strong>Volume</strong>${btn("volume_up","+","mz-tv-lg")}${btn("volume_down","−","mz-tv-lg")}${btn("mute_toggle","🔇")}</div>
