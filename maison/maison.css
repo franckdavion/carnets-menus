@@ -211,6 +211,53 @@ textarea.input{min-height:84px;resize:vertical;}
 .fab{position:fixed;right:max(16px,calc(50% - 304px));bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 4px);z-index:6;display:flex;align-items:center;gap:8px;height:54px;padding:0 22px 0 18px;border-radius:999px;border:0;background:var(--accent);color:var(--on-accent);font:700 17px var(--body);box-shadow:0 6px 18px rgba(20,40,34,.25);}
 .fab svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.6;fill:none;stroke-linecap:round;}
 
+/* Calendrier : menu « + » compact, construit sur la FAB existante.
+   La barre de navigation iPhone et ses safe-areas restent inchangées. */
+.cal-create{
+ position:fixed;right:max(16px,calc(50% - 304px));
+ bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 4px);
+ z-index:9998;display:flex;flex-direction:column;align-items:flex-end;
+}
+.cal-create .cal-create-fab{
+ position:relative;right:auto;bottom:auto;display:grid;place-items:center;
+ width:60px;height:60px;padding:0;border-radius:50%;
+ background:radial-gradient(ellipse at 38% 14%,#e0fbff,#6fcaff 40%,#277ee2 76%,#08459b);
+ border:1px solid #b5f2ff;color:#062044;
+ box-shadow:inset 0 2px 2px #fff9,inset 0 -4px 8px #074ca9aa,0 0 13px #2acfffbb,0 8px 22px #001225bb;
+}
+.cal-create .cal-create-fab svg{width:30px;height:30px;transition:transform .2s ease;}
+.cal-create .cal-create-fab[aria-expanded="true"] svg{transform:rotate(45deg);}
+.cal-create-options{
+ position:absolute;right:0;bottom:calc(100% + 12px);
+ display:flex;flex-direction:column;align-items:flex-end;gap:9px;
+ max-width:calc(100vw - 32px);
+}
+.cal-create-options[hidden]{display:none;}
+.cal-create-option{
+ display:flex;align-items:center;justify-content:flex-end;gap:10px;
+ padding:0;border:0;background:transparent;color:#fff;cursor:pointer;
+ white-space:nowrap;font:700 15px var(--body);
+}
+.cal-create-label{
+ padding:10px 13px;border-radius:13px;
+ background:linear-gradient(155deg,rgba(24,58,103,.97),rgba(4,19,46,.98));
+ border:1px solid #6ac9f0b3;box-shadow:0 4px 15px #0008,0 0 10px #008ce64f,inset 0 1px 1px #e2f9ff5c;
+}
+.cal-create-icon{
+ flex:none;width:48px;height:48px;display:grid;place-items:center;border-radius:50%;
+ background:radial-gradient(ellipse at 30% 13%,#c2f2ff,#4a9cf0 48%,#0b3c83);
+ border:1px solid #b2edff;box-shadow:inset 0 2px 2px #fff9,0 0 13px #00aaff89,0 4px 12px #0008;
+}
+.cal-create-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.cal-create-option:nth-child(2) .cal-create-icon{background:radial-gradient(ellipse at 30% 12%,#f3daff,#976be0 50%,#432174);}
+.cal-create-option:nth-child(3) .cal-create-icon{background:radial-gradient(ellipse at 30% 12%,#d0ffe9,#46bc9b 50%,#145d58);}
+.cal-create-option:focus-visible,.cal-create-fab:focus-visible{outline:2px solid white;outline-offset:3px;}
+@media(orientation:landscape) and (min-width:900px) and (min-height:480px){
+ .cal-create{right:max(28px,calc(50% - 562px));}
+}
+@media(prefers-reduced-motion:reduce){.cal-create .cal-create-fab svg{transition:none;}}
+
+
 /* ---------- tab bar ---------- */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);}
 .tabs .wrap{display:flex;padding:0 4px;}
