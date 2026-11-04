@@ -1262,7 +1262,7 @@ function domZoneBatchCard(zone) {
   };
   return `<article class="dom-device dom-zone-batch"><div class="dom-device-head"><strong>▤ Tous les volets</strong><span class="muted">${n} volet(s)</span></div><div class="dom-actions">${btn("↑ Tout ouvrir", "Monter")}${btn("■ Stop", "Stop")}${btn("↓ Tout fermer", "Descendre")}</div></article>`;
 }
-function domSettings(zone) {
+function domSettingsLegacy(zone) {
   const rows = domRead().filter(x => !zone || x.zone === zone);
   const heading = zone ? DOM_ZONES[zone] : "Domotique";
   const cloud = mode === "cloud" && S.hh;
@@ -1289,9 +1289,155 @@ function domSettings(zone) {
     domStRefreshStatus().catch(() => {});
   }
 }
+let mzDomRoomMoving=false;
+function mzDomSettingsNav(icon,title,detail,target,flag=""){
+  return `<button type="button" class="mz-dom-settings-nav" data-mz-dom-settings-nav="${target}">
+    <span class="mz-dom-settings-icon" aria-hidden="true">${icon}</span>
+    <span class="mz-dom-settings-copy"><strong>${esc(title)}</strong><small>${esc(detail)}</small></span>
+    ${flag?`<span class="mz-dom-settings-status">${esc(flag)}</span>`:""}
+    <span aria-hidden="true" class="mz-dom-settings-arrow">›</span>
+  </button>`;
+}
+
+function mzDomSettingsBack(){
+  return `<button type="button" class="btn ghost mz-dom-settings-back" data-mz-dom-settings-back>← Tous les réglages</button>`;
+}
+
+function mzDomSettingsHub(){
+  const rooms=domHomeRead().rooms, linked=domRead().filter(x=>x.shelly_id);
+  const service=(icon,name,detail,key,on)=>mzDomSettingsNav(icon,name,detail,"service:"+key,on?"Relié":"À relier");
+  openSheet("Réglages · Domotique",`<div class="mz-dom-settings-hub">
+    <p class="muted">Choisissez une rubrique. Les fonctions techniques restent accessibles séparément.</p>
+    <h3>Personnalisation</h3>
+    <div class="mz-dom-settings-group">
+      ${mzDomSettingsNav("🏠","Pièces et zones",rooms.length+" pièces · ajouter, renommer ou supprimer","rooms")}
+      ${mzDomSettingsNav("▤","Mes Shelly",linked.length+" appareils associés · changer de pièce","shellys")}
+      ${mzDomSettingsNav("★","Mes accès rapides","Choisir les trois raccourcis","favs")}
+    </div>
+    <h3>Services connectés</h3>
+    <div class="mz-dom-settings-group">
+      ${service("⚡","Shelly Cloud","Volets, éclairages et portails","shelly",domConnected())}
+      ${service("♨️","MELCloud","Chauffage Mitsubishi","mel",domMelLinked())}
+      ${service("🤖","Dreame Home","Aspirateur D20 Ultra","dreame",domDreameLinked())}
+      ${service("📺","SmartThings","Télévision Samsung","tv",domStLinked())}
+    </div>
+    <div class="mz-dom-settings-group">
+      ${mzDomSettingsNav("⚙","Réglages avancés","Comptes, déconnexions et paramètres complets","advanced")}
+    </div>
+  </div>`);
+}
+
+function mzDomShellyManagerSheet(){
+  const devices=domRead(), linked=devices.filter(x=>x.shelly_id), unlinked=devices.filter(x=>!x.shelly_id);
+  const rooms=domHomeRead().rooms;
+  const types=[["volet","▤","Volets"],["lumiere","💡","Éclairages"],["portail","🚪","Portails et accès"],["prise","🔌","Prises et relais"]];
+  const sections=types.map(([type,icon,title])=>{
+    const rows=linked.filter(x=>x.type===type);if(!rows.length)return "";
+    return `<section class="mz-dom-shelly-group"><h3>${icon} ${title} <small>(${rows.length})</small></h3>
+      ${rows.map(x=>`<article class="mz-dom-shelly-row">
+        <div class="mz-dom-shelly-title">
+          <strong>${esc(x.name)}</strong>
+          <button type="button" class="btn ghost small" data-dom-edit="${esc(x.id)}">Modifier ›</button>
+        </div>
+        <label>Dans quelle pièce ?
+          <select data-mz-dom-room-select="${esc(x.id)}" aria-label="Pièce pour ${esc(x.name)}">
+          ${rooms.map(r=>`<option value="${esc(r.id)}" ${r.id===domRoomIdOf(x)?"selected":""}>${esc(r.t)}</option>`).join("")}
+          </select>
+        </label>
+        <small class="mz-dom-shelly-feedback" aria-live="polite">Aucun changement du branchement ni des commandes.</small>
+      </article>`).join("")}
+    </section>`;
+  }).join("");
+  const unused=unlinked.length?`<details class="mz-dom-settings-unused">
+    <summary>${unlinked.length} regroupement(s) sans module associé</summary>
+    ${unlinked.map(x=>`<div><span>${esc(x.name)}</span><button type="button" class="btn ghost small" data-dom-edit="${esc(x.id)}">Configurer ›</button></div>`).join("")}
+  </details>`:"";
+  openSheet("Mes Shelly · Pièces",`<div class="mz-dom-shelly-manager">${mzDomSettingsBack()}
+    <p class="muted">Choisissez directement une pièce pour déplacer son affichage dans Maisonnée. Cette affectation se synchronise avec le foyer et ne modifie pas le matériel Shelly.</p>
+    ${sections||'<p class="muted">Aucun appareil Shelly associé.</p>'}
+    ${unused}
+    <button type="button" class="btn primary" data-dom-add="exterieur">＋ Ajouter un appareil</button>
+  </div>`);
+}
+
+function mzDomServiceSettingsSheet(key){
+  let name="", body="";
+  if(key==="shelly"){
+    name="Shelly Cloud";
+    body=domConnected()?`<p class="muted">Compte relié. Classez vos appareils, ajoutez-en ou vérifiez la découverte Shelly.</p>
+      <button class="btn" type="button" data-mz-dom-settings-nav="shellys">Changer les pièces des Shelly ›</button>
+      <button class="btn" type="button" data-dom-add="exterieur">＋ Ajouter un appareil</button>
+      <button class="btn ghost" type="button" data-dom-cloud-list>Vérifier les appareils détectés</button>`
+      :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-connect>Relier Shelly Cloud</button>`;
+  }else if(key==="mel"){
+    name="MELCloud · Mitsubishi";
+    body=domMelLinked()?`<p class="muted">Compte relié${domMelStatus.device_name?" · "+esc(domMelStatus.device_name):""}.</p>
+      <button class="btn" type="button" data-dom-mel-devices>Choisir un appareil ›</button>`
+      :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-mel-connect>Relier MELCloud</button>`;
+  }else if(key==="dreame"){
+    name="Dreame Home";
+    body=domDreameLinked()?`<p class="muted">Compte relié${domDreameStatus.device_name?" · "+esc(domDreameStatus.device_name):""}.</p>
+      <button class="btn" type="button" data-dom-dreame-rooms>Pièces de l'aspirateur ›</button>
+      <button class="btn" type="button" data-dom-dreame-progs>Programmes de nettoyage ›</button>
+      <button class="btn ghost" type="button" data-dom-dreame-devices>Choisir un aspirateur ›</button>`
+      :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-dreame-connect>Relier Dreame Home</button>`;
+  }else if(key==="tv"){
+    name="SmartThings · Samsung TV";
+    body=domStLinked()?`<p class="muted">Compte relié${domStStatus.device_name?" · "+esc(domStStatus.device_name):""}.</p>
+      <button class="btn" type="button" data-dom-st-devices>Choisir un téléviseur ›</button>`
+      :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-st-connect>Relier SmartThings</button>`;
+  }else return;
+  openSheet(name,`<div class="mz-dom-service-settings">${mzDomSettingsBack()}${body}</div>`);
+}
+
+function mzDomAdvancedSettingsSheet(){
+  const flags=[
+    domConnected()?'<button type="button" class="btn ghost danger" data-dom-disconnect>Délier Shelly Cloud</button>':"",
+    domMelLinked()?'<button type="button" class="btn ghost danger" data-dom-mel-disconnect>Délier MELCloud</button>':"",
+    domDreameLinked()?'<button type="button" class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame Home</button>':"",
+    domStLinked()?'<button type="button" class="btn ghost danger" data-dom-st-disconnect>Délier SmartThings</button>':""
+  ].join("");
+  openSheet("Réglages avancés",`<div class="mz-dom-settings-hub">${mzDomSettingsBack()}
+    <p class="muted">Changer la pièce d'un Shelly ne nécessite aucun des réglages ci-dessous.</p>
+    <div class="mz-dom-settings-group">${mzDomSettingsNav("⚙","Configuration complète","Retrouver tous les anciens réglages","legacy")}</div>
+    <h3>Déconnecter un service</h3>
+    <div class="mz-dom-advanced-actions">${flags||"<p class='muted'>Aucun service relié.</p>"}</div>
+  </div>`);
+}
+
+async function mzDomMoveShellyRoom(select){
+  const id=select.dataset.mzDomRoomSelect;
+  const device=domRead().find(x=>String(x.id)===id);
+  const previous=domHomeRead();
+  const target=select.value;
+  const oldRoom=device?domRoomIdOf(device):null;
+  if(!device||!previous.rooms.some(r=>r.id===target)){
+    if(oldRoom)select.value=oldRoom;
+    toast("Appareil ou pièce introuvable.");return;
+  }
+  if(target===oldRoom)return;
+  if(mzDomRoomMoving){select.value=oldRoom;toast("Enregistrement déjà en cours.");return;}
+  const oldHome=S.hh?.home,feedback=select.closest(".mz-dom-shelly-row")?.querySelector(".mz-dom-shelly-feedback");
+  mzDomRoomMoving=true;select.disabled=true;
+  if(feedback)feedback.textContent="Enregistrement…";
+  try{
+    await domHomeWrite({assign:{...previous.assign,[id]:target}});
+    if(feedback)feedback.textContent="Pièce enregistrée ✓";
+    toast(device.name+" déplacé vers "+previous.rooms.find(r=>r.id===target).t+".");
+  }catch(err){
+    try{localStorage.setItem(DOM_ROOMS_LS,JSON.stringify(previous));}catch(_){}
+    if(S.hh){S.hh.home=oldHome;if(typeof saveLocal==="function")saveLocal();}
+    select.value=oldRoom;
+    if(feedback)feedback.textContent="Échec de sauvegarde · pièce inchangée.";
+    toast("Impossible d'enregistrer : "+err.message);
+  }finally{select.disabled=false;mzDomRoomMoving=false;}
+}
+function domSettings(zone) {
+  return zone ? domSettingsLegacy(zone) : mzDomSettingsHub();
+}
 function domRoomsManageSheet() {
   const { rooms } = domHomeRead();
-  openSheet("Pièces de la maison", `<div class="dom-settings"><p class="muted">Les pièces servent à la vue Domotique. Chaque équipement Shelly est rattaché à une pièce dans le formulaire d'ajout ou de modification.</p>
+  openSheet("Pièces de la maison", `<div class="dom-settings">${mzDomSettingsBack()}<p class="muted">Les pièces servent à la vue Domotique. Chaque équipement Shelly est rattaché à une pièce dans le formulaire d'ajout ou de modification.</p>
     <div class="dom-settings-list">${rooms.map(r => `<div class="dom-room-row"><button type="button" class="btn dom-settings-row" data-dom-room-edit="${esc(r.id)}"><span><span class="dom-eq-ico">${esc(r.ico)}</span> ${esc(r.t)} <small class="muted">${esc(r.sub || "")}</small></span><span>Modifier ›</span></button></div>`).join("")}</div>
     <button type="button" class="btn primary" data-dom-room-add>＋ Ajouter une pièce</button>
     <button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
@@ -2055,6 +2201,18 @@ function domConnectSheet() {
   </form>`);
 }
 document.addEventListener("click", e => {
+  if(e.target.closest("[data-mz-dom-settings-back]")){mzDomSettingsHub();return;}
+  const sn=e.target.closest("[data-mz-dom-settings-nav]");
+  if(sn){
+    const target=sn.dataset.mzDomSettingsNav;
+    if(target==="rooms")domRoomsManageSheet();
+    else if(target==="shellys")mzDomShellyManagerSheet();
+    else if(target==="favs")mzDomTestFavPicker();
+    else if(target==="advanced")mzDomAdvancedSettingsSheet();
+    else if(target==="legacy")domSettingsLegacy("");
+    else if(target.startsWith("service:"))mzDomServiceSettingsSheet(target.slice(8));
+    return;
+  }
   if (e.target.closest("[data-mz-dom-favs-config]")) { mzDomTestFavPicker(); return; }
   const zoneBtn = e.target.closest("[data-mz-dom-toggle]");
   if (zoneBtn) {
@@ -2629,6 +2787,10 @@ document.addEventListener("click", e => {
       render();
     });
   }
+});
+document.addEventListener("change", e => {
+  const sel=e.target.closest("[data-mz-dom-room-select]");
+  if(sel)mzDomMoveShellyRoom(sel);
 });
 document.addEventListener("submit", e => {
   if(e.target.id==="mz-dom-favs-form"){
