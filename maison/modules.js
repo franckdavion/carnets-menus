@@ -2619,10 +2619,13 @@ function bdaysOn(day) {
   return S.bdays.filter(b => b.month === m && (b.day === dd || (!leap && b.month === 2 && b.day === 29 && dd === 28)));
 }
 VIEWS.agenda = function () {
+  if (GTASKS.enabled && !GTASKS.busy && Date.now() - GTASKS.at >= 120000) setTimeout(() => gTasksRefresh(), 0);
   const first = parse(calMonth), y = first.getFullYear(), mo = first.getMonth();
   const start = mondayOf(calMonth), end = addDays(start, 41);
   const occ = occurrences(start, end), busy = new Set(occ.map(e => e.on));
   for (const g of G.ev.items) if (!G.cals || G.cals.includes(g.cal)) busy.add(g.day);
+  for (const t of S.tasks || []) if (!t.archived && t.next_due) busy.add(t.next_due);
+  if (GTASKS.enabled) for (const t of GTASKS.items) if (gTasksDay(t)) busy.add(gTasksDay(t));
   let cells = "";
   for (let i = 0; i < 42; i++) {
     const day = addDays(start, i), dt = parse(day), out = dt.getMonth() !== mo;
@@ -2633,14 +2636,17 @@ VIEWS.agenda = function () {
   let list = "";
   for (let i = 0; i < 7; i++) {
     const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
+    const localTasks = (S.tasks || []).filter(t => !t.archived && t.next_due === day);
+    const googleTasks = gTasksOn(day);
     list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span></div>
-      ${evs.length || bs.length || gs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
+      ${evs.length || bs.length || gs.length || localTasks.length || googleTasks.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}${localTasks.map(t => taskRow(t)).join("")}${googleTasks.map(gTasksRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
       <div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="calMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button>
         <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
         <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
+      ${GTASKS.enabled ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Google Tasks · ${GTASKS.error ? esc(GTASKS.error) + " · " : ""}<button class="linkbtn small" data-act="gTasksRefresh">Actualiser les tâches</button></p>` : `<p class="muted small" style="text-align:center;margin:6px 0 0"><button class="linkbtn small" data-act="gTasksEnable">Afficher Google Tasks</button></p>`}
       ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button>${G.list.length ? ` · <button class="linkbtn small" data-act="gCalsSheet">Agendas affichés</button>` : ""}</p>` : ""}
       ${calSel !== today() ? `<div style="text-align:center"><button class="linkbtn" data-act="calPick" data-v="${today()}">Revenir à aujourd'hui</button></div>` : ""}
     </div>${list}`;
@@ -3327,6 +3333,106 @@ async function gApi(path) {
   if (!r.ok) throw new Error("google " + r.status);
   return r.json();
 }
+/* Google Tasks — ressources natives du compte Google connecté, non dupliquées dans Supabase.
+   L'API Tasks n'enregistre que la DATE (jamais une heure ni un rappel personnalisé). */
+const GTASKS = { enabled: LS.get("mz_gtasks_enabled", false), lists: [], items: [], at: 0, busy: false, error: "", permission: false };
+const gTasksDay = task => task && task.due ? String(task.due).slice(0, 10) : "";
+async function gTasksApi(path, method = "GET", payload) {
+  if (!(await gEnsure())) throw new Error("Connecte ton compte Google depuis Ma famille.");
+  const res = await fetch("https://tasks.googleapis.com/tasks/v1/" + path, {
+    method, headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" },
+    body: payload === undefined ? undefined : JSON.stringify(payload)
+  });
+  if (res.status === 401) { G.tok = null; throw new Error("Session Google expirée. Reconnecte Google depuis Ma famille."); }
+  if (res.status === 403) { GTASKS.permission = true; throw new Error("Google Tasks n'est pas autorisé ou l'API Tasks n'est pas activée. Reconnecte Google depuis Ma famille puis vérifie l'API Tasks dans Google Cloud."); }
+  if (res.status === 404) throw new Error("Liste ou tâche Google introuvable. Actualise Google Tasks.");
+  if (!res.ok) throw new Error("Google Tasks : erreur " + res.status);
+  return res.status === 204 ? null : res.json();
+}
+async function gTasksRefresh(force = false) {
+  if (!GTASKS.enabled || mode !== "cloud" || !user || GTASKS.busy) return;
+  if (!force && Date.now() - GTASKS.at < 120000) return;
+  GTASKS.busy = true;
+  GTASKS.at = Date.now();
+  try {
+    const lists = [];
+    let page = "";
+    do {
+      const part = await gTasksApi("users/@me/lists?maxResults=100" + (page ? "&pageToken=" + encodeURIComponent(page) : ""));
+      lists.push(...(part.items || []));
+      page = part.nextPageToken || "";
+    } while (page && lists.length < 500);
+    GTASKS.lists = lists;
+    const items = [];
+    for (const list of lists) {
+      let next = "", n = 0;
+      do {
+        const part = await gTasksApi("lists/" + encodeURIComponent(list.id) + "/tasks?maxResults=100&showCompleted=true&showHidden=false&showDeleted=false" + (next ? "&pageToken=" + encodeURIComponent(next) : ""));
+        items.push(...(part.items || []).map(task => ({ ...task, listId: list.id, listName: list.title })));
+        next = part.nextPageToken || "";
+      } while (next && ++n < 20);
+    }
+    GTASKS.items = items;
+    GTASKS.error = "";
+    GTASKS.permission = false;
+  } catch (err) {
+    GTASKS.error = err?.message || "Lecture Google Tasks impossible.";
+  } finally {
+    GTASKS.busy = false;
+    gTasksFillFormLists();
+    if (view === "agenda" && !document.querySelector("#sheet")?.open) softRender();
+  }
+}
+function gTasksFillFormLists() {
+  const select = document.querySelector('#sheetIn [name="google_list"]');
+  if (!select) return;
+  const selected = select.dataset.selected || select.value;
+  select.innerHTML = GTASKS.lists.length
+    ? GTASKS.lists.map(x => `<option value="${esc(x.id)}" ${x.id === selected ? "selected" : ""}>${esc(x.title)}</option>`).join("")
+    : '<option value="">Aucune liste disponible</option>';
+  if (!GTASKS.lists.some(x => x.id === selected) && GTASKS.lists.length) select.value = GTASKS.lists[0].id;
+  const info = document.getElementById("gTaskInfo");
+  if (info) info.textContent = GTASKS.error || "Google Tasks conserve la date et les notes ; pas d’heure ni de rappel personnalisé via son API.";
+}
+function gTasksStart() {
+  GTASKS.enabled = true;
+  GTASKS.at = 0;
+  LS.set("mz_gtasks_enabled", true);
+  gTasksRefresh(true);
+}
+const gTasksOn = day => GTASKS.enabled ? GTASKS.items.filter(t => gTasksDay(t) === day) : [];
+function gTasksRow(task) {
+  const done = task.status === "completed";
+  return `<div class="row ev-row gtask-row">
+    <button class="check ${done ? "on" : ""}" data-act="gTaskDone" data-v="${esc(task.id)}" data-list="${esc(task.listId)}" aria-label="${done ? "Réactiver" : "Terminer"} la tâche ${esc(task.title || "")}">${I.tick}</button>
+    <button class="open" data-act="gTaskEdit" data-v="${esc(task.id)}" data-list="${esc(task.listId)}">
+      <span class="ev-time allday">Tâche</span><span class="main"><span class="t">${esc(task.title || "Sans titre")}</span><span class="m">Google Tasks · ${esc(task.listName || "")}${done ? " · Terminée" : ""}</span></span>
+    </button></div>`;
+}
+function gTasksSheetFill() {
+  gTasksFillFormLists();
+  if (GTASKS.enabled && !GTASKS.lists.length && !GTASKS.busy) gTasksRefresh(true);
+}
+async function gTasksSave(row, existing = null) {
+  const listId = existing?.listId || row.listId;
+  if (!listId) throw new Error("Choisis une liste Google Tasks.");
+  const payload = { title: row.title, notes: row.notes || "", due: row.day ? row.day + "T12:00:00.000Z" : null };
+  const path = "lists/" + encodeURIComponent(listId) + "/tasks" + (existing ? "/" + encodeURIComponent(existing.id) : "");
+  await gTasksApi(path, existing ? "PATCH" : "POST", payload);
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+async function gTasksRemove(task) {
+  await gTasksApi("lists/" + encodeURIComponent(task.listId) + "/tasks/" + encodeURIComponent(task.id), "DELETE");
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+async function gTasksComplete(task) {
+  await gTasksApi("lists/" + encodeURIComponent(task.listId) + "/tasks/" + encodeURIComponent(task.id), "PATCH", { status: task.status === "completed" ? "needsAction" : "completed" });
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+
 async function gFetch() {
   if (G.busy || !(await gEnsure())) return;
   G.busy = true;
