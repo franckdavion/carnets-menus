@@ -1620,6 +1620,8 @@ function domStEqCard() {
     : "";
   return `<article class="dom-eq-card dom-eq-tv"><button type="button" class="dom-eq-open" data-dom-st-open>${domEqCardTop("📺", esc(st.device_name || domStStatus.device_name || "Samsung TV"))}<small>${esc(line)}</small></button>${actions}</article>`;
 }
+// Navigation de la télécommande Samsung — initialisation indispensable à l’ouverture.
+let domTvTab = "remote";
 function domTvPanelHtml() {
   const st = domStState || {};
   const on = st.power === true, off = st.power === false;
