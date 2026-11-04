@@ -1084,6 +1084,9 @@ const I = {
   repas: '<svg viewBox="0 0 24 24"><path d="M7 3v8M4.5 3v5a2.5 2.5 0 0 0 5 0V3M7 11v10"/><path d="M17 21V3c-2.2 1.2-3.5 3.6-3.5 7v4H17"/></svg>',
   foyer: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.5 14.6c2.4.2 4 1.9 4.5 4.9"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 6.5a2 2 0 0 1 2-2h5l2.2 2.5H19a2 2 0 0 1 2 2v10.5H3z"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12h6M9 16h6"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>',
   tick: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
@@ -1102,7 +1105,7 @@ function render() {
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
   if (!VIEWS[view]) view = "home";
-  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
+  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
   if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
   const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
       <textarea class="input" name="body" rows="1" maxlength="2000" placeholder="Écrire au foyer…" aria-label="Message"></textarea>
@@ -1115,7 +1118,17 @@ function render() {
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
-    ${view === "agenda" ? `<button class="fab" data-act="newEvent">${I.plus}Événement</button><button class="fab" data-act="newAppointment" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Rendez-vous</button>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
+    ${view === "agenda" || (view === "docs" && S.v3) ? `<div class="cal-create" id="calCreate">
+      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : "Choisir le type de création"}" hidden>
+        ${view === "docs" ? `
+          <button type="button" class="cal-create-option" data-act="newFolder"><span class="cal-create-label">Dossier</span><span class="cal-create-icon" aria-hidden="true">${I.folder}</span></button>
+          <button type="button" class="cal-create-option" data-act="newDoc"><span class="cal-create-label">Document</span><span class="cal-create-icon" aria-hidden="true">${I.file}</span></button>` : `
+          <button type="button" class="cal-create-option" data-act="newAppointment"><span class="cal-create-label">Rendez-vous</span><span class="cal-create-icon" aria-hidden="true">${I.today}</span></button>
+          <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
+          <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>`}
+      </div>
+      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="${view === "docs" ? "Ajouter dans Documents" : "Créer dans l'agenda"}" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
+    </div>` : fab ? `<button type="button" class="fab mz-round-btn mz-round-btn--md" data-act="${fab[1]}" aria-label="${esc(fab[0] === "Ajouter" ? "Ajouter" : "Créer : " + fab[0])}">${I.plus}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
@@ -1146,6 +1159,8 @@ function taskRow(t, opts = {}) {
   const bits = [];
   if (opts.when) bits.push(late ? `<span class="late">${esc(dayLabel(t.next_due))}</span>` : esc(dayLabel(t.next_due)));
   else if (late) bits.push(`<span class="late">En retard depuis ${esc(dayLabel(t.next_due).toLowerCase())}</span>`);
+  if (t.due_time) bits.push("à " + esc(hm(t.due_time)));
+  if (t.deadline_on) bits.push("limite " + esc(fmtShort(t.deadline_on)));
   bits.push(esc(t.room));
   bits.push(esc(freqLabel(t)) + (t.rotate ? " · chacun son tour" : ""));
   return `<div class="row">
@@ -1208,9 +1223,9 @@ const VIEWS = {
 
   agenda() {
     const from = weekA, to = addDays(weekA, 6), occ = occurrences(from, to), d = today();
-    const head = `<div class="weeknav"><button class="icon-btn" data-act="weekA" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
+    const head = `<div class="weeknav"><button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekA" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
       <strong>${from === mondayOf(d) ? "Cette semaine" : "Semaine du " + fmtShort(from)}</strong>
-      <button class="icon-btn" data-act="weekA" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
+      <button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekA" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
     let body = "";
     for (let i = 0; i < 7; i++) {
       const day = addDays(from, i), evs = occ.filter(e => e.on === day);
@@ -1289,9 +1304,9 @@ function eventRow(e, withDay, withDate) {
 
 function menuView() {
   const d = today();
-  let out = `<div class="weeknav"><button class="icon-btn" data-act="weekR" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
+  let out = `<div class="weeknav"><button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekR" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
     <strong>${weekR === mondayOf(d) ? "Cette semaine" : "Semaine du " + fmtShort(weekR)}</strong>
-    <button class="icon-btn" data-act="weekR" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
+    <button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekR" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(weekR, i);
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${cap(DAYS[i])}<span>${esc(fmtShort(day))}</span></h3></header>
@@ -1419,7 +1434,7 @@ function openSheet(title, body, ctx = {}) {
   if (live) live.remove();
   const wasOpen = d.open;
   sheetCtx = ctx;
-  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="sheet-close-x" data-act="closeSheet" aria-label="Fermer">✕</button></div></div>${body}`;
+  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button type="button" class="sheet-close-x mz-round-btn mz-round-btn--sm mz-round-btn--close" data-act="closeSheet" aria-label="Fermer">${I.close}</button></div></div>${body}`;
   if (live && mzToastActive) {
     const again = spotSel && d.querySelector(spotSel);
     if (again) again.insertAdjacentElement("afterend", live);
@@ -1536,31 +1551,54 @@ const chipVal = (form, name) => { const b = form.querySelector(`[data-chip="${na
 const chipVals = (form, name) => [...form.querySelectorAll(`[data-chip="${name}"][aria-pressed="true"]`)].map(b => b.dataset.v);
 const memberOpts = () => members().map(m => [m.id, m.name, av(m, "sm")]);
 
-function taskSheet(t) {
-  const isNew = !t;
-  t = t || { title: "", room: "Divers", assignee: "", rotate: false, freq: "weekly", every_n: 7, weekdays: [isoDay(today())], next_due: today(), effort: 1, notes: "" };
+function taskSheet(t, day, opts = {}) {
+  const gTask = opts.googleTask || null;
+  const isNew = !t && !gTask;
+  const dest = gTask ? "google" : "local";
+  t = t || { title: gTask?.title || "", room: "Divers", assignee: "", rotate: false, freq: day ? "once" : "weekly", every_n: 7, weekdays: [isoDay(day || today())], next_due: gTask ? (gTasksDay(gTask) || day || today()) : (day || today()), effort: 1, due_time: null, deadline_on: null, notes: gTask?.notes || "" };
   openSheet(isNew ? "Nouvelle tâche" : "Tâche", `
     <form data-form="task">
+      ${isNew && (day || view === "agenda") ? `<label class="field"><span class="label">Destination</span><select class="input" name="task_destination"><option value="local">Maisonnée · tâche familiale</option><option value="google">Google Tasks · compte Google</option></select></label>` : `<input type="hidden" name="task_destination" value="${dest}">`}
       <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(t.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="Ex. Sortir les poubelles"></label>
+      <label class="field"><span class="label">Date prévue</span><input class="input" name="next_due" type="date" value="${esc(t.next_due)}" required></label>
+      <div data-task-local>
+      <label class="field"><span class="label">Heure (facultative)</span><input class="input" name="due_time" type="time" value="${esc(String(t.due_time || "").slice(0,5))}"></label>
+      <label class="field"><span class="label">Échéance (facultative)</span><input class="input" name="deadline_on" type="date" value="${esc(t.deadline_on || "")}"></label>
       <div class="field"><span class="label">Qui</span>${chipsHtml("assignee", [["", "N'importe qui", av(null, "sm")], ...memberOpts()], t.assignee || "")}</div>
       <label class="switch"><span><strong>Chacun son tour</strong><br><span class="muted small">la tâche passe au membre suivant à chaque fois</span></span><input type="checkbox" name="rotate" ${t.rotate ? "checked" : ""}></label>
       <div class="field"><span class="label">Quand</span>${chipsHtml("freq", FREQS, t.freq)}</div>
       <div class="field" data-show="weekly"><span class="label">Quels jours</span>${chipsHtml("weekdays", DAYS_SHORT.map((d, i) => [i + 1, d]), t.weekdays, true)}</div>
       <label class="field" data-show="every"><span class="label">Tous les combien de jours</span><input class="input" name="every_n" type="number" inputmode="numeric" min="1" max="365" value="${t.every_n || 7}"></label>
-      <label class="field"><span class="label">${isNew ? "À partir du" : "Prochaine fois"}</span><input class="input" name="next_due" type="date" value="${esc(t.next_due)}" required></label>
       <div class="field"><span class="label">Pièce</span>${chipsHtml("room", ROOMS.map(r => [r, r]), t.room)}</div>
       <div class="field"><span class="label">Durée</span>${chipsHtml("effort", EFFORT, t.effort)}</div>
-      <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(t.notes)}</textarea></label>
-      ${isNew ? "" : `<div class="field"><span class="label">C'est fait par…</span><div class="chips">${members().map(m => `<button type="button" class="chip" data-act="doneBy" data-v="${t.id}" data-m="${m.id}">${av(m, "sm")}${esc(m.name)}</button>`).join("")}</div></div>`}
+      </div>
+      <div data-task-google hidden>
+        <label class="field"><span class="label">Liste Google Tasks</span><select class="input" name="google_list" data-selected="${esc(gTask?.listId || "")}" ${gTask ? "disabled" : ""}><option value="">Chargement…</option></select></label>
+        <p class="muted small" id="gTaskInfo">Google Tasks : son API ne gère pas l'heure, la répétition ni les rappels. Ces réglages restent dans l'application Google.</p>
+        <button type="button" class="btn ghost" data-act="gTasksAuthorize">Autoriser ou reconnecter Google Tasks</button>
+      </div>
+      <label class="field"><span class="label">Note / description</span><textarea class="input" name="notes" maxlength="${dest === "google" ? 8192 : 500}" placeholder="Facultatif">${esc(t.notes)}</textarea></label>
+      ${isNew || gTask ? "" : `<div class="field"><span class="label">C'est fait par…</span><div class="chips">${members().map(m => `<button type="button" class="chip" data-act="doneBy" data-v="${t.id}" data-m="${m.id}">${av(m, "sm")}${esc(m.name)}</button>`).join("")}</div></div>`}
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
-        ${isNew ? "" : `<button class="btn danger" type="button" data-act="delTask" data-v="${t.id}">Supprimer</button>`}
+        ${gTask ? `<button class="btn danger" type="button" data-act="gTaskRemove" data-v="${esc(gTask.id)}" data-list="${esc(gTask.listId)}">Supprimer</button>` : isNew ? "" : `<button class="btn danger" type="button" data-act="delTask" data-v="${t.id}">Supprimer</button>`}
       </div>
-    </form>`, { id: isNew ? null : t.id });
+    </form>`, { id: gTask ? null : isNew ? null : t.id, gTask });
   syncShow();
+  if (gTask) gTasksSheetFill();
+}
+function syncTaskDestination(f) {
+  if (!f || f.dataset.form !== "task") return;
+  const google = f.elements.task_destination?.value === "google";
+  f.querySelectorAll("[data-task-local]").forEach(el => { el.hidden = google; });
+  f.querySelectorAll("[data-task-google]").forEach(el => { el.hidden = !google; });
+  f.querySelectorAll("[data-show]").forEach(el => { el.hidden = google || el.dataset.show !== chipVal(f, "freq"); });
+  if (f.elements.notes) f.elements.notes.maxLength = google ? 8192 : 500;
+  if (google) { if (!GTASKS.enabled) gTasksStart(); gTasksSheetFill(); }
 }
 function syncShow() {
   const f = $("#sheetIn form"); if (!f) return;
+  syncTaskDestination(f);
   const freq = chipVal(f, "freq");
   f.querySelectorAll("[data-show]").forEach(el => { el.hidden = el.dataset.show !== freq; });
   const allDay = f.querySelector("[name=allday]");
@@ -1856,6 +1894,13 @@ function memberSheet(m) {
 
 /* ---------- interactions ---------- */
 document.addEventListener("click", async e => {
+  // Fermer le menu de création agenda en touchant ailleurs ou en choisissant une action.
+  const createMenu = document.getElementById("calCreateOptions");
+  const createButton = document.getElementById("calCreateButton");
+  if (createMenu && !createMenu.hidden && (!e.target.closest("#calCreate") || e.target.closest(".cal-create-option"))) {
+    createMenu.hidden = true;
+    createButton?.setAttribute("aria-expanded", "false");
+  }
   const b = e.target.closest("[data-act],[data-chip]"); if (!b) return;
   if (b.dataset.chip) {
     if (b.hasAttribute("data-multi")) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
@@ -1884,6 +1929,40 @@ document.addEventListener("click", async e => {
     }
     case "doneBy": closeSheet(); doneTask(v, b.dataset.m); break;
     case "undo": undoLog(v); break;
+    case "calCreateToggle": {
+      const menu = document.getElementById("calCreateOptions");
+      if (menu) {
+        menu.hidden = !menu.hidden;
+        b.setAttribute("aria-expanded", String(!menu.hidden));
+        if (!menu.hidden) menu.querySelector("button")?.focus({ preventScroll: true });
+      }
+      break;
+    }
+    case "calCreateTask": taskSheet(null, calSel); break;
+    case "gTasksEnable": gTasksStart(); render(); break;
+    case "gTasksRefresh": GTASKS.at = 0; gTasksRefresh(true); break;
+    case "gTasksAuthorize": gConnect(false, "agenda"); break;
+    case "gTaskEdit": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (task) taskSheet(null, gTasksDay(task) || calSel, { googleTask: task });
+      break;
+    }
+    case "gTaskDone": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (!task) break;
+      b.disabled = true;
+      try { await gTasksComplete(task); render(); }
+      catch (err) { b.disabled = false; toast(err?.message || "Google Tasks n'a pas modifié la tâche."); }
+      break;
+    }
+    case "gTaskRemove": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (!task || !confirm("Supprimer cette tâche de Google Tasks ?")) break;
+      b.disabled = true;
+      try { await gTasksRemove(task); closeSheet(); render(); toast("Tâche supprimée de Google Tasks."); }
+      catch (err) { b.disabled = false; toast(err?.message || "Suppression Google Tasks impossible."); }
+      break;
+    }
     case "newTask": taskSheet(null); break;
     case "editTask": taskSheet(S.tasks.find(t => t.id === v)); break;
     case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t), null, "tasks"); } break;
@@ -1977,7 +2056,20 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", e => { if (e.target.name === "google_destination") syncGColorBox(e.target.form); if (e.target.name === "allday") syncShow(); if (e.target.matches("[data-geo]")) geoToggle(e.target.checked); });
 // message box grows with its text; Entrée envoie sur un clavier physique
 document.addEventListener("input", e => { if (e.target.name === "body" && e.target.closest(".composer")) { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; } });
-document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); } });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const menu = document.getElementById("calCreateOptions");
+    if (menu && !menu.hidden) {
+      e.preventDefault();
+      menu.hidden = true;
+      const button = document.getElementById("calCreateButton");
+      button?.setAttribute("aria-expanded", "false");
+      button?.focus({ preventScroll: true });
+      return;
+    }
+  }
+  if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); }
+});
 document.addEventListener("input", e => { if (e.target.id === "recSearch") $("#recList").innerHTML = recList(e.target.value, sheetCtx && sheetCtx.recipe); });
 
 async function setHh(p) {
@@ -1987,6 +2079,7 @@ async function setHh(p) {
 
 document.addEventListener("change", e => {
   if (e.target.matches('[name="reminder_mode"]')) reminderVisibility(e.target.closest("form"));
+  if (e.target.matches('[name="task_destination"]')) syncTaskDestination(e.target.closest("form"));
 });
 document.addEventListener("change", async e => {
   if (!e.target.matches("[data-pref]") || e.target.disabled) return;
@@ -2006,13 +2099,25 @@ document.addEventListener("submit", async e => {
   const btn = f.querySelector("[type=submit]");
   switch (kind) {
     case "task": {
+      if (fd.task_destination === "google") {
+        btn.disabled = true;
+        try {
+          const existing = sheetCtx?.gTask || null;
+          await gTasksSave({ title: (fd.title || "").trim(), notes: fd.notes || "", day: fd.next_due, listId: existing?.listId || fd.google_list }, existing);
+          closeSheet(); render();
+          toast(existing ? "Tâche Google modifiée." : "Tâche créée dans Google Tasks.", null, null, null, "agenda");
+        } catch (err) { btn.disabled = false; toast(err?.message || "Google Tasks n'a pas enregistré la tâche."); }
+        break;
+      }
       const freq = chipVal(f, "freq") || "once";
       const row = {
         title: fd.title.trim(), assignee: chipVal(f, "assignee") || null, rotate: !!fd.rotate, freq,
         every_n: Math.min(365, Math.max(1, parseInt(fd.every_n, 10) || 1)),
         weekdays: chipVals(f, "weekdays").map(Number).sort(), next_due: fd.next_due || today(),
-        room: chipVal(f, "room") || "Divers", effort: +(chipVal(f, "effort") || 1), notes: fd.notes.trim()
+        room: chipVal(f, "room") || "Divers", effort: +(chipVal(f, "effort") || 1), notes: fd.notes.trim(),
+        due_time: fd.due_time || null, deadline_on: fd.deadline_on || null
       };
+      if (row.deadline_on && row.deadline_on < row.next_due) { toast("La date limite doit être après la date prévue."); return; }
       if (freq === "weekly" && !row.weekdays.length) row.weekdays = [isoDay(row.next_due)];
       if (freq !== "weekly") row.weekdays = [];
       if (freq !== "every") row.every_n = 1;
