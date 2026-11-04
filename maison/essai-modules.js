@@ -1423,6 +1423,7 @@ async function mzDomMoveShellyRoom(select){
   try{
     await domHomeWrite({assign:{...previous.assign,[id]:target}});
     if(feedback)feedback.textContent="Pièce enregistrée ✓";
+    if(view==="domotique")pending=true;
     toast(device.name+" déplacé vers "+previous.rooms.find(r=>r.id===target).t+".");
   }catch(err){
     try{localStorage.setItem(DOM_ROOMS_LS,JSON.stringify(previous));}catch(_){}
@@ -2049,7 +2050,7 @@ function mzDomTestFavPicker(){
   const items=mzDomActualItems(),saved=mzDomFavorites();
   const options=[["group:portail","Portails"],["group:volet","Volets"],["group:lumiere","Lumières"],...items.map(x=>["device:"+x.id,x.name])];
   const fields=saved.map((value,i)=>`<label>Accès rapide ${i+1}<select name="fav_${i}" required>${options.map(([key,name])=>`<option value="${esc(key)}" ${key===value?"selected":""}>${esc(name)}</option>`).join("")}</select></label>`).join("");
-  openSheet("Mes accès rapides",`<form id="mz-dom-favs-form" class="dom-form"><p class="muted">Un raccourci ouvre la zone et affiche les commandes : il n'actionne jamais directement un portail ou un volet.</p>${fields}<button type="submit" class="btn primary">Enregistrer</button><p class="muted small">Test uniquement : choix enregistrés sur cet iPhone, sans modification Shelly ni Supabase.</p></form>`);
+  openSheet("Mes accès rapides",`<form id="mz-dom-favs-form" class="dom-form">${mzDomSettingsBack()}<p class="muted">Un raccourci ouvre la zone et affiche les commandes : il n'actionne jamais directement un portail ou un volet.</p>${fields}<button type="submit" class="btn primary">Enregistrer</button><p class="muted small">Test uniquement : choix enregistrés sur cet iPhone, sans modification Shelly ni Supabase.</p></form>`);
 }
 
 function domBoard() {
