@@ -2045,6 +2045,9 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
 .mn-house-line{flex:1 1 auto;height:2px;min-width:12px;margin-left:0;border-radius:2px;background:linear-gradient(90deg,#d8f4ff,#4eb6ff 18%,#4eb6ff);box-shadow:0 0 4px #d7f3ff,0 0 8px #5ec8ff,0 0 14px #2f9dff;}
 .mn-house-empty{margin:8px 2px 0;color:#c5d9ee;font-size:14px;}
 .mn-house-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:760px;margin-left:auto;margin-right:auto;}
+/* Design C+ V3 : éclat qui tourne autour du verre, jamais autour du contenu. */
+@property --mn-c-rim-angle{syntax:'<angle>';initial-value:0deg;inherits:false;}
+@keyframes mn-c-rim-orbit{to{--mn-c-rim-angle:360deg;}}
 /* Design C+ — verre saphir poli. Palette commune pour Accueil et Explorer ; extensible ailleurs sans toucher aux pages métier. */
 :root{
  --mn-c-cyan:#81e8ff;--mn-c-blue:#1b9dff;--mn-c-glass:#071a37;
@@ -2056,12 +2059,24 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
  position:relative;isolation:isolate;overflow:hidden;min-width:0;
  display:flex;flex-direction:column;align-items:flex-start;gap:3px;
  min-height:162px;padding:15px 15px 14px;text-align:left;
- color:#fff;border:1px solid rgba(var(--mn-c-light),.79);
+ color:#fff;border:2px solid transparent;
  border-radius:var(--mn-c-radius);
  background:
-  radial-gradient(ellipse 112% 88% at 100% -29%,rgba(var(--mn-c-light),.44) 0%,rgba(var(--mn-c-light),.05) 43%,transparent 69%),
-  radial-gradient(ellipse 78% 57% at 84% 115%,rgba(var(--mn-c-bottom),.49),transparent 78%),
-  linear-gradient(151deg,rgba(32,106,177,.95) 0%,rgba(var(--mn-c-deep),.97) 40%,#061329 79%,#041126 100%);
+  radial-gradient(ellipse 112% 88% at 100% -29%,rgba(var(--mn-c-light),.44) 0%,rgba(var(--mn-c-light),.05) 43%,transparent 69%) padding-box,
+  radial-gradient(ellipse 78% 57% at 84% 115%,rgba(var(--mn-c-bottom),.49),transparent 78%) padding-box,
+  linear-gradient(151deg,rgba(32,106,177,.95) 0%,rgba(var(--mn-c-deep),.97) 40%,#061329 79%,#041126 100%) padding-box,
+  conic-gradient(from var(--mn-c-rim-angle),
+    rgba(var(--mn-c-light),.55) 0deg 25deg,
+    rgba(var(--mn-c-light),.94) 44deg,
+    #f5ffff 58deg,
+    rgba(var(--mn-c-light),.96) 73deg,
+    rgba(var(--mn-c-light),.55) 93deg 211deg,
+    rgba(var(--mn-c-light),.91) 224deg,
+    #efffff 237deg,
+    rgba(var(--mn-c-light),.94) 249deg,
+    rgba(var(--mn-c-light),.55) 265deg 360deg
+  ) border-box;
+ animation:mn-c-rim-orbit 11s linear infinite;
  box-shadow:
   0 0 0 1px rgba(230,249,255,.24),
   0 0 13px rgba(var(--mn-c-light),.42),
@@ -2097,7 +2112,13 @@ body:has(main.view-home:not(.ultimate-classic)):not(:has(#ultimate-module-grid .
    0 14px 33px rgba(0,4,19,.70),inset 0 2px 2px rgba(255,255,255,.80),inset 0 -2px 10px rgba(var(--mn-c-bottom),.22);
  }
 }
-@media(prefers-reduced-motion:reduce){.mn-card:is(button):active{transform:none;}}
+/* Déphasage doux : toutes les cartes ne scintillent pas au même endroit. */
+.mn-card-repas,.mn-card-recette,.mn-card-courses,.mn-card-foyer{animation-delay:-4.4s;}
+.mn-card-cal,.mn-card-presences,.mn-card-docs,.mn-card-tasks{animation-delay:-7.8s;}
+@media(prefers-reduced-motion:reduce){
+ .mn-card{animation:none;}
+ .mn-card:is(button):active{transform:none;}
+}
 
 .mn-card-h{display:flex;align-items:center;gap:8px;width:100%;margin-bottom:8px;font-weight:750;}
 .mn-card-h img{width:46px;height:46px;flex:none;filter:drop-shadow(0 4px 6px rgba(0,4,22,.72)) drop-shadow(0 0 7px rgba(var(--mn-c-light),.40));}
