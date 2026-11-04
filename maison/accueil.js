@@ -306,7 +306,7 @@ window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:(
 
 /* Maisonnée Ultimate : ajout non destructif sur l'accueil uniquement. */
 (()=>{'use strict';
-let meteo=null;
+let meteo=null,meteoDernierSucces=0,meteoEnAttente=false,meteoCleActive='',meteoEssais=0,meteoRetryTimer=null,meteoSequence=0;
 function place(){const h=window.maisonHomeStore.read();return {city:h.city||'Doullens',lat:Number.isFinite(h.lat)?h.lat:50.001,lon:Number.isFinite(h.lon)?h.lon:2.345}}
 const date=()=>new Intl.DateTimeFormat('fr-FR',{dateStyle:'full'}).format(new Date());
 // Éphéméride : données indépendantes de la météo et de la navigation.
@@ -474,7 +474,7 @@ function render(){
  let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
  el.className='';
  const w=meteo?.current,d=meteo?.daily,now=new Date();
- const weather=w?`<div class="ultimate-big">${Math.round(w.temperature_2m)}°C</div><div class="ultimate-line">${codes(w.weather_code)}</div><div class="ultimate-secondary">Ressenti ${Math.round(w.apparent_temperature)}° · Vent ${Math.round(w.wind_speed_10m)} km/h${directionVent(w.wind_direction_10m)?` · ${directionVent(w.wind_direction_10m)}`:''}</div><div class="ultimate-secondary">Pluie ${d?.precipitation_probability_max?.[0]??'—'} %</div>`:'<div class="ultimate-secondary">Prévisions en cours de chargement ou indisponibles.</div>';
+ const weather=w?`<div class="ultimate-big">${Math.round(w.temperature_2m)}°C</div><div class="ultimate-line">${codes(w.weather_code)}</div><div class="ultimate-secondary">Ressenti ${Math.round(w.apparent_temperature)}° · Vent ${Math.round(w.wind_speed_10m)} km/h${directionVent(w.wind_direction_10m)?` · ${directionVent(w.wind_direction_10m)}`:''}</div><div class="ultimate-secondary">Pluie ${d?.precipitation_probability_max?.[0]??'—'} %</div>${meteoEnAttente?`<div class="ultimate-secondary">Dernières prévisions conservées (${new Date(meteoDernierSucces).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}) · actualisation en attente</div>`:''}`:'<div class="ultimate-secondary">Prévisions momentanément indisponibles · nouvel essai automatique.</div>';
  const weekday=iso=>new Intl.DateTimeFormat('fr-FR',{weekday:'short',timeZone:'Europe/Paris'}).format(new Date(iso+'T12:00:00')).replace('.','');
  const dailyCards=d?.time?.length?d.time.slice(0,7).map((day,i)=>`<div class="mn-day" aria-label="${day}"><span class="mn-day-name">${weekday(day)}</span><span class="mn-day-icon" aria-hidden="true">${iconImage(d.weather_code?.[i])}</span><strong>${Number.isFinite(d.temperature_2m_max?.[i])?Math.round(d.temperature_2m_max[i])+'°':'—'}</strong><small>${Number.isFinite(d.temperature_2m_min?.[i])?Math.round(d.temperature_2m_min[i])+'°':'—'}</small></div>`).join(''):'<p class="mn-weather-empty">Prévisions indisponibles</p>';
  const key=String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
@@ -588,7 +588,57 @@ async function changeCity(){
  await window.maisonHomeStore.write({city,lat,lon});
  await load();
 }
-async function load(){try{const u=`https://api.open-meteo.com/v1/forecast?latitude=${place().lat}&longitude=${place().lon}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset,moonrise,moonset&timezone=Europe%2FParis&forecast_days=7`;const r=await fetch(u);if(!r.ok)throw Error('weather');meteo=await r.json()}catch(e){meteo=null}render()}
+// Météo : ne jamais effacer une prévision valide pour une panne passagère de l'API.
+// Le cache, limité à la journée et à 12 heures, est propre à la ville configurée.
+function meteoCacheKey(p){return 'mn_meteo_v2_'+Number(p.lat).toFixed(3)+'_'+Number(p.lon).toFixed(3)}
+function meteoJour(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function meteoValide(d){return !!(d&&d.current&&Number.isFinite(Number(d.current.temperature_2m))&&d.daily&&Array.isArray(d.daily.time)&&d.daily.time[0]===meteoJour()&&Array.isArray(d.daily.temperature_2m_max))}
+function meteoCacheLire(p){
+ try{
+  const c=JSON.parse(localStorage.getItem(meteoCacheKey(p))||'null');
+  if(c&&Number.isFinite(c.at)&&Date.now()-c.at>=0&&Date.now()-c.at<12*3600000&&meteoValide(c.data))return c;
+ }catch(e){}
+ return null;
+}
+async function meteoDemander(p,versionReduite){
+ const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+ const timeout=ctrl?setTimeout(()=>ctrl.abort(),9000):null;
+ const variables='temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset'+(versionReduite?'':',moonrise,moonset');
+ const url=`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(p.lat)}&longitude=${encodeURIComponent(p.lon)}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability&daily=${variables}&timezone=Europe%2FParis&forecast_days=7`;
+ try{
+  const r=await fetch(url,{cache:'no-store',signal:ctrl?ctrl.signal:undefined});
+  if(!r.ok)throw Error('Météo HTTP '+r.status);
+  const d=await r.json();
+  if(!meteoValide(d))throw Error('Données météo incomplètes');
+  return d;
+ }finally{if(timeout)clearTimeout(timeout)}
+}
+async function load(){
+ const p=place(),cle=meteoCacheKey(p),seq=++meteoSequence;
+ if(cle!==meteoCleActive){meteoCleActive=cle;meteo=null;meteoDernierSucces=0;meteoEnAttente=false;meteoEssais=0;}
+ if(!meteo){const c=meteoCacheLire(p);if(c){meteo=c.data;meteoDernierSucces=c.at;meteoEnAttente=true;render()}}
+ try{
+  let d;
+  try{d=await meteoDemander(p,false)}catch(e){
+   // Si une variable astronomique n'est pas servie temporairement, demander le cœur météo.
+   d=await meteoDemander(p,true);
+  }
+  if(seq!==meteoSequence||cle!==meteoCacheKey(place()))return;
+  meteo=d;meteoEnAttente=false;meteoDernierSucces=Date.now();meteoEssais=0;
+  if(meteoRetryTimer){clearTimeout(meteoRetryTimer);meteoRetryTimer=null}
+  try{localStorage.setItem(cle,JSON.stringify({at:meteoDernierSucces,data:d}))}catch(e){}
+ }catch(e){
+  if(seq!==meteoSequence||cle!==meteoCacheKey(place()))return;
+  meteoEnAttente=!!meteo;
+  console.warn('Prévisions météo non disponibles :',e&&e.message||e);
+  // Deux tentatives espacées, puis le rafraîchissement périodique habituel.
+  if(meteoEssais<2&&!meteoRetryTimer){
+   const delai=meteoEssais++?180000:60000;
+   meteoRetryTimer=setTimeout(()=>{meteoRetryTimer=null;void load()},delai);
+  }
+ }
+ render();
+}
 function init(){const app=document.querySelector('#app');if(!app)return;let homePaintQueued=false;new MutationObserver(()=>{if(!document.querySelector('main.view-home')||document.querySelector('#ultimate-dashboard'))return;if(homePaintQueued)return;homePaintQueued=true;requestAnimationFrame(()=>{homePaintQueued=false;if(document.querySelector('main.view-home')&&!document.querySelector('#ultimate-dashboard'))render()})}).observe(app,{childList:true});render();load();chargerEphemeride();setInterval(load,1800000);let lastDay=new Date().toDateString();setInterval(()=>{const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride();load()}},60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride()}load()}})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
