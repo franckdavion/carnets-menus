@@ -1084,6 +1084,7 @@ const I = {
   repas: '<svg viewBox="0 0 24 24"><path d="M7 3v8M4.5 3v5a2.5 2.5 0 0 0 5 0V3M7 11v10"/><path d="M17 21V3c-2.2 1.2-3.5 3.6-3.5 7v4H17"/></svg>',
   foyer: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.5 14.6c2.4.2 4 1.9 4.5 4.9"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg>',
   folder: '<svg viewBox="0 0 24 24"><path d="M3 6.5a2 2 0 0 1 2-2h5l2.2 2.5H19a2 2 0 0 1 2 2v10.5H3z"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12h6M9 16h6"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>',
@@ -1433,7 +1434,7 @@ function openSheet(title, body, ctx = {}) {
   if (live) live.remove();
   const wasOpen = d.open;
   sheetCtx = ctx;
-  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button class="sheet-close-x" data-act="closeSheet" aria-label="Fermer">✕</button></div></div>${body}`;
+  $("#sheetIn").innerHTML = `<div class="sheet-top"><div class="grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="sheetTitle">${esc(title)}</h2><button type="button" class="sheet-close-x mz-round-btn mz-round-btn--sm mz-round-btn--close" data-act="closeSheet" aria-label="Fermer">${I.close}</button></div></div>${body}`;
   if (live && mzToastActive) {
     const again = spotSel && d.querySelector(spotSel);
     if (again) again.insertAdjacentElement("afterend", live);
