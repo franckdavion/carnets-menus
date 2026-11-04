@@ -159,7 +159,8 @@
     return '<div class="mz-wallet-item mz-wallet-mosaic-item" data-wallet-search="' +
       h((c.name + " " + (brand?.name || "") + " " + (c.code || "")).toLocaleLowerCase("fr")) + '">' +
       '<button type="button" data-wallet="open" data-id="' + h(c.id) +
-      '" class="mz-wallet-mosaic-card" aria-label="Afficher la carte ' + h(c.name) + '">' +
+      '" class="mz-wallet-mosaic-card" aria-label="Afficher la carte ' + h(c.name) +
+      '. Appui long pour les options" title="Appui long : gérer la carte">' +
       brandTile(c) + (c.favorite ? '<span class="mz-wallet-star" aria-label="Favori">★</span>' : '') +
       '</button></div>';
   }
@@ -639,7 +640,17 @@
       area.innerHTML = ean || '<p class="mz-wallet-image-warning">Capture indisponible. Le numéro de la carte est conservé. Tu peux ajouter une nouvelle capture depuis Klarna.</p>';
     }
   }
-  function fullscreen(c) {
+  function walletManageMenu(c) {
+    const id = h(c.id);
+    return '<div class="mz-wallet-manage-menu" id="mz-wallet-card-menu" hidden role="group" aria-label="Gérer la carte">' +
+      '<button type="button" data-wallet="favorite" data-id="' + id + '">' +
+      (c.favorite ? '★ Retirer des favoris' : '☆ Utilisation fréquente') + '</button>' +
+      '<button type="button" data-wallet="edit" data-id="' + id + '">✎ Modifier la carte</button>' +
+      '<button type="button" data-wallet="crop" data-id="' + id + '">✂ Recadrer le code-barres</button>' +
+      '<button type="button" class="mz-wallet-delete-action" data-wallet="delete" data-id="' + id +
+      '">Supprimer la carte…</button></div>';
+  }
+  function fullscreen(c, showMenu = false) {
     if (!c) return;
     let dlg = document.getElementById("mz-wallet-dialog");
     if (!dlg) {
@@ -653,24 +664,75 @@
     const barcode = walletEan13Svg(c.code);
     const hasPhoto = !!(c.image || c.originalImage);
     dlg.innerHTML = '<div class="mz-wallet-full"><div class="mz-wallet-fulltop"><strong>' + h(c.name) +
-      '</strong><button type="button" data-wallet="close" aria-label="Fermer">✕</button></div>' +
+      '</strong><span class="mz-wallet-fulltop-actions">' +
+      '<button type="button" data-wallet="cardMenu" data-id="' + h(c.id) +
+      '" aria-label="Options de gestion de la carte" aria-haspopup="true" aria-expanded="false" aria-controls="mz-wallet-card-menu">⋯</button>' +
+      '<button type="button" data-wallet="close" aria-label="Fermer">✕</button></span></div>' +
+      walletManageMenu(c) +
       '<div class="mz-wallet-codearea" id="mz-wallet-codearea">' +
       (barcode || (hasPhoto ? 'Chargement de la capture enregistrée…' :
         '<p class="mz-wallet-image-warning">Aucune capture disponible.</p>')) + '</div>' +
-      (c.code ? '<p class="mz-wallet-number">' + h(c.code) + '</p>' : '<p class="mz-wallet-number">Présente la capture au lecteur en caisse.</p>') +
-      '<p class="mz-wallet-hint">' + (barcode ? "Code-barres EAN-13 généré localement depuis le numéro enregistré." :
-        "La capture est conservée sur cet iPhone.") + '</p>' +
+      (c.code ? '<p class="mz-wallet-number">' + h(c.code) + '</p>' :
+        '<p class="mz-wallet-number">Présente la capture au lecteur en caisse.</p>') +
+      '<p class="mz-wallet-hint">' + (barcode ? 'Code-barres EAN-13 généré localement depuis le numéro enregistré.' :
+        'La capture est conservée sur cet iPhone.') + '</p>' +
       (hasPhoto || barcode ? '<div class="mz-wallet-full-toggle">' +
-        (hasPhoto ? '<button type="button" data-wallet="showCapture" data-id="' + h(c.id) + '">Voir la capture</button>' : '') +
+        (hasPhoto ? '<button type="button" data-wallet="showCapture" data-id="' + h(c.id) +
+          '">Voir la capture</button>' : '') +
         (barcode ? '<button type="button" data-wallet="showBarcode" data-id="' + h(c.id) +
-          '" ' + (hasPhoto ? "hidden" : "") + '>Voir le code-barres</button>' : '') + '</div>' : '') +
-      '<div class="mz-wallet-full-actions"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '">' +
-      (c.favorite ? "★ Retirer des favoris" : "☆ Utilisation fréquente") + '</button>' +
-      '<button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier la carte</button>' +
-      '<button type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button></div></div>';
+          '" ' + (hasPhoto ? "hidden" : "") + '>Voir le code-barres</button>' : '') +
+        '</div>' : '') + '</div>';
     if (!dlg.open) dlg.showModal();
+    if (showMenu) walletToggleCardMenu(dlg, true);
     if (!barcode && hasPhoto) walletShowCapture(c, dlg);
   }
+  function walletToggleCardMenu(dlg, open) {
+    const panel = dlg?.querySelector("#mz-wallet-card-menu");
+    const trigger = dlg?.querySelector('[data-wallet="cardMenu"]');
+    if (!panel || !trigger) return;
+    panel.hidden = !open;
+    trigger.setAttribute("aria-expanded", String(open));
+  }
+  /* Appui long uniquement sur les tuiles de la mosaïque. Annuler dès que
+     l'utilisateur fait défiler la liste, pour éviter les ouvertures involontaires. */
+  let walletHold = null, walletSuppressClick = null;
+  function walletStopHold() {
+    if (walletHold?.timer) clearTimeout(walletHold.timer);
+    walletHold = null;
+  }
+  document.addEventListener("pointerdown", event => {
+    const tile = event.target.closest(".mz-wallet-mosaic-card[data-wallet='open']");
+    if (!tile || (event.pointerType === "mouse" && event.button !== 0)) return;
+    walletStopHold();
+    const id = tile.dataset.id, pointerId = event.pointerId;
+    walletHold = {
+      id, pointerId, x: event.clientX, y: event.clientY,
+      timer: setTimeout(() => {
+        const still = walletHold;
+        if (!still || still.id !== id || still.pointerId !== pointerId) return;
+        walletSuppressClick = {id, expires: Date.now() + 1600};
+        walletStopHold();
+        fullscreen(lookup(id), true);
+      }, 650)
+    };
+  }, {passive: true});
+  document.addEventListener("pointermove", event => {
+    if (!walletHold || event.pointerId !== walletHold.pointerId) return;
+    if (Math.hypot(event.clientX - walletHold.x, event.clientY - walletHold.y) > 12)
+      walletStopHold();
+  }, {passive: true});
+  document.addEventListener("pointerup", walletStopHold, {passive: true});
+  document.addEventListener("pointercancel", walletStopHold, {passive: true});
+  window.addEventListener("scroll", walletStopHold, {passive: true});
+  document.addEventListener("contextmenu", event => {
+    const tile = event.target.closest(".mz-wallet-mosaic-card[data-wallet='open']");
+    if (!tile) return;
+    event.preventDefault();
+    if (walletSuppressClick?.id === tile.dataset.id && Date.now() < walletSuppressClick.expires) return;
+    walletSuppressClick = {id: tile.dataset.id, expires: Date.now() + 1600};
+    walletStopHold();
+    fullscreen(lookup(tile.dataset.id), true);
+  });
   function editCard(c) {
     if (!c) return;
     openSheet("Personnaliser la carte", '<form data-wallet-edit="' + h(c.id) + '">' +
@@ -758,6 +820,18 @@
     if (!button) return;
     event.preventDefault(); event.stopPropagation();
     const cmd = button.dataset.wallet, card = lookup(button.dataset.id);
+    if (cmd === "open" && walletSuppressClick?.id === button.dataset.id &&
+        Date.now() < walletSuppressClick.expires) {
+      walletSuppressClick = null;
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (cmd === "cardMenu") {
+      const dlg = document.getElementById("mz-wallet-dialog");
+      const opened = !dlg?.querySelector("#mz-wallet-card-menu")?.hidden;
+      walletToggleCardMenu(dlg, !opened);
+      return;
+    }
     if (cmd === "pick") document.getElementById("mz-wallet-files")?.click();
     else if (cmd === "pickBackup") document.getElementById("mz-wallet-backup")?.click();
     else if (cmd === "open") fullscreen(card);
@@ -781,9 +855,13 @@
       try { document.getElementById("mz-wallet-dialog")?.close(); await putMany([{ ...card, favorite: !card.favorite }]); await reload(); }
       catch (e) { state.error = "Modification impossible."; redraw(); }
     } else if (cmd === "delete" && card) {
-      if (!confirm("Supprimer « " + card.name + " » de cet iPhone ?")) return;
-      try { await erase(card.id); closeSheet(); await reload(); }
-      catch (e) { state.error = "Suppression impossible."; redraw(); }
+      if (!confirm("Supprimer définitivement « " + card.name + " » de cet iPhone ? Cette action ne peut pas être annulée.")) return;
+      try {
+        await erase(card.id);
+        document.getElementById("mz-wallet-dialog")?.close();
+        closeSheet();
+        await reload();
+      } catch (e) { state.error = "Suppression impossible."; redraw(); }
     } else if (cmd === "saveDrafts") await saveDrafts();
     else if (cmd === "clearDrafts") {
       state.drafts = []; state.status = ""; clearUrls(); redraw();

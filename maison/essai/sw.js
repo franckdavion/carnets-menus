@@ -1,7 +1,7 @@
 "use strict";
 /* Cache exclusivement la version de test sous /maison/essai/.
    Ne jamais supprimer ni remplacer le cache/PWA de la Maisonnée officielle. */
-const CACHE = "maisonnee-essai-cartes-v6";
+const CACHE = "maisonnee-essai-cartes-v7";
 const SHELL = [
   "./", "./index.html", "./manifest.json",
   "../maison.css", "../essai.css", "../essai-app.js", "../essai-modules.js", "../essai-cartes.js",
