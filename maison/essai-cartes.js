@@ -756,7 +756,7 @@
     } catch (e) { state.error = "Modification impossible : " + (e.message || e); redraw(); }
   }, true);
   window.addEventListener("resize", () => { if (state.crop) cropFit(); });
-  window.addEventListener("online", () => { decoderPromise = null; redraw(); });
+  window.addEventListener("online", () => { decoderPromise = null; ocrScriptPromise = null; redraw(); });
   window.addEventListener("offline", redraw);
   navigator.serviceWorker?.addEventListener("controllerchange", redraw);
   reload().catch(e => { state.ready = false; state.error = "Stockage indisponible : " + (e.message || e); redraw(); });
