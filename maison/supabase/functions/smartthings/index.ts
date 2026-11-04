@@ -65,11 +65,17 @@ async function stFetch(pat: string, path: string, init?: RequestInit) {
   return { ok: r.ok, status: r.status, body };
 }
 
+function stError(status: number, fallback: string): Error {
+  if (status === 401) return new Error("Jeton SmartThings expiré ou invalide. Renouvelez-le dans les réglages SmartThings.");
+  if (status === 403) return new Error("Accès SmartThings refusé : autorisations insuffisantes. Vérifiez les droits de lecture et de commande des appareils.");
+  return new Error(fallback);
+}
+
 interface StDevice { id: string; name: string; label: string; type: string }
 
 async function stListDevices(pat: string): Promise<StDevice[]> {
   const r = await stFetch(pat, "devices");
-  if (!r.ok) throw new Error("Impossible de lister les appareils SmartThings");
+  if (!r.ok) throw stError(r.status, "Impossible de lister les appareils SmartThings");
   const root = r.body as Record<string, unknown>;
   const items = Array.isArray(root?.items) ? root.items : [];
   return (items as Record<string, unknown>[])
@@ -92,7 +98,7 @@ async function stListDevices(pat: string): Promise<StDevice[]> {
 
 async function stAllDevices(pat: string): Promise<StDevice[]> {
   const r = await stFetch(pat, "devices");
-  if (!r.ok) throw new Error("Impossible de lister les appareils SmartThings");
+  if (!r.ok) throw stError(r.status, "Impossible de lister les appareils SmartThings");
   const root = r.body as Record<string, unknown>;
   const items = Array.isArray(root?.items) ? root.items : [];
   return (items as Record<string, unknown>[]).map(d => ({
@@ -105,7 +111,7 @@ async function stAllDevices(pat: string): Promise<StDevice[]> {
 
 async function stDeviceStatus(pat: string, deviceId: string) {
   const r = await stFetch(pat, `devices/${deviceId}/status`);
-  if (!r.ok) throw new Error("État SmartThings indisponible");
+  if (!r.ok) throw stError(r.status, "État SmartThings indisponible");
   return r.body as Record<string, unknown>;
 }
 
@@ -164,7 +170,7 @@ async function stCommand(pat: string, deviceId: string, capability: string, comm
   });
   if (!r.ok) {
     const body = r.body as Record<string, unknown>;
-    throw new Error(String(body?.message || body?.error || "Commande SmartThings refusée"));
+    throw stError(r.status, String(body?.message || body?.error || "Commande SmartThings refusée"));
   }
   return r.body;
 }
@@ -235,11 +241,14 @@ Deno.serve(async req => {
 
       // Verify token works
       const testR = await stFetch(pat, "devices?capability=switch");
-      if (!testR.ok) return json(req, { error: "Token SmartThings refusé par Samsung. Vérifiez qu'il est actif." }, 400);
+      if (!testR.ok) return json(req, { error: stError(testR.status, "Jeton SmartThings refusé par Samsung. Vérifiez qu'il est actif.").message }, 400);
 
-      // Find TV devices
+      // Conserver le téléviseur choisi lors du remplacement du jeton.
+      // La nouvelle clé est enregistrée uniquement après sa validation.
+      const previous = await getCred(hid);
       const tvs = await stListDevices(pat);
-      const device = tvs.length ? tvs[0] : null;
+      const all = await stAllDevices(pat);
+      const device = (previous?.device_id ? all.find(d => d.id === previous.device_id) : null) || tvs[0] || null;
 
       const { error } = await admin.from("household_smartthings").upsert({
         household_id: hid,
@@ -330,8 +339,20 @@ Deno.serve(async req => {
       stateCache.delete(deviceId);
       // Small delay for TV to process command
       await new Promise(r => setTimeout(r, 600));
-      const st = await readState(cred);
-      return json(req, { ok: true, ...st });
+      try {
+        const st = await readState(cred);
+        return json(req, { ok: true, ...st });
+      } catch (e) {
+        // Une commande acceptée ne doit pas être considérée comme ratée si
+        // seule sa relecture échoue : on conserve un état inconnu, jamais "éteint".
+        console.warn("Commande envoyée, relecture impossible :", e instanceof Error ? e.message : "erreur");
+        return json(req, {
+          ok: true, connected: true, device_id: deviceId,
+          device_name: cred.device_name || "Samsung TV",
+          power: null, label: "Commande transmise · état non confirmé",
+          state_unavailable: true
+        });
+      }
     }
 
     // ── pick_device ─────────────────────────────────────────────────

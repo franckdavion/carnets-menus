@@ -97,19 +97,26 @@ Deno.serve(async (req: Request) => {
     const input = cleanString(cap(raw, "mediaInputSource", "inputSource"));
     const channel = cleanString(cap(raw, "tvChannel", "tvChannel"));
     const channelName = cleanString(cap(raw, "tvChannel", "tvChannelName"));
-    const denied = [status.status, health.status, detail?.status].some(code => code === 401 || code === 403);
+    // Ne pas confondre un refus de /health avec un refus total d'accès au téléviseur.
+    const readDenied = !status.ok && !detail?.ok &&
+      [status.status, detail?.status].some(code => code === 401 || code === 403);
+    const expired = readDenied && [status.status, detail?.status].some(code => code === 401);
+    const healthDenied = !health.ok && (health.status === 401 || health.status === 403);
+    const accessIssue = readDenied ? (expired ? "token" : "permissions") : healthDenied ? "health" : null;
     const label =
+      accessIssue === "token" ? "Jeton SmartThings expiré ou invalide" :
+      accessIssue === "permissions" ? "Autorisations SmartThings insuffisantes" :
       healthValue === "OFFLINE" ? "Hors ligne · TV probablement éteinte" :
       healthValue === "UNHEALTHY" ? "Connexion instable · état incertain" :
       power === false ? "Éteinte" :
       power === true ? "Allumée" :
-      denied ? "Accès SmartThings refusé" :
+      accessIssue === "health" ? "Lecture de disponibilité refusée" :
       healthValue === "ONLINE" ? "Connectée · état inconnu" :
       "État SmartThings indisponible";
     return reply(req, {
       connected: true, device_name: cred.device_name || "Samsung TV",
       power, volume, mute, input, channel, channelName, label,
-      health: healthValue, source: "smartthings-tv-test",
+      health: healthValue, access_issue: accessIssue, source: "smartthings-tv-test",
       // Codes HTTP uniquement, jamais de PAT ni de réponse brute du fournisseur.
       diagnostic: {
         status_http: status.status,
