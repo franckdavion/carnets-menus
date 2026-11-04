@@ -10,6 +10,7 @@ const APP_VERSION = "1.16.1.2";
 const CONTEXT_TTL_MS = 25 * 60 * 1000;
 const ALLOWED = new Set([
   "https://franckdavion.github.io",
+  "http://192.168.0.146:8765",
   "http://127.0.0.1:8765",
   "http://localhost:8765",
   "http://127.0.0.1:8766",
