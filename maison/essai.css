@@ -46,13 +46,12 @@
 @media(prefers-reduced-motion:reduce){.cal-create .cal-create-fab svg{transition:none;}}
 
 
-/* Calendrier repliable : commande explicite, uniquement dans la version d'essai. */
-.cal .cal-month-toggle{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-width:0;min-height:64px;padding:6px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(85,200,255,.09);color:var(--ink);cursor:pointer;text-align:center;}
-.cal .cal-month-toggle-copy{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;}
-.cal .cal-month-toggle strong{font:700 17px var(--display);white-space:nowrap;}
-.cal .cal-month-toggle-hint{font:600 12px var(--body);color:var(--accent);white-space:nowrap;}
-.cal .cal-month-toggle-chevron{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:50%;background:linear-gradient(145deg,rgba(90,204,255,.30),rgba(27,105,187,.34));border:2px solid var(--accent);box-shadow:0 0 12px rgba(85,200,255,.32),inset 0 1px 2px rgba(255,255,255,.24);}
-.cal .cal-month-toggle-chevron svg{display:block;width:32px;height:32px;stroke:var(--accent);fill:none;stroke-width:3.2;transform:rotate(90deg);}
+/* Calendrier repliable : gros bouton fléché à droite du mois, version d’essai uniquement. */
+.cal .cal-month-toggle{display:flex;flex:1;align-items:center;justify-content:space-between;gap:5px;min-width:0;min-height:74px;padding:6px 4px 6px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(85,200,255,.09);color:var(--ink);cursor:pointer;}
+.cal .cal-month-toggle-copy{display:flex;flex:1;align-items:center;justify-content:center;min-width:0;}
+.cal .cal-month-toggle strong{font:700 17px var(--display);text-align:center;overflow-wrap:anywhere;}
+.cal .cal-month-toggle-chevron{display:grid;place-items:center;flex:none;width:62px;height:62px;border-radius:50%;background:linear-gradient(145deg,rgba(114,216,255,.52),rgba(17,97,202,.62));border:3px solid var(--accent);box-shadow:0 0 17px rgba(85,200,255,.54),inset 0 1px 3px rgba(255,255,255,.38);}
+.cal .cal-month-toggle-chevron svg{display:block;width:42px;height:42px;stroke:var(--accent);fill:none;stroke-width:3.5;transform:rotate(90deg);}
 .cal .cal-month-toggle[aria-expanded="true"] .cal-month-toggle-chevron svg{transform:rotate(-90deg);}
 .cal .cal-month-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-@media(max-width:380px){.cal .cal-month-toggle{gap:5px;padding:6px 5px}.cal .cal-month-toggle strong{font-size:15px}.cal .cal-month-toggle-chevron{width:42px;height:42px}.cal .cal-month-toggle-chevron svg{width:30px;height:30px}}
+@media(max-width:380px){.cal .cal-month-toggle{gap:3px;padding-left:4px;padding-right:2px}.cal .cal-month-toggle strong{font-size:15px}.cal .cal-month-toggle-chevron{width:56px;height:56px}.cal .cal-month-toggle-chevron svg{width:38px;height:38px}}
