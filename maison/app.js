@@ -1568,7 +1568,7 @@ function taskSheet(t, day, opts = {}) {
       </div>
       <div data-task-google hidden>
         <label class="field"><span class="label">Liste Google Tasks</span><select class="input" name="google_list" data-selected="${esc(gTask?.listId || "")}" ${gTask ? "disabled" : ""}><option value="">Chargement…</option></select></label>
-        <p class="muted small" id="gTaskInfo">Google Tasks n'enregistre ni heure ni rappel via son API.</p>
+        <p class="muted small" id="gTaskInfo">Google Tasks : son API ne gère pas l'heure, la répétition ni les rappels. Ces réglages restent dans l'application Google.</p>
         <button type="button" class="btn ghost" data-act="gTasksAuthorize">Autoriser ou reconnecter Google Tasks</button>
       </div>
       <label class="field"><span class="label">Note / description</span><textarea class="input" name="notes" maxlength="${dest === "google" ? 8192 : 500}" placeholder="Facultatif">${esc(t.notes)}</textarea></label>
