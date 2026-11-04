@@ -1906,7 +1906,40 @@ function mzDomTestFavPicker(){
   openSheet("Mes accès rapides",`<form id="mz-dom-favs-form" class="dom-form"><p class="muted">Un raccourci ouvre la zone et affiche les commandes : il n'actionne jamais directement un portail ou un volet.</p>${fields}<button type="submit" class="btn primary">Enregistrer</button><p class="muted small">Test uniquement : choix enregistrés sur cet iPhone, sans modification Shelly ni Supabase.</p></form>`);
 }
 
-function domBoard() { return mzDomTestBoard(); }
+function domBoard() {
+  const rooms = domRoomList();
+  const st = domDashStats();
+  const eq = rooms.map(r => `<article class="dom-eq-card"><button type="button" class="dom-eq-open" data-dom-room="${esc(r.id)}">${domEqCardTop(esc(r.ico), esc(r.t))}<small>${esc(domRoomSummary(r))}</small></button></article>`);
+  const pending = mode === "demo" ? "Mode démo — ouvrez le vrai foyer" : "Non connecté";
+  eq.push(domMelLinked() ? domMelEqCard() : domPlaceholderCard("mitsu", "Chauffage Mitsubishi", "♨️", pending));
+  eq.push(domDreameLinked() ? domDreameEqCard() : domPlaceholderCard("dreame", "Dreame D20 Ultra", "🤖", pending));
+  eq.push(domStLinked() ? domStEqCard() : domPlaceholderCard("tv", "Samsung TV", "📺", pending));
+  return `<article class="dom-hero">
+    <button type="button" class="dom-hero-media" data-dom-tab="house" aria-label="Ouvrir la vue maison">
+      <span class="dom-hero-photo" aria-hidden="true"></span>
+      <span class="dom-hero-shade"></span>
+      <span class="dom-hero-copy"><strong>Ma maison</strong><span class="dom-hero-status ${st.connected ? "is-on" : ""}">${st.connected ? "Maison connectée" : "Shelly non relié"}</span></span>
+    </button>
+    <div class="dom-hero-stats">
+      <span><i aria-hidden="true">▤</i>${esc(st.volets)}</span>
+      <span><i aria-hidden="true">🚪</i>${esc(st.gate)}</span>
+      <span><i aria-hidden="true">🌡</i>${st.indoor ? esc(st.indoor) + " intérieur" : "Intérieur non disponible"}</span>
+      <span><i aria-hidden="true">♨️</i>${st.mel && st.melTemps ? esc(st.melTemps) : (st.mel ? esc(domMelSummary()) : "Chauffage non relié")}</span>
+    </div>
+  </article>
+  <button type="button" class="btn mz-dom-zones-entry" data-dom-tab="zones">
+    <span class="mz-dom-zones-entry-icon" aria-hidden="true">▤</span>
+    <span><strong>Mes zones et commandes rapides</strong><small>Extérieur · Rez-de-chaussée · Étage</small></span>
+    <span aria-hidden="true">›</span>
+  </button>
+  <div class="dom-scenes" role="group" aria-label="Scénarios">
+    <button type="button" data-dom-scenario="nuit">🌙 Bonne nuit<span>À configurer</span></button>
+    <button type="button" data-dom-scenario="depart">🚗 Départ<span>À configurer</span></button>
+    <button type="button" data-dom-scenario="retour">🏠 Retour<span>À configurer</span></button>
+  </div>
+  <div class="dom-eq-head"><h3>Mes équipements</h3><button type="button" class="btn ghost small" data-dom-tab="house">Voir par pièces ›</button></div>
+  <div class="dom-eq-grid">${eq.join("")}</div>`;
+}
 function domHouseView() {
   const rooms = domRoomList();
   const roomRows = rooms.map(r => {
@@ -1958,7 +1991,7 @@ function domScenarioSheet(id) {
   openSheet(t, `<div class="dom-pending"><p><strong>À configurer</strong></p><p class="muted">Ce scénario n'envoie aucune commande pour le moment. Vous pourrez l'associer plus tard à des équipements réellement connectés.</p><button type="button" class="btn" data-act="closeSheet">Fermer</button></div>`);
 }
 function domPage() {
-  const tab = domTab === "house" ? "house" : "board";
+  const tab = domTab === "house" ? "house" : domTab === "zones" ? "zones" : "board";
   if (domZone) {
     const devices = domRead().filter(x => x.zone === domZone);
     const batch = domZoneBatchCard(domZone);
@@ -1966,8 +1999,10 @@ function domPage() {
   }
   return `<section class="dom-page">
     <div class="dom-page-heading"><h2>Domotique</h2><button class="btn dom-settings-button" data-dom-settings="" aria-label="Réglages Domotique" title="Réglages Domotique">⚙️</button></div>
-    ${tab === "house" ? '<button type="button" class="btn ghost mz-dom-return" data-dom-tab="board">← Retour aux zones</button>' : ""}
-    ${tab === "house" ? domHouseView() : domBoard()}
+    ${tab === "zones"
+      ? '<button type="button" class="btn ghost mz-dom-return" data-dom-tab="board">← Retour au tableau de bord</button>'
+      : `<div class="seg dom-seg" role="group" aria-label="Présentation"><button type="button" data-dom-tab="board" aria-pressed="${tab === "board"}">Tableau de bord</button><button type="button" data-dom-tab="house" aria-pressed="${tab === "house"}">Vue maison</button></div>`}
+    ${tab === "zones" ? mzDomTestBoard() : tab === "house" ? domHouseView() : domBoard()}
   </section>`;
 }
 VIEWS.domotique = function () {
@@ -2047,7 +2082,7 @@ document.addEventListener("click", e => {
     return;
   }
   const tab = e.target.closest("[data-dom-tab]");
-  if (tab) { domTab = tab.dataset.domTab === "house" ? "house" : "board"; domZone = ""; render(); return; }
+  if (tab) { const next = tab.dataset.domTab; domTab = next === "house" || next === "zones" ? next : "board"; domZone = ""; render(); return; }
   const room = e.target.closest("[data-dom-room]");
   if (room) { domRoomSheet(room.dataset.domRoom); return; }
   const dev = e.target.closest("[data-dom-device]");
