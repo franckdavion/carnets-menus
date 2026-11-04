@@ -261,6 +261,93 @@
       URL.revokeObjectURL(url);
     }
   }
+  /* OCR facultative et locale dans le navigateur : le moteur est téléchargé
+     uniquement sur demande lorsque Internet est disponible, sans téléverser
+     les captures. L'identification reste à confirmer avant l'enregistrement. */
+  let ocrScriptPromise = null, ocrWorker = null;
+  async function loadTextReader() {
+    if (window.Tesseract?.createWorker) return true;
+    if (!navigator.onLine) return false;
+    if (!ocrScriptPromise) ocrScriptPromise = new Promise(resolve => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      const timer = setTimeout(() => resolve(false), 15000);
+      script.onload = () => { clearTimeout(timer); resolve(!!window.Tesseract?.createWorker); };
+      script.onerror = () => { clearTimeout(timer); resolve(false); };
+      document.head.appendChild(script);
+    });
+    return ocrScriptPromise;
+  }
+  async function ocrSource(blob) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      img.src = url; await img.decode();
+      const top = Math.max(1, Math.round(img.naturalHeight * .75));
+      const ratio = Math.min(1.7, 1350 / img.naturalWidth);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * ratio);
+      canvas.height = Math.round(top * ratio);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return blob;
+      ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, img.naturalWidth, top, 0, 0, canvas.width, canvas.height);
+      return await new Promise((resolve,reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Impossible de lire la capture.")), "image/png"));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function recognizeBrandOnCard(card) {
+    if (!card?.image) return { brand: null, reason: "Capture indisponible." };
+    const matched = brandFromText(card.name);
+    if (matched) return { brand: matched, reason: "Enseigne retrouvée dans le nom." };
+    if (!navigator.onLine) return { brand: null, reason: "Reconnaissance automatique indisponible hors ligne : choisis l’enseigne dans la liste." };
+    try {
+      if (!(await loadTextReader())) return { brand: null, reason: "Le lecteur de texte ne s’est pas chargé. Choisis l’enseigne dans la liste." };
+      if (!ocrWorker) ocrWorker = await window.Tesseract.createWorker("eng");
+      const image = await ocrSource(card.originalImage || card.image);
+      const result = await ocrWorker.recognize(image);
+      const words = String(result?.data?.text || "");
+      const brand = brandFromText(words);
+      return { brand, reason: brand ? "Nom repéré sur la capture (à vérifier)." :
+        "Aucune enseigne reconnue avec certitude. Sélectionne-la dans la liste." };
+    } catch (error) {
+      return { brand: null, reason: "Lecture automatique impossible. Choisis l’enseigne manuellement." };
+    }
+  }
+  async function recognizeOne(id) {
+    if (state.busy) return;
+    const draft = state.drafts.find(d => d.id === id), card = draft || lookup(id);
+    if (!card) return;
+    state.busy = true; state.error = "";
+    state.status = "Lecture du nom de l’enseigne sur la capture…"; redraw();
+    try {
+      const found = await recognizeBrandOnCard(card);
+      if (found.brand) {
+        const updated = applyBrand({ ...card }, found.brand.id);
+        if (draft) Object.assign(draft, updated);
+        else await putMany([updated]);
+        state.status = found.brand.name + " — " + found.reason;
+        if (!draft) await reload();
+      } else state.status = found.reason;
+    } finally { state.busy = false; redraw(); }
+  }
+  async function recognizeDrafts() {
+    if (state.busy || !state.drafts.length) return;
+    state.busy = true;
+    let done = 0, found = 0;
+    try {
+      for (const draft of state.drafts) {
+        done++;
+        if (brandOf(draft)) { found++; continue; }
+        state.status = "Identification " + done + " / " + state.drafts.length + "…";
+        redraw();
+        const result = await recognizeBrandOnCard(draft);
+        if (result.brand) { applyBrand(draft, result.brand.id); found++; }
+      }
+      state.status = found + " enseigne(s) associée(s) sur " + done +
+        ". Vérifie les propositions et choisis les enseignes manquantes.";
+    } finally { state.busy = false; redraw(); }
+  }
+
   async function addImages(files) {
     if (state.busy) return;
     const images = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, LIMIT);
@@ -280,7 +367,9 @@
           const found = await readBarcode(file);
           if (found.code && knownCodes.has(found.code)) { duplicates++; continue; }
           existing.add(hash); if (found.code) knownCodes.add(found.code);
-          state.drafts.push({ id: uid(), name: nameFromFile(file.name, state.cards.length + state.drafts.length + 1), code: found.code, format: found.format, hash, image: file, originalImage: file, favorite: false, savedAt: Date.now() });
+          const fileName = nameFromFile(file.name, state.cards.length + state.drafts.length + 1);
+          const detectedBrand = brandFromText(fileName);
+          state.drafts.push({ id: uid(), name: detectedBrand?.name || fileName, brandId: detectedBrand?.id || "", code: found.code, format: found.format, hash, image: file, originalImage: file, favorite: false, savedAt: Date.now() });
         } catch (e) { failures++; }
       }
       state.status = state.drafts.length + " capture(s) à vérifier" + (duplicates ? " · " + duplicates + " doublon(s) ignoré(s)" : "") + (failures ? " · " + failures + " erreur(s)" : "") + ".";
@@ -293,7 +382,7 @@
     if (state.busy || !state.drafts.length) return;
     state.busy = true; state.error = ""; state.status = "Enregistrement local…"; redraw();
     try {
-      const batch = state.drafts.map(d => ({ ...d, name: String(d.name).trim().slice(0, 60) || "Carte de fidélité" }));
+      const batch = state.drafts.map(d => ({ ...d, brandId: brandOf(d)?.id || "", name: String(d.name).trim().slice(0, 60) || brandOf(d)?.name || "Carte de fidélité" }));
       await putMany(batch);
       state.drafts = [];
       state.status = batch.length + " carte(s) sauvegardée(s) sur cet appareil.";
@@ -559,7 +648,7 @@
         const originalImage = typeof row.originalImage === "string" ? base64ToBlob(row.originalImage) : null;
         if (hash) knownHash.add(hash);
         if (code) knownCodes.add(code);
-        batch.push({ id: uid(), name: row.name.slice(0, 60) || "Carte restaurée", code, format: String(row.format || "").slice(0, 60), hash, image, originalImage, favorite: !!row.favorite, savedAt: Date.now() });
+        batch.push({ id: uid(), name: row.name.slice(0, 60) || "Carte restaurée", brandId: brandById(row.brandId)?.id || brandFromText(row.name)?.id || "", code, format: String(row.format || "").slice(0, 60), hash, image, originalImage, favorite: !!row.favorite, savedAt: Date.now() });
       }
       await putMany(batch);
       state.status = batch.length + " carte(s) restaurée(s).";
