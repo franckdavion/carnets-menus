@@ -1282,7 +1282,7 @@ function domSettings(zone) {
     ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">Compte relié${domStStatus.device_name ? " · " + esc(domStStatus.device_name) : ""}. Token côté serveur uniquement.</p><div class="btns"><button class="btn" data-dom-st-devices>Choisir un appareil</button><button class="btn ghost danger" data-dom-st-disconnect>Délier SmartThings</button></div>`
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">Reliez un token SmartThings (PAT) pour piloter votre TV Samsung.</p><button class="btn primary" data-dom-st-connect>Relier SmartThings</button>`)
     : "";
-  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}${stv}<p class="muted small">Version domotique · build 20261101e02</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
+  openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}${stv}<p class="muted small">Version domotique · build 20261101e02</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-mz-dom-favs-config>Personnaliser mes 3 accès rapides ›</button><button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
@@ -1789,35 +1789,123 @@ function domStDevicePickerSheet() {
 function domPlaceholderCard(kind, title, ico, sub) {
   return `<article class="dom-eq-card is-pending"><button type="button" class="dom-eq-open" data-dom-placeholder="${kind}">${domEqCardTop(ico, esc(title))}<small>${esc(sub)}</small></button></article>`;
 }
-function domBoard() {
-  const rooms = domRoomList();
-  const st = domDashStats();
-  const eq = rooms.map(r => `<article class="dom-eq-card"><button type="button" class="dom-eq-open" data-dom-room="${esc(r.id)}">${domEqCardTop(esc(r.ico), esc(r.t))}<small>${esc(domRoomSummary(r))}</small></button></article>`);
-  const pending = mode === "demo" ? "Mode démo — ouvrez le vrai foyer" : "Non connecté";
-  eq.push(domMelLinked() ? domMelEqCard() : domPlaceholderCard("mitsu", "Chauffage Mitsubishi", "♨️", pending));
-  eq.push(domDreameLinked() ? domDreameEqCard() : domPlaceholderCard("dreame", "Dreame D20 Ultra", "🤖", pending));
-  eq.push(domStLinked() ? domStEqCard() : domPlaceholderCard("tv", "Samsung TV", "📺", pending));
-  return `<article class="dom-hero">
-    <button type="button" class="dom-hero-media" data-dom-tab="house" aria-label="Ouvrir la vue maison">
-      <span class="dom-hero-photo" aria-hidden="true"></span>
-      <span class="dom-hero-shade"></span>
-      <span class="dom-hero-copy"><strong>Ma maison</strong><span class="dom-hero-status ${st.connected ? "is-on" : ""}">${st.connected ? "Maison connectée" : "Shelly non relié"}</span></span>
-    </button>
-    <div class="dom-hero-stats">
-      <span><i aria-hidden="true">▤</i>${esc(st.volets)}</span>
-      <span><i aria-hidden="true">🚪</i>${esc(st.gate)}</span>
-      <span><i aria-hidden="true">🌡</i>${st.indoor ? esc(st.indoor) + " intérieur" : "Intérieur non disponible"}</span>
-      <span><i aria-hidden="true">♨️</i>${st.mel && st.melTemps ? esc(st.melTemps) : (st.mel ? esc(domMelSummary()) : "Chauffage non relié")}</span>
-    </div>
-  </article>
-  <div class="dom-scenes" role="group" aria-label="Scénarios">
-    <button type="button" data-dom-scenario="nuit">🌙 Bonne nuit<span>À configurer</span></button>
-    <button type="button" data-dom-scenario="depart">🚗 Départ<span>À configurer</span></button>
-    <button type="button" data-dom-scenario="retour">🏠 Retour<span>À configurer</span></button>
-  </div>
-  <div class="dom-eq-head"><h3>Mes équipements</h3><button type="button" class="btn ghost small" data-dom-tab="house">Voir par pièces ›</button></div>
-  <div class="dom-eq-grid">${eq.join("")}</div>`;
+/* Vue Domotique compacte — TEST uniquement. */
+let mzDomOpenZone = "exterieur";
+function mzDomFavorites(){
+  try {
+    const v=JSON.parse(localStorage.getItem("mz_dom_favorites_test_v1")||"null");
+    if(Array.isArray(v)&&v.length===3&&v.every(x=>typeof x==="string"))return v;
+  }catch(_){}
+  return ["group:portail","group:volet","group:lumiere"];
 }
+
+function mzDomDisplayZone(x){
+  const rooms=domHomeRead().rooms;
+  const room=rooms.find(r=>r.id===domRoomIdOf(x));
+  const n=String(room?.t||"").toLocaleLowerCase("fr");
+  if(/extérieur|exterieur|jardin|garage|atelier/.test(n))return "exterieur";
+  if(/chambre|étage|etage|escalier/.test(n))return "etage";
+  if(/salon|salle|cuisine|entrée|entree|séjour|sejour|bureau|rdc/.test(n))return "rdc";
+  return x.zone==="etage"?"etage":x.zone==="rdc"?"rdc":"exterieur";
+}
+
+function mzDomActualItems(){return domRead().filter(x=>!!x.shelly_id);}
+
+function mzDomFavTarget(key){
+  const items=mzDomActualItems();
+  if(key.startsWith("device:"))return items.find(x=>"device:"+x.id===key)||null;
+  const type=key.slice(6);
+  return items.find(x=>x.type===type&&mzDomDisplayZone(x)===(type==="volet"?"rdc":"exterieur"))
+    ||items.find(x=>x.type===type)||null;
+}
+
+function mzDomFavText(key){
+  const labels={"group:portail":"Portails","group:volet":"Volets","group:lumiere":"Lumières"};
+  if(labels[key])return labels[key];
+  const found=mzDomActualItems().find(x=>"device:"+x.id===key);
+  return found?found.name:"Choisir";
+}
+
+function mzDomFavIcon(key){
+  const x=mzDomFavTarget(key);
+  const t=key.startsWith("group:")?key.slice(6):x?.type;
+  return t==="portail"?"🚪":t==="volet"?"▤":t==="lumiere"?"💡":t==="prise"?"🔌":"⌘";
+}
+
+function mzDomCompactDevice(x){
+  const pos=domPos(x),st=domState[x.id];
+  const state=x.type==="volet"?domVoletBadge(x)
+    :`<span class="mz-dom-device-state">${esc(st?.label||(domStateLoading?"Lecture en cours":"État non confirmé"))}</span>`;
+  return `<article class="mz-dom-device mz-dom-device-${esc(x.type)}" data-mz-dom-device="${esc(x.id)}">
+    <div class="mz-dom-device-top">
+      <span class="mz-dom-device-icon" aria-hidden="true">${x.type==="volet"?domShutterSvg(x):domIcon(x.type)}</span>
+      <span class="mz-dom-device-info"><strong>${esc(x.name)}</strong>${state}</span>
+    </div>
+    ${x.type==="volet"&&pos!=null?domMeter(x):""}
+    ${domCmdBtns(x,true)}
+  </article>`;
+}
+
+function mzDomAccordions(){
+  const meta=[["exterieur","🌳","Extérieur"],["rdc","🏠","Rez-de-chaussée"],["etage","🛏️","Étage"]];
+  const items=mzDomActualItems();
+  return meta.map(([zone,ico,label])=>{
+    const rows=items.filter(x=>mzDomDisplayZone(x)===zone),open=mzDomOpenZone===zone;
+    const hint=zone==="exterieur"?"Portails · Éclairages · Atelier"
+       :zone==="rdc"?"Salon · Cuisine · Salle à manger · Entrée":"Chambres · Escalier";
+    const summary=`${rows.length} équipement${rows.length>1?"s":""} · ${hint}`;
+    // Batch controls are the existing, server-supported commands; no new relay action.
+    const batch=zone==="rdc"||zone==="etage"?domZoneBatchCard(zone):"";
+    const content=open?`<div class="mz-dom-zone-content">${batch}
+      <div class="mz-dom-items ${zone==="exterieur"?"mz-dom-items-ext":""}">
+        ${rows.length?rows.map(mzDomCompactDevice).join(""):'<p class="muted small">Aucun appareil Shelly associé.</p>'}
+      </div>
+      ${zone==="rdc"&&domStLinked()?`<button class="mz-dom-linked" type="button" data-dom-st-open><span aria-hidden="true">📺</span><span><strong>TV Samsung</strong><small>${esc(domStSummary())}</small></span><span aria-hidden="true">›</span></button>`:""}
+    </div>`:"";
+    return `<section class="mz-dom-zone${open?" is-open":""}">
+      <button type="button" class="mz-dom-zone-toggle" data-mz-dom-toggle="${zone}"
+        aria-expanded="${open}" aria-controls="mz-zone-${zone}">
+        <span class="mz-dom-zone-ico" aria-hidden="true">${ico}</span>
+        <span class="mz-dom-zone-heading"><strong>${label}</strong><small>${esc(summary)}</small></span>
+        <span class="mz-dom-chevron" aria-hidden="true">${open?"⌃":"⌄"}</span>
+      </button>
+      <div id="mz-zone-${zone}" class="mz-dom-zone-body" ${open?"":"hidden"}>${content}</div>
+    </section>`;
+  }).join("");
+}
+
+function mzDomTestBoard(){
+  const items=mzDomActualItems();
+  const n=t=>items.filter(x=>x.type===t).length;
+  const favs=mzDomFavorites().map(key=>`<button type="button" class="mz-dom-fav" data-mz-dom-fav="${esc(key)}" aria-label="Afficher ${esc(mzDomFavText(key))}"><span class="mz-dom-fav-icon" aria-hidden="true">${mzDomFavIcon(key)}</span><span>${esc(mzDomFavText(key))}</span></button>`).join("");
+  const extras=[
+    domMelLinked()?domMelEqCard():domPlaceholderCard("mitsu","Chauffage Mitsubishi","♨️","Non connecté"),
+    domDreameLinked()?domDreameEqCard():domPlaceholderCard("dreame","Dreame D20 Ultra","🤖","Non connecté")
+  ].join("");
+  return `<div class="mz-dom-compact">
+    <div class="mz-dom-pulse"><span>▤ ${n("volet")} volets</span><span>💡 ${n("lumiere")} éclairages</span><span>🚪 ${n("portail")} accès</span></div>
+    <div class="mz-dom-section-head"><h3>Accès rapides</h3><span>Modifier dans Réglages</span></div>
+    <div class="mz-dom-quick" role="group" aria-label="Accès rapides">${favs}</div>
+    <div class="mz-dom-section-head"><h3>Mes zones</h3><span>Une zone ouverte à la fois</span></div>
+    <div class="mz-dom-zones">${mzDomAccordions()}</div>
+    <details class="mz-dom-details"><summary>Confort et appareils <span class="mz-dom-more">Chauffage · Aspirateur</span></summary><div class="dom-eq-grid mz-dom-other">${extras}</div></details>
+    <details class="mz-dom-details"><summary>Scénarios <span class="mz-dom-more">Bonne nuit · Départ · Retour</span></summary><div class="dom-scenes">
+      <button type="button" data-dom-scenario="nuit">🌙 Bonne nuit<span>À configurer</span></button>
+      <button type="button" data-dom-scenario="depart">🚗 Départ<span>À configurer</span></button>
+      <button type="button" data-dom-scenario="retour">🏠 Retour<span>À configurer</span></button>
+    </div></details>
+    <button type="button" class="btn ghost mz-dom-allrooms" data-dom-tab="house">Voir toutes les pièces ›</button>
+  </div>`;
+}
+
+function mzDomTestFavPicker(){
+  const items=mzDomActualItems(),saved=mzDomFavorites();
+  const options=[["group:portail","Portails"],["group:volet","Volets"],["group:lumiere","Lumières"],...items.map(x=>["device:"+x.id,x.name])];
+  const fields=saved.map((value,i)=>`<label>Accès rapide ${i+1}<select name="fav_${i}" required>${options.map(([key,name])=>`<option value="${esc(key)}" ${key===value?"selected":""}>${esc(name)}</option>`).join("")}</select></label>`).join("");
+  openSheet("Mes accès rapides",`<form id="mz-dom-favs-form" class="dom-form"><p class="muted">Un raccourci ouvre la zone et affiche les commandes : il n'actionne jamais directement un portail ou un volet.</p>${fields}<button type="submit" class="btn primary">Enregistrer</button><p class="muted small">Test uniquement : choix enregistrés sur cet iPhone, sans modification Shelly ni Supabase.</p></form>`);
+}
+
+function domBoard() { return mzDomTestBoard(); }
 function domHouseView() {
   const rooms = domRoomList();
   const roomRows = rooms.map(r => {
@@ -1877,10 +1965,7 @@ function domPage() {
   }
   return `<section class="dom-page">
     <div class="dom-page-heading"><h2>Domotique</h2><button class="btn dom-settings-button" data-dom-settings="" aria-label="Réglages Domotique" title="Réglages Domotique">⚙️</button></div>
-    <div class="seg dom-seg" role="group" aria-label="Présentation">
-      <button type="button" data-dom-tab="board" aria-pressed="${tab === "board"}">Tableau de bord</button>
-      <button type="button" data-dom-tab="house" aria-pressed="${tab === "house"}">Vue maison</button>
-    </div>
+    ${tab === "house" ? '<button type="button" class="btn ghost mz-dom-return" data-dom-tab="board">← Retour aux zones</button>' : ""}
     ${tab === "house" ? domHouseView() : domBoard()}
   </section>`;
 }
@@ -1934,6 +2019,32 @@ function domConnectSheet() {
   </form>`);
 }
 document.addEventListener("click", e => {
+  if (e.target.closest("[data-mz-dom-favs-config]")) { mzDomTestFavPicker(); return; }
+  const zoneBtn = e.target.closest("[data-mz-dom-toggle]");
+  if (zoneBtn) {
+    const zone=zoneBtn.dataset.mzDomToggle;
+    if (!["exterieur","rdc","etage"].includes(zone)) return;
+    const oldTop=zoneBtn.getBoundingClientRect().top;
+    mzDomOpenZone=mzDomOpenZone===zone?"":zone;
+    render();
+    requestAnimationFrame(()=>{
+      const next=document.querySelector('[data-mz-dom-toggle="' + zone + '"]');
+      if(next)window.scrollBy(0,next.getBoundingClientRect().top-oldTop);
+    });
+    return;
+  }
+  const fav=e.target.closest("[data-mz-dom-fav]");
+  if(fav){
+    const x=mzDomFavTarget(fav.dataset.mzDomFav);
+    if(!x){toast("Appareil indisponible.");return;}
+    mzDomOpenZone=mzDomDisplayZone(x);
+    render();
+    requestAnimationFrame(()=>{
+      const card=document.querySelector('[data-mz-dom-device="' + x.id + '"]');
+      if(card)card.scrollIntoView({behavior:"smooth",block:"center"});
+    });
+    return;
+  }
   const tab = e.target.closest("[data-dom-tab]");
   if (tab) { domTab = tab.dataset.domTab === "house" ? "house" : "board"; domZone = ""; render(); return; }
   const room = e.target.closest("[data-dom-room]");
@@ -2484,6 +2595,15 @@ document.addEventListener("click", e => {
   }
 });
 document.addEventListener("submit", e => {
+  if(e.target.id==="mz-dom-favs-form"){
+    e.preventDefault();
+    const fd=new FormData(e.target);
+    const chosen=[0,1,2].map(i=>String(fd.get("fav_"+i)||""));
+    const accepted=new Set(["group:portail","group:volet","group:lumiere",...mzDomActualItems().map(x=>"device:"+x.id)]);
+    if(chosen.some(x=>!accepted.has(x))){toast("Raccourci invalide.");return;}
+    localStorage.setItem("mz_dom_favorites_test_v1",JSON.stringify(chosen));
+    closeSheet();render();toast("Accès rapides personnalisés sur cet appareil.");return;
+  }
   if (e.target.id === "dom-dreame-rooms") {
     e.preventDefault();
     const fd = new FormData(e.target);
