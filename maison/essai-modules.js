@@ -2646,14 +2646,14 @@ VIEWS.agenda = function () {
   }
   return `<div class="cal">
       <div class="weeknav" style="margin-top:0">
-        <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="-1" aria-label="Mois précédent" ${calMonthOpen ? "" : "hidden"}>${I.left}</button>
+        <button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav cal-month-arrow" data-act="calMonth" data-v="-1" aria-label="Mois précédent" ${calMonthOpen ? "" : "hidden"}>${I.left}</button>
         <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Réduire" : "Afficher"} le calendrier du mois">
           <span class="cal-month-toggle-copy">
             <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
           </span>
           <span class="cal-month-toggle-chevron mz-round-btn mz-round-btn--lg" aria-hidden="true">${I.right}</span>
         </button>
-        <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
+        <button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
       </div>
       <div id="calMonthContent" ${calMonthOpen ? "" : "hidden"}>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
@@ -2770,7 +2770,7 @@ VIEWS.budget = function () {
     days += `<button class="row" data-act="editExp" data-v="${e.id}"><span class="cat-dot" style="--c:${catColor(e.category)}"></span><span class="main"><span class="t">${esc(e.label)}</span><span class="m">${esc(e.kind === "in" ? "Rentrée" : e.category)}${p ? " · " + esc(p.name) : ""}</span></span><span class="amt ${e.kind === "in" ? "in" : ""}">${e.kind === "in" ? "+" : "−"}${esc(eur(e.amount))}</span></button>`;
   }
   if (last) days += "</div>";
-  return `<div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="budMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button><strong>${esc(cap(monthName(m0)))}</strong><button class="icon-btn plain" data-act="budMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
+  return `<div class="weeknav" style="margin-top:0"><button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="budMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button><strong>${esc(cap(monthName(m0)))}</strong><button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="budMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
     <div class="card bud-card">
       <span class="muted small">Dépensé</span>
       <span class="bud-big">${esc(eur(spent))}</span>
@@ -3217,7 +3217,7 @@ async function lbDraw() {
   const el = $("#lb"), p = lbList[lbIdx]; if (!el || !p) return lbClose();
   const m = member(p.member_id), mine = p.member_id === S.me;
   const when = new Date(p.taken_at || p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  el.innerHTML = `<div class="lb-top"><button class="icon-btn plain" data-act="lbClose" aria-label="Fermer">✕</button><span>${lbIdx + 1} / ${lbList.length}</span><span style="width:44px"></span></div>
+  el.innerHTML = `<div class="lb-top"><button type="button" class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--close" data-act="lbClose" aria-label="Fermer">${I.close}</button><span>${lbIdx + 1} / ${lbList.length}</span><span style="width:44px"></span></div>
     <div class="lb-img"><img id="lbImg" alt="${esc(p.caption || "Photo")}"></div>
     <div class="lb-info">${p.caption ? `<p style="margin:0 0 4px">${esc(p.caption)}</p>` : ""}<span class="small">${m ? esc(m.name) + " · " : ""}${esc(when)}${p.album ? " · " + esc(p.album) : ""}</span>
       <div class="btns" style="margin-top:10px"><button class="btn" data-act="lbSave">Enregistrer</button><button class="btn" data-act="lbAlbum">Album</button>${mine ? `<button class="btn danger" data-act="lbDel">Supprimer</button>` : ""}</div></div>
