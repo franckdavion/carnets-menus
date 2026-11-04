@@ -2647,8 +2647,12 @@ VIEWS.agenda = function () {
   return `<div class="cal">
       <div class="weeknav" style="margin-top:0">
         <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="-1" aria-label="Mois précédent" ${calMonthOpen ? "" : "hidden"}>${I.left}</button>
-        <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Masquer" : "Afficher"} le calendrier mensuel">
-          <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong><span aria-hidden="true">${I.right}</span>
+        <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Réduire" : "Afficher"} le calendrier du mois">
+          <span class="cal-month-toggle-copy">
+            <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
+            <span class="cal-month-toggle-hint" aria-hidden="true">${calMonthOpen ? "Réduire le mois" : "Afficher le mois"}</span>
+          </span>
+          <span class="cal-month-toggle-chevron" aria-hidden="true">${I.right}</span>
         </button>
         <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
       </div>
@@ -2935,7 +2939,9 @@ document.addEventListener("click", async e => {
       const toggle = document.querySelector(".cal-month-toggle");
       if (toggle) {
         toggle.setAttribute("aria-expanded", String(calMonthOpen));
-        toggle.setAttribute("aria-label", (calMonthOpen ? "Masquer" : "Afficher") + " le calendrier mensuel");
+        toggle.setAttribute("aria-label", (calMonthOpen ? "Réduire" : "Afficher") + " le calendrier du mois");
+        const hint = toggle.querySelector(".cal-month-toggle-hint");
+        if (hint) hint.textContent = calMonthOpen ? "Réduire le mois" : "Afficher le mois";
       }
       break;
     }
