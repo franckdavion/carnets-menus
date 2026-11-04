@@ -12,8 +12,7 @@ const clientId = Deno.env.get('GOOGLE_CLIENT_ID')!;
 const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')!;
 const callback = `${sbUrl}/functions/v1/google-calendar/callback`;
 const admin = createClient(sbUrl, service, { auth: { persistSession: false } });
-const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
-const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+const allowedOrigins = new Set([origin, 'http://localhost:8765', 'http://127.0.0.1:8765', 'http://192.168.0.146:8765']);
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const ub64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0));
 const keyPromise = crypto.subtle.importKey('raw', new TextEncoder().encode(clientSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
@@ -32,6 +31,11 @@ async function exchange(params: URLSearchParams) {
   return data;
 }
 Deno.serve(async req => {
+  const requestedOrigin = req.headers.get('Origin') || '';
+  const cors = { 'Access-Control-Allow-Origin': allowedOrigins.has(requestedOrigin) ? requestedOrigin : origin,
+    'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Vary': 'Origin' };
+  const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const url = new URL(req.url);
   const action = url.pathname.split('/').pop();
@@ -60,7 +64,7 @@ Deno.serve(async req => {
     if (action === 'start' && req.method === 'POST') {
       const payload = b64(new TextEncoder().encode(JSON.stringify({ uid: user.id, exp: Date.now() + 10 * 60e3, nonce: crypto.randomUUID() })));
       const state = payload + '.' + await sign(payload);
-      const params = new URLSearchParams({ client_id: clientId, redirect_uri: callback, response_type: 'code', access_type: 'offline', prompt: 'consent', scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events', include_granted_scopes: 'true', state });
+      const params = new URLSearchParams({ client_id: clientId, redirect_uri: callback, response_type: 'code', access_type: 'offline', prompt: 'consent', scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks', include_granted_scopes: 'true', state });
       return json({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + params });
     }
     if (action === 'token' && req.method === 'GET') {
