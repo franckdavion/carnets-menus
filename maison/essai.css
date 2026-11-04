@@ -354,3 +354,26 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   border-color:#ffc578;background:linear-gradient(150deg,#70441d,#2c2c45);box-shadow:0 0 12px #ffab5255;color:#fff4e5
 }
 .dom-page .dom-scenes button[data-dom-scenario="poele"][aria-busy="true"]{opacity:.7}
+
+/* Flamme Poêle : mouvement doux seulement lorsque la baisse de consigne est active. */
+.dom-page .dom-scenes button[data-dom-scenario="poele"] .dom-poele-title{
+  display:inline-flex;align-items:center;justify-content:center;gap:3px;
+  color:inherit;font:inherit;white-space:nowrap
+}
+.dom-page .dom-scenes button[data-dom-scenario="poele"] .dom-poele-flame{
+  display:inline-block;font-size:17px;line-height:1;transform-origin:50% 85%
+}
+.dom-page .dom-scenes button[data-dom-scenario="poele"][aria-pressed="true"] .dom-poele-flame{
+  animation:dom-poele-flicker 2.1s ease-in-out infinite
+}
+@keyframes dom-poele-flicker{
+  0%,100%{transform:rotate(-3deg) scale(1);filter:drop-shadow(0 0 2px #ffae6570)}
+  28%{transform:rotate(4deg) scale(1.11);filter:drop-shadow(0 0 6px #ffad4dbb)}
+  62%{transform:rotate(-2deg) scale(.96);filter:drop-shadow(0 0 3px #ffae658a)}
+  82%{transform:rotate(2deg) scale(1.07);filter:drop-shadow(0 0 5px #ffad4db0)}
+}
+@media(prefers-reduced-motion:reduce){
+  .dom-page .dom-scenes button[data-dom-scenario="poele"] .dom-poele-flame{
+    animation:none!important;filter:none!important;transform:none!important
+  }
+}
