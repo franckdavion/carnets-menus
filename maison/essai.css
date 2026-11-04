@@ -108,3 +108,23 @@ html.mz-inline-keyboard .composer{top:calc(var(--mz-visible-bottom, 600px) - 8px
 .mz-shop-store .cx-fold[hidden],.mz-shop-store .cx-item[hidden]{display:none!important;}
 body:has(main.view-courses) #cxUp{display:none!important;}
 @media(max-width:380px){.mz-shop-hero{padding:12px}.mz-shop-hero-actions{gap:8px}.mz-shop-enter{font-size:16px}.mz-shop-inlineadd{padding:10px 8px}.mz-shop-inlineadd form[data-form="cxAdd"] .btn{padding-inline:8px;font-size:14px}.mz-shop-panel>summary{padding:11px 10px;gap:6px;font-size:15px}}
+
+/* Agenda : recherche dans la version de test. Reprend la bibliothèque de boutons. */
+.mz-agenda-search-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 3px 9px;}
+.mz-agenda-search-toolbar>strong{font:800 19px var(--display);color:var(--ink);}
+.mz-agenda-magnifier{cursor:pointer;}
+.mz-agenda-search-panel{padding:12px;border:1px solid rgba(102,202,255,.64);border-radius:18px;background:linear-gradient(145deg,rgba(22,74,139,.72),rgba(6,24,57,.91));margin-bottom:13px;}
+.mz-agenda-search-inputrow{display:flex;gap:9px;align-items:center;}
+.mz-agenda-search-inputrow .input{flex:1;min-width:0;font-size:16px;}
+.mz-agenda-search-x{cursor:pointer;flex:none;background:linear-gradient(150deg,#204f79,#0a213f 75%);color:#d5efff;border-color:#58baf2;}
+.mz-agenda-hint,.mz-agenda-empty{margin:12px 2px 5px;}
+.mz-agenda-count{font:700 13px var(--body);color:#aadfff;margin:13px 2px 8px;}
+.mz-agenda-results-list{display:flex;flex-direction:column;gap:8px;max-height:min(54vh,480px);overflow-y:auto;overscroll-behavior:contain;padding:2px;}
+.mz-agenda-result{display:flex;align-items:flex-start;flex-direction:column;gap:3px;width:100%;padding:12px 13px;border:1px solid rgba(111,193,255,.5);border-radius:13px;background:rgba(12,35,78,.76);color:#fff;text-align:left;cursor:pointer;overflow-wrap:anywhere;}
+.mz-agenda-result:active{background:rgba(47,118,194,.5);}
+.mz-agenda-result:focus-visible{outline:2px solid #85dcff;outline-offset:2px;}
+.mz-agenda-type{font:700 11px var(--body);color:#84d8ff;}
+.mz-agenda-result>strong{font:750 16px var(--body);}
+.mz-agenda-date{font:500 13px var(--body);color:#c5e2fb;}
+.mz-agenda-scope{line-height:1.45;margin:11px 3px 0;}
+#mzAgendaNormal[hidden]{display:none!important;}
