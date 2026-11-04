@@ -266,41 +266,82 @@ dialog.sheet .mz-tv .mz-tv-close{width:100%}
 .dom-page .mz-dom-zones-entry:focus-visible{outline:2px solid #b8f3ff;outline-offset:3px}
 
 
-/* MAISSONNÉE TEST — centre réglages domotique, uniquement dans essai.css. */
-dialog.sheet .mz-dom-settings-hub,dialog.sheet .mz-dom-shelly-manager,dialog.sheet .mz-dom-service-settings{display:grid;gap:12px;min-width:0}
-dialog.sheet .mz-dom-settings-hub>h3,dialog.sheet .mz-dom-shelly-group>h3{margin:8px 0 0;color:#a8dbff;font:800 13px/1.2 var(--display);letter-spacing:.03em}
-dialog.sheet .mz-dom-settings-hub>.muted,dialog.sheet .mz-dom-shelly-manager>.muted{margin:0;line-height:1.5;font-size:13px}
-dialog.sheet .mz-dom-settings-group{display:grid;gap:8px;min-width:0}
-dialog.sheet .mz-dom-settings-nav{display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:65px;padding:11px 12px;border:1px solid #477da9;border-radius:14px;background:linear-gradient(160deg,rgba(26,64,109,.92),rgba(9,34,72,.95));color:#f4fbff;text-align:left;cursor:pointer;touch-action:manipulation}
-dialog.sheet .mz-dom-settings-nav:focus-visible{outline:2px solid #b3eaff;outline-offset:2px}
-dialog.sheet .mz-dom-settings-icon{flex:0 0 33px;font-size:24px;text-align:center;color:#a5e1ff}
-dialog.sheet .mz-dom-settings-copy{display:grid;gap:4px;min-width:0;flex:1}
-dialog.sheet .mz-dom-settings-copy strong{font-size:14px;line-height:1.2}
-dialog.sheet .mz-dom-settings-copy small{font-size:12px;line-height:1.35;color:#b0d0ea;overflow-wrap:anywhere}
-dialog.sheet .mz-dom-settings-status{padding:5px 7px;border:1px solid #4e88a9;border-radius:20px;color:#b3ebd8;background:#143b4c;font:700 11px var(--body);white-space:nowrap}
-dialog.sheet .mz-dom-settings-arrow{flex:none;font-size:24px;line-height:1;color:#b4e8ff}
-dialog.sheet .mz-dom-settings-back{width:100%;min-height:44px;text-align:center}
-dialog.sheet .mz-dom-shelly-group{display:grid;gap:9px}
-dialog.sheet .mz-dom-shelly-group>h3 small{color:#8dbbdd;font-size:12px}
-dialog.sheet .mz-dom-shelly-row{display:grid;gap:9px;padding:12px;border:1px solid #447ca9;border-radius:15px;background:linear-gradient(155deg,#1a426d,#0d2a50);min-width:0}
-dialog.sheet .mz-dom-shelly-title{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
-dialog.sheet .mz-dom-shelly-title>strong{min-width:0;overflow-wrap:anywhere;font-size:14px}
-dialog.sheet .mz-dom-shelly-title>.btn{flex:none;font-size:12px;min-height:38px;padding:6px 9px}
-dialog.sheet .mz-dom-shelly-row label{display:grid;gap:6px;font-size:12px;font-weight:700;color:#c5e1f7}
-dialog.sheet .mz-dom-shelly-row select{display:block;width:100%;max-width:100%;min-height:45px;border:1px solid #82c7e9;border-radius:12px;padding:8px 12px;background:#0c2647;color:#f4fbff;font:700 15px var(--body)}
-dialog.sheet .mz-dom-shelly-row select:disabled{opacity:.65}
-dialog.sheet .mz-dom-shelly-feedback{font-size:11px;color:#a1cde9;line-height:1.4}
-dialog.sheet .mz-dom-settings-unused{padding:11px 12px;border:1px solid #497ea7;border-radius:14px}
-dialog.sheet .mz-dom-settings-unused summary{font-size:13px;cursor:pointer}
-dialog.sheet .mz-dom-settings-unused>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px;font-size:13px}
-dialog.sheet .mz-dom-settings-unused>div>span{overflow-wrap:anywhere}
-dialog.sheet .mz-dom-settings-unused .btn{min-height:40px}
-dialog.sheet .mz-dom-service-settings>.btn{min-height:48px}
-dialog.sheet .mz-dom-service-settings>.muted{font-size:13px;line-height:1.5}
-dialog.sheet .mz-dom-advanced-actions{display:grid;gap:9px;min-width:0}
-dialog.sheet .mz-dom-advanced-actions>.btn{width:100%;min-height:46px}
-@media(max-width:390px){
- dialog.sheet .mz-dom-settings-nav{padding:10px 9px;gap:8px}
- dialog.sheet .mz-dom-settings-icon{flex-basis:29px;font-size:22px}
- dialog.sheet .mz-dom-settings-status{font-size:10px;padding:4px 6px}
+
+/* MAISSONNÉE TEST — réglages Domotique V4, véritable page, styles réutilisés/scopés. */
+.mz-dset-page{max-width:720px;min-width:0;margin:0 auto}
+.mz-dset{display:grid;gap:14px;min-width:0;padding:2px 0 20px;color:#f2f9ff}
+.mz-dset-head{display:flex;align-items:center;gap:12px;min-width:0}
+.mz-dset-back{display:grid;place-items:center;width:43px;height:43px;flex:none;border:1px solid #65b2e5;border-radius:50%;color:#d9f5ff;background:linear-gradient(155deg,#1f568a,#0a294f);font-size:26px;font-weight:650;touch-action:manipulation}
+.mz-dset-headcopy{display:grid;gap:2px;min-width:0}
+.mz-dset-headcopy h2{margin:0;font:800 23px/1.15 var(--display);color:#f2faff}
+.mz-dset-headcopy span{font:500 12px var(--body);color:#a9cee8}
+.mz-dset-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:5px;border:1px solid #315d89;border-radius:16px;background:#0a2243;min-width:0}
+.mz-dset-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:58px;min-width:0;padding:7px 2px;border:1px solid transparent;border-radius:12px;background:transparent;color:#accde7;font:700 12px/1.2 var(--body);touch-action:manipulation}
+.mz-dset-tabs button span{font-size:22px;line-height:1;color:#d2ebfa}
+.mz-dset-tabs button[aria-pressed=true]{color:#fff;border-color:#80d3ff;background:linear-gradient(145deg,#216ca6,#103865);box-shadow:inset 0 1px 0 #c6ebff3b}
+.mz-dset-content{display:grid;gap:11px;min-width:0}
+.mz-dset-lead{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding-top:2px}
+.mz-dset-lead>div{min-width:0}
+.mz-dset-lead h3{margin:0;font:800 19px/1.2 var(--display);color:#f2faff}
+.mz-dset-lead p{margin:4px 0 0;font:500 12px/1.3 var(--body);color:#b1d0e7}
+.mz-dset-count{flex:none;padding:6px 9px;border-radius:99px;border:1px solid #5484aa;background:#163655;color:#d8f0ff;font:700 11px var(--body)}
+.mz-dset-search{display:flex;align-items:center;gap:7px;min-height:44px;padding:0 11px;border:1px solid #548fb9;border-radius:12px;background:#0c2547;color:#a5d8f6}
+.mz-dset-search>span{font-size:26px;line-height:1}
+.mz-dset-search input{flex:1;min-width:0;height:42px;border:0;background:transparent!important;color:#fff;font:500 16px var(--body);outline:none}
+.mz-dset-search input::placeholder{color:#a3bdd5;opacity:1}
+.mz-dset-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;min-width:0}
+.mz-dset-filters button{min-width:0;min-height:39px;padding:5px 1px;border-radius:11px;border:1px solid #477a9e;background:#0d2a4b;color:#b6d7ef;font:700 clamp(10px,2.8vw,13px)/1.2 var(--body);touch-action:manipulation}
+.mz-dset-filters button[aria-pressed=true]{border-color:#83d8fc;color:#fff;background:#1b628e}
+.mz-dset-results{margin:0;color:#a7cde5;font:600 11px var(--body)}
+.mz-dset-list{display:grid;gap:7px;min-width:0}
+.mz-dset-device{display:grid;grid-template-columns:30px minmax(0,1fr) minmax(102px,38%) 32px;align-items:center;gap:7px;min-width:0;min-height:62px;padding:8px;border:1px solid #376a94;border-radius:12px;background:linear-gradient(150deg,rgba(24,57,94,.96),rgba(9,31,63,.96))}
+.mz-dset-device[hidden]{display:none!important}
+.mz-dset-glyph{font-size:21px;line-height:1;text-align:center;color:#b6e6ff}
+.mz-dset-device-info{display:grid;gap:3px;min-width:0}
+.mz-dset-device-info strong{font:750 13px/1.2 var(--body);overflow-wrap:anywhere;color:#f6faff}
+.mz-dset-device-info small{font:500 11px/1.1 var(--body);color:#a6c8e0}
+.mz-dset-device select{display:block;width:100%;max-width:100%;min-height:43px;border:1px solid #6ab5e5;border-radius:10px;background:#0c294f;color:#f7fcff;font:650 16px/1.2 var(--body);padding:5px 7px;min-width:0;text-overflow:ellipsis}
+.mz-dset-device select:disabled{opacity:.65}
+.mz-dset-more{display:grid;place-items:center;width:32px;height:43px;border:1px solid #427cad;border-radius:10px;background:#173a65;color:#d0eeff;font-size:21px;letter-spacing:1px;touch-action:manipulation}
+.mz-dset-device .mz-dom-shelly-feedback{grid-column:2 / -1;display:block;margin:0;color:#b4eccc;font:600 11px/1.3 var(--body)}
+.mz-dset-device .mz-dom-shelly-feedback:empty{display:none}
+.mz-dset-add{display:flex;align-items:center;justify-content:center;gap:9px;min-height:47px;width:100%;padding:10px 12px;border:1px dashed #5da9d4;border-radius:13px;background:rgba(24,64,105,.45);color:#c8e9ff;font:750 13px var(--body);touch-action:manipulation}
+.mz-dset-add span{font-size:21px}
+.mz-dset-unused{padding:10px 12px;border:1px solid #315c82;border-radius:12px;background:#102948}
+.mz-dset-unused summary{color:#bbd8ee;font:650 12px/1.4 var(--body);cursor:pointer}
+.mz-dset-unused>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0 0;color:#e0eef9;font-size:13px}
+.mz-dset-rooms,.mz-dset-services{display:grid;gap:8px;min-width:0}
+.mz-dset-room,.mz-dset-service{display:flex;align-items:center;gap:10px;min-width:0;min-height:67px;padding:10px 12px;border:1px solid #437aa6;border-radius:14px;background:linear-gradient(155deg,#1b426d,#0b2b52)}
+.mz-dset-room-icon,.mz-dset-service-icon{flex:0 0 30px;font-size:23px;text-align:center}
+.mz-dset-room-copy,.mz-dset-service-copy{display:grid;gap:4px;flex:1;min-width:0}
+.mz-dset-room-copy strong,.mz-dset-service-copy strong{color:#f4faff;font:750 14px/1.2 var(--body);overflow-wrap:anywhere}
+.mz-dset-room-copy small,.mz-dset-service-copy small{color:#a8cbe5;font:550 11px/1.2 var(--body)}
+.mz-dset-room>button{min-height:41px;padding:7px 10px;border:1px solid #6cbce9;border-radius:11px;background:#164b7c;color:#e5f7ff;font:700 12px var(--body)}
+.mz-dset-service{width:100%;text-align:left;color:#ebf6ff;touch-action:manipulation}
+.mz-dset-service-status{flex:none;font:700 11px/1.2 var(--body);color:#c5cbd9}
+.mz-dset-service-status.is-linked{color:#9cecca}
+.mz-dset-service>span:last-child{font-size:22px;color:#b1dcf3}
+.mz-dset-subsection{display:grid;gap:10px;margin-top:10px}
+.mz-dset-subsection h3{margin:0;color:#f0faff;font:750 15px var(--display)}
+.mz-dset-navrow{display:flex;align-items:center;gap:10px;width:100%;min-height:54px;padding:12px;border:1px solid #4c86b4;border-radius:12px;background:#123654;color:#f0f9ff;text-align:left;font:700 13px var(--body)}
+.mz-dset-navrow>span:first-child{font-size:21px}
+.mz-dset-navrow>span:nth-child(2){flex:1}
+.mz-dset-navrow>span:last-child{font-size:23px}
+/* L'ancien écran avancé reste utilisable, mais sort de la vue de premier niveau. */
+dialog.sheet .mz-dom-settings-hub,dialog.sheet .mz-dom-service-settings{display:grid;gap:11px;min-width:0}
+dialog.sheet .mz-dom-settings-hub>h3{margin:0;color:#a8dbff;font-size:14px}
+dialog.sheet .mz-dom-settings-group,dialog.sheet .mz-dom-advanced-actions{display:grid;gap:8px}
+dialog.sheet .mz-dom-settings-nav{display:flex;align-items:center;gap:9px;width:100%;min-height:58px;padding:10px;border:1px solid #477da9;border-radius:13px;background:#153558;color:#f3faff;text-align:left}
+dialog.sheet .mz-dom-settings-icon{flex:0 0 30px;font-size:22px;text-align:center}
+dialog.sheet .mz-dom-settings-copy{display:grid;gap:3px;min-width:0;flex:1}
+dialog.sheet .mz-dom-settings-copy strong{font-size:14px}
+dialog.sheet .mz-dom-settings-copy small{font-size:12px;color:#b7d7ed}
+dialog.sheet .mz-dom-settings-arrow{font-size:22px;color:#b5e5ff}
+dialog.sheet .mz-dom-settings-back{width:100%;min-height:44px}
+dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions>.btn{min-height:45px}
+@media (max-width:390px){
+  .mz-dset-device{grid-template-columns:24px minmax(0,1fr) minmax(100px,36%) 30px;gap:5px;padding:8px 6px}
+  .mz-dset-device-info strong{font-size:12px}
+  .mz-dset-glyph{font-size:19px}
+  .mz-dset-service-status{font-size:10px}
 }
