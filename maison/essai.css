@@ -1,5 +1,5 @@
 /* Couche de test : ajout à maison.css, sans toucher au thème officiel. */
-Calendrier : menu « + » compact, construit sur la FAB existante.
+/* Calendrier : menu « + » compact, construit sur la FAB existante.
    La barre de navigation iPhone et ses safe-areas restent inchangées. */
 .cal-create{
  position:fixed;right:max(16px,calc(50% - 304px));
@@ -45,5 +45,3 @@ Calendrier : menu « + » compact, construit sur la FAB existante.
 }
 @media(prefers-reduced-motion:reduce){.cal-create .cal-create-fab svg{transition:none;}}
 
-
-/*
