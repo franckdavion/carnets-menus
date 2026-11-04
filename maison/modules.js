@@ -2614,15 +2614,20 @@ VIEWS.explore = function () {
 
 /* ---------- calendar: month grid + days ---------- */
 let calSel = today(), calMonth = today().slice(0, 7) + "-01";
+// Préférence propre à cet appareil : le calendrier mensuel reste replié ou déployé.
+let calMonthOpen = LS.get("mz_cal_month_open", true) !== false;
 function bdaysOn(day) {
   const d = parse(day), m = d.getMonth() + 1, dd = d.getDate(), leap = new Date(d.getFullYear(), 1, 29).getMonth() === 1;
   return S.bdays.filter(b => b.month === m && (b.day === dd || (!leap && b.month === 2 && b.day === 29 && dd === 28)));
 }
 VIEWS.agenda = function () {
+  if (GTASKS.enabled && !GTASKS.busy && Date.now() - GTASKS.at >= 120000) setTimeout(() => gTasksRefresh(), 0);
   const first = parse(calMonth), y = first.getFullYear(), mo = first.getMonth();
   const start = mondayOf(calMonth), end = addDays(start, 41);
   const occ = occurrences(start, end), busy = new Set(occ.map(e => e.on));
   for (const g of G.ev.items) if (!G.cals || G.cals.includes(g.cal)) busy.add(g.day);
+  for (const t of S.tasks || []) if (!t.archived && t.next_due) busy.add(t.next_due);
+  if (GTASKS.enabled) for (const t of GTASKS.items) if (gTasksDay(t)) busy.add(gTasksDay(t));
   let cells = "";
   for (let i = 0; i < 42; i++) {
     const day = addDays(start, i), dt = parse(day), out = dt.getMonth() !== mo;
@@ -2633,16 +2638,29 @@ VIEWS.agenda = function () {
   let list = "";
   for (let i = 0; i < 7; i++) {
     const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
+    // Si la copie familiale vers Google Agenda est active, ses événements affichent déjà ces tâches : ne pas les doubler.
+    const localTasks = (typeof gtConf === "function" && gtConf().on) ? [] : (S.tasks || []).filter(t => !t.archived && t.next_due === day);
+    const googleTasks = gTasksOn(day);
     list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span></div>
-      ${evs.length || bs.length || gs.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
+      ${evs.length || bs.length || gs.length || localTasks.length || googleTasks.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}${localTasks.map(t => taskRow(t)).join("")}${googleTasks.map(gTasksRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
-      <div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="calMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button>
-        <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
-        <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
+      <div class="weeknav" style="margin-top:0">
+        <button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav cal-month-arrow" data-act="calMonth" data-v="-1" aria-label="Mois précédent" ${calMonthOpen ? "" : "hidden"}>${I.left}</button>
+        <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Réduire" : "Afficher"} le calendrier du mois">
+          <span class="cal-month-toggle-copy">
+            <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
+          </span>
+          <span class="cal-month-toggle-chevron mz-round-btn mz-round-btn--lg" aria-hidden="true">${I.right}</span>
+        </button>
+        <button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
+      </div>
+      <div id="calMonthContent" ${calMonthOpen ? "" : "hidden"}>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
+      ${GTASKS.enabled ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Google Tasks · ${GTASKS.error ? esc(GTASKS.error) + " · " : ""}<button class="linkbtn small" data-act="gTasksRefresh">Actualiser les tâches</button></p>` : `<p class="muted small" style="text-align:center;margin:6px 0 0"><button class="linkbtn small" data-act="gTasksEnable">Afficher Google Tasks</button></p>`}
       ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button>${G.list.length ? ` · <button class="linkbtn small" data-act="gCalsSheet">Agendas affichés</button>` : ""}</p>` : ""}
       ${calSel !== today() ? `<div style="text-align:center"><button class="linkbtn" data-act="calPick" data-v="${today()}">Revenir à aujourd'hui</button></div>` : ""}
+      </div>
     </div>${list}`;
 };
 
@@ -2752,7 +2770,7 @@ VIEWS.budget = function () {
     days += `<button class="row" data-act="editExp" data-v="${e.id}"><span class="cat-dot" style="--c:${catColor(e.category)}"></span><span class="main"><span class="t">${esc(e.label)}</span><span class="m">${esc(e.kind === "in" ? "Rentrée" : e.category)}${p ? " · " + esc(p.name) : ""}</span></span><span class="amt ${e.kind === "in" ? "in" : ""}">${e.kind === "in" ? "+" : "−"}${esc(eur(e.amount))}</span></button>`;
   }
   if (last) days += "</div>";
-  return `<div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="budMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button><strong>${esc(cap(monthName(m0)))}</strong><button class="icon-btn plain" data-act="budMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
+  return `<div class="weeknav" style="margin-top:0"><button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="budMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button><strong>${esc(cap(monthName(m0)))}</strong><button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="budMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
     <div class="card bud-card">
       <span class="muted small">Dépensé</span>
       <span class="bud-big">${esc(eur(spent))}</span>
@@ -2911,6 +2929,19 @@ document.addEventListener("click", async e => {
     case "goShop": closeSheet(); view = "courses"; render(); setTimeout(() => { const i = $("#shopIn"); if (i) i.focus(); }, 50); break;
     case "goMsg": closeSheet(); view = "messages"; render(); setTimeout(() => { const t = $(".composer textarea"); if (t) t.focus(); }, 50); break;
     case "calPick": calSel = v; if (v.slice(0, 7) !== calMonth.slice(0, 7)) calMonth = v.slice(0, 7) + "-01"; render(); break;
+    case "calMonthToggle": {
+      calMonthOpen = !calMonthOpen;
+      LS.set("mz_cal_month_open", calMonthOpen);
+      const content = document.getElementById("calMonthContent");
+      if (content) content.hidden = !calMonthOpen;
+      document.querySelectorAll(".cal-month-arrow").forEach(btn => { btn.hidden = !calMonthOpen; });
+      const toggle = document.querySelector(".cal-month-toggle");
+      if (toggle) {
+        toggle.setAttribute("aria-expanded", String(calMonthOpen));
+        toggle.setAttribute("aria-label", (calMonthOpen ? "Réduire" : "Afficher") + " le calendrier du mois");
+      }
+      break;
+    }
     case "calMonth": { const d = parse(calMonth); d.setMonth(d.getMonth() + +v); calMonth = ymd(d); calSel = calMonth.slice(0, 7) === today().slice(0, 7) ? today() : calMonth; render(); break; }
     case "newEventOn": eventSheet(null, v); break;
     case "newAppointmentOn": eventSheet(null, v, true); break;
@@ -3186,7 +3217,7 @@ async function lbDraw() {
   const el = $("#lb"), p = lbList[lbIdx]; if (!el || !p) return lbClose();
   const m = member(p.member_id), mine = p.member_id === S.me;
   const when = new Date(p.taken_at || p.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  el.innerHTML = `<div class="lb-top"><button class="icon-btn plain" data-act="lbClose" aria-label="Fermer">✕</button><span>${lbIdx + 1} / ${lbList.length}</span><span style="width:44px"></span></div>
+  el.innerHTML = `<div class="lb-top"><button type="button" class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--close" data-act="lbClose" aria-label="Fermer">${I.close}</button><span>${lbIdx + 1} / ${lbList.length}</span><span style="width:44px"></span></div>
     <div class="lb-img"><img id="lbImg" alt="${esc(p.caption || "Photo")}"></div>
     <div class="lb-info">${p.caption ? `<p style="margin:0 0 4px">${esc(p.caption)}</p>` : ""}<span class="small">${m ? esc(m.name) + " · " : ""}${esc(when)}${p.album ? " · " + esc(p.album) : ""}</span>
       <div class="btns" style="margin-top:10px"><button class="btn" data-act="lbSave">Enregistrer</button><button class="btn" data-act="lbAlbum">Album</button>${mine ? `<button class="btn danger" data-act="lbDel">Supprimer</button>` : ""}</div></div>
@@ -3327,6 +3358,113 @@ async function gApi(path) {
   if (!r.ok) throw new Error("google " + r.status);
   return r.json();
 }
+/* Google Tasks — ressources natives du compte Google connecté, non dupliquées dans Supabase.
+   L'API Tasks n'enregistre que la DATE (jamais une heure ni un rappel personnalisé). */
+const GTASKS = { enabled: LS.get("mz_gtasks_enabled", false), lists: [], items: [], at: 0, busy: false, error: "", permission: false, userId: null };
+const gTasksDay = task => task && task.due ? String(task.due).slice(0, 10) : "";
+async function gTasksApi(path, method = "GET", payload) {
+  if (!(await gEnsure())) throw new Error("Connecte ton compte Google depuis Ma famille.");
+  const res = await fetch("https://tasks.googleapis.com/tasks/v1/" + path, {
+    method, headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" },
+    body: payload === undefined ? undefined : JSON.stringify(payload)
+  });
+  if (res.status === 401) { G.tok = null; throw new Error("Session Google expirée. Reconnecte Google depuis Ma famille."); }
+  if (res.status === 403) { GTASKS.permission = true; throw new Error("Google Tasks n'est pas autorisé ou l'API Tasks n'est pas activée. Reconnecte Google depuis Ma famille puis vérifie l'API Tasks dans Google Cloud."); }
+  if (res.status === 404) throw new Error("Liste ou tâche Google introuvable. Actualise Google Tasks.");
+  if (!res.ok) throw new Error("Google Tasks : erreur " + res.status);
+  return res.status === 204 ? null : res.json();
+}
+async function gTasksRefresh(force = false) {
+  if (!GTASKS.enabled || mode !== "cloud" || !user || GTASKS.busy) return;
+  if (GTASKS.userId !== user.id) {
+    GTASKS.userId = user.id;
+    GTASKS.items = [];
+    GTASKS.lists = [];
+    GTASKS.at = 0;
+  }
+  if (!force && Date.now() - GTASKS.at < 120000) return;
+  GTASKS.busy = true;
+  GTASKS.at = Date.now();
+  try {
+    const lists = [];
+    let page = "";
+    do {
+      const part = await gTasksApi("users/@me/lists?maxResults=100" + (page ? "&pageToken=" + encodeURIComponent(page) : ""));
+      lists.push(...(part.items || []));
+      page = part.nextPageToken || "";
+    } while (page && lists.length < 500);
+    GTASKS.lists = lists;
+    const items = [];
+    for (const list of lists) {
+      let next = "", n = 0;
+      do {
+        const part = await gTasksApi("lists/" + encodeURIComponent(list.id) + "/tasks?maxResults=100&showCompleted=true&showHidden=false&showDeleted=false" + (next ? "&pageToken=" + encodeURIComponent(next) : ""));
+        items.push(...(part.items || []).map(task => ({ ...task, listId: list.id, listName: list.title })));
+        next = part.nextPageToken || "";
+      } while (next && ++n < 20);
+    }
+    GTASKS.items = items;
+    GTASKS.error = "";
+    GTASKS.permission = false;
+  } catch (err) {
+    GTASKS.error = err?.message || "Lecture Google Tasks impossible.";
+  } finally {
+    GTASKS.busy = false;
+    gTasksFillFormLists();
+    if (view === "agenda" && !document.querySelector("#sheet")?.open) softRender();
+  }
+}
+function gTasksFillFormLists() {
+  const select = document.querySelector('#sheetIn [name="google_list"]');
+  if (!select) return;
+  const selected = select.dataset.selected || select.value;
+  select.innerHTML = GTASKS.lists.length
+    ? GTASKS.lists.map(x => `<option value="${esc(x.id)}" ${x.id === selected ? "selected" : ""}>${esc(x.title)}</option>`).join("")
+    : '<option value="">Aucune liste disponible</option>';
+  if (!GTASKS.lists.some(x => x.id === selected) && GTASKS.lists.length) select.value = GTASKS.lists[0].id;
+  const info = document.getElementById("gTaskInfo");
+  if (info) info.textContent = GTASKS.error || "Google Tasks conserve la date et les notes ; son API ne gère ni heure, ni répétition, ni rappel personnalisé.";
+}
+function gTasksStart() {
+  GTASKS.enabled = true;
+  GTASKS.at = 0;
+  LS.set("mz_gtasks_enabled", true);
+  gTasksRefresh(true);
+}
+const gTasksOn = day => GTASKS.enabled && user && GTASKS.userId === user.id
+  ? GTASKS.items.filter(t => gTasksDay(t) === day) : [];
+function gTasksRow(task) {
+  const done = task.status === "completed";
+  return `<div class="row ev-row gtask-row">
+    <button class="check ${done ? "on" : ""}" data-act="gTaskDone" data-v="${esc(task.id)}" data-list="${esc(task.listId)}" aria-label="${done ? "Réactiver" : "Terminer"} la tâche ${esc(task.title || "")}">${I.tick}</button>
+    <button class="open" data-act="gTaskEdit" data-v="${esc(task.id)}" data-list="${esc(task.listId)}">
+      <span class="ev-time allday">Tâche</span><span class="main"><span class="t">${esc(task.title || "Sans titre")}</span><span class="m">Google Tasks · ${esc(task.listName || "")}${done ? " · Terminée" : ""}</span></span>
+    </button></div>`;
+}
+function gTasksSheetFill() {
+  gTasksFillFormLists();
+  if (GTASKS.enabled && !GTASKS.lists.length && !GTASKS.busy) gTasksRefresh(true);
+}
+async function gTasksSave(row, existing = null) {
+  const listId = existing?.listId || row.listId;
+  if (!listId) throw new Error("Choisis une liste Google Tasks.");
+  const payload = { title: row.title, notes: row.notes || "", due: row.day ? row.day + "T12:00:00.000Z" : null };
+  const path = "lists/" + encodeURIComponent(listId) + "/tasks" + (existing ? "/" + encodeURIComponent(existing.id) : "");
+  await gTasksApi(path, existing ? "PATCH" : "POST", payload);
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+async function gTasksRemove(task) {
+  await gTasksApi("lists/" + encodeURIComponent(task.listId) + "/tasks/" + encodeURIComponent(task.id), "DELETE");
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+async function gTasksComplete(task) {
+  await gTasksApi("lists/" + encodeURIComponent(task.listId) + "/tasks/" + encodeURIComponent(task.id), "PATCH", { status: task.status === "completed" ? "needsAction" : "completed" });
+  GTASKS.at = 0;
+  await gTasksRefresh(true);
+}
+
 async function gFetch() {
   if (G.busy || !(await gEnsure())) return;
   G.busy = true;
@@ -3549,3 +3687,124 @@ document.addEventListener("change", e => {
 });
 
 init();
+
+/* COURSES : deux écrans Préparation et En magasin, moteur et actions de courses.js inchangés.
+   Préparation et magasin partagent les mêmes données Supabase et Carnet. */
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof VIEWS.courses !== 'function') return;
+  const originalCourses = VIEWS.courses;
+  const screenKey = 'mz_courses_ecran_v1';
+  let uxScreen = sessionStorage.getItem(screenKey) === 'store' ? 'store' : 'prep';
+  let prepY = 0, storeY = 0, query = '';
+  let daysOpen = false, optionsOpen = false;
+  const join = nodes => nodes.map(n => n.outerHTML).join('');
+  const isShop = () => view === 'courses' && uxScreen === 'store';
+
+  VIEWS.courses = function () {
+    const raw = originalCourses();
+    // En chargement, en erreur, ou hors cloud : garder l'écran d'origine.
+    if (typeof raw !== 'string' || !raw.includes('id="cxList"')) return raw;
+    const temp = document.createElement('template');
+    temp.innerHTML = raw;
+    const nodes = Array.from(temp.content.children);
+    const d = nodes.findIndex(n => n.matches('.group-h') && n.textContent.trim() === 'Courses pour');
+    const f = nodes.findIndex(n => n.matches('form[data-form="cxAdd"]'));
+    const h = nodes.findIndex(n => n.id === 'cxList');
+    if (d < 0 || f <= d || h <= f) return raw;
+    const stats = nodes.find(n => n.matches('.cx-ultimate-stats'));
+    const nums = stats ? Array.from(stats.querySelectorAll('strong')).map(n => parseInt(n.textContent, 10) || 0) : [0, 0, 0];
+    const left = nums[0] || 0, bought = nums[1] || 0, days = nums[2] || 0;
+    const total = left + bought, pct = total ? Math.round(bought * 100 / total) : 0;
+    const form = nodes[f].outerHTML;
+    const progress = nodes.find(n => n.matches('.cx-progress'));
+    const tail = nodes.slice(f + 1, h).filter(n => !n.matches('.cx-progress'));
+    const undo = tail.filter(n => n.querySelector('[data-act="cxFinishUndo"]'));
+    const opts = nodes.slice(0, d).filter(n => n.matches('details'));
+    const carnet = nodes.find(n => n.matches('.cx-ultimate-actions'))?.querySelector('a[href]');
+    // On déplace le bouton original du catalogue près de la saisie, sans dupliquer son action.
+    const cataloguePanel = tail.find(n => n.querySelector('[data-act="catOpen"]'));
+    const catalogueButton = cataloguePanel?.querySelector('[data-act="catOpen"]')?.outerHTML || '<button type="button" class="btn block" data-act="catOpen">🛍️ Catalogue de produits</button>';
+    const catalogueAccess = '<div class="btns mz-shop-catalogue-access" style="margin-top:10px">' + catalogueButton + '</div>';
+
+    if (uxScreen === 'store') {
+      return '<section class="mz-shop-screen mz-shop-store" aria-label="Courses en magasin">' +
+        '<header class="mz-shop-store-header"><button type="button" data-act="mzShopBack" class="mz-shop-back">← Préparation</button>' +
+        '<h2>En magasin</h2><p>' + bought + ' / ' + total + ' acheté' + (bought > 1 ? 's' : '') + ' · ' + left + ' à prendre</p></header>' +
+        (progress ? progress.outerHTML : '') +
+        '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Saisir un article</label>' + form + catalogueAccess + '</div>' +
+        '<label class="mz-shop-search"><span aria-hidden="true">⌕</span><input type="search" id="mzShopSearch" class="input" autocomplete="off" aria-label="Rechercher un article" placeholder="Rechercher dans les rayons" value="' + esc(query) + '"></label>' +
+        '<div class="mz-shop-store-list">' + join(nodes.slice(h)) + '</div>' +
+        (undo.length ? '<div class="mz-shop-undo">' + join(undo) + '</div>' : '') +
+        '</section>';
+    }
+    return '<section class="mz-shop-screen mz-shop-prep" aria-label="Préparer les courses">' +
+      '<div class="mz-shop-hero"><h2>Préparer mes courses</h2><p><strong>' + left + '</strong> à prendre · <strong>' + bought + '</strong> dans le panier · ' + days + ' jour' + (days > 1 ? 's' : '') + '</p>' +
+      '<div class="mz-shop-progress-track" role="progressbar" aria-label="Achats effectués" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="mz-shop-hero-actions"><button class="mz-shop-enter" type="button" data-act="mzShopEnter">🛒 En magasin <span>' + left + ' à prendre</span></button>' +
+      '<button type="button" class="mz-round-btn mz-round-btn--md mz-shop-addfab" data-act="catOpen" aria-label="Choisir un article dans le catalogue">' + I.plus + '</button></div></div>' +
+      '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Saisir un article</label>' + form + catalogueAccess + '</div>' +
+      '<details class="mz-shop-panel" id="mzShopDays"' + (daysOpen ? ' open' : '') + '><summary><span>Jours et repas</span><small>' + days + ' jour' + (days > 1 ? 's' : '') + ' sélectionné' + (days > 1 ? 's' : '') + '</small></summary>' +
+      '<div class="mz-shop-panel-content">' + join(nodes.slice(d, f)) + '</div></details>' +
+      '<details class="mz-shop-panel" id="mzShopOptions"' + (optionsOpen ? ' open' : '') + '><summary><span>Options et aide</span><small>Catalogue, recettes, réglages</small></summary><div class="mz-shop-panel-content">' +
+      (carnet ? '<div class="btns">' + carnet.outerHTML + '</div>' : '') +
+      join(opts) + join(tail.filter(n => n !== cataloguePanel && !undo.includes(n))) + join(undo) + '</div></details></section>';
+  };
+
+  function filterStore() {
+    const root = document.querySelector('.mz-shop-store');
+    if (!root) return;
+    const q = query.trim().toLocaleLowerCase('fr');
+    root.querySelectorAll('.cx-item').forEach(row => {
+      row.hidden = !!q && !row.textContent.toLocaleLowerCase('fr').includes(q);
+    });
+    root.querySelectorAll('.cx-fold').forEach(section => {
+      const body = section.querySelector('.cx-fold-body'), toggle = section.querySelector('.cx-fold-toggle');
+      if (!body || !toggle) return;
+      const matches = Array.from(section.querySelectorAll('.cx-item')).some(row => !row.hidden);
+      section.hidden = !!q && !matches;
+      body.hidden = q ? false : toggle.getAttribute('aria-expanded') !== 'true';
+      section.classList.toggle('is-open', !body.hidden);
+    });
+  }
+
+  const oldAfterRender = afterRender;
+  afterRender = function () {
+    if (typeof oldAfterRender === 'function') oldAfterRender();
+    if (isShop()) filterStore();
+    const legacyUp = document.getElementById('cxUp');
+    if (legacyUp && view === 'courses') legacyUp.hidden = true;
+  };
+
+  function changeShopScreen(next) {
+    if (view !== 'courses' || next === uxScreen) return;
+    if (uxScreen === 'store') storeY = window.scrollY; else prepY = window.scrollY;
+    uxScreen = next;
+    sessionStorage.setItem(screenKey, next);
+    // L'ancien saut vers le bas de la liste est remplacé par l'écran magasin.
+    LS.set('mz_cx_inlist', false);
+    render();
+    const y = next === 'store' ? storeY : prepY;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
+
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest('[data-act]');
+    if (!b || view !== 'courses') return;
+    if (b.dataset.act === 'mzShopEnter') { e.preventDefault(); changeShopScreen('store'); return; }
+    if (b.dataset.act === 'mzShopBack') { e.preventDefault(); changeShopScreen('prep'); return; }
+    // La flèche de l'en-tête revient à Préparation avant de quitter Courses.
+    if (isShop() && b.dataset.act === 'go' && b.closest('header.top')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      changeShopScreen('prep');
+    }
+  }, true);
+  document.addEventListener('toggle', function (e) {
+    if (e.target.id === 'mzShopDays') daysOpen = e.target.open;
+    if (e.target.id === 'mzShopOptions') optionsOpen = e.target.open;
+  }, true);
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'mzShopSearch') { query = e.target.value; filterStore(); }
+  });
+  if (view === 'courses') render();
+});
