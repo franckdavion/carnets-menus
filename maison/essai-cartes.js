@@ -115,15 +115,15 @@
       // Le rafraîchissement manuel, au retour en ligne et à l'ouverture reste disponible.
     }
   }
+  /* Recevoir automatiquement les cartes déjà partagées avec le foyer, sans
+     transférer les cartes privées locales tant que "Activer" n'a pas été confirmé. */
+  let walletAutoInFlight = false;
   async function walletAutoCloud() {
-    if (navigator.onLine === false || cloud.busy) return;
-    let flags = false;
-    try { flags = Object.keys(localStorage).some(k => k.startsWith(CLOUD_PREFIX) && localStorage.getItem(k) === "1"); }
-    catch (_) {}
-    if (!flags) return;
+    if (navigator.onLine === false || cloud.busy || walletAutoInFlight) return;
+    walletAutoInFlight = true;
     try {
       const context = await walletContext();
-      if (!context?.householdId || !savedCloudFlag(context.householdId)) return;
+      if (!context?.householdId) return;
       if (cloud.householdId && cloud.householdId !== context.householdId) {
         if (cloud.channel) { try { await cloud.client?.removeChannel(cloud.channel); } catch (_) {} }
         cloud.channel = null;
@@ -131,11 +131,13 @@
       cloud.client = context.client;
       cloud.householdId = context.householdId;
       cloud.householdName = context.householdName;
-      cloud.enabled = true;
-      await walletSync();
-      walletSubscribe();
+      cloud.enabled = savedCloudFlag(context.householdId);
+      await walletSync(!cloud.enabled);
+      if (cloud.enabled) walletSubscribe();
     } catch (error) {
-      walletStatus("Sauvegarde familiale en attente : " + (error.message || "connexion indisponible"));
+      walletStatus("Cartes familiales en attente : " + (error.message || "connexion indisponible"));
+    } finally {
+      walletAutoInFlight = false;
     }
   }
   async function walletConnectFamily() {
@@ -224,8 +226,8 @@
       syncPending: false, syncDeleted: !!remote.deleted_at
     };
   }
-  async function walletSync() {
-    if (!cloud.enabled || !cloud.householdId || !cloud.client ||
+  async function walletSync(pullOnly = false) {
+    if ((!cloud.enabled && !pullOnly) || !cloud.householdId || !cloud.client ||
         cloud.busy || navigator.onLine === false) return;
     cloud.busy = true;
     cloud.warning = "";
@@ -264,6 +266,13 @@
         if (!local && !remote.deleted_at) added++;
       }
       if (incoming.length) await putMany(incoming, true);
+      if (pullOnly) {
+        cloud.message = added ? added + " carte(s) récupérée(s) depuis le foyer « " +
+          cloud.householdName + " »." : "Cartes du foyer consultables sur cet appareil.";
+        if (failed) cloud.warning = failed + " capture(s) non téléchargée(s). Réessaie avec Internet.";
+        await reload();
+        return;
+      }
       // Relire après fusion, pour ne jamais écraser les cartes reçues du serveur.
       const localNow = await all();
       for (const card of localNow) {
@@ -469,6 +478,11 @@
       '">Retirer</button></div></div>';
   }
   VIEWS.fidelite = function () {
+    // Réessayer après l'authentification si le portefeuille s'ouvre depuis l'application.
+    if (!cloud.initialized && navigator.onLine !== false) {
+      cloud.initialized = true;
+      setTimeout(() => walletAutoCloud(), 250);
+    }
     const filtered = state.cards.filter(c => (c.name + " " + (brandOf(c)?.name || "") + " " + (c.code || ""))
       .toLocaleLowerCase("fr").includes(state.search.toLocaleLowerCase("fr")));
     const fav = filtered.filter(c => c.favorite), rest = filtered.filter(c => !c.favorite);
