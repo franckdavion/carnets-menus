@@ -364,7 +364,13 @@ async function domStRefreshState(force) {
     domStStateAt = Date.now();
     if (r.device_name) domStStatus.device_name = r.device_name;
     return true;
-  }).catch(() => false).finally(() => { domStStateInflight = null; });
+  }).catch(() => {
+    // Une lecture SmartThings refusée ne doit pas laisser la carte en « Chargement… ».
+    // Ne pas déduire que la TV est éteinte : son état reste inconnu.
+    domStState = { label: "État indisponible", power: null };
+    domStStateAt = Date.now();
+    return true;
+  }).finally(() => { domStStateInflight = null; });
   return domStStateInflight;
 }
 function domStPollOnView() {
@@ -1682,6 +1688,7 @@ function domTvPanelHtml() {
   return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":"État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
     <nav class="mz-tv-tabs" aria-label="Fonctions téléviseur">${tabs.map(([id,ico,label])=>`<button type="button" data-dom-tv-tab="${id}" class="${domTvTab===id?"is-active":""}" aria-current="${domTvTab===id?"page":"false"}"><b aria-hidden="true">${ico}</b><span>${label}</span></button>`).join("")}</nav>
     <p class="dom-tv-status mz-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
+    ${st.label === "État indisponible" ? '<div class="mz-tv-info"><span>SmartThings ne répond pas pour le moment. La TV peut néanmoins être commandée si Samsung accepte les ordres.</span><button type="button" class="btn ghost" data-dom-st-retry>↻ Réessayer de lire l’état</button></div>' : ""}
     <div class="dom-tv-controls mz-tv-content" data-dom-tv-controls>${page}</div>
     <button type="button" class="btn ghost mz-tv-close" data-act="closeSheet">Fermer</button>`;
 }
@@ -2304,6 +2311,14 @@ document.addEventListener("click", e => {
       domDreameFillHosts();
       setTimeout(() => { domDreameRefreshState(true).then(() => { domDreameFillHosts(); render(); }).catch(() => {}); }, 2500);
     }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
+    return;
+  }
+  if (e.target.closest("[data-dom-st-retry]")) {
+    domStStateAt = 0;
+    domStRefreshState(true).then(() => {
+      domSoftRender();
+      if (document.querySelector(".dom-tv-panel.mz-tv")) domTvFillPanel();
+    }).catch(() => {});
     return;
   }
   if (e.target.closest("[data-dom-st-open]")) { domTvSheet(); return; }
