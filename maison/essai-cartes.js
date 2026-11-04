@@ -4,7 +4,7 @@
   const DATABASE = "maisonnee-cartes-local-v1";
   const STORE = "cards";
   const LIMIT = 60;
-  const state = { cards: [], drafts: [], ready: false, busy: false, status: "", error: "", search: "" };
+  const state = { cards: [], drafts: [], ready: false, busy: false, status: "", error: "", search: "", crop: null };
   const urls = new Map();
   let dbPromise = null, decoderPromise = null;
   const h = value => esc(value == null ? "" : value);
@@ -84,14 +84,14 @@
       '<button type="button" data-wallet="open" data-id="' + h(c.id) + '" class="mz-wallet-card">' +
       (url ? '<img src="' + url + '" alt="" loading="lazy">' : '<span class="mz-wallet-symbol">▥</span>') +
       '<span class="mz-wallet-info"><strong>' + h(c.name) + '</strong><small>' + h(detail) + '</small></span><span aria-hidden="true">›</span></button>' +
-      '<div class="mz-wallet-tools"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '" aria-label="' + (c.favorite ? "Retirer des favoris" : "Mettre en favori") + '">' + (c.favorite ? "★ Favori" : "☆ Favori") + '</button><button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier</button></div></div>';
+      '<div class="mz-wallet-tools"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '" aria-label="' + (c.favorite ? "Retirer des favoris" : "Mettre en favori") + '">' + (c.favorite ? "★ Favori" : "☆ Favori") + '</button><button type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button><button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier</button></div></div>';
   }
   function draftRow(d, i) {
     const url = imageUrl(d.id, d.image);
     return '<div class="mz-wallet-draft"><img src="' + url + '" alt="Capture ' + (i + 1) + '">' +
       '<label>Nom de la carte<input class="input" type="text" data-wallet-name="' + h(d.id) + '" maxlength="60" value="' + h(d.name) + '"></label>' +
       '<small>' + (d.code ? 'Code détecté : ' + h(d.code) : "Code non reconnu : la capture restera disponible.") + '</small>' +
-      '<button type="button" data-wallet="removeDraft" data-id="' + h(d.id) + '">Retirer</button></div>';
+      '<div class="mz-wallet-draft-actions"><button type="button" data-wallet="crop" data-id="' + h(d.id) + '">✂ Recadrer le code-barres</button><button type="button" data-wallet="removeDraft" data-id="' + h(d.id) + '">Retirer</button></div></div>';
   }
   VIEWS.fidelite = function () {
     const list = state.cards.filter(c => (c.name + " " + (c.code || "")).toLocaleLowerCase("fr").includes(state.search.toLocaleLowerCase("fr")));
@@ -175,7 +175,7 @@
           const found = await readBarcode(file);
           if (found.code && knownCodes.has(found.code)) { duplicates++; continue; }
           existing.add(hash); if (found.code) knownCodes.add(found.code);
-          state.drafts.push({ id: uid(), name: nameFromFile(file.name, state.cards.length + state.drafts.length + 1), code: found.code, format: found.format, hash, image: file, favorite: false, savedAt: Date.now() });
+          state.drafts.push({ id: uid(), name: nameFromFile(file.name, state.cards.length + state.drafts.length + 1), code: found.code, format: found.format, hash, image: file, originalImage: file, favorite: false, savedAt: Date.now() });
         } catch (e) { failures++; }
       }
       state.status = state.drafts.length + " capture(s) à vérifier" + (duplicates ? " · " + duplicates + " doublon(s) ignoré(s)" : "") + (failures ? " · " + failures + " erreur(s)" : "") + ".";
@@ -196,6 +196,173 @@
     } catch (e) { state.error = "Impossible d’enregistrer les cartes : " + (e.message || e); }
     finally { state.busy = false; redraw(); }
   }
+
+  /* Recadrage tactile non destructif : coordonnées normalisées dans l'image,
+     coins redimensionnables et déplacement du cadre. L'original est conservé. */
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  function cropDefault(image) {
+    return image.naturalHeight > image.naturalWidth * 1.35
+      ? { x: .07, y: .15, w: .86, h: .30 }
+      : { x: .06, y: .22, w: .88, h: .55 };
+  }
+  function cropPaint() {
+    const region = document.getElementById("mz-wallet-crop-region");
+    if (!region || !state.crop) return;
+    const r = state.crop.rect;
+    region.style.left = (r.x * 100) + "%";
+    region.style.top = (r.y * 100) + "%";
+    region.style.width = (r.w * 100) + "%";
+    region.style.height = (r.h * 100) + "%";
+  }
+  function cropPoint(event, stage) {
+    const box = stage.getBoundingClientRect();
+    return {
+      x: clamp((event.clientX - box.left) / Math.max(1, box.width), 0, 1),
+      y: clamp((event.clientY - box.top) / Math.max(1, box.height), 0, 1)
+    };
+  }
+  function cropPointerDown(event) {
+    if (!state.crop || state.crop.busy || event.button > 0) return;
+    const stage = event.target.closest("#mz-wallet-crop-stage");
+    if (!stage) return;
+    event.preventDefault();
+    const rect = { ...state.crop.rect }, point = cropPoint(event, stage);
+    const corner = event.target.closest("[data-crop-handle]")?.dataset.cropHandle;
+    const inside = event.target.closest("#mz-wallet-crop-region");
+    if (!corner && !inside) {
+      rect.x = clamp(point.x - rect.w / 2, 0, 1 - rect.w);
+      rect.y = clamp(point.y - rect.h / 2, 0, 1 - rect.h);
+      state.crop.rect = rect;
+      cropPaint();
+    }
+    state.crop.drag = {
+      id: event.pointerId, mode: corner || "move",
+      start: point, original: { ...state.crop.rect }
+    };
+    stage.setPointerCapture(event.pointerId);
+  }
+  function cropPointerMove(event) {
+    const current = state.crop;
+    if (!current?.drag || current.drag.id !== event.pointerId) return;
+    event.preventDefault();
+    const stage = document.getElementById("mz-wallet-crop-stage");
+    if (!stage) return;
+    const point = cropPoint(event, stage);
+    const drag = current.drag, a = drag.original;
+    const dx = point.x - drag.start.x, dy = point.y - drag.start.y;
+    const minimumWidth = .13, minimumHeight = .055;
+    let left = a.x, top = a.y, right = a.x + a.w, bottom = a.y + a.h;
+    if (drag.mode === "move") {
+      left = clamp(a.x + dx, 0, 1 - a.w);
+      top = clamp(a.y + dy, 0, 1 - a.h);
+      right = left + a.w; bottom = top + a.h;
+    } else {
+      if (drag.mode.includes("w")) left = clamp(a.x + dx, 0, right - minimumWidth);
+      if (drag.mode.includes("e")) right = clamp(a.x + a.w + dx, left + minimumWidth, 1);
+      if (drag.mode.includes("n")) top = clamp(a.y + dy, 0, bottom - minimumHeight);
+      if (drag.mode.includes("s")) bottom = clamp(a.y + a.h + dy, top + minimumHeight, 1);
+    }
+    current.rect = { x: left, y: top, w: right - left, h: bottom - top };
+    cropPaint();
+  }
+  function cropPointerUp(event) {
+    if (!state.crop?.drag || state.crop.drag.id !== event.pointerId) return;
+    state.crop.drag = null;
+    const stage = document.getElementById("mz-wallet-crop-stage");
+    if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+  }
+  async function openCrop(card) {
+    if (!card?.image) { toast("Aucune image à recadrer."); return; }
+    const source = card.originalImage || card.image;
+    let dlg = document.getElementById("mz-wallet-crop");
+    if (!dlg) {
+      dlg = document.createElement("dialog");
+      dlg.id = "mz-wallet-crop";
+      dlg.className = "mz-wallet-crop-dialog";
+      dlg.addEventListener("close", () => { state.crop = null; });
+      document.body.appendChild(dlg);
+    }
+    const sourceUrl = imageUrl(card.id + "-original", source);
+    dlg.innerHTML = '<div class="mz-wallet-crop-content">' +
+      '<div class="mz-wallet-crop-top"><strong>Recadrer · ' + h(card.name) + '</strong><button type="button" data-wallet="cropClose" aria-label="Fermer le recadrage">✕</button></div>' +
+      '<p>Place le cadre autour du code-barres. Glisse le cadre pour le déplacer et tire les coins pour l’ajuster.</p>' +
+      '<div class="mz-wallet-crop-scroll"><div class="mz-wallet-crop-stage" id="mz-wallet-crop-stage">' +
+      '<img id="mz-wallet-crop-image" src="' + sourceUrl + '" alt="Capture originale à recadrer">' +
+      '<div class="mz-wallet-crop-region" id="mz-wallet-crop-region" role="group" aria-label="Zone conservée">' +
+      ['nw', 'ne', 'sw', 'se'].map(handle =>
+        '<span class="mz-wallet-crop-handle" data-crop-handle="' + handle + '" aria-hidden="true"></span>').join("") +
+      '</div></div></div>' +
+      '<div class="mz-wallet-crop-actions"><button type="button" class="btn" data-wallet="cropReset">Réinitialiser</button>' +
+      '<button type="button" class="btn primary" data-wallet="cropSave">Utiliser ce cadrage</button></div>' +
+      '<small>La capture originale est conservée pour permettre un nouveau recadrage.</small>' +
+      '</div>';
+    const stage = dlg.querySelector("#mz-wallet-crop-stage");
+    stage.addEventListener("pointerdown", cropPointerDown);
+    stage.addEventListener("pointermove", cropPointerMove);
+    stage.addEventListener("pointerup", cropPointerUp);
+    stage.addEventListener("pointercancel", cropPointerUp);
+    state.crop = { id: card.id, source, rect: { x: .08, y: .2, w: .84, h: .35 }, busy: false, drag: null };
+    if (!dlg.open) dlg.showModal();
+    try {
+      const image = dlg.querySelector("#mz-wallet-crop-image");
+      await image.decode();
+      if (!state.crop || state.crop.id !== card.id) return;
+      state.crop.rect = cropDefault(image);
+      cropPaint();
+    } catch (e) {
+      dlg.close();
+      toast("Impossible de lire cette capture pour la recadrer.");
+    }
+  }
+  async function applyCrop() {
+    const crop = state.crop;
+    if (!crop || crop.busy) return;
+    crop.busy = true;
+    const button = document.querySelector('#mz-wallet-crop [data-wallet="cropSave"]');
+    if (button) { button.disabled = true; button.textContent = "Recadrage…"; }
+    try {
+      const image = document.getElementById("mz-wallet-crop-image");
+      if (!image?.naturalWidth || !image?.naturalHeight) throw new Error("Image non chargée");
+      const r = crop.rect;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * r.w));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * r.h));
+      if (canvas.width * canvas.height > 20000000) throw new Error("Zone trop grande pour le traitement.");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Traitement de l'image indisponible.");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, image.naturalWidth * r.x, image.naturalHeight * r.y,
+        image.naturalWidth * r.w, image.naturalHeight * r.h, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error("Impossible de créer la capture recadrée.")), "image/png"));
+      const draft = state.drafts.find(d => d.id === crop.id);
+      const saved = lookup(crop.id);
+      const original = draft || saved;
+      if (!original) throw new Error("Carte introuvable.");
+      const updated = { ...original, image: blob, originalImage: original.originalImage || crop.source };
+      if (!updated.code) {
+        const found = await readBarcode(blob);
+        if (found.code) { updated.code = found.code; updated.format = found.format; }
+      }
+      if (draft) Object.assign(draft, updated);
+      else await putMany([updated]);
+      document.getElementById("mz-wallet-crop")?.close();
+      if (saved) await reload();
+      else { clearUrls(); redraw(); }
+      state.status = "Code-barres recadré. Vérifie l’aperçu avant d’enregistrer.";
+      redraw();
+    } catch (e) {
+      toast("Recadrage impossible : " + (e?.message || e));
+      crop.busy = false;
+      if (button) { button.disabled = false; button.textContent = "Utiliser ce cadrage"; }
+    }
+  }
+  function resetCrop() {
+    const image = document.getElementById("mz-wallet-crop-image");
+    if (!state.crop || !image) return;
+    state.crop.rect = cropDefault(image);
+    cropPaint();
+  }
+
   function fullscreen(c) {
     if (!c) return;
     let dlg = document.getElementById("mz-wallet-dialog");
@@ -244,7 +411,7 @@
     try {
       const rows = [];
       for (const card of state.cards) {
-        rows.push({ ...card, image: card.image ? await blobToBase64(card.image) : null });
+        rows.push({ ...card, image: card.image ? await blobToBase64(card.image) : null, originalImage: card.originalImage ? await blobToBase64(card.originalImage) : null });
       }
       const payload = { kind: "maisonnee-cartes", version: 1, exportedAt: new Date().toISOString(), cards: rows };
       const file = new Blob([JSON.stringify(payload)], { type: "application/json" });
@@ -273,9 +440,10 @@
         const hash = typeof row.hash === "string" ? row.hash.slice(0, 128) : "";
         if ((hash && knownHash.has(hash)) || (code && knownCodes.has(code))) continue;
         const image = row.image ? base64ToBlob(row.image) : null;
+        const originalImage = typeof row.originalImage === "string" ? base64ToBlob(row.originalImage) : null;
         if (hash) knownHash.add(hash);
         if (code) knownCodes.add(code);
-        batch.push({ id: uid(), name: row.name.slice(0, 60) || "Carte restaurée", code, format: String(row.format || "").slice(0, 60), hash, image, favorite: !!row.favorite, savedAt: Date.now() });
+        batch.push({ id: uid(), name: row.name.slice(0, 60) || "Carte restaurée", code, format: String(row.format || "").slice(0, 60), hash, image, originalImage, favorite: !!row.favorite, savedAt: Date.now() });
       }
       await putMany(batch);
       state.status = batch.length + " carte(s) restaurée(s).";
@@ -293,6 +461,10 @@
     else if (cmd === "open") fullscreen(card);
     else if (cmd === "close") document.getElementById("mz-wallet-dialog")?.close();
     else if (cmd === "edit") editCard(card);
+    else if (cmd === "crop") await openCrop(card || state.drafts.find(d => d.id === button.dataset.id));
+    else if (cmd === "cropSave") await applyCrop();
+    else if (cmd === "cropReset") resetCrop();
+    else if (cmd === "cropClose") document.getElementById("mz-wallet-crop")?.close();
     else if (cmd === "favorite" && card) {
       try { await putMany([{ ...card, favorite: !card.favorite }]); await reload(); }
       catch (e) { state.error = "Modification impossible."; redraw(); }
