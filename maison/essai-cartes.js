@@ -1,11 +1,17 @@
 "use strict";
-/* Version test : portefeuille local, aucun accès Supabase et aucune transmission des photos. */
+/* Portefeuille test : copie locale IndexedDB et synchronisation familiale Supabase facultative. */
 (function () {
   const DATABASE = "maisonnee-cartes-local-v1";
   const STORE = "cards";
   const LIMIT = 60;
   const state = { cards: [], drafts: [], ready: false, busy: false, status: "", error: "", search: "", crop: null, manage: false };
   const urls = new Map();
+  const CLOUD_TABLE = "household_loyalty_cards", CLOUD_BUCKET = "household-loyalty";
+  const CLOUD_PREFIX = "mz_wallet_family_share_v1:";
+  const cloud = { client: null, householdId: null, householdName: "", enabled: false,
+    busy: false, message: "", warning: "", login: false, noHousehold: false,
+    timer: null, channel: null, initialized: false, conflictCount: 0 };
+
   let dbPromise = null, decoderPromise = null;
   const h = value => esc(value == null ? "" : value);
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "carte-" + Date.now() + "-" + Math.random().toString(36).slice(2));
@@ -33,18 +39,32 @@
       req.onerror = () => reject(req.error);
     });
   }
-  async function putMany(rows) {
+  async function putMany(rows, fromCloud = false) {
     if (!rows.length) return;
     const base = await db();
+    const changed = rows.map(row => {
+      if (fromCloud) return row;
+      const previous = state.cards.find(card => card.id === row.id);
+      const imageDirty = !!row.syncImageDirty ||
+        !!row.image && (!previous || previous.image !== row.image);
+      return { ...row, syncPending: true, syncImageDirty: imageDirty,
+        modifiedLocallyAt: Date.now() };
+    });
     await new Promise((resolve, reject) => {
       const tx = base.transaction(STORE, "readwrite");
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
-      for (const row of rows) tx.objectStore(STORE).put(row);
+      for (const row of changed) tx.objectStore(STORE).put(row);
     });
+    if (!fromCloud) walletScheduleSync();
   }
   async function erase(id) {
+    const card = state.cards.find(c => c.id === id);
+    if (card?.syncHouseholdId) {
+      await putMany([{ ...card, syncDeleted: true }]);
+      return;
+    }
     const base = await db();
     await new Promise((resolve, reject) => {
       const tx = base.transaction(STORE, "readwrite");
@@ -53,6 +73,273 @@
       tx.objectStore(STORE).delete(id);
     });
   }
+
+  /* Les métadonnées partagées sont protégées par RLS, et les images sont
+     téléchargées depuis un bucket privé. IndexedDB reste la source hors ligne. */
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const savedCloudFlag = hid => {
+    try { return localStorage.getItem(CLOUD_PREFIX + hid) === "1"; }
+    catch (_) { return false; }
+  };
+  function walletScheduleSync() {
+    if (!cloud.enabled || !cloud.householdId || navigator.onLine === false) return;
+    clearTimeout(cloud.timer);
+    cloud.timer = setTimeout(() => walletSync(), 1200);
+  }
+  function walletStatus(message, warning = "") {
+    cloud.message = message;
+    cloud.warning = warning;
+    redraw();
+  }
+  function walletSignIn() {
+    // Réutiliser l'authentification existante, sans second formulaire ni mot de passe.
+    location.href = new URL("essai.html?v=fidelite", document.baseURI).href;
+  }
+  async function walletContext() {
+    if (navigator.onLine === false) return {offline: true};
+    if (typeof window.maisonneeLoyaltyCloudSession !== "function") {
+      throw new Error("La connexion au foyer n’est pas disponible.");
+    }
+    return await window.maisonneeLoyaltyCloudSession();
+  }
+  function walletSubscribe() {
+    if (!cloud.enabled || !cloud.client || !cloud.householdId || cloud.channel) return;
+    try {
+      cloud.channel = cloud.client.channel("loyalty-" + cloud.householdId)
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: CLOUD_TABLE,
+          filter: "household_id=eq." + cloud.householdId
+        }, () => walletScheduleSync()).subscribe();
+    } catch (_) {
+      // Le rafraîchissement manuel, au retour en ligne et à l'ouverture reste disponible.
+    }
+  }
+  async function walletAutoCloud() {
+    if (navigator.onLine === false || cloud.busy) return;
+    let flags = false;
+    try { flags = Object.keys(localStorage).some(k => k.startsWith(CLOUD_PREFIX) && localStorage.getItem(k) === "1"); }
+    catch (_) {}
+    if (!flags) return;
+    try {
+      const context = await walletContext();
+      if (!context?.householdId || !savedCloudFlag(context.householdId)) return;
+      if (cloud.householdId && cloud.householdId !== context.householdId) {
+        if (cloud.channel) { try { await cloud.client?.removeChannel(cloud.channel); } catch (_) {} }
+        cloud.channel = null;
+      }
+      cloud.client = context.client;
+      cloud.householdId = context.householdId;
+      cloud.householdName = context.householdName;
+      cloud.enabled = true;
+      await walletSync();
+      walletSubscribe();
+    } catch (error) {
+      walletStatus("Sauvegarde familiale en attente : " + (error.message || "connexion indisponible"));
+    }
+  }
+  async function walletConnectFamily() {
+    if (cloud.busy || navigator.onLine === false) return;
+    cloud.busy = true; cloud.warning = "";
+    walletStatus("Vérification de la connexion au foyer…");
+    let context;
+    try { context = await walletContext(); }
+    catch (error) {
+      cloud.busy = false;
+      walletStatus("Connexion impossible : " + (error.message || error));
+      return;
+    }
+    cloud.busy = false;
+    if (context.login) {
+      cloud.login = true;
+      walletStatus("Connecte-toi à Maisonnée pour partager les cartes avec ta famille.");
+      return;
+    }
+    if (context.noHousehold || !context.householdId) {
+      cloud.noHousehold = true;
+      walletStatus("Aucun foyer associé à ce compte. Rejoins d’abord ton foyer dans Maisonnée.");
+      return;
+    }
+    const count = (await all()).filter(c => !c.syncDeleted && !c.syncHouseholdId).length;
+    if (!confirm("Activer le partage avec le foyer « " + context.householdName + " » ?\n\n" +
+      count + " carte(s) locales seront proposées à la synchronisation. " +
+      "Les membres connectés à ce foyer pourront consulter les cartes et leurs codes-barres.")) return;
+    cloud.client = context.client;
+    cloud.householdId = context.householdId;
+    cloud.householdName = context.householdName;
+    cloud.enabled = true;
+    cloud.login = false;
+    try { localStorage.setItem(CLOUD_PREFIX + context.householdId, "1"); }
+    catch (_) { walletStatus("Stockage local saturé : le partage ne pourra pas être mémorisé."); }
+    await walletSync();
+    walletSubscribe();
+  }
+  async function walletCompressImage(blob) {
+    if (!blob) return null;
+    if (!(blob instanceof Blob)) throw new Error("Format de capture non pris en charge.");
+    const image = await walletCaptureImage(blob);
+    const ratio = Math.min(1, 1500 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Compression d'image indisponible.");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const encode = (type, quality) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
+    let output = await encode("image/webp", .92);
+    if (!output || output.type !== "image/webp" || output.size > 2750000) output = await encode("image/jpeg", .86);
+    if (!output || output.size > 2900000) throw new Error("Capture trop volumineuse pour le stockage familial.");
+    return output;
+  }
+  async function walletUploadImage(card) {
+    if (!card.image) return null;
+    const blob = await walletCompressImage(card.image);
+    const ext = blob.type === "image/webp" ? "webp" : "jpg";
+    const path = cloud.householdId + "/" + card.id + "/" + Date.now() +
+      "-" + crypto.randomUUID() + "." + ext;
+    const result = await cloud.client.storage.from(CLOUD_BUCKET).upload(path, blob, {
+      contentType: blob.type, upsert: false, cacheControl: "3600"
+    });
+    if (result.error) throw result.error;
+    return path;
+  }
+  async function walletDownloadImage(path) {
+    if (!path) return null;
+    const result = await cloud.client.storage.from(CLOUD_BUCKET).download(path);
+    if (result.error) throw result.error;
+    return result.data || null;
+  }
+  function walletFromRemote(remote, existing, image) {
+    return {
+      id: remote.id,
+      name: remote.name, brandId: remote.brand_id || "",
+      code: remote.code || "", format: remote.format || "", hash: remote.hash || "",
+      favorite: !!remote.favorite, image: image || existing?.image || null,
+      originalImage: existing?.originalImage || null, savedAt: existing?.savedAt || Date.now(),
+      syncHouseholdId: cloud.householdId, syncRevision: Number(remote.revision) || 1,
+      syncImagePath: remote.image_path || null, syncImageDirty: false,
+      syncPending: false, syncDeleted: !!remote.deleted_at
+    };
+  }
+  async function walletSync() {
+    if (!cloud.enabled || !cloud.householdId || !cloud.client ||
+        cloud.busy || navigator.onLine === false) return;
+    cloud.busy = true;
+    cloud.warning = "";
+    walletStatus("Synchronisation du foyer…");
+    let added = 0, sent = 0, conflicts = 0, failed = 0, duplicates = 0;
+    try {
+      const res = await cloud.client.from(CLOUD_TABLE).select("*")
+        .eq("household_id", cloud.householdId).order("updated_at", {ascending: false}).limit(250);
+      if (res.error) throw res.error;
+      const remoteRows = res.data || [];
+      const remoteMap = new Map(remoteRows.map(row => [row.id, row]));
+      const localRows = await all();
+      const localMap = new Map(localRows.map(c => [c.id, c]));
+      const incoming = [];
+      // Télécharger d'abord : aucune modification locale ou serveur en cas
+      // d'erreur à la lecture de la collection distante.
+      for (const remote of remoteRows) {
+        const local = localMap.get(remote.id);
+        if (local?.syncHouseholdId && local.syncHouseholdId !== cloud.householdId) continue;
+        if (local?.syncPending) {
+          if (remote.deleted_at && local.syncDeleted) {
+            incoming.push(walletFromRemote(remote, local, local.image));
+          }
+          continue;
+        }
+        const different = !local ||
+          Number(remote.revision) > Number(local.syncRevision || 0) ||
+          (!!remote.image_path && !local.image);
+        if (!different) continue;
+        let blob = local?.image || null;
+        if (remote.image_path && (remote.image_path !== local?.syncImagePath || !blob)) {
+          try { blob = await walletDownloadImage(remote.image_path); }
+          catch (_) { failed++; }
+        }
+        incoming.push(walletFromRemote(remote, local, blob));
+        if (!local && !remote.deleted_at) added++;
+      }
+      if (incoming.length) await putMany(incoming, true);
+      // Relire après fusion, pour ne jamais écraser les cartes reçues du serveur.
+      const localNow = await all();
+      for (const card of localNow) {
+        if (card.syncHouseholdId && card.syncHouseholdId !== cloud.householdId) continue;
+        const remote = remoteMap.get(card.id);
+        const needsUpload = !!card.syncPending || (!card.syncHouseholdId && !card.syncDeleted);
+        if (!needsUpload) continue;
+        if (!UUID_RE.test(card.id)) { failed++; continue; }
+        if (remote && Number(remote.revision) !== Number(card.syncRevision || 0)) {
+          conflicts++; continue;
+        }
+        if (!remote && card.syncDeleted) continue;
+        if (!remote && !card.syncDeleted && remoteRows.some(other =>
+          !other.deleted_at && other.id !== card.id &&
+          ((card.hash && other.hash === card.hash) ||
+            (card.code && other.code === card.code &&
+              (card.brandId || "") === (other.brand_id || ""))))) {
+          duplicates++; continue;
+        }
+        try {
+          let imagePath = card.syncImagePath || remote?.image_path || null;
+          if (card.image && (!imagePath || card.syncImageDirty)) {
+            imagePath = await walletUploadImage(card);
+          }
+          const payload = {
+            name: String(card.name || "Carte de fidélité").slice(0, 80),
+            brand_id: String(card.brandId || "").slice(0, 60),
+            code: String(card.code || "").slice(0, 256),
+            format: String(card.format || "").slice(0, 60),
+            hash: String(card.hash || "").slice(0, 128),
+            favorite: !!card.favorite,
+            image_path: imagePath,
+            deleted_at: card.syncDeleted ? new Date().toISOString() : null
+          };
+          let result;
+          if (remote) {
+            result = await cloud.client.from(CLOUD_TABLE).update(payload)
+              .eq("household_id", cloud.householdId).eq("id", card.id)
+              .eq("revision", Number(card.syncRevision)).select("*").maybeSingle();
+          } else {
+            result = await cloud.client.from(CLOUD_TABLE)
+              .insert({ ...payload, id: card.id, household_id: cloud.householdId })
+              .select("*").single();
+          }
+          if (result.error) throw result.error;
+          if (!result.data) { conflicts++; continue; }
+          const latest = (await all()).find(row => row.id === card.id);
+          if (!latest) continue;
+          const unchanged = latest.modifiedLocallyAt === card.modifiedLocallyAt;
+          const ack = {
+            ...latest, syncHouseholdId: cloud.householdId,
+            syncRevision: Number(result.data.revision), syncImagePath: imagePath,
+            syncPending: !unchanged, syncImageDirty: unchanged ? false : latest.syncImageDirty
+          };
+          await putMany([ack], true);
+          remoteMap.set(card.id, result.data);
+          sent++;
+        } catch (_) { failed++; }
+      }
+      cloud.conflictCount = conflicts;
+      cloud.message = "Famille : " + sent + " envoyée(s), " + added + " reçue(s).";
+      cloud.warning = [
+        conflicts ? conflicts + " conflit(s) : aucune modification n’a été écrasée." : "",
+        duplicates ? duplicates + " doublon(s) à vérifier avant partage." : "",
+        failed ? failed + " image(s) ou carte(s) non synchronisée(s) : réessaie avec Internet." : ""
+      ].filter(Boolean).join(" ");
+      await reload();
+      walletSubscribe();
+    } catch (error) {
+      cloud.message = "Synchronisation impossible : " + (error.message || error);
+      cloud.warning = "Tes cartes restent sur cet iPhone. Réessaie une fois la connexion rétablie.";
+    } finally {
+      cloud.busy = false;
+      redraw();
+    }
+  }
+
   function imageUrl(id, file) {
     if (!file) return "";
     if (!urls.has(id)) urls.set(id, URL.createObjectURL(file));
@@ -70,7 +357,8 @@
   }
   async function reload() {
     clearUrls();
-    state.cards = (await all()).sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, "fr"));
+    state.cards = (await all()).filter(c => !c.syncDeleted)
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, "fr"));
     state.ready = true;
     state.error = "";
     redraw();
@@ -183,15 +471,31 @@
     const filtered = state.cards.filter(c => (c.name + " " + (brandOf(c)?.name || "") + " " + (c.code || ""))
       .toLocaleLowerCase("fr").includes(state.search.toLocaleLowerCase("fr")));
     const fav = filtered.filter(c => c.favorite), rest = filtered.filter(c => !c.favorite);
+    const sharing = cloud.enabled && cloud.householdId;
+    const familyStatus = !navigator.onLine ? "Hors ligne · copie locale disponible" :
+      cloud.busy ? "Synchronisation en cours…" :
+      sharing ? (cloud.message || "Partage familial activé") :
+      (cloud.message || "Cartes disponibles uniquement sur cet appareil");
+    const familyUI = '<div class="mz-wallet-family" role="region" aria-label="Partage familial">' +
+      '<div><strong>' + (sharing ? "Partagées avec la famille" : "Partage familial") + '</strong>' +
+      '<p>' + h(familyStatus) + '</p>' +
+      (sharing ? '<small>Foyer : ' + h(cloud.householdName) + '</small>' : '') +
+      (cloud.warning ? '<p class="mz-wallet-family-warning">' + h(cloud.warning) + '</p>' : '') +
+      '</div><button type="button" class="btn" data-wallet="' +
+      (cloud.login || cloud.noHousehold ? "cloudLogin" : sharing ? "cloudSync" : "cloudConnect") +
+      '"' + (cloud.busy || (!navigator.onLine && !cloud.login && !cloud.noHousehold) ? ' disabled' : '') + '>' +
+      (cloud.login ? "Se connecter" : cloud.noHousehold ? "Ouvrir Maisonnée" :
+        sharing ? "↻ Synchroniser" : "Activer") + '</button></div>';
     const section = (title, entries) => entries.length ?
       '<section class="mz-wallet-mosaic-section"><h3>' + h(title) + '</h3><div class="mz-wallet-list mz-wallet-mosaic-grid">' +
       entries.map(previewRow).join("") + '</div></section>' : "";
     return '<section class="mz-wallet mz-wallet-mosaic">' +
       '<div class="mz-wallet-head"><div><h2>Cartes de fidélité</h2><p>Tes cartes restent accessibles sans Internet sur cet appareil.</p></div>' +
-      '<span class="mz-wallet-offline">' + (!navigator.onLine ? "Hors ligne" : "Stockage iPhone") + '</span></div>' +
+      '<span class="mz-wallet-offline">' + (!navigator.onLine ? "Hors ligne" : sharing ? "Local + famille" : "Stockage iPhone") + '</span></div>' +
       '<div class="mz-wallet-actions mz-wallet-main-actions"><button class="btn primary" type="button" data-wallet="pick">＋ Ajouter des cartes</button>' +
       '<button class="btn" type="button" data-wallet="manageToggle">' + (state.manage ? "Fermer les options" : "⋯ Gérer") + '</button></div>' +
-      (state.manage ? '<div class="mz-wallet-manage"><p>Les cartes et leurs captures sont enregistrées uniquement sur cet appareil.</p>' +
+      familyUI +
+      (state.manage ? '<div class="mz-wallet-manage"><p>Une copie locale reste disponible sans Internet. La sauvegarde manuelle reste recommandée.</p>' +
         '<div class="mz-wallet-actions"><button class="btn" type="button" data-wallet="backup">Sauvegarder mes cartes</button>' +
         '<button class="btn" type="button" data-wallet="pickBackup">Restaurer une sauvegarde</button></div></div>' : '') +
       '<input id="mz-wallet-files" class="mz-wallet-file" type="file" accept="image/*" multiple aria-label="Sélectionner des captures d’écran">' +
@@ -848,6 +1152,9 @@
     else if (cmd === "recognize") { if (button.closest("#sheet")) closeSheet(); document.getElementById("mz-wallet-dialog")?.close(); await recognizeOne(button.dataset.id); }
     else if (cmd === "recognizeDrafts") await recognizeDrafts();
     else if (cmd === "manageToggle") { state.manage = !state.manage; redraw(); }
+    else if (cmd === "cloudConnect") await walletConnectFamily();
+    else if (cmd === "cloudLogin") walletSignIn();
+    else if (cmd === "cloudSync") await walletSync();
     else if (cmd === "cropSave") await applyCrop();
     else if (cmd === "cropReset") resetCrop();
     else if (cmd === "cropClose") document.getElementById("mz-wallet-crop")?.close();
@@ -918,8 +1225,13 @@
     } catch (e) { state.error = "Modification impossible : " + (e.message || e); redraw(); }
   }, true);
   window.addEventListener("resize", () => { if (state.crop) cropFit(); });
-  window.addEventListener("online", () => { decoderPromise = null; ocrScriptPromise = null; redraw(); });
-  window.addEventListener("offline", redraw);
+  window.addEventListener("online", () => { decoderPromise = null; ocrScriptPromise = null; walletAutoCloud(); redraw(); });
+  window.addEventListener("offline", () => { cloud.message = "Hors ligne · reprise automatique à la reconnexion"; redraw(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && navigator.onLine !== false) walletAutoCloud();
+  });
   navigator.serviceWorker?.addEventListener("controllerchange", redraw);
-  reload().catch(e => { state.ready = false; state.error = "Stockage indisponible : " + (e.message || e); redraw(); });
+  reload().then(() => walletAutoCloud()).catch(e => {
+    state.ready = false; state.error = "Stockage indisponible : " + (e.message || e); redraw();
+  });
 })();

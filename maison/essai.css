@@ -617,3 +617,20 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
 @media(max-width:400px){
   .mz-wallet-manage-menu{grid-template-columns:1fr}
 }
+
+/* Partage familial des cartes : état explicite, sans modifier la mosaïque. */
+.mz-wallet-family{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border:1px solid #5ac8ff66;border-radius:15px;
+  padding:12px 13px;background:linear-gradient(115deg,#133b5e,#0c2642);
+}
+.mz-wallet-family>div{flex:1;min-width:0}
+.mz-wallet-family strong{display:block;font-size:14px;color:#eef9ff}
+.mz-wallet-family p{margin:5px 0 0;font-size:12px;line-height:1.45;color:#bcdff6;overflow-wrap:anywhere}
+.mz-wallet-family small{display:block;margin-top:4px;color:#a4c6dd;font-size:11px}
+.mz-wallet-family .btn{flex:none;min-height:39px;font-size:12px;padding:7px 12px}
+.mz-wallet-family .mz-wallet-family-warning{color:#ffe0ae}
+@media(max-width:400px){
+  .mz-wallet-family{gap:8px;padding:10px}
+  .mz-wallet-family .btn{max-width:44%;white-space:normal;line-height:1.3}
+}

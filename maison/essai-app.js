@@ -244,6 +244,26 @@ function loadSb() {
   });
 }
 
+/* Pont limité au portefeuille de test. Les identifiants sont vérifiés côté
+   Supabase avant toute lecture ou écriture ; aucun service_role côté iPhone. */
+window.maisonneeLoyaltyCloudSession = async function () {
+  if (navigator.onLine === false) return { offline: true };
+  const client = await loadSb();
+  const auth = await client.auth.getUser();
+  if (auth.error || !auth.data?.user) return { login: true };
+  const account = auth.data.user;
+  const membership = await client.from("household_members").select("household_id")
+    .eq("user_id", account.id);
+  if (membership.error) throw membership.error;
+  const ids = (membership.data || []).map(row => row.household_id);
+  if (!ids.length) return { noHousehold: true };
+  const preferred = mode === "cloud" && S.hh && ids.includes(S.hh.id) ? S.hh.id :
+    ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
+  const info = await client.from("households").select("name").eq("id", preferred).maybeSingle();
+  return { client, householdId: preferred, householdName: info.data?.name || "Mon foyer",
+    userId: account.id };
+};
+
 async function loadCloud(hid) {
   const since = addDays(today(), -60);
   const [hh, mm, tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
