@@ -1854,9 +1854,10 @@ function mzDomAccordions(){
     const hint=zone==="exterieur"?"Portails · Éclairages · Atelier"
        :zone==="rdc"?"Salon · Cuisine · Salle à manger · Entrée":"Chambres · Escalier";
     const summary=`${rows.length} équipement${rows.length>1?"s":""} · ${hint}`;
-    // Batch controls are the existing, server-supported commands; no new relay action.
-    const batch=zone==="rdc"||zone==="etage"?domZoneBatchCard(zone):"";
-    const content=open?`<div class="mz-dom-zone-content">${batch}
+    // Les groupes historiques suivent la zone technique Shelly ; comme le volet
+    // salle à manger est assigné à une pièce RDC mais stocké dans la zone Extérieur,
+    // ne pas présenter ici une commande globale qui en oublierait un.
+    const content=open?`<div class="mz-dom-zone-content">
       <div class="mz-dom-items ${zone==="exterieur"?"mz-dom-items-ext":""}">
         ${rows.length?rows.map(mzDomCompactDevice).join(""):'<p class="muted small">Aucun appareil Shelly associé.</p>'}
       </div>
