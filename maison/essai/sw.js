@@ -1,7 +1,7 @@
 "use strict";
 /* Cache exclusivement la version de test sous /maison/essai/.
    Ne jamais supprimer ni remplacer le cache/PWA de la Maisonnée officielle. */
-const CACHE = "maisonnee-essai-cartes-v3";
+const CACHE = "maisonnee-essai-cartes-v4";
 const SHELL = [
   "./", "./index.html", "./manifest.json",
   "../maison.css", "../essai.css", "../essai-app.js", "../essai-modules.js", "../essai-cartes.js",
@@ -27,30 +27,31 @@ self.addEventListener("activate", event => {
     self.clients.claim()
   ]));
 });
+/* Priorité au réseau dès qu'il est joignable : sinon l'iPhone restait bloqué
+   sur un ancien essai-modules.js et affichait l'ancienne page Courses.
+   La version stockée reste disponible en cas de coupure Internet. */
 self.addEventListener("fetch", event => {
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (request.mode === "navigate") {
-    event.respondWith(fetch(request).then(async response => {
+
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(new Request(request, { cache: "no-cache" }));
       if (response.ok) {
-        const cache = await caches.open(CACHE);
-        await cache.put(request, response.clone());
+        const copy = response.clone();
+        event.waitUntil(caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {}));
       }
       return response;
-    }).catch(async () => {
-      return await caches.match(request, { ignoreSearch: true }) ||
-        await caches.match(new URL("./index.html", self.location).href) ||
-        Response.error();
-    }));
-    return;
-  }
-  event.respondWith(caches.match(request, { ignoreSearch: true }).then(cached => {
-    if (cached) return cached;
-    return fetch(request).then(response => {
-      if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
-      return response;
-    });
-  }));
+    } catch (_) {
+      const backup = await caches.match(request, { ignoreSearch: true });
+      if (backup) return backup;
+      if (request.mode === "navigate") {
+        const shell = await caches.match(new URL("./index.html", self.location).href);
+        if (shell) return shell;
+      }
+      return Response.error();
+    }
+  })());
 });
