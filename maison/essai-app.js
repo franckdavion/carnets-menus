@@ -1121,7 +1121,7 @@ function render() {
         <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
         <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>
       </div>
-      <button type="button" class="fab cal-create-fab" id="calCreateButton" data-act="calCreateToggle" aria-label="Créer dans l'agenda" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
+      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="Créer dans l'agenda" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
     </div>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
