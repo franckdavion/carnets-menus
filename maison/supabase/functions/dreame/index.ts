@@ -12,6 +12,7 @@ const admin = createClient(sbUrl, service, { auth: { persistSession: false } });
 
 const ALLOWED = new Set([
   "https://franckdavion.github.io",
+  "http://192.168.0.146:8765",
   "http://127.0.0.1:8765",
   "http://localhost:8765",
   "http://127.0.0.1:8766",
