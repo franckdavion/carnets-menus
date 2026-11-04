@@ -77,6 +77,83 @@
   }
   window.maisonneeCartesCount = () => state.cards.length;
   const lookup = id => state.cards.find(c => c.id === id);
+  /* Catalogue local de styles : ces vignettes sont dessinées dans Maisonnée
+     pour rester disponibles en mode avion, sans charger des logos externes. */
+  const BRANDS = [
+    ["intermarche","Intermarché","#fff","#222","Intermarché",["intermarche","inter marche"]],
+    ["leclerc","E.Leclerc","#fa9300","#087ac0","E.Leclerc",["e leclerc","eleclerc","leclerc"]],
+    ["action","Action","#fff","#07529d","ACTION",["action"]],
+    ["bricomarche","Bricomarché","#fff","#222","BRICOMARCHÉ",["bricomarche","brico marche"]],
+    ["match","Match","#fff","#278442","MATCH",["supermarche match","match"]],
+    ["auchan","Auchan","#ed1d2e","#fff","Auchan",["auchan"]],
+    ["intersport","Intersport","#fff","#1d5390","INTERSPORT",["intersport"]],
+    ["carrefour","Carrefour","#08448c","#fff","Carrefour",["carrefour","carrefour market"]],
+    ["decathlon","Decathlon","#364bbb","#fff","DECATHLON",["decathlon"]],
+    ["gammvert","Gamm vert","#00745f","#fff","Gamm vert",["gamm vert","gammvert"]],
+    ["gifi","GiFi","#fff","#ec2071","GiFi",["gifi"]],
+    ["superu","Super U","#287b96","#fff","U",["super u","hyper u","magasins u","systeme u","utile","superu"]],
+    ["norauto","Norauto","#023b87","#fff","Norauto",["norauto"]],
+    ["colruyt","Colruyt","#eeeae1","#1b1b1b","colruyt",["colruyt"]],
+    ["darty","Darty","#ec1b27","#fff","DARTY",["darty"]],
+    ["gosport","GO Sport","#000","#fff","GO SPORT",["go sport","gosport"]],
+    ["histoiredor","Histoire d’Or","#ae002f","#ffefcc","Histoire d’Or",["histoire d or","histoiredor"]],
+    ["ikea","IKEA","#07559a","#f8d800","IKEA",["ikea"]],
+    ["lahalle","La Halle","#08051a","#fff","LA HALLE",["la halle","lahalle"]],
+    ["lidl","Lidl","#143a79","#f9d100","LIDL",["lidl"]],
+    ["picwic","PicWic","#a50023","#ffdd00","PicWic",["picwic","pic wic"]],
+    ["bricodepot","Brico Dépôt","#fff","#df2730","BRICO DÉPÔT",["brico depot","bricodepot"]],
+    ["boulanger","Boulanger","#f16b21","#fff","boulanger",["boulanger"]],
+    ["fnac","Fnac","#fdd400","#171717","fnac",["fnac"]],
+    ["cultura","Cultura","#fff","#e9502c","cultura",["cultura"]],
+    ["leroymerlin","Leroy Merlin","#007e50","#fff","LEROY MERLIN",["leroy merlin","leroymerlin"]],
+    ["aldi","Aldi","#0060a9","#fff","ALDI",["aldi"]],
+    ["kiabi","Kiabi","#fff","#164fac","KIABI",["kiabi"]],
+    ["castorama","Castorama","#005aab","#fff","Castorama",["castorama"]],
+    ["jardiland","Jardiland","#007341","#fff","Jardiland",["jardiland"]],
+    ["gemo","Gémo","#fff","#ec202c","Gémo",["gemo"]],
+    ["sephora","Sephora","#101010","#fff","SEPHORA",["sephora"]]
+  ].map(([id,name,bg,ink,mark,aliases]) => ({id,name,bg,ink,mark,aliases}));
+  const NORMAL = text => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const brandById = id => BRANDS.find(b => b.id === id) || null;
+  function brandFromText(input) {
+    const hay = " " + NORMAL(input) + " ";
+    const matches = [];
+    for (const brand of BRANDS) {
+      for (const alias of brand.aliases) {
+        const key = " " + NORMAL(alias) + " ";
+        if (hay.includes(key)) matches.push({ brand, length: key.length });
+      }
+    }
+    matches.sort((a,b) => b.length - a.length);
+    return matches[0]?.brand || null;
+  }
+  function brandOf(card) {
+    return brandById(card?.brandId) || brandFromText(card?.name) || null;
+  }
+  function brandTile(card, forDraft = false) {
+    const brand = brandOf(card), id = brand?.id || "generic";
+    const label = brand?.mark || card?.name || "Ma carte";
+    return '<span class="mz-wallet-brand-tile mz-wallet-brand--' + id + (forDraft ? ' mz-wallet-brand-mini' : '') +
+      '" style="--wallet-bg:' + (brand?.bg || "#173a5a") + ';--wallet-ink:' + (brand?.ink || "#e5f5ff") + '" aria-label="' + h(label) + '">' +
+      '<span class="mz-wallet-brand-logo">' + h(label) + '</span></span>';
+  }
+  function brandOptions(card) {
+    const active = brandOf(card)?.id || "";
+    return '<option value=""' + (!active ? " selected" : "") + '>Autre enseigne / à identifier</option>' +
+      BRANDS.map(b => '<option value="' + b.id + '"' + (active === b.id ? " selected" : "") + '>' + h(b.name) + '</option>').join("");
+  }
+  function applyBrand(card, id) {
+    const brand = brandById(id);
+    const old = brandOf(card);
+    const previous = String(card.name || "");
+    card.brandId = brand?.id || "";
+    if (brand && (!previous || /^carte\s*\d+$/i.test(previous) ||
+        /^carte restaur/i.test(previous) || (old && NORMAL(previous) === NORMAL(old.name)))) {
+      card.name = brand.name;
+    }
+    return card;
+  }
+
   function previewRow(c) {
     const url = imageUrl(c.id, c.image);
     const detail = c.code ? "Code reconnu · " + c.code : c.image ? "Capture disponible" : "Numéro manuel";
