@@ -1,6 +1,6 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v123";
+const CACHE = "carnet-archive-maison-v124";
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css",
   "espace.js", "push-config.js", "supabase/functions/_shared/cal.js",
@@ -21,7 +21,22 @@ self.addEventListener("fetch", e => {
   if (!own && !lib) return;
   e.respondWith(fetch(own ? new Request(e.request, { cache: "no-cache" }) : e.request)
     .then(r => { if (r.ok || r.type === "opaque") { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); } return r; })
-    .catch(() => caches.match(e.request).then(r => r || (e.request.mode === "navigate" ? caches.match("index.html") : undefined))));
+    // En ligne, privilégier la version publiée. Hors ligne, la requête
+    // peut contenir ?v=... alors que le précache contient le fichier sans query.
+    .catch(async () => {
+      // Priorité au cache de Maisonnée : le cache du Carnet de menus partage
+      // le même domaine, mais ne doit pas fournir d'anciens scripts Maison.
+      const maisonCache = await caches.open(CACHE);
+      const cached = await maisonCache.match(e.request, { ignoreSearch: true });
+      if (cached) return cached;
+      if (e.request.mode === "navigate") {
+        const home = new URL("index.html", self.location).href;
+        return (await maisonCache.match(home, { ignoreSearch: true })) ||
+          (await caches.match(e.request, { ignoreSearch: true })) ||
+          (await caches.match(home, { ignoreSearch: true })) || Response.error();
+      }
+      return (await caches.match(e.request, { ignoreSearch: true })) || Response.error();
+    }));
 });
 
 self.addEventListener("push", event => {

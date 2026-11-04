@@ -466,6 +466,16 @@ async function init() {
   const cache = LS.get("mz_cache", null);
   if (mode === "cloud" && cache && cache.hh) { S = { ...blank(), ...cache, recipes: null }; screen = "app"; render(); }
   else { screen = "loading"; render(); }
+  // Hors ligne, ne pas exiger le chargement de Supabase CDN ni une session réseau
+  // pour afficher les dernières données locales de Maisonnée.
+  if (navigator.onLine === false) {
+    if (screen !== "app") {
+      screen = "welcome";
+      render();
+      toast("Hors ligne : ouvre Maisonnée avec Internet une première fois pour garder les données disponibles.");
+    }
+    return;
+  }
   try {
     const boot = (async () => {
       await loadSb();
