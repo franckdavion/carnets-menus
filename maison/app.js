@@ -441,6 +441,24 @@ async function loadRecipes() {
   return S.recipes;
 }
 
+/* Démarrage PWA : une panne réseau ne prouve jamais que le foyer a disparu.
+   Ne jamais effacer la session ni présenter la création de foyer par défaut.
+   L'accès local conserve la vue et les données du foyer quand elles existent. */
+function mzOfflineStartup(reason) {
+  const snapshot = LS.get("mz_cache", null);
+  if (snapshot && snapshot.hh) {
+    if (!S.hh || S.hh.id !== snapshot.hh.id) S = { ...blank(), ...snapshot, recipes: null };
+    screen = "app";
+    render();
+  } else {
+    // Les captures des cartes sont dans IndexedDB, séparément du cache du foyer.
+    S = { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes hors ligne" } };
+    view = "fidelite";
+    screen = "app";
+    render();
+  }
+  toast(reason || "Connexion indisponible : données locales uniquement.");
+}
 /* ---------- startup ---------- */
 async function init() {
   const url = new URL(location.href), code = url.searchParams.get("code");
@@ -461,12 +479,7 @@ async function init() {
     S = { ...blank(), ...cache, recipes: null };
     screen = "app"; render();
   } else if (navigator.onLine === false) {
-    // Accès de secours à la section Cartes, indépendamment de la dernière page
-    // ouverte et sans modifier mz_mode, mz_view ou les données du foyer.
-    S = { ...blank(), hh: { id: "portefeuille-local", name: "Cartes hors ligne" } };
-    view = "fidelite";
-    screen = "app"; render();
-    toast("Mode avion : cartes disponibles sur cet iPhone. Le reste se synchronisera après reconnexion.");
+    mzOfflineStartup("Mode avion : cartes conservées sur cet iPhone.");
     return;
   } else {
     screen = "loading"; render();
@@ -482,19 +495,45 @@ async function init() {
     })();
     await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
-    if (screen !== "app") { screen = "welcome"; render(); toast(e.message === "timeout" ? "Connexion trop lente. Réessayez ou utilisez Essayer sans compte." : "Pas de connexion pour l'instant."); }
+    // Une erreur CDN / réseau / session ne signifie ni déconnexion volontaire
+    // ni disparition du foyer : ne pas effacer mz_mode ou mz_hh.
+    mzOfflineStartup("Connexion indisponible : données locales, synchronisation en attente.");
     return;
   }
-  if (!user) { mode = null; LS.del("mz_mode"); screen = "welcome"; return render(); }
-  await enterCloud();
+  if (!user) {
+    if (mode === "cloud" || LS.get("mz_hh", null)) {
+      mzOfflineStartup("Session non vérifiable : reconnecte-toi quand Internet sera disponible.");
+      return;
+    }
+    mode = null; screen = "welcome"; return render();
+  }
+  try {
+    await enterCloud();
+  } catch (e) {
+    console.warn("Foyer : vérification différée", e);
+    mzOfflineStartup("Foyer non vérifiable : données locales conservées.");
+  }
 }
 
 async function enterCloud() {
   const { data: mine, error } = await sb.from("household_members").select("household_id").eq("user_id", user.id);
-  if (error) { screen = "setup"; setupErr = /relation|does not exist|schema cache/i.test(error.message) ? "Le foyer n'est pas encore installé dans Supabase : collez d'abord le script supabase/migrations/0001_foyer.sql (voir maison/LISEZMOI.md)." : ""; return render(); }
+  if (error || !Array.isArray(mine)) {
+    // Erreur API ou réseau : ne jamais traiter cela comme un foyer inexistant.
+    mzOfflineStartup("Impossible de vérifier le foyer : accès local conservé.");
+    return;
+  }
   const ids = mine.map(r => r.household_id);
   const join = LS.get("mz_join", null);
-  if (!ids.length || join) { screen = "setup"; if (join) await previewJoin(join); return render(); }
+  if (join) { screen = "setup"; await previewJoin(join); return render(); }
+  if (!ids.length) {
+    // Un identifiant de foyer préexistant rend ce résultat suspect :
+    // ne surtout pas inviter à recréer/rejoindre le foyer en mode avion.
+    if (LS.get("mz_hh", null) || LS.get("mz_cache", null)?.hh) {
+      mzOfflineStartup("Foyer non confirmé : réessaye en ligne, sans créer de nouveau foyer.");
+      return;
+    }
+    screen = "setup"; return render();
+  }
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
