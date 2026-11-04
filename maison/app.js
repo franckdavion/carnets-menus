@@ -1102,7 +1102,7 @@ function render() {
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
   if (!VIEWS[view]) view = "home";
-  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], agenda: ["Événement", "newEvent"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
+  const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
   if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
   const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
       <textarea class="input" name="body" rows="1" maxlength="2000" placeholder="Écrire au foyer…" aria-label="Message"></textarea>
@@ -1115,7 +1115,14 @@ function render() {
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
-    ${view === "agenda" ? `<button class="fab" data-act="newEvent">${I.plus}Événement</button><button class="fab" data-act="newAppointment" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Rendez-vous</button>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
+    ${view === "agenda" ? `<div class="cal-create" id="calCreate">
+      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="Choisir le type de création" hidden>
+        <button type="button" class="cal-create-option" data-act="newAppointment"><span class="cal-create-label">Rendez-vous</span><span class="cal-create-icon" aria-hidden="true">${I.today}</span></button>
+        <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
+        <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>
+      </div>
+      <button type="button" class="fab cal-create-fab" id="calCreateButton" data-act="calCreateToggle" aria-label="Créer dans l'agenda" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
+    </div>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
@@ -1536,9 +1543,9 @@ const chipVal = (form, name) => { const b = form.querySelector(`[data-chip="${na
 const chipVals = (form, name) => [...form.querySelectorAll(`[data-chip="${name}"][aria-pressed="true"]`)].map(b => b.dataset.v);
 const memberOpts = () => members().map(m => [m.id, m.name, av(m, "sm")]);
 
-function taskSheet(t) {
+function taskSheet(t, day) {
   const isNew = !t;
-  t = t || { title: "", room: "Divers", assignee: "", rotate: false, freq: "weekly", every_n: 7, weekdays: [isoDay(today())], next_due: today(), effort: 1, notes: "" };
+  t = t || { title: "", room: "Divers", assignee: "", rotate: false, freq: day ? "once" : "weekly", every_n: 7, weekdays: [isoDay(day || today())], next_due: day || today(), effort: 1, notes: "" };
   openSheet(isNew ? "Nouvelle tâche" : "Tâche", `
     <form data-form="task">
       <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(t.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="Ex. Sortir les poubelles"></label>
@@ -1856,6 +1863,13 @@ function memberSheet(m) {
 
 /* ---------- interactions ---------- */
 document.addEventListener("click", async e => {
+  // Fermer le menu de création agenda en touchant ailleurs ou en choisissant une action.
+  const createMenu = document.getElementById("calCreateOptions");
+  const createButton = document.getElementById("calCreateButton");
+  if (createMenu && !createMenu.hidden && (!e.target.closest("#calCreate") || e.target.closest(".cal-create-option"))) {
+    createMenu.hidden = true;
+    createButton?.setAttribute("aria-expanded", "false");
+  }
   const b = e.target.closest("[data-act],[data-chip]"); if (!b) return;
   if (b.dataset.chip) {
     if (b.hasAttribute("data-multi")) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
@@ -1884,6 +1898,16 @@ document.addEventListener("click", async e => {
     }
     case "doneBy": closeSheet(); doneTask(v, b.dataset.m); break;
     case "undo": undoLog(v); break;
+    case "calCreateToggle": {
+      const menu = document.getElementById("calCreateOptions");
+      if (menu) {
+        menu.hidden = !menu.hidden;
+        b.setAttribute("aria-expanded", String(!menu.hidden));
+        if (!menu.hidden) menu.querySelector("button")?.focus({ preventScroll: true });
+      }
+      break;
+    }
+    case "calCreateTask": taskSheet(null, calSel); break;
     case "newTask": taskSheet(null); break;
     case "editTask": taskSheet(S.tasks.find(t => t.id === v)); break;
     case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t), null, "tasks"); } break;
@@ -1977,7 +2001,20 @@ document.addEventListener("click", async e => {
 document.addEventListener("change", e => { if (e.target.name === "google_destination") syncGColorBox(e.target.form); if (e.target.name === "allday") syncShow(); if (e.target.matches("[data-geo]")) geoToggle(e.target.checked); });
 // message box grows with its text; Entrée envoie sur un clavier physique
 document.addEventListener("input", e => { if (e.target.name === "body" && e.target.closest(".composer")) { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; } });
-document.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); } });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const menu = document.getElementById("calCreateOptions");
+    if (menu && !menu.hidden) {
+      e.preventDefault();
+      menu.hidden = true;
+      const button = document.getElementById("calCreateButton");
+      button?.setAttribute("aria-expanded", "false");
+      button?.focus({ preventScroll: true });
+      return;
+    }
+  }
+  if (e.key === "Enter" && !e.shiftKey && e.target.closest && e.target.closest(".composer") && matchMedia("(hover: hover)").matches) { e.preventDefault(); e.target.form.requestSubmit(); }
+});
 document.addEventListener("input", e => { if (e.target.id === "recSearch") $("#recList").innerHTML = recList(e.target.value, sheetCtx && sheetCtx.recipe); });
 
 async function setHh(p) {
