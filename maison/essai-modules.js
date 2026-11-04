@@ -2614,6 +2614,8 @@ VIEWS.explore = function () {
 
 /* ---------- calendar: month grid + days ---------- */
 let calSel = today(), calMonth = today().slice(0, 7) + "-01";
+// Préférence propre à cet appareil : le calendrier mensuel reste replié ou déployé.
+let calMonthOpen = LS.get("mz_cal_month_open", true) !== false;
 function bdaysOn(day) {
   const d = parse(day), m = d.getMonth() + 1, dd = d.getDate(), leap = new Date(d.getFullYear(), 1, 29).getMonth() === 1;
   return S.bdays.filter(b => b.month === m && (b.day === dd || (!leap && b.month === 2 && b.day === 29 && dd === 28)));
@@ -2643,13 +2645,19 @@ VIEWS.agenda = function () {
       ${evs.length || bs.length || gs.length || localTasks.length || googleTasks.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}${localTasks.map(t => taskRow(t)).join("")}${googleTasks.map(gTasksRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
   }
   return `<div class="cal">
-      <div class="weeknav" style="margin-top:0"><button class="icon-btn plain" data-act="calMonth" data-v="-1" aria-label="Mois précédent">${I.left}</button>
-        <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
-        <button class="icon-btn plain" data-act="calMonth" data-v="1" aria-label="Mois suivant">${I.right}</button></div>
+      <div class="weeknav" style="margin-top:0">
+        <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="-1" aria-label="Mois précédent" ${calMonthOpen ? "" : "hidden"}>${I.left}</button>
+        <button type="button" class="cal-month-toggle" data-act="calMonthToggle" aria-controls="calMonthContent" aria-expanded="${calMonthOpen}" aria-label="${calMonthOpen ? "Masquer" : "Afficher"} le calendrier mensuel">
+          <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong><span aria-hidden="true">${I.right}</span>
+        </button>
+        <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
+      </div>
+      <div id="calMonthContent" ${calMonthOpen ? "" : "hidden"}>
       <div class="cal-grid" role="grid">${["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="cal-h">${x}</span>`).join("")}${cells}</div>
       ${GTASKS.enabled ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Google Tasks · ${GTASKS.error ? esc(GTASKS.error) + " · " : ""}<button class="linkbtn small" data-act="gTasksRefresh">Actualiser les tâches</button></p>` : `<p class="muted small" style="text-align:center;margin:6px 0 0"><button class="linkbtn small" data-act="gTasksEnable">Afficher Google Tasks</button></p>`}
       ${gOn() ? `<p class="muted small" style="text-align:center;margin:6px 0 0">Agenda Google ${G.ev.at ? "mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : ""} · <button class="linkbtn small" data-act="gRefresh">Actualiser</button>${G.list.length ? ` · <button class="linkbtn small" data-act="gCalsSheet">Agendas affichés</button>` : ""}</p>` : ""}
       ${calSel !== today() ? `<div style="text-align:center"><button class="linkbtn" data-act="calPick" data-v="${today()}">Revenir à aujourd'hui</button></div>` : ""}
+      </div>
     </div>${list}`;
 };
 
@@ -2918,6 +2926,19 @@ document.addEventListener("click", async e => {
     case "goShop": closeSheet(); view = "courses"; render(); setTimeout(() => { const i = $("#shopIn"); if (i) i.focus(); }, 50); break;
     case "goMsg": closeSheet(); view = "messages"; render(); setTimeout(() => { const t = $(".composer textarea"); if (t) t.focus(); }, 50); break;
     case "calPick": calSel = v; if (v.slice(0, 7) !== calMonth.slice(0, 7)) calMonth = v.slice(0, 7) + "-01"; render(); break;
+    case "calMonthToggle": {
+      calMonthOpen = !calMonthOpen;
+      LS.set("mz_cal_month_open", calMonthOpen);
+      const content = document.getElementById("calMonthContent");
+      if (content) content.hidden = !calMonthOpen;
+      document.querySelectorAll(".cal-month-arrow").forEach(btn => { btn.hidden = !calMonthOpen; });
+      const toggle = document.querySelector(".cal-month-toggle");
+      if (toggle) {
+        toggle.setAttribute("aria-expanded", String(calMonthOpen));
+        toggle.setAttribute("aria-label", (calMonthOpen ? "Masquer" : "Afficher") + " le calendrier mensuel");
+      }
+      break;
+    }
     case "calMonth": { const d = parse(calMonth); d.setMonth(d.getMonth() + +v); calMonth = ymd(d); calSel = calMonth.slice(0, 7) === today().slice(0, 7) ? today() : calMonth; render(); break; }
     case "newEventOn": eventSheet(null, v); break;
     case "newAppointmentOn": eventSheet(null, v, true); break;
