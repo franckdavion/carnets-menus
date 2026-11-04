@@ -2007,7 +2007,11 @@ function installMzTvTestHandlers() {
   });
 }
 installMzTvTestHandlers();
+let domStReturnAfterRenewal = "";
 function domStConnectSheet() {
+  // Garder le contexte exact de navigation lors du renouvellement.
+  domStReturnAfterRenewal = document.querySelector(".dom-tv-panel.mz-tv") ? "tv"
+    : document.querySelector(".mz-dom-service-settings") ? "settings" : "";
   const renewal = domStLinked();
   openSheet(renewal ? "Renouveler le jeton SmartThings" : "Relier SmartThings", `<form id="dom-st-connect" class="dom-form">
     <p class="muted">Les nouveaux jetons personnels Samsung expirent après 24 heures. Créez un jeton sur <a href="https://account.smartthings.com/tokens" target="_blank" rel="noopener">account.smartthings.com/tokens</a> avec les droits de lecture et de commande des appareils.</p>
@@ -2998,9 +3002,16 @@ document.addEventListener("submit", e => {
       domStDevices = r.devices || [];
       if (S.hh && r.device_id != null) S.hh.smartthings_device_id = r.device_id;
       domStStatusAt = Date.now();
+      const returnTo = domStReturnAfterRenewal;
+      domStReturnAfterRenewal = "";
       closeSheet(); render();
-      toast(r.device_name ? "SmartThings relié · " + r.device_name : "SmartThings relié.");
-      domStRefreshState(true).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
+      toast(r.device_name ? "Jeton SmartThings vérifié · " + r.device_name : "Jeton SmartThings vérifié.");
+      domStRefreshState(true).then(changed => { if (changed) domSoftRender(); })
+        .catch(() => {})
+        .finally(() => {
+          if (returnTo === "tv") domTvSheet(true);
+          else if (returnTo === "settings") mzDomServiceSettingsSheet("tv");
+        });
       if ((domStDevices.length || 0) > 1) setTimeout(domStDevicePickerSheet, 400);
     }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
     return;
