@@ -2526,3 +2526,114 @@ dialog.sheet .dom-tv-panel .dom-tv-step{display:inline-flex!important;visibility
 .dom-dreame-panel .dom-dreame-placement{margin:16px 0}
 .dom-dreame-panel .dom-dreame-placement summary{cursor:pointer;color:#c6e8ff;font-weight:600;padding:8px 0}
 @media(max-width:360px){.dom-dreame-panel .dom-dreame-room-grid .btn{font-size:13px}}
+
+/* MAISONNÉE 2026-11-04 : agenda, boutons ronds, clavier iPhone, vues Courses. */
+/* Calendrier : menu « + » compact, construit sur la FAB existante.
+   La barre de navigation iPhone et ses safe-areas restent inchangées. */
+.cal-create{
+ position:fixed;right:max(16px,calc(50% - 304px));
+ bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 4px);
+ z-index:9998;display:flex;flex-direction:column;align-items:flex-end;
+}
+.cal-create .cal-create-fab{position:relative;right:auto;bottom:auto;padding:0;}
+.cal-create .cal-create-fab svg{transition:transform .2s ease;}
+.cal-create .cal-create-fab[aria-expanded="true"] svg{transform:rotate(45deg);}
+.cal-create-options{
+ position:absolute;right:0;bottom:calc(100% + 12px);
+ display:flex;flex-direction:column;align-items:flex-end;gap:9px;
+ max-width:calc(100vw - 32px);
+}
+.cal-create-options[hidden]{display:none;}
+.cal-create-option{
+ display:flex;align-items:center;justify-content:flex-end;gap:10px;
+ padding:0;border:0;background:transparent;color:#fff;cursor:pointer;
+ white-space:nowrap;font:700 15px var(--body);
+}
+.cal-create-label{
+ padding:10px 13px;border-radius:13px;
+ background:linear-gradient(155deg,rgba(24,58,103,.97),rgba(4,19,46,.98));
+ border:1px solid #6ac9f0b3;box-shadow:0 4px 15px #0008,0 0 10px #008ce64f,inset 0 1px 1px #e2f9ff5c;
+}
+.cal-create-icon{
+ flex:none;width:48px;height:48px;display:grid;place-items:center;border-radius:50%;
+ background:radial-gradient(ellipse at 30% 13%,#c2f2ff,#4a9cf0 48%,#0b3c83);
+ border:1px solid #b2edff;box-shadow:inset 0 2px 2px #fff9,0 0 13px #00aaff89,0 4px 12px #0008;
+}
+.cal-create-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.cal-create-option:nth-child(2) .cal-create-icon{background:radial-gradient(ellipse at 30% 12%,#f3daff,#976be0 50%,#432174);}
+.cal-create-option:nth-child(3) .cal-create-icon{background:radial-gradient(ellipse at 30% 12%,#d0ffe9,#46bc9b 50%,#145d58);}
+.cal-create-option:focus-visible,.cal-create-fab:focus-visible{outline:2px solid white;outline-offset:3px;}
+@media(orientation:landscape) and (min-width:900px) and (min-height:480px){
+ .cal-create{right:max(28px,calc(50% - 562px));}
+}
+@media(prefers-reduced-motion:reduce){.cal-create .cal-create-fab svg{transition:none;}}
+
+
+/* MAISONNÉE / BOUTONS RONDS COMMUNS (2026-11-04).
+   Même style pour +, chevron et futures commandes ; réutiliser les SVG I et actions data-act.
+   Tailles : --sm 44px, --md 60px, --lg 62px ; aucun nouveau fichier.
+   Modifier ici les styles communs sans toucher aux commandes JS associées. */
+/* Les adaptateurs ciblent Repas et Présences sans modifier leurs fichiers JavaScript partagés. */
+.mz-round-btn,.view-repas .weeknav .icon-btn,.view-presences .pr-arrow{--mz-round-bg:radial-gradient(ellipse at 35% 15%,#d6f9ff,#6dc9ff 38%,#277ee2 73%,#08459b);box-sizing:border-box;display:grid;place-items:center;flex:none;width:var(--mz-round-size);height:var(--mz-round-size);padding:0;border:2px solid #b5f2ff;border-radius:50%;background:var(--mz-round-bg);color:#062044;box-shadow:inset 0 2px 2px rgba(255,255,255,.75),inset 0 -4px 8px rgba(7,76,169,.65),0 0 14px rgba(42,207,255,.72),0 8px 22px rgba(0,18,37,.72);touch-action:manipulation;}
+.mz-round-btn--sm,.view-repas .weeknav .icon-btn,.view-presences .pr-arrow{--mz-round-size:44px;--mz-round-icon-size:24px;}
+.mz-round-btn--md{--mz-round-size:60px;--mz-round-icon-size:30px;}
+.mz-round-btn--lg{--mz-round-size:62px;--mz-round-icon-size:42px;}
+.mz-round-btn svg,.view-repas .weeknav .icon-btn svg{display:block;width:var(--mz-round-icon-size);height:var(--mz-round-icon-size);stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.mz-round-btn:focus-visible,.view-repas .weeknav .icon-btn:focus-visible,.view-presences .pr-arrow:focus-visible{outline:2px solid #a8eeff;outline-offset:3px;}
+.icon-btn.plain.mz-round-btn--nav{background:var(--mz-round-bg);border-color:#b5f2ff;}
+.fab.mz-round-btn{display:grid;place-items:center;padding:0;min-width:var(--mz-round-size);font-size:0;}
+ /* Variante fermer : même base et même dimension standard (44 px), finition bleu nuit discrète. */
+.sheet-top .sheet-close-x.mz-round-btn--close,.lb-top .icon-btn.plain.mz-round-btn--close{display:grid;place-items:center;min-width:44px;min-height:44px;border:2px solid #58baf2;background:linear-gradient(150deg,#204f79,#0a213f 75%);color:#cdefff;box-shadow:inset 0 1px 2px rgba(255,255,255,.22),0 0 11px rgba(58,183,255,.45);}
+.sheet-top .sheet-close-x.mz-round-btn--close svg,.lb-top .icon-btn.plain.mz-round-btn--close svg{width:24px;height:24px;stroke-width:2.7;}
+.sheet-top .sheet-close-x.mz-round-btn--close:active,.lb-top .icon-btn.plain.mz-round-btn--close:active{background:#285b87;}
+/* Agenda : le chevron est une pastille visuelle ; le bouton entier du mois reste cliquable. */
+.cal .cal-month-toggle{display:flex;flex:1;align-items:center;justify-content:space-between;gap:5px;min-width:0;min-height:74px;padding:6px 4px 6px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(85,200,255,.09);color:var(--ink);cursor:pointer;}
+.cal .cal-month-toggle-copy{display:flex;flex:1;align-items:center;justify-content:center;min-width:0;}
+.cal .cal-month-toggle strong{font:700 17px var(--display);text-align:center;overflow-wrap:anywhere;}
+.cal .cal-month-toggle-chevron svg{transform:rotate(90deg);stroke-width:3.5;}
+.cal .cal-month-toggle[aria-expanded="true"] .cal-month-toggle-chevron svg{transform:rotate(-90deg);}
+.cal .cal-month-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+@media(max-width:380px){.cal .cal-month-toggle{gap:3px;padding-left:4px;padding-right:2px}.cal .cal-month-toggle strong{font-size:15px}.cal .cal-month-toggle-chevron.mz-round-btn{--mz-round-size:56px;--mz-round-icon-size:38px}}
+
+/* Saisie iPhone : réutilise le suivi visualViewport de index.html dans toutes les pages.
+   Ne s'active QUE si un champ est sélectionné et le clavier réellement ouvert. */
+html.mz-inline-keyboard main.wrap{padding-bottom:calc(var(--mz-keyboard-space, 0px) + 135px)!important;}
+html.mz-inline-keyboard .pill,html.mz-inline-keyboard .fab,html.mz-inline-keyboard .cal-create,html.mz-inline-keyboard .cx-up{visibility:hidden!important;pointer-events:none!important;}
+html.mz-inline-keyboard .composer{top:calc(var(--mz-visible-bottom, 600px) - 8px)!important;bottom:auto!important;transform:translateY(-100%);}
+@media(max-width:767px){main.wrap input:not([type=checkbox]):not([type=radio]),main.wrap textarea,main.wrap select,.composer textarea{scroll-margin-top:80px;scroll-margin-bottom:96px;font-size:max(16px,1em);}}
+
+/* COURSES : écrans Préparation / En magasin ; moteur original inchangé. */
+.mz-shop-screen{min-width:0;padding:8px 0 30px;}
+.mz-shop-hero{padding:16px;border:1px solid #55c8ff;border-radius:22px;background:linear-gradient(145deg,rgba(22,79,149,.72),rgba(5,25,61,.92));box-shadow:0 0 18px rgba(34,142,255,.24);}
+.mz-shop-hero h2,.mz-shop-store-header h2{font:800 clamp(21px,4.7vw,26px)/1.2 var(--display);margin:0 0 7px;color:#f4faff;}
+.mz-shop-hero p,.mz-shop-store-header p{margin:0 0 12px;color:#c7e4fb;font-size:14px;}
+.mz-shop-progress-track{height:9px;overflow:hidden;border-radius:99px;background:rgba(131,184,255,.24);margin-bottom:14px;}
+.mz-shop-progress-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4eb7ff,#91e9ff);}
+.mz-shop-hero-actions{display:flex;align-items:center;gap:12px;}
+.mz-shop-enter{flex:1;min-width:0;min-height:60px;display:flex;justify-content:center;align-items:center;gap:7px;flex-wrap:wrap;padding:11px 10px;border-radius:19px;border:1px solid #a7e9ff;font:800 18px var(--body);color:#092144;background:linear-gradient(145deg,#a5e7ff,#58b5ff 55%,#267cde);box-shadow:inset 0 1px 2px #fff8,0 0 13px #3daaff70;cursor:pointer;}
+.mz-shop-enter span{font:700 12px var(--body);white-space:nowrap;}
+.mz-shop-addfab{flex:none;}
+.mz-shop-inlineadd{margin:14px 0;padding:13px 12px;border:1px solid rgba(93,184,255,.53);border-radius:17px;background:rgba(8,38,83,.57);}
+.mz-shop-label{display:block;margin-bottom:8px;font:750 14px var(--body);color:#d9efff;}
+.mz-shop-inlineadd form[data-form="cxAdd"]{display:flex;gap:8px;align-items:center;margin:0!important;min-width:0;}
+.mz-shop-inlineadd form[data-form="cxAdd"] input{min-width:0;flex:1;}
+.mz-shop-inlineadd form[data-form="cxAdd"] .btn{flex:none;padding-inline:12px;}
+.mz-shop-panel{border:1px solid rgba(94,183,247,.65);border-radius:17px;margin:12px 0;background:linear-gradient(145deg,rgba(25,61,109,.78),rgba(6,29,69,.91));overflow:hidden;}
+.mz-shop-panel>summary{cursor:pointer;min-height:66px;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 15px;color:#f5fbff;font:750 17px var(--body);list-style:none;touch-action:manipulation;}
+.mz-shop-panel>summary::-webkit-details-marker{display:none;}
+.mz-shop-panel>summary::after{content:"⌄";font-size:27px;color:#78d6ff;line-height:1;flex:none;}
+.mz-shop-panel[open]>summary::after{transform:rotate(180deg);}
+.mz-shop-panel>summary small{font-size:12px;font-weight:600;color:#c0ddf3;flex:1;text-align:right;}
+.mz-shop-panel-content{padding:2px 12px 16px;border-top:1px solid rgba(114,178,255,.25);}
+.mz-shop-panel-content .group-h{margin-top:14px;}
+.mz-shop-panel-content .cx-ultimate-days{margin-top:8px;}
+.mz-shop-store-header{padding:10px 0 9px;}
+.mz-shop-back{background:none;border:0;padding:7px 2px 12px;color:#78d6ff;font:750 15px var(--body);cursor:pointer;}
+.mz-shop-store .cx-progress{margin:0 0 12px;}
+.mz-shop-search{display:flex;align-items:center;gap:8px;margin:10px 0 16px;border:1px solid rgba(103,189,255,.64);border-radius:16px;padding:4px 10px;background:rgba(8,39,82,.75);}
+.mz-shop-search span{font-size:25px;color:#a2defe;}
+.mz-shop-search input{border:0!important;box-shadow:none!important;background:transparent!important;min-width:0;width:100%;}
+.mz-shop-store-list .cx-list-h{margin-top:10px;}
+.mz-shop-store .cx-fold[hidden],.mz-shop-store .cx-item[hidden]{display:none!important;}
+body:has(main.view-courses) #cxUp{display:none!important;}
+@media(max-width:380px){.mz-shop-hero{padding:12px}.mz-shop-hero-actions{gap:8px}.mz-shop-enter{font-size:16px}.mz-shop-inlineadd{padding:10px 8px}.mz-shop-inlineadd form[data-form="cxAdd"] .btn{padding-inline:8px;font-size:14px}.mz-shop-panel>summary{padding:11px 10px;gap:6px;font-size:15px}}
