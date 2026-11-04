@@ -1543,31 +1543,54 @@ const chipVal = (form, name) => { const b = form.querySelector(`[data-chip="${na
 const chipVals = (form, name) => [...form.querySelectorAll(`[data-chip="${name}"][aria-pressed="true"]`)].map(b => b.dataset.v);
 const memberOpts = () => members().map(m => [m.id, m.name, av(m, "sm")]);
 
-function taskSheet(t, day) {
-  const isNew = !t;
-  t = t || { title: "", room: "Divers", assignee: "", rotate: false, freq: day ? "once" : "weekly", every_n: 7, weekdays: [isoDay(day || today())], next_due: day || today(), effort: 1, notes: "" };
+function taskSheet(t, day, opts = {}) {
+  const gTask = opts.googleTask || null;
+  const isNew = !t && !gTask;
+  const dest = gTask ? "google" : "local";
+  t = t || { title: gTask?.title || "", room: "Divers", assignee: "", rotate: false, freq: day ? "once" : "weekly", every_n: 7, weekdays: [isoDay(day || today())], next_due: gTask ? (gTasksDay(gTask) || day || today()) : (day || today()), effort: 1, due_time: null, deadline_on: null, notes: gTask?.notes || "" };
   openSheet(isNew ? "Nouvelle tâche" : "Tâche", `
     <form data-form="task">
+      ${isNew && (day || view === "agenda") ? `<label class="field"><span class="label">Destination</span><select class="input" name="task_destination"><option value="local">Maisonnée · tâche familiale</option><option value="google">Google Tasks · compte Google</option></select></label>` : `<input type="hidden" name="task_destination" value="${dest}">`}
       <label class="field"><span class="label">Quoi</span><input class="input" name="title" value="${esc(t.title)}" required maxlength="80" ${isNew ? "autofocus" : ""} placeholder="Ex. Sortir les poubelles"></label>
+      <label class="field"><span class="label">Date prévue</span><input class="input" name="next_due" type="date" value="${esc(t.next_due)}" required></label>
+      <div data-task-local>
+      <label class="field"><span class="label">Heure (facultative)</span><input class="input" name="due_time" type="time" value="${esc(String(t.due_time || "").slice(0,5))}"></label>
+      <label class="field"><span class="label">Échéance (facultative)</span><input class="input" name="deadline_on" type="date" value="${esc(t.deadline_on || "")}"></label>
       <div class="field"><span class="label">Qui</span>${chipsHtml("assignee", [["", "N'importe qui", av(null, "sm")], ...memberOpts()], t.assignee || "")}</div>
       <label class="switch"><span><strong>Chacun son tour</strong><br><span class="muted small">la tâche passe au membre suivant à chaque fois</span></span><input type="checkbox" name="rotate" ${t.rotate ? "checked" : ""}></label>
       <div class="field"><span class="label">Quand</span>${chipsHtml("freq", FREQS, t.freq)}</div>
       <div class="field" data-show="weekly"><span class="label">Quels jours</span>${chipsHtml("weekdays", DAYS_SHORT.map((d, i) => [i + 1, d]), t.weekdays, true)}</div>
       <label class="field" data-show="every"><span class="label">Tous les combien de jours</span><input class="input" name="every_n" type="number" inputmode="numeric" min="1" max="365" value="${t.every_n || 7}"></label>
-      <label class="field"><span class="label">${isNew ? "À partir du" : "Prochaine fois"}</span><input class="input" name="next_due" type="date" value="${esc(t.next_due)}" required></label>
       <div class="field"><span class="label">Pièce</span>${chipsHtml("room", ROOMS.map(r => [r, r]), t.room)}</div>
       <div class="field"><span class="label">Durée</span>${chipsHtml("effort", EFFORT, t.effort)}</div>
-      <label class="field"><span class="label">Note</span><textarea class="input" name="notes" maxlength="500" placeholder="Facultatif">${esc(t.notes)}</textarea></label>
-      ${isNew ? "" : `<div class="field"><span class="label">C'est fait par…</span><div class="chips">${members().map(m => `<button type="button" class="chip" data-act="doneBy" data-v="${t.id}" data-m="${m.id}">${av(m, "sm")}${esc(m.name)}</button>`).join("")}</div></div>`}
+      </div>
+      <div data-task-google hidden>
+        <label class="field"><span class="label">Liste Google Tasks</span><select class="input" name="google_list" data-selected="${esc(gTask?.listId || "")}" ${gTask ? "disabled" : ""}><option value="">Chargement…</option></select></label>
+        <p class="muted small" id="gTaskInfo">Google Tasks n'enregistre ni heure ni rappel via son API.</p>
+        <button type="button" class="btn ghost" data-act="gTasksAuthorize">Autoriser ou reconnecter Google Tasks</button>
+      </div>
+      <label class="field"><span class="label">Note / description</span><textarea class="input" name="notes" maxlength="${dest === "google" ? 8192 : 500}" placeholder="Facultatif">${esc(t.notes)}</textarea></label>
+      ${isNew || gTask ? "" : `<div class="field"><span class="label">C'est fait par…</span><div class="chips">${members().map(m => `<button type="button" class="chip" data-act="doneBy" data-v="${t.id}" data-m="${m.id}">${av(m, "sm")}${esc(m.name)}</button>`).join("")}</div></div>`}
       <div class="sheet-sticky btns" style="margin-top:0">
         <button class="btn primary" type="submit" style="flex:1">Enregistrer</button>
-        ${isNew ? "" : `<button class="btn danger" type="button" data-act="delTask" data-v="${t.id}">Supprimer</button>`}
+        ${gTask ? `<button class="btn danger" type="button" data-act="gTaskRemove" data-v="${esc(gTask.id)}" data-list="${esc(gTask.listId)}">Supprimer</button>` : isNew ? "" : `<button class="btn danger" type="button" data-act="delTask" data-v="${t.id}">Supprimer</button>`}
       </div>
-    </form>`, { id: isNew ? null : t.id });
+    </form>`, { id: gTask ? null : isNew ? null : t.id, gTask });
   syncShow();
+  if (gTask) gTasksSheetFill();
+}
+function syncTaskDestination(f) {
+  if (!f || f.dataset.form !== "task") return;
+  const google = f.elements.task_destination?.value === "google";
+  f.querySelectorAll("[data-task-local]").forEach(el => { el.hidden = google; });
+  f.querySelectorAll("[data-task-google]").forEach(el => { el.hidden = !google; });
+  f.querySelectorAll("[data-show]").forEach(el => { el.hidden = google || el.dataset.show !== chipVal(f, "freq"); });
+  if (f.elements.notes) f.elements.notes.maxLength = google ? 8192 : 500;
+  if (google) { if (!GTASKS.enabled) gTasksStart(); gTasksSheetFill(); }
 }
 function syncShow() {
   const f = $("#sheetIn form"); if (!f) return;
+  syncTaskDestination(f);
   const freq = chipVal(f, "freq");
   f.querySelectorAll("[data-show]").forEach(el => { el.hidden = el.dataset.show !== freq; });
   const allDay = f.querySelector("[name=allday]");
