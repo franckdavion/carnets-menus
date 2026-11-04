@@ -1084,6 +1084,8 @@ const I = {
   repas: '<svg viewBox="0 0 24 24"><path d="M7 3v8M4.5 3v5a2.5 2.5 0 0 0 5 0V3M7 11v10"/><path d="M17 21V3c-2.2 1.2-3.5 3.6-3.5 7v4H17"/></svg>',
   foyer: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.5 14.6c2.4.2 4 1.9 4.5 4.9"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 6.5a2 2 0 0 1 2-2h5l2.2 2.5H19a2 2 0 0 1 2 2v10.5H3z"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6zM14 3.5v4h4M9 12h6M9 16h6"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>',
   tick: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
@@ -1115,14 +1117,17 @@ function render() {
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
-    ${view === "agenda" ? `<div class="cal-create" id="calCreate">
-      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="Choisir le type de création" hidden>
-        <button type="button" class="cal-create-option" data-act="newAppointment"><span class="cal-create-label">Rendez-vous</span><span class="cal-create-icon" aria-hidden="true">${I.today}</span></button>
-        <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
-        <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>
+    ${view === "agenda" || (view === "docs" && S.v3) ? `<div class="cal-create" id="calCreate">
+      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : "Choisir le type de création"}" hidden>
+        ${view === "docs" ? `
+          <button type="button" class="cal-create-option" data-act="newFolder"><span class="cal-create-label">Dossier</span><span class="cal-create-icon" aria-hidden="true">${I.folder}</span></button>
+          <button type="button" class="cal-create-option" data-act="newDoc"><span class="cal-create-label">Document</span><span class="cal-create-icon" aria-hidden="true">${I.file}</span></button>` : `
+          <button type="button" class="cal-create-option" data-act="newAppointment"><span class="cal-create-label">Rendez-vous</span><span class="cal-create-icon" aria-hidden="true">${I.today}</span></button>
+          <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
+          <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>`}
       </div>
-      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="Créer dans l'agenda" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
-    </div>` : view === "docs" && S.v3 ? `<button class="fab" data-act="newDoc">${I.plus}Document</button><button class="fab" data-act="newFolder" style="bottom:calc(var(--navspace) + env(safe-area-inset-bottom) + 66px)">${I.plus}Dossier</button>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
+      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="${view === "docs" ? "Ajouter dans Documents" : "Créer dans l'agenda"}" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
+    </div>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
