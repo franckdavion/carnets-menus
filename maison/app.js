@@ -1931,6 +1931,30 @@ document.addEventListener("click", async e => {
       break;
     }
     case "calCreateTask": taskSheet(null, calSel); break;
+    case "gTasksEnable": gTasksStart(); render(); break;
+    case "gTasksRefresh": GTASKS.at = 0; gTasksRefresh(true); break;
+    case "gTasksAuthorize": gConnect(false, "agenda"); break;
+    case "gTaskEdit": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (task) taskSheet(null, gTasksDay(task) || calSel, { googleTask: task });
+      break;
+    }
+    case "gTaskDone": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (!task) break;
+      b.disabled = true;
+      try { await gTasksComplete(task); render(); }
+      catch (err) { b.disabled = false; toast(err?.message || "Google Tasks n'a pas modifié la tâche."); }
+      break;
+    }
+    case "gTaskRemove": {
+      const task = GTASKS.items.find(t => t.id === v && t.listId === b.dataset.list);
+      if (!task || !confirm("Supprimer cette tâche de Google Tasks ?")) break;
+      b.disabled = true;
+      try { await gTasksRemove(task); closeSheet(); render(); toast("Tâche supprimée de Google Tasks."); }
+      catch (err) { b.disabled = false; toast(err?.message || "Suppression Google Tasks impossible."); }
+      break;
+    }
     case "newTask": taskSheet(null); break;
     case "editTask": taskSheet(S.tasks.find(t => t.id === v)); break;
     case "delTask": closeSheet(); { const t = S.tasks.find(x => x.id === v); await remove("tasks", v); if (t) toast("Tâche supprimée.", "Annuler", () => add("tasks", t), null, "tasks"); } break;
@@ -2047,6 +2071,7 @@ async function setHh(p) {
 
 document.addEventListener("change", e => {
   if (e.target.matches('[name="reminder_mode"]')) reminderVisibility(e.target.closest("form"));
+  if (e.target.matches('[name="task_destination"]')) syncTaskDestination(e.target.closest("form"));
 });
 document.addEventListener("change", async e => {
   if (!e.target.matches("[data-pref]") || e.target.disabled) return;
@@ -2066,13 +2091,25 @@ document.addEventListener("submit", async e => {
   const btn = f.querySelector("[type=submit]");
   switch (kind) {
     case "task": {
+      if (fd.task_destination === "google") {
+        btn.disabled = true;
+        try {
+          const existing = sheetCtx?.gTask || null;
+          await gTasksSave({ title: (fd.title || "").trim(), notes: fd.notes || "", day: fd.next_due, listId: existing?.listId || fd.google_list }, existing);
+          closeSheet(); render();
+          toast(existing ? "Tâche Google modifiée." : "Tâche créée dans Google Tasks.", null, null, null, "agenda");
+        } catch (err) { btn.disabled = false; toast(err?.message || "Google Tasks n'a pas enregistré la tâche."); }
+        break;
+      }
       const freq = chipVal(f, "freq") || "once";
       const row = {
         title: fd.title.trim(), assignee: chipVal(f, "assignee") || null, rotate: !!fd.rotate, freq,
         every_n: Math.min(365, Math.max(1, parseInt(fd.every_n, 10) || 1)),
         weekdays: chipVals(f, "weekdays").map(Number).sort(), next_due: fd.next_due || today(),
-        room: chipVal(f, "room") || "Divers", effort: +(chipVal(f, "effort") || 1), notes: fd.notes.trim()
+        room: chipVal(f, "room") || "Divers", effort: +(chipVal(f, "effort") || 1), notes: fd.notes.trim(),
+        due_time: fd.due_time || null, deadline_on: fd.deadline_on || null
       };
+      if (row.deadline_on && row.deadline_on < row.next_due) { toast("La date limite doit être après la date prévue."); return; }
       if (freq === "weekly" && !row.weekdays.length) row.weekdays = [isoDay(row.next_due)];
       if (freq !== "weekly") row.weekdays = [];
       if (freq !== "every") row.every_n = 1;
