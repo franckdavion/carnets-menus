@@ -114,6 +114,8 @@
     return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
   }
   function decoder() {
+    if (window.ZXing?.BrowserMultiFormatReader) return Promise.resolve(true);
+    if (!navigator.onLine) return Promise.resolve(false);
     if (!decoderPromise) {
       decoderPromise = new Promise(resolve => {
         if (window.ZXing?.BrowserMultiFormatReader) { resolve(true); return; }
@@ -334,7 +336,7 @@
       closeSheet(); await reload();
     } catch (e) { state.error = "Modification impossible : " + (e.message || e); redraw(); }
   }, true);
-  window.addEventListener("online", redraw);
+  window.addEventListener("online", () => { decoderPromise = null; redraw(); });
   window.addEventListener("offline", redraw);
   navigator.serviceWorker?.addEventListener("controllerchange", redraw);
   reload().catch(e => { state.ready = false; state.error = "Stockage indisponible : " + (e.message || e); redraw(); });
