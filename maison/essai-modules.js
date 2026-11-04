@@ -2651,7 +2651,7 @@ VIEWS.agenda = function () {
           <span class="cal-month-toggle-copy">
             <strong>${esc(cap(first.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })))}</strong>
           </span>
-          <span class="cal-month-toggle-chevron" aria-hidden="true">${I.right}</span>
+          <span class="cal-month-toggle-chevron mz-round-btn mz-round-btn--lg" aria-hidden="true">${I.right}</span>
         </button>
         <button class="icon-btn plain cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
       </div>
