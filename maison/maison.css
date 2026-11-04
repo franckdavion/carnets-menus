@@ -2657,3 +2657,221 @@ body:has(main.view-courses) #cxUp{display:none!important;}
 .mz-agenda-date{font:500 13px var(--body);color:#c5e2fb;}
 .mz-agenda-scope{line-height:1.45;margin:11px 3px 0;}
 #mzAgendaNormal[hidden]{display:none!important;}
+
+/* --- Maisonnée : TV Samsung, zones Shelly et réglages iPhone (publication du 04-11-2026) --- */
+/* TV SAMSUNG — prévisualisation dans essai.html uniquement. Aucun style officiel modifié. */
+dialog.sheet .mz-tv{--mz-tv-blue:#55c8ff;color:#e9f7ff;gap:12px;min-width:0}
+dialog.sheet .mz-tv .mz-tv-hero{display:flex;align-items:center;gap:11px;min-width:0;padding:12px 9px 14px;background:linear-gradient(125deg,#133c6d,#081a33);border-radius:18px}
+dialog.sheet .mz-tv .mz-tv-screen{display:grid;place-items:center;width:48px;height:40px;border-radius:8px;border:1px solid #69cef9;background:linear-gradient(135deg,#2878c0,#071f46);font-size:28px;color:#d8f4ff;flex:none}
+dialog.sheet .mz-tv .mz-tv-hero-text{flex:1;min-width:0;display:grid;gap:4px}
+dialog.sheet .mz-tv .mz-tv-hero-text>strong{font-size:clamp(17px,5vw,22px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+dialog.sheet .mz-tv .mz-tv-hero-text>span{font-size:12px;color:#c2def3}
+dialog.sheet .mz-tv .mz-tv-dot{display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:#7898aa}
+dialog.sheet .mz-tv .mz-tv-dot.is-on{background:#6cf1ab;box-shadow:0 0 8px #6cf1ab}
+dialog.sheet .mz-tv .mz-tv-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:5px;border:1px solid #35658e;border-radius:17px;background:#081b36}
+dialog.sheet .mz-tv .mz-tv-tabs button{display:grid;justify-items:center;gap:5px;min-width:0;padding:10px 2px;border:1px solid transparent;border-radius:12px;background:transparent;color:#b5d3ee;font-size:clamp(10px,2.7vw,13px);font-weight:700;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-tabs button b{font-size:24px;font-weight:500;line-height:1}
+dialog.sheet .mz-tv .mz-tv-tabs button.is-active{border-color:#91e7ff;background:linear-gradient(150deg,#236d9e,#123359);box-shadow:0 0 12px #50c8ff77;color:white}
+dialog.sheet .mz-tv .mz-tv-status{font-size:13px;min-height:38px;padding:9px 11px}
+dialog.sheet .mz-tv .mz-tv-content{gap:12px}
+dialog.sheet .mz-tv .mz-tv-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-mini>span{display:grid;gap:5px;padding:11px;border:1px solid #386d99;border-radius:14px;background:#102b4c;min-width:0}
+dialog.sheet .mz-tv .mz-tv-mini small{color:#9abfe0;font-size:12px}
+dialog.sheet .mz-tv .mz-tv-mini strong{color:#f4faff;font-size:14px;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-key,dialog.sheet .mz-tv .mz-tv-app{min-width:0;min-height:46px;border:1px solid #5da6d4;border-radius:15px;background:linear-gradient(155deg,#234a74,#0a2347 78%);color:#f4faff;box-shadow:inset 0 1px 1px #ffffff22,0 0 7px #46b7ff33;font-weight:750;cursor:pointer;touch-action:manipulation}
+dialog.sheet .mz-tv .mz-tv-key:active:not(:disabled){background:#2274ac}
+dialog.sheet .mz-tv .mz-tv-key:disabled,dialog.sheet .mz-tv .mz-tv-app:disabled{cursor:default;opacity:.7}
+dialog.sheet .mz-tv .mz-tv-topkeys{display:grid;grid-template-columns:1fr 62px 1fr;align-items:center;gap:8px}
+dialog.sheet .mz-tv .mz-tv-power-key{height:62px;border-radius:50%;font-size:28px;border-color:#93ebff;box-shadow:0 0 13px #45d4ff88}
+dialog.sheet .mz-tv .mz-tv-hero-power{height:45px;min-height:45px;width:45px;flex:none;border-radius:50%;font-size:23px;border-color:#8fe7ff}
+dialog.sheet .mz-tv .mz-tv-remote{display:grid;grid-template-columns:minmax(57px,1fr) minmax(140px,2.5fr) minmax(57px,1fr);gap:8px;align-items:stretch}
+dialog.sheet .mz-tv .mz-tv-side{display:grid;grid-template-rows:22px 1fr 1fr auto;align-items:stretch;gap:6px}
+dialog.sheet .mz-tv .mz-tv-side>strong{font-size:12px;color:#b6d4ef;text-align:center}
+dialog.sheet .mz-tv .mz-tv-lg{font-size:24px}
+dialog.sheet .mz-tv .mz-tv-dpad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(50px,1fr));gap:4px;padding:6px;border-radius:25px;border:1px solid #4b94c6;background:linear-gradient(145deg,#154575,#08284f)}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-up{grid-column:2;grid-row:1}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-left{grid-column:1;grid-row:2}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-ok{grid-column:2;grid-row:2;border-color:#85defc;border-radius:50%;background:#17568e;opacity:1}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-right{grid-column:3;grid-row:2}
+dialog.sheet .mz-tv .mz-tv-dpad .mz-tv-down{grid-column:2;grid-row:3}
+dialog.sheet .mz-tv .mz-tv-bottomkeys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-apps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-favorites{display:flex;overflow-x:auto;gap:8px;padding:4px 1px 8px}
+dialog.sheet .mz-tv .mz-tv-app{display:grid;justify-items:center;align-content:center;gap:7px;min-height:88px;padding:7px 4px;font-size:clamp(10px,2.7vw,13px);overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-favorites .mz-tv-app{flex:0 0 78px}
+dialog.sheet .mz-tv .mz-tv-app-mark{font-size:25px;font-weight:900;color:#e7f7ff}
+dialog.sheet .mz-tv .mz-tv-app-0{color:#ff2b3b}
+dialog.sheet .mz-tv .mz-tv-app-1{color:#ff4646}
+dialog.sheet .mz-tv .mz-tv-app-2{color:#62c9ff;font-size:17px}
+dialog.sheet .mz-tv .mz-tv-app-3{color:#cde8ff}
+dialog.sheet .mz-tv .mz-tv-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:5px}
+dialog.sheet .mz-tv .mz-tv-section-head>strong{font-size:15px}
+dialog.sheet .mz-tv .mz-tv-section-head>span{font-size:12px;color:#91cbee}
+dialog.sheet .mz-tv .mz-tv-section-head button{border:0;background:transparent;color:#86d9ff;font-size:13px}
+dialog.sheet .mz-tv .mz-tv-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+dialog.sheet .mz-tv .mz-tv-source.is-active{border-color:#89e5ff;background:linear-gradient(155deg,#246ea7,#113b64);box-shadow:0 0 12px #51cbff77}
+dialog.sheet .mz-tv .mz-tv-info{display:grid;gap:7px;padding:13px;border:1px solid #38719f;border-radius:15px;background:#102d51;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+dialog.sheet .mz-tv .mz-tv-info small{color:#b8d5ec}
+dialog.sheet .mz-tv .mz-tv-note{margin:0;color:#bdd9ed;font-size:12px;line-height:1.45}
+dialog.sheet .mz-tv .mz-tv-close{width:100%}
+@media(max-width:385px){
+ dialog.sheet .mz-tv .mz-tv-remote{grid-template-columns:minmax(51px,1fr) minmax(123px,2.4fr) minmax(51px,1fr);gap:5px}
+ dialog.sheet .mz-tv .mz-tv-dpad{padding:4px;gap:3px}
+ dialog.sheet .mz-tv .mz-tv-tabs{gap:2px}
+ dialog.sheet .mz-tv .mz-tv-apps{gap:5px}
+}
+
+
+/* MAISONNÉE TEST — zones iPhone. Styles strictement locaux, barre PWA inchangée. */
+.mz-dom-compact{display:grid;gap:13px;min-width:0;padding-bottom:20px}
+.mz-dom-compact .mz-dom-pulse{display:flex;flex-wrap:wrap;gap:6px}
+.mz-dom-compact .mz-dom-pulse span{padding:7px 9px;border:1px solid #417aa7;border-radius:99px;background:#123457;color:#d0e9fb;font:650 11px/1.25 var(--body)}
+.mz-dom-compact .mz-dom-section-head{display:flex;justify-content:space-between;align-items:baseline;gap:7px}
+.mz-dom-compact .mz-dom-section-head h3{margin:0;color:#f0faff;font:800 16px var(--display)}
+.mz-dom-compact .mz-dom-section-head span{color:#9ccbe9;text-align:right;font:600 11px var(--body)}
+.mz-dom-compact .mz-dom-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mz-dom-compact .mz-dom-fav{display:grid;align-content:center;justify-items:center;gap:8px;min-width:0;min-height:88px;padding:9px 5px;border:1px solid #7acaff;border-radius:17px;background:linear-gradient(155deg,#245988,#092246);color:#e9f9ff;box-shadow:inset 0 1px 2px #ffffff31,0 0 12px #349de260;font:800 clamp(11px,3vw,14px)/1.17 var(--body);text-align:center;overflow-wrap:anywhere;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-fav:focus-visible,.mz-dom-compact .mz-dom-zone-toggle:focus-visible{outline:2px solid #a8eeff;outline-offset:3px}
+.mz-dom-compact .mz-dom-fav-icon{font-size:27px;line-height:1;color:#a3e3ff}
+.mz-dom-compact .mz-dom-zones{display:grid;gap:10px}
+.mz-dom-compact .mz-dom-zone{min-width:0;border:1px solid #417da9;border-radius:18px;background:linear-gradient(150deg,rgba(29,68,111,.9),rgba(5,27,61,.95));overflow:hidden}
+.mz-dom-compact .mz-dom-zone.is-open{border-color:#78c9f7;box-shadow:0 0 12px #3caeff4b}
+.mz-dom-compact .mz-dom-zone-toggle{display:flex;align-items:center;gap:11px;min-width:0;width:100%;padding:14px 12px;border:0;background:transparent;color:#f2faff;text-align:left;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-zone-ico{font-size:25px;min-width:29px;text-align:center}
+.mz-dom-compact .mz-dom-zone-heading{display:grid;gap:4px;flex:1;min-width:0}
+.mz-dom-compact .mz-dom-zone-heading strong{font:800 16px/1.2 var(--display)}
+.mz-dom-compact .mz-dom-zone-heading small{font:500 12px/1.3 var(--body);color:#bdd8ef;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-chevron{font-size:28px;line-height:1;color:#a6dfff}
+.mz-dom-compact .mz-dom-zone-body[hidden]{display:none!important}
+.mz-dom-compact .mz-dom-zone-content{display:grid;gap:9px;padding:0 10px 12px}
+.mz-dom-compact .mz-dom-items{display:grid;gap:9px}
+.mz-dom-compact .mz-dom-items-ext{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mz-dom-compact .mz-dom-device{display:grid;gap:9px;min-width:0;padding:11px 9px;border:1px solid #397db4;border-radius:15px;background:linear-gradient(155deg,rgba(28,68,116,.94),rgba(7,29,64,.95))}
+.mz-dom-compact .mz-dom-device-top{display:flex;align-items:center;gap:7px;min-width:0}
+.mz-dom-compact .mz-dom-device-icon{display:flex;align-items:center;justify-content:center;flex:0 0 37px;min-width:0;color:#a9e2ff;font-size:23px}
+.mz-dom-compact .mz-dom-items-ext .mz-dom-device-icon{flex:0 0 24px;font-size:20px}
+.mz-dom-compact .mz-dom-device-icon .dom-shutter-svg{width:37px;height:46px;flex:0 0 37px}
+.mz-dom-compact .mz-dom-device-info{display:grid;gap:4px;min-width:0}
+.mz-dom-compact .mz-dom-device-info strong{font:750 13px/1.26 var(--body);color:#f1faff;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device-info .dom-volet-badge,.mz-dom-compact .mz-dom-device-state{font:600 11px/1.2 var(--body);color:#a9cee8;overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device .dom-pos{margin:0}
+.mz-dom-compact .mz-dom-device .dom-actions{width:100%;min-width:0;gap:5px}
+.mz-dom-compact .mz-dom-device .dom-actions .btn{min-width:0;min-height:44px;padding:7px 3px;border:1px solid #77c9f6;border-radius:12px;background:linear-gradient(155deg,#245b90,#0b2b57);color:#fff;box-shadow:0 0 9px #45baff58;font:750 12px/1.15 var(--body);overflow-wrap:anywhere}
+.mz-dom-compact .mz-dom-device-volet .dom-actions .btn{font-size:22px;border-radius:99px;min-height:46px}
+.mz-dom-compact .mz-dom-items-ext .dom-actions .btn{font-size:11px}
+.mz-dom-compact .mz-dom-linked{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 12px;border:1px solid #397eae;border-radius:14px;background:#123456;color:#eef9ff;text-align:left}
+.mz-dom-compact .mz-dom-linked>span:first-child{font-size:24px}
+.mz-dom-compact .mz-dom-linked>span:nth-child(2){display:grid;gap:3px;min-width:0;flex:1}
+.mz-dom-compact .mz-dom-linked small{font-size:11px;color:#b1d2e9}
+.mz-dom-compact .mz-dom-details{min-width:0;border:1px solid #4279a3;border-radius:15px;background:rgba(12,43,81,.74);overflow:hidden}
+.mz-dom-compact .mz-dom-details>summary{padding:13px;min-height:50px;font:750 14px var(--body);color:#f0faff;cursor:pointer;touch-action:manipulation}
+.mz-dom-compact .mz-dom-more{display:block;margin-top:4px;font:500 11px var(--body);color:#a7cce9}
+.mz-dom-compact .mz-dom-details>.dom-eq-grid,.mz-dom-compact .mz-dom-details>.dom-scenes{padding:0 10px 12px}
+.mz-dom-compact .mz-dom-other{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mz-dom-compact .mz-dom-allrooms{width:100%;min-height:48px}
+.dom-page .mz-dom-return{margin-bottom:10px}
+@media(max-width:360px){
+ .mz-dom-compact .mz-dom-zone-content{padding-inline:7px}
+ .mz-dom-compact .mz-dom-items-ext{gap:6px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device{padding:8px 6px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-top{gap:3px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-icon{flex-basis:17px;font-size:18px}
+ .mz-dom-compact .mz-dom-items-ext .mz-dom-device-info strong{font-size:11px}
+}
+
+
+/* MAISONNÉE TEST — entrée vers la page des zones depuis le tableau de bord. */
+.dom-page .mz-dom-zones-entry{
+  display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:12px 14px;
+  border:1px solid #77d2fc;border-radius:17px;text-align:left;
+  background:linear-gradient(150deg,rgba(35,103,163,.85),rgba(8,36,80,.96));
+  box-shadow:0 0 14px rgba(85,200,255,.3);color:#f3fbff;
+}
+.dom-page .mz-dom-zones-entry-icon{flex:0 0 38px;display:grid;place-items:center;font-size:27px;color:#a4e8ff}
+.dom-page .mz-dom-zones-entry>span:nth-child(2){display:grid;flex:1;min-width:0;gap:5px}
+.dom-page .mz-dom-zones-entry strong{font:800 15px/1.2 var(--display)}
+.dom-page .mz-dom-zones-entry small{font:600 12px/1.3 var(--body);color:#afdcf9}
+.dom-page .mz-dom-zones-entry>span:last-child{font-size:27px;color:#adebff}
+.dom-page .mz-dom-zones-entry:focus-visible{outline:2px solid #b8f3ff;outline-offset:3px}
+
+
+
+/* MAISSONNÉE TEST — réglages Domotique V4, véritable page, styles réutilisés/scopés. */
+.mz-dset-page{max-width:720px;min-width:0;margin:0 auto}
+.mz-dset{display:grid;gap:14px;min-width:0;padding:2px 0 20px;color:#f2f9ff}
+.mz-dset-head{display:flex;align-items:center;gap:12px;min-width:0}
+.mz-dset-back{display:grid;place-items:center;width:43px;height:43px;flex:none;border:1px solid #65b2e5;border-radius:50%;color:#d9f5ff;background:linear-gradient(155deg,#1f568a,#0a294f);font-size:26px;font-weight:650;touch-action:manipulation}
+.mz-dset-headcopy{display:grid;gap:2px;min-width:0}
+.mz-dset-headcopy h2{margin:0;font:800 23px/1.15 var(--display);color:#f2faff}
+.mz-dset-headcopy span{font:500 12px var(--body);color:#a9cee8}
+.mz-dset-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:5px;border:1px solid #315d89;border-radius:16px;background:#0a2243;min-width:0}
+.mz-dset-tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:58px;min-width:0;padding:7px 2px;border:1px solid transparent;border-radius:12px;background:transparent;color:#accde7;font:700 12px/1.2 var(--body);touch-action:manipulation}
+.mz-dset-tabs button span{font-size:22px;line-height:1;color:#d2ebfa}
+.mz-dset-tabs button[aria-pressed=true]{color:#fff;border-color:#80d3ff;background:linear-gradient(145deg,#216ca6,#103865);box-shadow:inset 0 1px 0 #c6ebff3b}
+.mz-dset-content{display:grid;gap:11px;min-width:0}
+.mz-dset-lead{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding-top:2px}
+.mz-dset-lead>div{min-width:0}
+.mz-dset-lead h3{margin:0;font:800 19px/1.2 var(--display);color:#f2faff}
+.mz-dset-lead p{margin:4px 0 0;font:500 12px/1.3 var(--body);color:#b1d0e7}
+.mz-dset-count{flex:none;padding:6px 9px;border-radius:99px;border:1px solid #5484aa;background:#163655;color:#d8f0ff;font:700 11px var(--body)}
+.mz-dset-search{display:flex;align-items:center;gap:7px;min-height:44px;padding:0 11px;border:1px solid #548fb9;border-radius:12px;background:#0c2547;color:#a5d8f6}
+.mz-dset-search>span{font-size:26px;line-height:1}
+.mz-dset-search input{flex:1;min-width:0;height:42px;border:0;background:transparent!important;color:#fff;font:500 16px var(--body);outline:none}
+.mz-dset-search input::placeholder{color:#a3bdd5;opacity:1}
+.mz-dset-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;min-width:0}
+.mz-dset-filters button{min-width:0;min-height:39px;padding:5px 1px;border-radius:11px;border:1px solid #477a9e;background:#0d2a4b;color:#b6d7ef;font:700 clamp(10px,2.8vw,13px)/1.2 var(--body);touch-action:manipulation}
+.mz-dset-filters button[aria-pressed=true]{border-color:#83d8fc;color:#fff;background:#1b628e}
+.mz-dset-results{margin:0;color:#a7cde5;font:600 11px var(--body)}
+.mz-dset-list{display:grid;gap:7px;min-width:0}
+.mz-dset-device{display:grid;grid-template-columns:30px minmax(0,1fr) minmax(102px,38%) 32px;align-items:center;gap:7px;min-width:0;min-height:62px;padding:8px;border:1px solid #376a94;border-radius:12px;background:linear-gradient(150deg,rgba(24,57,94,.96),rgba(9,31,63,.96))}
+.mz-dset-device[hidden]{display:none!important}
+.mz-dset-glyph{font-size:21px;line-height:1;text-align:center;color:#b6e6ff}
+.mz-dset-device-info{display:grid;gap:3px;min-width:0}
+.mz-dset-device-info strong{font:750 13px/1.2 var(--body);overflow-wrap:anywhere;color:#f6faff}
+.mz-dset-device-info small{font:500 11px/1.1 var(--body);color:#a6c8e0}
+.mz-dset-device select{display:block;width:100%;max-width:100%;min-height:43px;border:1px solid #6ab5e5;border-radius:10px;background:#0c294f;color:#f7fcff;font:650 16px/1.2 var(--body);padding:5px 7px;min-width:0;text-overflow:ellipsis}
+.mz-dset-device select:disabled{opacity:.65}
+.mz-dset-more{display:grid;place-items:center;width:32px;height:43px;border:1px solid #427cad;border-radius:10px;background:#173a65;color:#d0eeff;font-size:21px;letter-spacing:1px;touch-action:manipulation}
+.mz-dset-device .mz-dom-shelly-feedback{grid-column:2 / -1;display:block;margin:0;color:#b4eccc;font:600 11px/1.3 var(--body)}
+.mz-dset-device .mz-dom-shelly-feedback:empty{display:none}
+.mz-dset-add{display:flex;align-items:center;justify-content:center;gap:9px;min-height:47px;width:100%;padding:10px 12px;border:1px dashed #5da9d4;border-radius:13px;background:rgba(24,64,105,.45);color:#c8e9ff;font:750 13px var(--body);touch-action:manipulation}
+.mz-dset-add span{font-size:21px}
+.mz-dset-unused{padding:10px 12px;border:1px solid #315c82;border-radius:12px;background:#102948}
+.mz-dset-unused summary{color:#bbd8ee;font:650 12px/1.4 var(--body);cursor:pointer}
+.mz-dset-unused>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0 0;color:#e0eef9;font-size:13px}
+.mz-dset-rooms,.mz-dset-services{display:grid;gap:8px;min-width:0}
+.mz-dset-room,.mz-dset-service{display:flex;align-items:center;gap:10px;min-width:0;min-height:67px;padding:10px 12px;border:1px solid #437aa6;border-radius:14px;background:linear-gradient(155deg,#1b426d,#0b2b52)}
+.mz-dset-room-icon,.mz-dset-service-icon{flex:0 0 30px;font-size:23px;text-align:center}
+.mz-dset-room-copy,.mz-dset-service-copy{display:grid;gap:4px;flex:1;min-width:0}
+.mz-dset-room-copy strong,.mz-dset-service-copy strong{color:#f4faff;font:750 14px/1.2 var(--body);overflow-wrap:anywhere}
+.mz-dset-room-copy small,.mz-dset-service-copy small{color:#a8cbe5;font:550 11px/1.2 var(--body)}
+.mz-dset-room>button{min-height:41px;padding:7px 10px;border:1px solid #6cbce9;border-radius:11px;background:#164b7c;color:#e5f7ff;font:700 12px var(--body)}
+.mz-dset-service{width:100%;text-align:left;color:#ebf6ff;touch-action:manipulation}
+.mz-dset-service-status{flex:none;font:700 11px/1.2 var(--body);color:#c5cbd9}
+.mz-dset-service-status.is-linked{color:#9cecca}
+.mz-dset-service>span:last-child{font-size:22px;color:#b1dcf3}
+.mz-dset-subsection{display:grid;gap:10px;margin-top:10px}
+.mz-dset-subsection h3{margin:0;color:#f0faff;font:750 15px var(--display)}
+.mz-dset-navrow{display:flex;align-items:center;gap:10px;width:100%;min-height:54px;padding:12px;border:1px solid #4c86b4;border-radius:12px;background:#123654;color:#f0f9ff;text-align:left;font:700 13px var(--body)}
+.mz-dset-navrow>span:first-child{font-size:21px}
+.mz-dset-navrow>span:nth-child(2){flex:1}
+.mz-dset-navrow>span:last-child{font-size:23px}
+/* L'ancien écran avancé reste utilisable, mais sort de la vue de premier niveau. */
+dialog.sheet .mz-dom-settings-hub,dialog.sheet .mz-dom-service-settings{display:grid;gap:11px;min-width:0}
+dialog.sheet .mz-dom-settings-hub>h3{margin:0;color:#a8dbff;font-size:14px}
+dialog.sheet .mz-dom-settings-group,dialog.sheet .mz-dom-advanced-actions{display:grid;gap:8px}
+dialog.sheet .mz-dom-settings-nav{display:flex;align-items:center;gap:9px;width:100%;min-height:58px;padding:10px;border:1px solid #477da9;border-radius:13px;background:#153558;color:#f3faff;text-align:left}
+dialog.sheet .mz-dom-settings-icon{flex:0 0 30px;font-size:22px;text-align:center}
+dialog.sheet .mz-dom-settings-copy{display:grid;gap:3px;min-width:0;flex:1}
+dialog.sheet .mz-dom-settings-copy strong{font-size:14px}
+dialog.sheet .mz-dom-settings-copy small{font-size:12px;color:#b7d7ed}
+dialog.sheet .mz-dom-settings-arrow{font-size:22px;color:#b5e5ff}
+dialog.sheet .mz-dom-settings-back{width:100%;min-height:44px}
+dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions>.btn{min-height:45px}
+@media (max-width:390px){
+  .mz-dset-device{grid-template-columns:24px minmax(0,1fr) minmax(100px,36%) 30px;gap:5px;padding:8px 6px}
+  .mz-dset-device-info strong{font-size:12px}
+  .mz-dset-glyph{font-size:19px}
+  .mz-dset-service-status{font-size:10px}
+}
+
