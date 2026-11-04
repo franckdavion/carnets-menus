@@ -3721,13 +3721,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const undo = tail.filter(n => n.querySelector('[data-act="cxFinishUndo"]'));
     const opts = nodes.slice(0, d).filter(n => n.matches('details'));
     const carnet = nodes.find(n => n.matches('.cx-ultimate-actions'))?.querySelector('a[href]');
+    // On déplace le bouton original du catalogue près de la saisie, sans dupliquer son action.
+    const cataloguePanel = tail.find(n => n.querySelector('[data-act="catOpen"]'));
+    const catalogueButton = cataloguePanel?.querySelector('[data-act="catOpen"]')?.outerHTML || '<button type="button" class="btn block" data-act="catOpen">🛍️ Catalogue de produits</button>';
+    const catalogueAccess = '<div class="btns mz-shop-catalogue-access" style="margin-top:10px">' + catalogueButton + '</div>';
 
     if (uxScreen === 'store') {
       return '<section class="mz-shop-screen mz-shop-store" aria-label="Courses en magasin">' +
         '<header class="mz-shop-store-header"><button type="button" data-act="mzShopBack" class="mz-shop-back">← Préparation</button>' +
         '<h2>En magasin</h2><p>' + bought + ' / ' + total + ' acheté' + (bought > 1 ? 's' : '') + ' · ' + left + ' à prendre</p></header>' +
         (progress ? progress.outerHTML : '') +
-        '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Ajouter un article</label>' + form + '</div>' +
+        '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Saisir un article</label>' + form + catalogueAccess + '</div>' +
         '<label class="mz-shop-search"><span aria-hidden="true">⌕</span><input type="search" id="mzShopSearch" class="input" autocomplete="off" aria-label="Rechercher un article" placeholder="Rechercher dans les rayons" value="' + esc(query) + '"></label>' +
         '<div class="mz-shop-store-list">' + join(nodes.slice(h)) + '</div>' +
         (undo.length ? '<div class="mz-shop-undo">' + join(undo) + '</div>' : '') +
@@ -3737,13 +3741,13 @@ document.addEventListener('DOMContentLoaded', function () {
       '<div class="mz-shop-hero"><h2>Préparer mes courses</h2><p><strong>' + left + '</strong> à prendre · <strong>' + bought + '</strong> dans le panier · ' + days + ' jour' + (days > 1 ? 's' : '') + '</p>' +
       '<div class="mz-shop-progress-track" role="progressbar" aria-label="Achats effectués" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
       '<div class="mz-shop-hero-actions"><button class="mz-shop-enter" type="button" data-act="mzShopEnter">🛒 En magasin <span>' + left + ' à prendre</span></button>' +
-      '<button type="button" class="mz-round-btn mz-round-btn--md mz-shop-addfab" data-act="cxAddFocus" aria-label="Ajouter un article">' + I.plus + '</button></div></div>' +
-      '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Ajouter un article</label>' + form + '</div>' +
+      '<button type="button" class="mz-round-btn mz-round-btn--md mz-shop-addfab" data-act="catOpen" aria-label="Choisir un article dans le catalogue">' + I.plus + '</button></div></div>' +
+      '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Saisir un article</label>' + form + catalogueAccess + '</div>' +
       '<details class="mz-shop-panel" id="mzShopDays"' + (daysOpen ? ' open' : '') + '><summary><span>Jours et repas</span><small>' + days + ' jour' + (days > 1 ? 's' : '') + ' sélectionné' + (days > 1 ? 's' : '') + '</small></summary>' +
       '<div class="mz-shop-panel-content">' + join(nodes.slice(d, f)) + '</div></details>' +
       '<details class="mz-shop-panel" id="mzShopOptions"' + (optionsOpen ? ' open' : '') + '><summary><span>Options et aide</span><small>Catalogue, recettes, réglages</small></summary><div class="mz-shop-panel-content">' +
       (carnet ? '<div class="btns">' + carnet.outerHTML + '</div>' : '') +
-      join(opts) + join(tail.filter(n => !undo.includes(n))) + join(undo) + '</div></details></section>';
+      join(opts) + join(tail.filter(n => n !== cataloguePanel && !undo.includes(n))) + join(undo) + '</div></details></section>';
   };
 
   function filterStore() {
