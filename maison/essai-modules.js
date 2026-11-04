@@ -3687,3 +3687,120 @@ document.addEventListener("change", e => {
 });
 
 init();
+
+/* COURSES V1 TEST : deux écrans, moteur et actions de courses.js inchangés.
+   Préparation et magasin partagent les mêmes données Supabase et Carnet. */
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof VIEWS.courses !== 'function') return;
+  const originalCourses = VIEWS.courses;
+  const screenKey = 'mz_test_courses_ecran_v1';
+  let uxScreen = sessionStorage.getItem(screenKey) === 'store' ? 'store' : 'prep';
+  let prepY = 0, storeY = 0, query = '';
+  let daysOpen = false, optionsOpen = false;
+  const join = nodes => nodes.map(n => n.outerHTML).join('');
+  const isShop = () => view === 'courses' && uxScreen === 'store';
+
+  VIEWS.courses = function () {
+    const raw = originalCourses();
+    // En chargement, en erreur, ou hors cloud : garder l'écran d'origine.
+    if (typeof raw !== 'string' || !raw.includes('id="cxList"')) return raw;
+    const temp = document.createElement('template');
+    temp.innerHTML = raw;
+    const nodes = Array.from(temp.content.children);
+    const d = nodes.findIndex(n => n.matches('.group-h') && n.textContent.trim() === 'Courses pour');
+    const f = nodes.findIndex(n => n.matches('form[data-form="cxAdd"]'));
+    const h = nodes.findIndex(n => n.id === 'cxList');
+    if (d < 0 || f <= d || h <= f) return raw;
+    const stats = nodes.find(n => n.matches('.cx-ultimate-stats'));
+    const nums = stats ? Array.from(stats.querySelectorAll('strong')).map(n => parseInt(n.textContent, 10) || 0) : [0, 0, 0];
+    const left = nums[0] || 0, bought = nums[1] || 0, days = nums[2] || 0;
+    const total = left + bought, pct = total ? Math.round(bought * 100 / total) : 0;
+    const form = nodes[f].outerHTML;
+    const progress = nodes.find(n => n.matches('.cx-progress'));
+    const tail = nodes.slice(f + 1, h).filter(n => !n.matches('.cx-progress'));
+    const undo = tail.filter(n => n.querySelector('[data-act="cxFinishUndo"]'));
+    const opts = nodes.slice(0, d).filter(n => n.matches('details'));
+    const carnet = nodes.find(n => n.matches('.cx-ultimate-actions'))?.querySelector('a[href]');
+
+    if (uxScreen === 'store') {
+      return '<section class="mz-shop-screen mz-shop-store" aria-label="Courses en magasin">' +
+        '<header class="mz-shop-store-header"><button type="button" data-act="mzShopBack" class="mz-shop-back">← Préparation</button>' +
+        '<h2>En magasin</h2><p>' + bought + ' / ' + total + ' acheté' + (bought > 1 ? 's' : '') + ' · ' + left + ' à prendre</p></header>' +
+        (progress ? progress.outerHTML : '') +
+        '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Ajouter un article</label>' + form + '</div>' +
+        '<label class="mz-shop-search"><span aria-hidden="true">⌕</span><input type="search" id="mzShopSearch" class="input" autocomplete="off" aria-label="Rechercher un article" placeholder="Rechercher dans les rayons" value="' + esc(query) + '"></label>' +
+        '<div class="mz-shop-store-list">' + join(nodes.slice(h)) + '</div>' +
+        (undo.length ? '<div class="mz-shop-undo">' + join(undo) + '</div>' : '') +
+        '</section>';
+    }
+    return '<section class="mz-shop-screen mz-shop-prep" aria-label="Préparer les courses">' +
+      '<div class="mz-shop-hero"><h2>Préparer mes courses</h2><p><strong>' + left + '</strong> à prendre · <strong>' + bought + '</strong> dans le panier · ' + days + ' jour' + (days > 1 ? 's' : '') + '</p>' +
+      '<div class="mz-shop-progress-track" role="progressbar" aria-label="Achats effectués" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
+      '<div class="mz-shop-hero-actions"><button class="mz-shop-enter" type="button" data-act="mzShopEnter">🛒 En magasin <span>' + left + ' à prendre</span></button>' +
+      '<button type="button" class="mz-round-btn mz-round-btn--md mz-shop-addfab" data-act="cxAddFocus" aria-label="Ajouter un article">' + I.plus + '</button></div></div>' +
+      '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Ajouter un article</label>' + form + '</div>' +
+      '<details class="mz-shop-panel" id="mzShopDays"' + (daysOpen ? ' open' : '') + '><summary><span>Jours et repas</span><small>' + days + ' jour' + (days > 1 ? 's' : '') + ' sélectionné' + (days > 1 ? 's' : '') + '</small></summary>' +
+      '<div class="mz-shop-panel-content">' + join(nodes.slice(d, f)) + '</div></details>' +
+      '<details class="mz-shop-panel" id="mzShopOptions"' + (optionsOpen ? ' open' : '') + '><summary><span>Options et aide</span><small>Catalogue, recettes, réglages</small></summary><div class="mz-shop-panel-content">' +
+      (carnet ? '<div class="btns">' + carnet.outerHTML + '</div>' : '') +
+      join(opts) + join(tail.filter(n => !undo.includes(n))) + join(undo) + '</div></details></section>';
+  };
+
+  function filterStore() {
+    const root = document.querySelector('.mz-shop-store');
+    if (!root) return;
+    const q = query.trim().toLocaleLowerCase('fr');
+    root.querySelectorAll('.cx-item').forEach(row => {
+      row.hidden = !!q && !row.textContent.toLocaleLowerCase('fr').includes(q);
+    });
+    root.querySelectorAll('.cx-fold').forEach(section => {
+      const body = section.querySelector('.cx-fold-body'), toggle = section.querySelector('.cx-fold-toggle');
+      if (!body || !toggle) return;
+      const matches = Array.from(section.querySelectorAll('.cx-item')).some(row => !row.hidden);
+      section.hidden = !!q && !matches;
+      body.hidden = q ? false : toggle.getAttribute('aria-expanded') !== 'true';
+      section.classList.toggle('is-open', !body.hidden);
+    });
+  }
+
+  const oldAfterRender = afterRender;
+  afterRender = function () {
+    if (typeof oldAfterRender === 'function') oldAfterRender();
+    if (isShop()) filterStore();
+    const legacyUp = document.getElementById('cxUp');
+    if (legacyUp && view === 'courses') legacyUp.hidden = true;
+  };
+
+  function changeShopScreen(next) {
+    if (view !== 'courses' || next === uxScreen) return;
+    if (uxScreen === 'store') storeY = window.scrollY; else prepY = window.scrollY;
+    uxScreen = next;
+    sessionStorage.setItem(screenKey, next);
+    // L'ancien saut vers le bas de la liste est remplacé par l'écran magasin.
+    LS.set('mz_cx_inlist', false);
+    render();
+    const y = next === 'store' ? storeY : prepY;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
+
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest('[data-act]');
+    if (!b || view !== 'courses') return;
+    if (b.dataset.act === 'mzShopEnter') { e.preventDefault(); changeShopScreen('store'); return; }
+    if (b.dataset.act === 'mzShopBack') { e.preventDefault(); changeShopScreen('prep'); return; }
+    // La flèche de l'en-tête revient à Préparation avant de quitter Courses.
+    if (isShop() && b.dataset.act === 'go' && b.closest('header.top')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      changeShopScreen('prep');
+    }
+  }, true);
+  document.addEventListener('toggle', function (e) {
+    if (e.target.id === 'mzShopDays') daysOpen = e.target.open;
+    if (e.target.id === 'mzShopOptions') optionsOpen = e.target.open;
+  }, true);
+  document.addEventListener('input', function (e) {
+    if (e.target.id === 'mzShopSearch') { query = e.target.value; filterStore(); }
+  });
+  if (view === 'courses') render();
+});
