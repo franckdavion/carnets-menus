@@ -4,7 +4,7 @@
   const DATABASE = "maisonnee-cartes-local-v1";
   const STORE = "cards";
   const LIMIT = 60;
-  const state = { cards: [], drafts: [], ready: false, busy: false, status: "", error: "", search: "", crop: null };
+  const state = { cards: [], drafts: [], ready: false, busy: false, status: "", error: "", search: "", crop: null, manage: false };
   const urls = new Map();
   let dbPromise = null, decoderPromise = null;
   const h = value => esc(value == null ? "" : value);
@@ -155,35 +155,63 @@
   }
 
   function previewRow(c) {
-    const url = imageUrl(c.id, c.image);
-    const detail = c.code ? "Code reconnu · " + c.code : c.image ? "Capture disponible" : "Numéro manuel";
-    return '<div class="mz-wallet-item" data-wallet-search="' + h((c.name + " " + c.code).toLowerCase()) + '">' +
-      '<button type="button" data-wallet="open" data-id="' + h(c.id) + '" class="mz-wallet-card">' +
-      (url ? '<img src="' + url + '" alt="" loading="lazy">' : '<span class="mz-wallet-symbol">▥</span>') +
-      '<span class="mz-wallet-info"><strong>' + h(c.name) + '</strong><small>' + h(detail) + '</small></span><span aria-hidden="true">›</span></button>' +
-      '<div class="mz-wallet-tools"><button type="button" data-wallet="favorite" data-id="' + h(c.id) + '" aria-label="' + (c.favorite ? "Retirer des favoris" : "Mettre en favori") + '">' + (c.favorite ? "★ Favori" : "☆ Favori") + '</button><button type="button" data-wallet="crop" data-id="' + h(c.id) + '">✂ Recadrer</button><button type="button" data-wallet="edit" data-id="' + h(c.id) + '">Modifier</button></div></div>';
+    const brand = brandOf(c);
+    return '<div class="mz-wallet-item mz-wallet-mosaic-item" data-wallet-search="' +
+      h((c.name + " " + (brand?.name || "") + " " + (c.code || "")).toLocaleLowerCase("fr")) + '">' +
+      '<button type="button" data-wallet="open" data-id="' + h(c.id) +
+      '" class="mz-wallet-mosaic-card" aria-label="Afficher la carte ' + h(c.name) + '">' +
+      brandTile(c) + (c.favorite ? '<span class="mz-wallet-star" aria-label="Favori">★</span>' : '') +
+      '</button></div>';
   }
   function draftRow(d, i) {
     const url = imageUrl(d.id, d.image);
-    return '<div class="mz-wallet-draft"><img src="' + url + '" alt="Capture ' + (i + 1) + '">' +
-      '<label>Nom de la carte<input class="input" type="text" data-wallet-name="' + h(d.id) + '" maxlength="60" value="' + h(d.name) + '"></label>' +
-      '<small>' + (d.code ? 'Code détecté : ' + h(d.code) : "Code non reconnu : la capture restera disponible.") + '</small>' +
-      '<div class="mz-wallet-draft-actions"><button type="button" data-wallet="crop" data-id="' + h(d.id) + '">✂ Recadrer le code-barres</button><button type="button" data-wallet="removeDraft" data-id="' + h(d.id) + '">Retirer</button></div></div>';
+    return '<div class="mz-wallet-draft">' +
+      '<div class="mz-wallet-draft-identity">' + brandTile(d, true) +
+      '<img src="' + url + '" alt="Capture du code-barres ' + (i + 1) + '"></div>' +
+      '<label>Enseigne<select class="input" data-wallet-brand="' + h(d.id) +
+      '">' + brandOptions(d) + '</select></label>' +
+      '<label>Nom de la carte<input class="input" type="text" data-wallet-name="' + h(d.id) +
+      '" maxlength="60" value="' + h(d.name) + '"></label>' +
+      '<small>' + (d.code ? 'Code détecté : ' + h(d.code) : 'Code non reconnu : la capture sera conservée.') + '</small>' +
+      '<div class="mz-wallet-draft-actions"><button type="button" data-wallet="recognize" data-id="' + h(d.id) +
+      '">⌕ Reconnaître l’enseigne</button><button type="button" data-wallet="crop" data-id="' + h(d.id) +
+      '">✂ Recadrer</button><button type="button" data-wallet="removeDraft" data-id="' + h(d.id) +
+      '">Retirer</button></div></div>';
   }
   VIEWS.fidelite = function () {
-    const list = state.cards.filter(c => (c.name + " " + (c.code || "")).toLocaleLowerCase("fr").includes(state.search.toLocaleLowerCase("fr")));
-    return '<section class="mz-wallet">' +
-      '<div class="mz-wallet-head"><div><h2>Mes cartes de fidélité</h2><p>Conservées sur cet appareil, consultables sans Internet.</p></div><span class="mz-wallet-offline">' + (!navigator.onLine ? "Hors ligne" : "Stockage iPhone") + '</span></div>' +
-      '<div class="mz-wallet-actions"><button class="btn primary" type="button" data-wallet="pick">＋ Ajouter des captures</button><button class="btn" type="button" data-wallet="backup">Sauvegarder</button><button class="btn" type="button" data-wallet="pickBackup">Restaurer</button></div>' +
+    const filtered = state.cards.filter(c => (c.name + " " + (brandOf(c)?.name || "") + " " + (c.code || ""))
+      .toLocaleLowerCase("fr").includes(state.search.toLocaleLowerCase("fr")));
+    const fav = filtered.filter(c => c.favorite), rest = filtered.filter(c => !c.favorite);
+    const section = (title, entries) => entries.length ?
+      '<section class="mz-wallet-mosaic-section"><h3>' + h(title) + '</h3><div class="mz-wallet-list mz-wallet-mosaic-grid">' +
+      entries.map(previewRow).join("") + '</div></section>' : "";
+    return '<section class="mz-wallet mz-wallet-mosaic">' +
+      '<div class="mz-wallet-head"><div><h2>Cartes de fidélité</h2><p>Tes cartes restent accessibles sans Internet sur cet appareil.</p></div>' +
+      '<span class="mz-wallet-offline">' + (!navigator.onLine ? "Hors ligne" : "Stockage iPhone") + '</span></div>' +
+      '<div class="mz-wallet-actions mz-wallet-main-actions"><button class="btn primary" type="button" data-wallet="pick">＋ Ajouter des cartes</button>' +
+      '<button class="btn" type="button" data-wallet="manageToggle">' + (state.manage ? "Fermer les options" : "⋯ Gérer") + '</button></div>' +
+      (state.manage ? '<div class="mz-wallet-manage"><p>Les cartes et leurs captures sont enregistrées uniquement sur cet appareil.</p>' +
+        '<div class="mz-wallet-actions"><button class="btn" type="button" data-wallet="backup">Sauvegarder mes cartes</button>' +
+        '<button class="btn" type="button" data-wallet="pickBackup">Restaurer une sauvegarde</button></div></div>' : '') +
       '<input id="mz-wallet-files" class="mz-wallet-file" type="file" accept="image/*" multiple aria-label="Sélectionner des captures d’écran">' +
       '<input id="mz-wallet-backup" class="mz-wallet-file" type="file" accept=".json,application/json" aria-label="Importer une sauvegarde">' +
       (state.status ? '<p class="mz-wallet-status" role="status">' + h(state.status) + '</p>' : "") +
       (state.error ? '<p class="mz-wallet-error" role="alert">' + h(state.error) + '</p>' : "") +
-      (state.drafts.length ? '<section class="mz-wallet-review"><h3>Vérifier les ' + state.drafts.length + ' captures</h3><p>Corrige les noms avant d’enregistrer. Les codes non reconnus seront conservés en image.</p><div class="mz-wallet-drafts">' + state.drafts.map(draftRow).join("") + '</div><div class="mz-wallet-actions"><button type="button" class="btn primary" data-wallet="saveDrafts" ' + (state.busy ? "disabled" : "") + '>Enregistrer ' + state.drafts.length + ' cartes</button><button type="button" class="btn" data-wallet="clearDrafts">Annuler</button></div></section>' : "") +
-      (state.ready ? '<label class="mz-wallet-search">Rechercher une enseigne<input class="input" id="mz-wallet-search" type="search" placeholder="Nom du magasin" value="' + h(state.search) + '"></label><div class="mz-wallet-list">' +
-        (list.length ? list.map(previewRow).join("") : '<div class="mz-wallet-empty">' + (state.cards.length ? "Aucune carte trouvée." : "Aucune carte enregistrée. Ajoute tes captures Klarna pour commencer.") + '</div>') + '</div>' :
+      (state.drafts.length ? '<section class="mz-wallet-review"><h3>Vérifier ' + state.drafts.length + ' carte(s)</h3>' +
+        '<p>Choisis l’enseigne pour obtenir sa vignette. Si elle n’est pas proposée, tu peux garder un nom personnalisé.</p>' +
+        '<div class="mz-wallet-drafts">' + state.drafts.map(draftRow).join("") + '</div>' +
+        '<div class="mz-wallet-actions"><button type="button" class="btn primary" data-wallet="saveDrafts" ' +
+        (state.busy ? "disabled" : "") + '>Enregistrer ' + state.drafts.length + ' carte(s)</button>' +
+        '<button type="button" class="btn" data-wallet="recognizeDrafts" ' + (state.busy ? "disabled" : "") +
+        '>⌕ Reconnaître les enseignes</button>' +
+        '<button type="button" class="btn" data-wallet="clearDrafts">Annuler</button></div></section>' : "") +
+      (state.ready ? '<label class="mz-wallet-search">⌕ Rechercher<input class="input" id="mz-wallet-search" type="search" ' +
+        'placeholder="Enseigne ou numéro de carte" value="' + h(state.search) + '"></label>' +
+        (filtered.length ? section("Utilisation fréquente", fav) + section(rest.length && fav.length ? "Toutes les cartes" : "Mes cartes", rest) :
+        '<div class="mz-wallet-empty">' + (state.cards.length ? "Aucune carte trouvée." :
+          "Aucune carte enregistrée. Importe une capture Klarna pour commencer.") + '</div>') :
         '<p class="mz-wallet-status">Ouverture du stockage local…</p>') +
-      '<p class="mz-wallet-note">Les photos et les numéros restent sur cet appareil. La sauvegarde est nécessaire avant de changer ou réinitialiser l’iPhone.</p></section>';
+      '<p class="mz-wallet-note">Les vignettes d’enseignes fonctionnent hors ligne. Pense à sauvegarder tes cartes avant un changement d’iPhone.</p></section>';
   };
   async function sha256(blob) {
     if (!crypto.subtle) return String(blob.size) + "-" + String(blob.lastModified || "");
