@@ -488,3 +488,78 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   .mz-wallet-crop-scroll{padding:6px}
   .mz-wallet-crop-handle{width:25px;height:25px}
 }
+
+/* Test Cartes : mosaïque d'enseignes, sans ressources distantes (mode avion). */
+.mz-wallet-mosaic{gap:15px}
+.mz-wallet-mosaic .mz-wallet-head{align-items:center}
+.mz-wallet-mosaic .mz-wallet-head h2{font-size:19px}
+.mz-wallet-mosaic .mz-wallet-head p{font-size:12px}
+.mz-wallet-main-actions{gap:10px}
+.mz-wallet-main-actions [data-wallet="pick"]{flex:1;min-height:46px}
+.mz-wallet-main-actions [data-wallet="manageToggle"]{min-width:105px}
+.mz-wallet-manage{padding:12px;border:1px solid #5bc8fd5c;border-radius:14px;background:#112a45}
+.mz-wallet-manage p{margin:0 0 11px;color:#b2d4eb;font-size:12px}
+.mz-wallet-mosaic .mz-wallet-search{position:relative}
+.mz-wallet-mosaic .mz-wallet-search .input{border-radius:20px;min-height:52px;background:#16243c}
+.mz-wallet-mosaic-section{display:grid;gap:10px}
+.mz-wallet-mosaic-section h3{display:flex;align-items:center;gap:12px;margin:0;color:#d6e4f2;font-size:15px;font-weight:650}
+.mz-wallet-mosaic-section h3:after{content:"";height:1px;flex:1;background:#9ab8d84a}
+.mz-wallet-mosaic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mz-wallet-mosaic .mz-wallet-mosaic-item{position:relative;min-width:0;padding:0;border:0;background:transparent;border-radius:20px}
+.mz-wallet-mosaic-card{width:100%;padding:0;border:0;background:transparent;display:block;cursor:pointer;text-align:center;position:relative;color:inherit}
+.mz-wallet-brand-tile{
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  width:100%;aspect-ratio:1.58/1;box-sizing:border-box;padding:13px 8px;
+  border-radius:18px;background:var(--wallet-bg,#153c63);color:var(--wallet-ink,#fff);
+  box-shadow:inset 0 0 0 1px #ffffff2c,0 3px 12px #0002;
+  overflow:hidden;isolation:isolate
+}
+.mz-wallet-brand-logo{
+  display:flex;align-items:center;justify-content:center;max-width:100%;
+  font-family:Arial,system-ui,sans-serif;font-size:clamp(14px,3.7vw,26px);
+  font-weight:850;line-height:1.12;letter-spacing:-.035em;
+  text-wrap:balance;overflow-wrap:anywhere
+}
+.mz-wallet-star{position:absolute;top:6px;right:7px;border-radius:99px;padding:2px 5px;font-size:15px;color:#ffe29a;background:#0009}
+.mz-wallet-brand--generic{background:linear-gradient(145deg,#2d5279,#142d4e);border:1px dashed #75bdf58a}
+.mz-wallet-brand--intermarche .mz-wallet-brand-logo{font-style:italic;letter-spacing:-.045em;font-size:clamp(13px,3.5vw,24px)}
+.mz-wallet-brand--leclerc .mz-wallet-brand-logo{font-weight:900;letter-spacing:-.05em}
+.mz-wallet-brand--leclerc .mz-wallet-brand-logo:before{content:"Ⓛ";display:block;font-size:1.2em;margin-right:3px}
+.mz-wallet-brand--action .mz-wallet-brand-logo{font-style:italic;font-stretch:condensed;letter-spacing:-.06em}
+.mz-wallet-brand--bricomarche .mz-wallet-brand-logo,.mz-wallet-brand--bricodepot .mz-wallet-brand-logo{font-size:clamp(12px,3vw,23px)}
+.mz-wallet-brand--match .mz-wallet-brand-logo{font-weight:950;color:#349c43;letter-spacing:.025em}
+.mz-wallet-brand--gammvert .mz-wallet-brand-logo{font-weight:700}
+.mz-wallet-brand--gifi .mz-wallet-brand-logo{font-size:clamp(26px,6vw,48px);letter-spacing:-.08em;font-weight:1000}
+.mz-wallet-brand--superu .mz-wallet-brand-logo{background:#fff;color:#eb2138;border:5px solid #3b9aaf;border-radius:50%;width:68px;height:68px;font-size:53px;line-height:1}
+.mz-wallet-brand--darty .mz-wallet-brand-logo{border-radius:60%;background:#fff;color:#212121;width:80px;height:80px;font-size:22px}
+.mz-wallet-brand--lidl .mz-wallet-brand-logo{width:76px;height:76px;background:#fbd80c;color:#173577;box-shadow:inset 0 0 0 5px #e13d3d;border:5px solid #fff;font-size:27px}
+.mz-wallet-brand--ikea .mz-wallet-brand-logo{background:#ffd600;color:#00559f;padding:10px 18px;border-radius:60%;font-size:clamp(19px,4.8vw,35px);letter-spacing:-.05em}
+.mz-wallet-brand--auchan .mz-wallet-brand-logo{font-style:italic;letter-spacing:-.04em}
+.mz-wallet-brand--intersport .mz-wallet-brand-logo{font-style:italic;font-size:clamp(13px,3.4vw,26px)}
+.mz-wallet-brand--colruyt .mz-wallet-brand-logo{text-transform:lowercase;letter-spacing:-.08em}
+.mz-wallet-brand--fnac .mz-wallet-brand-logo{font-size:clamp(21px,5vw,38px);font-style:italic}
+.mz-wallet-brand--gosport .mz-wallet-brand-logo{font-size:clamp(19px,4.8vw,34px)}
+.mz-wallet-brand-mini{width:115px;max-width:35%;min-width:88px;aspect-ratio:1.58/1;border-radius:12px;padding:7px}
+.mz-wallet-brand-mini .mz-wallet-brand-logo{font-size:clamp(12px,2.9vw,18px)}
+.mz-wallet-brand-mini.mz-wallet-brand--superu .mz-wallet-brand-logo,
+.mz-wallet-brand-mini.mz-wallet-brand--lidl .mz-wallet-brand-logo,
+.mz-wallet-brand-mini.mz-wallet-brand--darty .mz-wallet-brand-logo{width:46px;height:46px;font-size:22px;border-width:2px}
+.mz-wallet-brand-mini.mz-wallet-brand--gifi .mz-wallet-brand-logo{font-size:24px}
+.mz-wallet-draft-identity{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mz-wallet-draft-identity img{width:60%;height:100px;object-fit:contain;background:white;border-radius:9px}
+.mz-wallet-draft{gap:10px}
+.mz-wallet-draft label{font-size:13px;font-weight:600}
+.mz-wallet-draft select.input{max-width:100%;box-sizing:border-box}
+.mz-wallet-draft-actions{gap:6px}
+.mz-wallet-draft-actions button{border:1px solid #5bc7ff70;background:#153e60;color:#e4f4ff;
+  border-radius:9px;padding:9px 7px;font-size:11px;font-weight:650}
+.mz-wallet-draft-actions button[data-wallet="removeDraft"]{color:#ffc5c5;background:#512b35;border-color:#d8656588}
+.mz-wallet-edit-brand{display:flex;justify-content:center;margin:4px 0 12px}
+.mz-wallet-edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}
+.mz-wallet-edit-actions .btn{flex:1 1 145px;min-height:42px;font-size:12px}
+.mz-wallet-full-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.mz-wallet-full-actions button{padding:9px 12px;border-radius:11px;background:#e8f3ff;color:#153956;
+  border:1px solid #c5d8e8;font-size:12px;font-weight:700;cursor:pointer}
+@media(min-width:700px){.mz-wallet-mosaic-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:390px){.mz-wallet-mosaic-grid{gap:9px}.mz-wallet-brand-tile{border-radius:15px}
+ .mz-wallet-main-actions [data-wallet="manageToggle"]{min-width:95px}}
