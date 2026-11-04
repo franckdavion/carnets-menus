@@ -3399,7 +3399,7 @@ function gTasksFillFormLists() {
     : '<option value="">Aucune liste disponible</option>';
   if (!GTASKS.lists.some(x => x.id === selected) && GTASKS.lists.length) select.value = GTASKS.lists[0].id;
   const info = document.getElementById("gTaskInfo");
-  if (info) info.textContent = GTASKS.error || "Google Tasks conserve la date et les notes ; pas d’heure ni de rappel personnalisé via son API.";
+  if (info) info.textContent = GTASKS.error || "Google Tasks conserve la date et les notes ; son API ne gère ni heure, ni répétition, ni rappel personnalisé.";
 }
 function gTasksStart() {
   GTASKS.enabled = true;
