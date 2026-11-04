@@ -563,3 +563,25 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
 @media(min-width:700px){.mz-wallet-mosaic-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:390px){.mz-wallet-mosaic-grid{gap:9px}.mz-wallet-brand-tile{border-radius:15px}
  .mz-wallet-main-actions [data-wallet="manageToggle"]{min-width:95px}}
+
+/* Test cartes : code-barres EAN-13 local, lisible même sans capture iPhone. */
+.mz-wallet-codearea .mz-wallet-ean13{
+  display:block;width:min(100%,560px);height:auto;max-height:55dvh;
+  background:#fff;flex:none;shape-rendering:crispEdges
+}
+.mz-wallet-full-toggle{
+  display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap
+}
+.mz-wallet-full-toggle button{
+  border:1px solid #d3e2ef;background:#edf6ff;color:#143b65;
+  padding:10px 14px;border-radius:11px;font-weight:650;font-size:13px;
+  min-height:42px
+}
+.mz-wallet-full-toggle button[hidden]{display:none!important}
+.mz-wallet-image-warning{
+  max-width:340px;margin:auto;text-align:center;color:#445364;
+  font-size:13px;line-height:1.5
+}
+@media(max-width:420px){
+  .mz-wallet-codearea .mz-wallet-ean13{width:100%;max-height:48dvh}
+}
