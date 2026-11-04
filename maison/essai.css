@@ -44,16 +44,19 @@
    Même style pour +, chevron et futures commandes ; réutiliser les SVG I et actions data-act.
    Tailles : --sm 44px, --md 60px, --lg 62px ; aucun nouveau fichier.
    Après validation : migrer dans maison.css en supprimant les anciennes règles redondantes. */
-.mz-round-btn{box-sizing:border-box;display:grid;place-items:center;flex:none;width:var(--mz-round-size);height:var(--mz-round-size);padding:0;border:2px solid #b5f2ff;border-radius:50%;background:radial-gradient(ellipse at 35% 15%,#d6f9ff,#6dc9ff 38%,#277ee2 73%,#08459b);color:#062044;box-shadow:inset 0 2px 2px rgba(255,255,255,.75),inset 0 -4px 8px rgba(7,76,169,.65),0 0 14px rgba(42,207,255,.72),0 8px 22px rgba(0,18,37,.72);touch-action:manipulation;}
-.mz-round-btn--sm{--mz-round-size:44px;--mz-round-icon-size:24px;}
+/* Les adaptateurs ciblent Repas et Présences sans modifier leurs fichiers JavaScript partagés. */
+.mz-round-btn,.view-repas .weeknav .icon-btn,.view-presences .pr-arrow{--mz-round-bg:radial-gradient(ellipse at 35% 15%,#d6f9ff,#6dc9ff 38%,#277ee2 73%,#08459b);box-sizing:border-box;display:grid;place-items:center;flex:none;width:var(--mz-round-size);height:var(--mz-round-size);padding:0;border:2px solid #b5f2ff;border-radius:50%;background:var(--mz-round-bg);color:#062044;box-shadow:inset 0 2px 2px rgba(255,255,255,.75),inset 0 -4px 8px rgba(7,76,169,.65),0 0 14px rgba(42,207,255,.72),0 8px 22px rgba(0,18,37,.72);touch-action:manipulation;}
+.mz-round-btn--sm,.view-repas .weeknav .icon-btn,.view-presences .pr-arrow{--mz-round-size:44px;--mz-round-icon-size:24px;}
 .mz-round-btn--md{--mz-round-size:60px;--mz-round-icon-size:30px;}
 .mz-round-btn--lg{--mz-round-size:62px;--mz-round-icon-size:42px;}
-.mz-round-btn svg{display:block;width:var(--mz-round-icon-size);height:var(--mz-round-icon-size);stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-.mz-round-btn:focus-visible{outline:2px solid #a8eeff;outline-offset:3px;}
+.mz-round-btn svg,.view-repas .weeknav .icon-btn svg{display:block;width:var(--mz-round-icon-size);height:var(--mz-round-icon-size);stroke:currentColor;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.mz-round-btn:focus-visible,.view-repas .weeknav .icon-btn:focus-visible,.view-presences .pr-arrow:focus-visible{outline:2px solid #a8eeff;outline-offset:3px;}
+.icon-btn.plain.mz-round-btn--nav{background:var(--mz-round-bg);border-color:#b5f2ff;}
+.fab.mz-round-btn{display:grid;place-items:center;padding:0;min-width:var(--mz-round-size);font-size:0;}
  /* Variante fermer : même base et même dimension standard (44 px), finition bleu nuit discrète. */
-.sheet-top .sheet-close-x.mz-round-btn--close{display:grid;place-items:center;min-width:44px;min-height:44px;border:2px solid #58baf2;background:linear-gradient(150deg,#204f79,#0a213f 75%);color:#cdefff;box-shadow:inset 0 1px 2px rgba(255,255,255,.22),0 0 11px rgba(58,183,255,.45);}
-.sheet-top .sheet-close-x.mz-round-btn--close svg{width:24px;height:24px;stroke-width:2.7;}
-.sheet-top .sheet-close-x.mz-round-btn--close:active{background:#285b87;}
+.sheet-top .sheet-close-x.mz-round-btn--close,.lb-top .icon-btn.plain.mz-round-btn--close{display:grid;place-items:center;min-width:44px;min-height:44px;border:2px solid #58baf2;background:linear-gradient(150deg,#204f79,#0a213f 75%);color:#cdefff;box-shadow:inset 0 1px 2px rgba(255,255,255,.22),0 0 11px rgba(58,183,255,.45);}
+.sheet-top .sheet-close-x.mz-round-btn--close svg,.lb-top .icon-btn.plain.mz-round-btn--close svg{width:24px;height:24px;stroke-width:2.7;}
+.sheet-top .sheet-close-x.mz-round-btn--close:active,.lb-top .icon-btn.plain.mz-round-btn--close:active{background:#285b87;}
 /* Agenda : le chevron est une pastille visuelle ; le bouton entier du mois reste cliquable. */
 .cal .cal-month-toggle{display:flex;flex:1;align-items:center;justify-content:space-between;gap:5px;min-width:0;min-height:74px;padding:6px 4px 6px 10px;border:1px solid var(--line);border-radius:14px;background:rgba(85,200,255,.09);color:var(--ink);cursor:pointer;}
 .cal .cal-month-toggle-copy{display:flex;flex:1;align-items:center;justify-content:center;min-width:0;}
