@@ -428,6 +428,13 @@ async function init() {
   const goTo = url.searchParams.get("v");
   if (goTo) { view = goTo; LS.set("mz_view", goTo); url.searchParams.delete("v"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
   if (code) { LS.set("mz_join", code.toUpperCase()); url.searchParams.delete("code"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
+  // Entrée autonome du portefeuille de test : aucun appel réseau avant l'affichage des cartes.
+  const walletTest = /\/essai\/(?:index\.html)?$/.test(location.pathname);
+  const walletCache = LS.get("mz_cache", null);
+  if (walletTest && (url.searchParams.get("cartes") === "1" || (navigator.onLine === false && !walletCache))) {
+    S = walletCache && walletCache.hh ? { ...blank(), ...walletCache, recipes: null } : { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes" } };
+    view = "fidelite"; screen = "app"; render(); return;
+  }
   if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
   // show the last known state straight away, then refresh from the cloud
   const cache = LS.get("mz_cache", null);
@@ -2335,7 +2342,7 @@ function demoUpgrade(d) {
 }
 
 /* ---------- go ---------- */
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:" && /\/essai\/(?:index\.html)?$/.test(location.pathname)) navigator.serviceWorker.register("essai/sw.js", { scope: "essai/" }).catch(() => {});
 // init() is called at the end of modules.js, once every module is registered
 
 // La hauteur de la fenêtre suit visualViewport (index.html).
