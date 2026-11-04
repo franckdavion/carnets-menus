@@ -452,30 +452,28 @@ async function init() {
   if (url.searchParams.get("cartes") === "1") {
     view = "fidelite"; LS.set("mz_view", "fidelite");
   }
-  // Premier démarrage hors ligne sans cache d'application : seul le portefeuille
-  // local reste accessible, sans autorisation d'accès aux autres données.
-  if (view === "fidelite" && navigator.onLine === false) {
-    const cache = LS.get("mz_cache", null);
-    if (!cache || !cache.hh) {
-      S = { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes" } };
-      screen = "app"; render(); return;
-    }
-  }
   if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
-  // show the last known state straight away, then refresh from the cloud
+  // Afficher immédiatement le dernier état local du foyer authentifié.
+  // Sans cet état, ne JAMAIS afficher le formulaire de connexion en mode avion :
+  // il est inutilisable sans réseau et cache les cartes sauvegardées dans IndexedDB.
   const cache = LS.get("mz_cache", null);
-  if (mode === "cloud" && cache && cache.hh) { S = { ...blank(), ...cache, recipes: null }; screen = "app"; render(); }
-  else { screen = "loading"; render(); }
-  // Hors ligne, ne pas exiger le chargement de Supabase CDN ni une session réseau
-  // pour afficher les dernières données locales de Maisonnée.
-  if (navigator.onLine === false) {
-    if (screen !== "app") {
-      screen = "welcome";
-      render();
-      toast("Hors ligne : ouvre Maisonnée avec Internet une première fois pour garder les données disponibles.");
-    }
+  if (mode === "cloud" && cache && cache.hh) {
+    S = { ...blank(), ...cache, recipes: null };
+    screen = "app"; render();
+  } else if (navigator.onLine === false) {
+    // Accès de secours à la section Cartes, indépendamment de la dernière page
+    // ouverte et sans modifier mz_mode, mz_view ou les données du foyer.
+    S = { ...blank(), hh: { id: "portefeuille-local", name: "Cartes hors ligne" } };
+    view = "fidelite";
+    screen = "app"; render();
+    toast("Mode avion : cartes disponibles sur cet iPhone. Le reste se synchronisera après reconnexion.");
     return;
+  } else {
+    screen = "loading"; render();
   }
+  // Hors ligne avec un cache du foyer : utiliser les données locales sans
+  // lancer de CDN Supabase, d'authentification ni de requêtes réseau.
+  if (navigator.onLine === false) return;
   try {
     const boot = (async () => {
       await loadSb();
