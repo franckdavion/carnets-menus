@@ -2636,7 +2636,8 @@ VIEWS.agenda = function () {
   let list = "";
   for (let i = 0; i < 7; i++) {
     const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
-    const localTasks = (S.tasks || []).filter(t => !t.archived && t.next_due === day);
+    // Si la copie familiale vers Google Agenda est active, ses événements affichent déjà ces tâches : ne pas les doubler.
+    const localTasks = (typeof gtConf === "function" && gtConf().on) ? [] : (S.tasks || []).filter(t => !t.archived && t.next_due === day);
     const googleTasks = gTasksOn(day);
     list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span></div>
       ${evs.length || bs.length || gs.length || localTasks.length || googleTasks.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}${localTasks.map(t => taskRow(t)).join("")}${googleTasks.map(gTasksRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
