@@ -23,6 +23,8 @@ const MI = {
   docs: '<path class="f" d="M4 9a3 3 0 0 1 3-3h6l3 3h9a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M10 20h7"/>',
   edt: '<rect class="f" x="4" y="6" width="20" height="18" rx="4"/><path d="M4 12h20M11 12v12M17 12v8"/><circle cx="24" cy="23" r="5.5" style="fill:var(--surface)"/><path d="M24 20.5V23l1.8 1.3"/>'
 };
+MC.fidelite = "#55C8FF";
+MI.fidelite = '<rect class="f" x="3" y="7" width="26" height="19" rx="4"/><path d="M3 13h26M8 19v3M11 19v3M14 19v3M18 19v3M22 19v3M25 19v3"/>';
 MC.galerie = "#F4729C";
 MI.galerie = '<rect class="f" x="4" y="9" width="24" height="17" rx="5"/><path d="M11 9l2-3.5h6L21 9"/><circle cx="16" cy="17.5" r="4.3"/><circle class="s" cx="23.5" cy="13" r="1.2"/>';
 const mi = (k, cls = "") => `<span class="mi ${cls}" style="--mc:${MC[k]}" aria-hidden="true"><svg viewBox="0 0 32 32">${MI[k]}</svg></span>`;
@@ -47,7 +49,8 @@ const MODS = [
   { k: "budget", t: "Budget", g: "Organisation", sub() { const m = today().slice(0, 7); const t = S.exp.filter(e => e.kind !== "in" && String(e.day).startsWith(m)).reduce((a, e) => a + Number(e.amount), 0); return t ? `${eur(t)} ce mois-ci` : "Suivez vos dépenses"; } },
   { k: "docs", t: "Documents", g: "Organisation", sub() { const soon = S.docs.filter(d => d.expires_on && diffDays(today(), d.expires_on) <= 30).length; return soon ? `${plural(soon, "document expire", "documents expirent")} bientôt` : S.docs.length ? plural(S.docs.length, "document", "documents") : "Papiers importants"; } },
   { k: "edt", t: "Emploi du temps", g: "Organisation", sub() { const now = nowSlots(); return now.length ? `${(member(now[0].member_id) || {}).name || ""} : ${now[0].title}` : S.sched.length ? "La semaine de chacun" : "Plannings de chacun"; } },
-  { k: "carte", t: "Localisation", g: "Organisation", sub() { const n = S.locs.length; return n ? plural(n, "position partagée", "positions partagées") : "Où sont-ils ?"; } }
+  { k: "carte", t: "Localisation", g: "Organisation", sub() { const n = S.locs.length; return n ? plural(n, "position partagée", "positions partagées") : "Où sont-ils ?"; } },
+  { k: "fidelite", t: "Cartes de fidélité", g: "Organisation", sub() { const n = window.maisonneeCartesCount?.() || 0; return n ? plural(n, "carte enregistrée", "cartes enregistrées") + " · hors ligne" : "Mes cartes hors ligne"; } }
 ];
 const modOf = k => MODS.find(m => m.k === k);
 const homePins = () => {
@@ -307,6 +310,99 @@ function domMelPollOnView() {
   const force = domMelLinked() && !domMelStateAt;
     domMelRefreshStatus().then(() => domMelRefreshState(force)).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
 }
+/* Poêle : consigne -2 °C, puis retour à la valeur mémorisée sur cet appareil.
+   Le stockage est séparé par foyer et unité MELCloud ; aucune autre intégration n'est modifiée. */
+const DOM_POELE_KEY = "maisonnee_dom_poele_v1";
+function domPoeleStorageKey() {
+  const hh = S && S.hh;
+  const deviceId = domMelStatus.device_id || (hh && hh.melcloud_device_id);
+  return hh && hh.id && deviceId != null ? DOM_POELE_KEY + "_" + String(hh.id) + "_" + String(deviceId) : "";
+}
+function domPoeleSaved() {
+  const key = domPoeleStorageKey();
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    if (!saved || !Number.isFinite(Number(saved.original)) || !Number.isFinite(Number(saved.target))) return null;
+    const original = Number(saved.original), target = Number(saved.target);
+    if (original < 10 || original > 30 || target < 10 || target > 30 || Math.abs(original - target - 2) > 0.01) return null;
+    return { original, target };
+  } catch (_) { return null; }
+}
+function domPoeleWrite(saved) {
+  const key = domPoeleStorageKey();
+  if (!key) return;
+  try {
+    if (saved) localStorage.setItem(key, JSON.stringify(saved));
+    else localStorage.removeItem(key);
+  } catch (_) {}
+}
+function domPoeleActive() {
+  const saved = domPoeleSaved();
+  if (!saved) return false;
+  return !domMelState || domMelState.set == null || Math.abs(Number(domMelState.set) - saved.target) < 0.1;
+}
+function domPoeleButton() {
+  const active = domPoeleActive(), busy = domMelBusy === "poele";
+  return '<button type="button" data-dom-scenario="poele" aria-label="Poêle : diminuer la consigne Mitsubishi de deux degrés ou rétablir la température précédente" aria-pressed="' +
+    String(active) + '"' + (busy ? ' aria-busy="true" disabled' : '') +
+    '><span class="dom-poele-title"><span class="dom-poele-flame" aria-hidden="true">🔥</span> Poêle</span><span>' + (busy ? "En cours…" : active ? "Actif · −2 °C" : "−2 °C / retour") + '</span></button>';
+}
+async function domPoeleToggle() {
+  if (domMelBusy) return;
+  if (mode !== "cloud" || !domMelLinked()) { domMitsuSheet(); return; }
+  const deviceId = domMelStatus.device_id || (S.hh && S.hh.melcloud_device_id);
+  if (!deviceId) { domMelDevicePickerSheet(); return; }
+  domMelBusy = "poele";
+  render();
+  try {
+    // Toujours relire la consigne réelle : la valeur affichée peut être en cache.
+    const fresh = await melcloudServer("state");
+    if (fresh.device_id != null && String(fresh.device_id) !== String(deviceId)) throw new Error("L'appareil MELCloud a changé. Réessayez.");
+    const current = fresh.set == null ? NaN : Number(fresh.set);
+    if (!Number.isFinite(current) || current < 10 || current > 30) throw new Error("Consigne Mitsubishi indisponible. Aucune commande envoyée.");
+    if (fresh.power == null) throw new Error("État marche/arrêt Mitsubishi indisponible. Aucune commande envoyée.");
+    domMelState = fresh;
+    domMelStateAt = Date.now();
+    const saved = domPoeleSaved();
+    // Si un retour précédent a abouti mais sa confirmation était tardive, ne pas rebaisser la consigne.
+    if (saved && Math.abs(current - saved.original) < 0.1) {
+      domPoeleWrite(null);
+      toast("Poêle désactivé · consigne déjà rétablie à " + domMelFmtTemp(current));
+      return;
+    }
+    const restore = !!saved && Math.abs(current - saved.target) < 0.1;
+    const original = Math.round(current * 2) / 2;
+    const next = restore ? saved.original : original - 2;
+    if (next < 10 || next > 30) throw new Error("Impossible de diminuer la consigne de 2 °C : limite MELCloud de 10 à 30 °C.");
+    const result = await domRunMelCommand(() => melcloudServer("command", { action: "set_temp", value: next }));
+    if (!result) { toast("Commande trop rapprochée. Réessayez dans un instant."); return; }
+    if (result.ok !== true) throw new Error("MELCloud n'a pas confirmé la commande.");
+    domMelState = result;
+    domMelStateAt = Date.now();
+    // Garder l'ancienne valeur jusqu'au retour confirmé, même si la lecture cloud tarde.
+    if (!restore) domPoeleWrite({ original, target: next });
+    let confirmed = result.set != null && Math.abs(Number(result.set) - next) < 0.1;
+    if (!confirmed) {
+      try {
+        const verify = await melcloudServer("state");
+        domMelState = verify;
+        domMelStateAt = Date.now();
+        confirmed = verify.set != null && Math.abs(Number(verify.set) - next) < 0.1;
+      } catch (_) {}
+    }
+    if (restore && confirmed) domPoeleWrite(null);
+    toast(confirmed
+      ? (restore ? "Poêle désactivé · consigne rétablie à " : "Poêle activé · consigne réglée à ") + domMelFmtTemp(next)
+      : "Commande envoyée, mais consigne non confirmée par MELCloud. Vérifiez la température affichée.");
+  } catch (err) {
+    toast((err && err.message) || "Commande Poêle impossible.");
+  } finally {
+    domMelBusy = "";
+    render();
+  }
+}
+
 function domStLinked() { return !!domStStatus.connected; }
 function domStSummary() {
   if (!domStLinked()) return "Non connecté";
@@ -2144,6 +2240,7 @@ function mzDomTestBoard(){
       <button type="button" data-dom-scenario="nuit">🌙 Bonne nuit<span>À configurer</span></button>
       <button type="button" data-dom-scenario="depart">🚗 Départ<span>À configurer</span></button>
       <button type="button" data-dom-scenario="retour">🏠 Retour<span>À configurer</span></button>
+      ${domPoeleButton()}
     </div></details>
     <button type="button" class="btn ghost mz-dom-allrooms" data-dom-tab="house">Voir toutes les pièces ›</button>
   </div>`;
@@ -2186,6 +2283,7 @@ function domBoard() {
     <button type="button" data-dom-scenario="nuit">🌙 Bonne nuit<span>À configurer</span></button>
     <button type="button" data-dom-scenario="depart">🚗 Départ<span>À configurer</span></button>
     <button type="button" data-dom-scenario="retour">🏠 Retour<span>À configurer</span></button>
+      ${domPoeleButton()}
   </div>
   <div class="dom-eq-head"><h3>Mes équipements</h3><button type="button" class="btn ghost small" data-dom-tab="house">Voir par pièces ›</button></div>
   <div class="dom-eq-grid">${eq.join("")}</div>`;
@@ -2356,7 +2454,7 @@ document.addEventListener("click", e => {
   const dev = e.target.closest("[data-dom-device]");
   if (dev) { domDeviceSheet(dev.dataset.domDevice); return; }
   const sc = e.target.closest("[data-dom-scenario]");
-  if (sc) { domScenarioSheet(sc.dataset.domScenario); return; }
+  if (sc) { if (sc.dataset.domScenario === "poele") domPoeleToggle(); else domScenarioSheet(sc.dataset.domScenario); return; }
   const ph = e.target.closest("[data-dom-placeholder]");
   if (ph) { domPlaceholderSheet(ph.dataset.domPlaceholder); return; }
   if (e.target.closest("[data-dom-mel-open]")) { domMitsuSheet(); return; }
@@ -2388,7 +2486,7 @@ document.addEventListener("click", e => {
   const melCmd = e.target.closest("[data-dom-mel-cmd]");
   if (melCmd) {
     const action = melCmd.dataset.domMelCmd;
-    if (!action || melCmd.disabled) return;
+    if (!action || melCmd.disabled || domMelBusy) return;
     domMelBusy = action;
     render();
     domRunMelCommand(() => melcloudServer("command", { action })).then(r => {

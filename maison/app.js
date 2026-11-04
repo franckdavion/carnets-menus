@@ -244,6 +244,26 @@ function loadSb() {
   });
 }
 
+/* Pont dédié au portefeuille familial. Les identifiants sont vérifiés côté
+   Supabase avant toute lecture ou écriture ; aucun service_role côté iPhone. */
+window.maisonneeLoyaltyCloudSession = async function () {
+  if (navigator.onLine === false) return { offline: true };
+  const client = await loadSb();
+  const auth = await client.auth.getUser();
+  if (auth.error || !auth.data?.user) return { login: true };
+  const account = auth.data.user;
+  const membership = await client.from("household_members").select("household_id")
+    .eq("user_id", account.id);
+  if (membership.error) throw membership.error;
+  const ids = (membership.data || []).map(row => row.household_id);
+  if (!ids.length) return { noHousehold: true };
+  const preferred = mode === "cloud" && S.hh && ids.includes(S.hh.id) ? S.hh.id :
+    ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
+  const info = await client.from("households").select("name").eq("id", preferred).maybeSingle();
+  return { client, householdId: preferred, householdName: info.data?.name || "Mon foyer",
+    userId: account.id };
+};
+
 async function loadCloud(hid) {
   const since = addDays(today(), -60);
   const [hh, mm, tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
@@ -428,6 +448,19 @@ async function init() {
   const goTo = url.searchParams.get("v");
   if (goTo) { view = goTo; LS.set("mz_view", goTo); url.searchParams.delete("v"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
   if (code) { LS.set("mz_join", code.toUpperCase()); url.searchParams.delete("code"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
+  // Accès direct à la carte depuis un raccourci, en conservant la navigation habituelle.
+  if (url.searchParams.get("cartes") === "1") {
+    view = "fidelite"; LS.set("mz_view", "fidelite");
+  }
+  // Premier démarrage hors ligne sans cache d'application : seul le portefeuille
+  // local reste accessible, sans autorisation d'accès aux autres données.
+  if (view === "fidelite" && navigator.onLine === false) {
+    const cache = LS.get("mz_cache", null);
+    if (!cache || !cache.hh) {
+      S = { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes" } };
+      screen = "app"; render(); return;
+    }
+  }
   if (mode === "demo") { S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); screen = "app"; render(); return geoTick(); }
   // show the last known state straight away, then refresh from the cloud
   const cache = LS.get("mz_cache", null);

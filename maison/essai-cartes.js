@@ -93,7 +93,8 @@
   }
   function walletSignIn() {
     // Réutiliser l'authentification existante, sans second formulaire ni mot de passe.
-    location.href = new URL("essai.html?v=fidelite", document.baseURI).href;
+    const destination = /\/essai(?:\/|\.html)/.test(location.pathname) ? "essai.html" : "index.html";
+    location.href = new URL(destination + "?v=fidelite", document.baseURI).href;
   }
   async function walletContext() {
     if (navigator.onLine === false) return {offline: true};

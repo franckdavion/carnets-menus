@@ -1,10 +1,10 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v121";
+const CACHE = "carnet-archive-maison-v122";
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css",
   "espace.js", "push-config.js", "supabase/functions/_shared/cal.js",
-  "app.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
+  "app.js", "essai-cartes.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
   "presences-core.js", "presences.js", "presences-export.js",
   "natif.js", "accueil.js", "bandeau-jour.js", "pont.js",
   "../ingredient-arts.js", "../ingredient-emojis.js", "../navigation-retour.js",
