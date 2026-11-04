@@ -1128,7 +1128,7 @@ function render() {
           <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>`}
       </div>
       <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="${view === "docs" ? "Ajouter dans Documents" : "Créer dans l'agenda"}" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
-    </div>` : fab ? `<button class="fab" data-act="${fab[1]}">${I.plus}${fab[0]}</button>` : ""}
+    </div>` : fab ? `<button type="button" class="fab mz-round-btn mz-round-btn--md" data-act="${fab[1]}" aria-label="${esc(fab[0] === "Ajouter" ? "Ajouter" : "Créer : " + fab[0])}">${I.plus}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
@@ -1223,9 +1223,9 @@ const VIEWS = {
 
   agenda() {
     const from = weekA, to = addDays(weekA, 6), occ = occurrences(from, to), d = today();
-    const head = `<div class="weeknav"><button class="icon-btn" data-act="weekA" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
+    const head = `<div class="weeknav"><button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekA" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
       <strong>${from === mondayOf(d) ? "Cette semaine" : "Semaine du " + fmtShort(from)}</strong>
-      <button class="icon-btn" data-act="weekA" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
+      <button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekA" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
     let body = "";
     for (let i = 0; i < 7; i++) {
       const day = addDays(from, i), evs = occ.filter(e => e.on === day);
@@ -1304,9 +1304,9 @@ function eventRow(e, withDay, withDate) {
 
 function menuView() {
   const d = today();
-  let out = `<div class="weeknav"><button class="icon-btn" data-act="weekR" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
+  let out = `<div class="weeknav"><button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekR" data-v="-7" aria-label="Semaine précédente">${I.left}</button>
     <strong>${weekR === mondayOf(d) ? "Cette semaine" : "Semaine du " + fmtShort(weekR)}</strong>
-    <button class="icon-btn" data-act="weekR" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
+    <button class="icon-btn mz-round-btn mz-round-btn--sm mz-round-btn--nav" data-act="weekR" data-v="7" aria-label="Semaine suivante">${I.right}</button></div>`;
   for (let i = 0; i < 7; i++) {
     const day = addDays(weekR, i);
     out += `<section class="day-card ${day === d ? "today" : ""}"><header><h3>${cap(DAYS[i])}<span>${esc(fmtShort(day))}</span></h3></header>
