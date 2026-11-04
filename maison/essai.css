@@ -425,3 +425,66 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
 .mz-wallet-number{text-align:center;font-size:15px;letter-spacing:.035em;overflow-wrap:anywhere;margin:0;font-weight:700}
 .mz-wallet-full .mz-wallet-hint{text-align:center;color:#657482}
 @media(max-width:420px){.mz-wallet-head{flex-wrap:wrap}.mz-wallet-offline{font-size:10px}.mz-wallet-actions .btn{flex:1 1 120px}.mz-wallet-card>img{width:68px;height:68px}.mz-wallet-symbol{width:68px;height:68px}}
+
+/* Test Cartes : recadrage précis avec les doigts, isolé du CSS commun. */
+.mz-wallet-tools{flex-wrap:wrap}
+.mz-wallet-draft-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between}
+.mz-wallet-draft-actions [data-wallet="crop"]{
+  background:#153e60;border:1px solid #5bc7ff;color:#d9f5ff;
+  border-radius:10px;padding:9px 11px;font-weight:700
+}
+.mz-wallet-crop-dialog{
+  border:1px solid #63c7ff77;border-radius:18px;padding:0;
+  width:min(95vw,740px);max-width:740px;max-height:calc(100dvh - 22px);
+  background:#0b1b31;color:#ebf7ff;box-shadow:0 20px 60px #0009
+}
+.mz-wallet-crop-dialog::backdrop{background:#010817e8}
+.mz-wallet-crop-content{
+  display:grid;gap:11px;padding:14px;
+  overflow-y:auto;overscroll-behavior:contain;max-height:calc(100dvh - 24px);
+  box-sizing:border-box
+}
+.mz-wallet-crop-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mz-wallet-crop-top strong{font-size:17px;overflow-wrap:anywhere}
+.mz-wallet-crop-top button{
+  color:#fff;background:#24405e;border:1px solid #7dcfff66;
+  border-radius:10px;min-height:36px;min-width:40px
+}
+.mz-wallet-crop-content p,.mz-wallet-crop-content small{
+  color:#b7d4e5;font-size:13px;line-height:1.45;margin:0
+}
+.mz-wallet-crop-scroll{
+  display:flex;align-items:center;justify-content:center;
+  min-height:180px;overflow:hidden;border:1px solid #385d7a;
+  background:#071529;border-radius:14px;padding:10px
+}
+.mz-wallet-crop-stage{
+  position:relative;display:block;flex:none;overflow:hidden;
+  touch-action:none;user-select:none;-webkit-user-select:none
+}
+.mz-wallet-crop-stage *{touch-action:none;-webkit-user-select:none;user-select:none}
+.mz-wallet-crop-stage img{
+  width:100%;height:100%;display:block;object-fit:fill;
+  pointer-events:none;-webkit-user-drag:none
+}
+.mz-wallet-crop-region{
+  position:absolute;box-sizing:border-box;border:2px dashed #4bd1ff;
+  box-shadow:0 0 0 9999px #00101fa8,0 0 13px #55c8ffb3;
+  cursor:move;z-index:1
+}
+.mz-wallet-crop-handle{
+  position:absolute;display:block;width:24px;height:24px;
+  background:#55c8ff;border:3px solid white;border-radius:50%;
+  box-sizing:border-box;box-shadow:0 1px 9px #0009;z-index:2
+}
+.mz-wallet-crop-handle[data-crop-handle="nw"]{left:0;top:0;transform:translate(-50%,-50%);cursor:nwse-resize}
+.mz-wallet-crop-handle[data-crop-handle="ne"]{right:0;top:0;transform:translate(50%,-50%);cursor:nesw-resize}
+.mz-wallet-crop-handle[data-crop-handle="sw"]{left:0;bottom:0;transform:translate(-50%,50%);cursor:nesw-resize}
+.mz-wallet-crop-handle[data-crop-handle="se"]{right:0;bottom:0;transform:translate(50%,50%);cursor:nwse-resize}
+.mz-wallet-crop-actions{display:flex;gap:10px;flex-wrap:wrap}
+.mz-wallet-crop-actions .btn{flex:1 1 125px;min-height:46px}
+@media(max-width:420px){
+  .mz-wallet-crop-content{padding:10px;gap:9px}
+  .mz-wallet-crop-scroll{padding:6px}
+  .mz-wallet-crop-handle{width:25px;height:25px}
+}
