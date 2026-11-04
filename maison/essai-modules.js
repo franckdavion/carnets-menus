@@ -1620,79 +1620,114 @@ function domStEqCard() {
     : "";
   return `<article class="dom-eq-card dom-eq-tv"><button type="button" class="dom-eq-open" data-dom-st-open>${domEqCardTop("📺", esc(st.device_name || domStStatus.device_name || "Samsung TV"))}<small>${esc(line)}</small></button>${actions}</article>`;
 }
+function domTvPanelHtml() {
+  const st = domStState || {};
+  const on = st.power === true, off = st.power === false;
+  const tabs = [
+    ["remote","⌘","Télécommande"],["apps","▦","Applications"],
+    ["sources","▣","Sources"],["settings","⚙","Réglages"]
+  ];
+  const btn = (action, label, cls = "") =>
+    `<button type="button" class="mz-tv-key ${cls}" data-dom-st-cmd="${action}" ${domStBusy===action?'aria-busy="true"':''}>${label}</button>`;
+  const preview = (label, cls = "") =>
+    `<button type="button" class="mz-tv-key ${cls}" disabled title="Commande non encore disponible avec la connexion SmartThings actuelle">${label}</button>`;
+  const info = (value, fallback) => value == null || value === "" ? fallback : esc(String(value));
+  const rawName = String(st.channelName || "");
+  const friendlyChannel = rawName && !/^(com\.|org\.|[a-z0-9]{7,}\.|[0-9]{9,}$)/i.test(rawName) ? rawName : "";
+  const channel = friendlyChannel || st.channel || "";
+  const appNames = ["Netflix","YouTube","Prime Video","Disney+","CANAL+","Apple TV","Plex","Spotify"];
+  const appMarkup = appNames.map((app,i) =>
+    `<button type="button" class="mz-tv-app" disabled title="Activation directe des applications à venir"><span class="mz-tv-app-mark mz-tv-app-${i}">${esc(app==="Netflix"?"N":app==="YouTube"?"▶":app==="Prime Video"?"prime":app==="Disney+"?"D+":app==="CANAL+"?"C+":app==="Apple TV"?"tv":app==="Spotify"?"♫":"P")}</span><span>${esc(app)}</span></button>`
+  ).join("");
+  const input = st.input || "";
+  const sources = [["TV","digitalTv"],["HDMI 1","HDMI1"],["HDMI 2","HDMI2"],["HDMI 3","HDMI3"],["HDMI 4","HDMI4"]];
+  const sourcesMarkup = sources.map(([label,value]) =>
+    `<button type="button" class="mz-tv-key mz-tv-source${String(input).replace(/\s/g,"").toLowerCase()===value.toLowerCase()?" is-active":""}" data-dom-tv-source="${value}" ${domStBusy==="set_input"?'disabled':''}>${esc(label)}</button>`
+  ).join("");
+  let page = "";
+  if (domTvTab === "remote") {
+    page = `<div class="mz-tv-mini"><span><small>Source active</small><strong>${info(st.input,"Non communiquée")}</strong></span><span><small>Chaîne</small><strong>${info(channel,"Non communiquée")}</strong></span></div>
+    <div class="mz-tv-topkeys">${preview("⌂ Accueil")}${btn("power_toggle","⏻","mz-tv-power-key")}${preview("↶ Retour")}</div>
+    <div class="mz-tv-remote">
+      <div class="mz-tv-side"><strong>Volume</strong>${btn("volume_up","+","mz-tv-lg")}${btn("volume_down","−","mz-tv-lg")}${btn("mute_toggle","🔇")}</div>
+      <div class="mz-tv-dpad">${preview("▲","mz-tv-up")}${preview("◀","mz-tv-left")}${preview("OK","mz-tv-ok")}${preview("▶","mz-tv-right")}${preview("▼","mz-tv-down")}</div>
+      <div class="mz-tv-side"><strong>Chaîne</strong>${btn("channel_up","+","mz-tv-lg")}${btn("channel_down","−","mz-tv-lg")}${preview("Guide")}</div>
+    </div>
+    <div class="mz-tv-bottomkeys">${preview("⏮")}${preview("▶❚❚")}${preview("⏭")}</div>
+    <p class="mz-tv-note">Les commandes lumineuses Volume, Chaîne et Marche/arrêt utilisent SmartThings. Le pavé, la lecture et Accueil seront activés après validation de leur connexion.</p>
+    <div class="mz-tv-section-head"><strong>Applications favorites</strong><button type="button" data-dom-tv-tab="apps">Tout voir ›</button></div>
+    <div class="mz-tv-apps mz-tv-favorites">${appNames.slice(0,5).map((app,i)=>`<button type="button" class="mz-tv-app" disabled title="Raccourci à activer"><span class="mz-tv-app-mark mz-tv-app-${i}">${esc(app==="Netflix"?"N":app==="YouTube"?"▶":app==="Prime Video"?"prime":app==="Disney+"?"D+":"C+")}</span><span>${esc(app)}</span></button>`).join("")}</div>`;
+  } else if (domTvTab === "apps") {
+    page = `<div class="mz-tv-section-head"><strong>Applications</strong><span>Prévisualisation</span></div>
+      <p class="mz-tv-note">Les raccourcis sont présentés pour valider la disposition. Ils seront activés après ajout d'un contrôle compatible avec la TV, sans modifier les autres équipements.</p>
+      <div class="mz-tv-apps">${appMarkup}</div>
+      <div class="mz-tv-section-head"><strong>Application active</strong></div>
+      <div class="mz-tv-info">${info(st.activeApp || st.appName,"Non communiquée par SmartThings")}</div>`;
+  } else if (domTvTab === "sources") {
+    page = `<div class="mz-tv-section-head"><strong>Choisir une source</strong></div>
+      <p class="mz-tv-note">Les sources disponibles dépendent des capacités déclarées par ton téléviseur. Si une commande n'est pas acceptée, l'application affichera l'erreur Samsung.</p>
+      <div class="mz-tv-sources">${sourcesMarkup}</div>
+      <div class="mz-tv-info">Source actuelle : <strong>${info(st.input,"Non communiquée")}</strong></div>`;
+  } else {
+    page = `<div class="mz-tv-section-head"><strong>État du téléviseur</strong></div>
+      <div class="mz-tv-mini"><span><small>Alimentation</small><strong>${on?"Allumée":off?"Éteinte":"Indisponible"}</strong></span><span><small>Volume</small><strong>${info(st.volume,"—")}</strong></span></div>
+      <div class="mz-tv-section-head"><strong>Programme en cours</strong></div>
+      <div class="mz-tv-info"><strong>${info(st.programTitle,"Titre non disponible")}</strong><small>Chaîne : ${info(channel,"non communiquée")}</small><small>SmartThings ne fournit pas systématiquement le nom de l'émission. Un guide TV externe sera nécessaire pour le programme précis.</small></div>
+      <div class="mz-tv-section-head"><strong>Emplacement</strong></div>${domIntegRoomPicker("_st")}
+      <p class="mz-tv-note">Menus Image, Son et Mode jeu : raccourcis à connecter après validation technique.</p>`;
+  }
+  return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":"État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
+    <nav class="mz-tv-tabs" aria-label="Fonctions téléviseur">${tabs.map(([id,ico,label])=>`<button type="button" data-dom-tv-tab="${id}" class="${domTvTab===id?"is-active":""}" aria-current="${domTvTab===id?"page":"false"}"><b aria-hidden="true">${ico}</b><span>${label}</span></button>`).join("")}</nav>
+    <p class="dom-tv-status mz-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
+    <div class="dom-tv-controls mz-tv-content" data-dom-tv-controls>${page}</div>
+    <button type="button" class="btn ghost mz-tv-close" data-act="closeSheet">Fermer</button>`;
+}
+
 function domTvSheet(fromRefresh) {
   if (!domStLinked()) {
     openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">SmartThings non relié</p><p>Reliez votre compte SmartThings pour piloter votre TV Samsung depuis Maisonnée.</p><button type="button" class="btn primary" data-dom-st-connect>Relier SmartThings</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
     return;
   }
-  if (fromRefresh && document.querySelector(".dom-tv-panel")) {
-    domTvFillPanel();
-    return;
-  }
+  if (fromRefresh && document.querySelector(".dom-tv-panel")) { domTvFillPanel(); return; }
   const st = domStState || {};
-  const title = st.device_name || domStStatus.device_name || "Samsung TV";
-  openSheet(title, `<article class="dom-device dom-tv-panel">
-    <p class="dom-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
-    <div class="dom-tv-controls" data-dom-tv-controls>${domTvControlsHtml()}</div>
-    ${domIntegRoomPicker("_st")}
-    <p class="muted small">Commandes via SmartThings (serveur Maisonnée).</p>
-    <button type="button" class="btn ghost" data-act="closeSheet">Fermer</button>
-  </article>`);
+  openSheet(st.device_name || domStStatus.device_name || "Samsung TV",
+    `<article class="dom-device dom-tv-panel mz-tv">${domTvPanelHtml()}</article>`);
   if (!fromRefresh) domStRefreshState(true).then(changed => { if (changed) domTvSheet(true); }).catch(() => {});
 }
+
 function domTvStatusHtml() {
   const st = domStState || {};
-  const powerOn = st.power === true;
-  const parts = [];
-  if (powerOn) {
-    parts.push('<span class="dom-tv-power is-on">Allumée</span>');
-    if (st.volume != null) parts.push(`<span>Volume ${st.volume}${st.mute ? " 🔇" : ""}</span>`);
-    if (st.input) parts.push(`<span>Source : ${esc(st.input)}</span>`);
-    if (st.channelName) parts.push(`<span>Chaîne : ${esc(st.channelName)}</span>`);
-    else if (st.channel) parts.push(`<span>Chaîne : ${esc(st.channel)}</span>`);
-  } else if (st.power === false) {
-    parts.push('<span class="dom-tv-power">Éteinte</span>');
-  } else {
-    parts.push('<span class="dom-tv-power">Chargement…</span>');
-  }
-  return parts.join("");
+  if (st.power === false) return `<span class="dom-tv-power">Éteinte</span>`;
+  if (st.power !== true) return `<span class="dom-tv-power">Chargement…</span>`;
+  return `<span class="dom-tv-power is-on">Allumée</span>${st.volume!=null?`<span>Volume ${esc(String(st.volume))}${st.mute?" · Muet":""}</span>`:""}${st.input?`<span>${esc(st.input)}</span>`:""}`;
 }
-function domTvControlsHtml() {
-  const st = domStState || {};
-  const powerOn = st.power === true;
-  const busyPw = domStBusy === "power_toggle";
-  const busyVu = domStBusy === "volume_up";
-  const busyVd = domStBusy === "volume_down";
-  const busyMt = domStBusy === "mute_toggle";
-  const busyCu = domStBusy === "channel_up";
-  const busyCd = domStBusy === "channel_down";
-  return `<div class="dom-tv-row">
-      <button type="button" class="btn dom-tv-btn${powerOn ? " is-on" : ""}" data-dom-st-cmd="power_toggle" ${busyPw ? "aria-busy=true" : ""}>⏻ ${powerOn ? "Éteindre" : "Allumer"}</button>
-    </div>
-    <div class="dom-tv-row">
-      <span class="muted">Volume</span>
-      <div class="dom-tv-group" role="group" aria-label="Volume">
-        <button type="button" class="btn dom-tv-step" data-dom-st-cmd="volume_down" ${busyVd ? "aria-busy=true" : ""}>−</button>
-        <span class="dom-tv-vol-val">${st.volume != null ? st.volume : "—"}</span>
-        <button type="button" class="btn dom-tv-step" data-dom-st-cmd="volume_up" ${busyVu ? "aria-busy=true" : ""}>+</button>
-        <button type="button" class="btn dom-tv-step${st.mute ? " is-on" : ""}" data-dom-st-cmd="mute_toggle" ${busyMt ? "aria-busy=true" : ""}>🔇</button>
-      </div>
-    </div>
-    <div class="dom-tv-row">
-      <span class="muted">Chaîne</span>
-      <div class="dom-tv-group" role="group" aria-label="Chaîne">
-        <button type="button" class="btn dom-tv-step" data-dom-st-cmd="channel_down" ${busyCd ? "aria-busy=true" : ""}>◀</button>
-        <span class="dom-tv-ch-val">${esc(st.channelName || st.channel || "—")}</span>
-        <button type="button" class="btn dom-tv-step" data-dom-st-cmd="channel_up" ${busyCu ? "aria-busy=true" : ""}>▶</button>
-      </div>
-    </div>`;
-}
+
+function domTvControlsHtml() { return domTvPanelHtml(); }
+
 function domTvFillPanel() {
-  const el = document.querySelector("[data-dom-tv-status]");
-  if (el) el.innerHTML = domTvStatusHtml();
-  const ctrl = document.querySelector("[data-dom-tv-controls]");
-  if (ctrl) ctrl.innerHTML = domTvControlsHtml();
+  const panel = document.querySelector(".dom-tv-panel.mz-tv");
+  if (panel) panel.innerHTML = domTvPanelHtml();
 }
+
+function installMzTvTestHandlers() {
+  document.addEventListener("click", function(e) {
+    const t = e.target.closest("[data-dom-tv-tab]");
+    if (t && document.querySelector(".dom-tv-panel.mz-tv")) {
+      e.preventDefault();
+      domTvTab = t.dataset.domTvTab;
+      domTvFillPanel();
+      return;
+    }
+    const s = e.target.closest("[data-dom-tv-source]");
+    if (!s || !document.querySelector(".dom-tv-panel.mz-tv") || s.disabled) return;
+    e.preventDefault();
+    const value = s.dataset.domTvSource;
+    domRunStCommand(() => smartthingsServer("command",{action:"set_input",value}))
+      .then(r => { if (!r) return; domStState=r; domStStateAt=Date.now(); domTvFillPanel(); toast("Source demandée : "+value); })
+      .catch(err=>toast(err.message));
+  });
+}
+installMzTvTestHandlers();
 function domStConnectSheet() {
   openSheet("Relier SmartThings", `<form id="dom-st-connect" class="dom-form">
     <p class="muted">Token personnel SmartThings (PAT). Créez-en un sur <a href="https://account.smartthings.com/tokens" target="_blank" rel="noopener">account.smartthings.com/tokens</a> avec les droits sur vos appareils. Il est enregistré pour le foyer, uniquement sur le serveur.</p>
