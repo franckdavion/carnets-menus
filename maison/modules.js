@@ -3336,7 +3336,7 @@ async function gApi(path) {
 }
 /* Google Tasks — ressources natives du compte Google connecté, non dupliquées dans Supabase.
    L'API Tasks n'enregistre que la DATE (jamais une heure ni un rappel personnalisé). */
-const GTASKS = { enabled: LS.get("mz_gtasks_enabled", false), lists: [], items: [], at: 0, busy: false, error: "", permission: false };
+const GTASKS = { enabled: LS.get("mz_gtasks_enabled", false), lists: [], items: [], at: 0, busy: false, error: "", permission: false, userId: null };
 const gTasksDay = task => task && task.due ? String(task.due).slice(0, 10) : "";
 async function gTasksApi(path, method = "GET", payload) {
   if (!(await gEnsure())) throw new Error("Connecte ton compte Google depuis Ma famille.");
@@ -3352,6 +3352,12 @@ async function gTasksApi(path, method = "GET", payload) {
 }
 async function gTasksRefresh(force = false) {
   if (!GTASKS.enabled || mode !== "cloud" || !user || GTASKS.busy) return;
+  if (GTASKS.userId !== user.id) {
+    GTASKS.userId = user.id;
+    GTASKS.items = [];
+    GTASKS.lists = [];
+    GTASKS.at = 0;
+  }
   if (!force && Date.now() - GTASKS.at < 120000) return;
   GTASKS.busy = true;
   GTASKS.at = Date.now();
@@ -3401,7 +3407,8 @@ function gTasksStart() {
   LS.set("mz_gtasks_enabled", true);
   gTasksRefresh(true);
 }
-const gTasksOn = day => GTASKS.enabled ? GTASKS.items.filter(t => gTasksDay(t) === day) : [];
+const gTasksOn = day => GTASKS.enabled && user && GTASKS.userId === user.id
+  ? GTASKS.items.filter(t => gTasksDay(t) === day) : [];
 function gTasksRow(task) {
   const done = task.status === "completed";
   return `<div class="row ev-row gtask-row">
