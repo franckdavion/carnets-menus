@@ -101,3 +101,29 @@ Le script exige que la branche descendante existe toujours, que son SHA soit inc
 **Important :** les six branches ancêtres ne sont pas toutes incluses dans `main`. Leurs commits sont conservés dans les deux branches descendantes explicitement protégées. La suppression ne signifie **pas** validation ni fusion des fonctionnalités correspondantes.
 
 Cible à terme : `main` et une branche de développement `test`, sans fusion automatique des fonctionnalités non validées.
+
+
+---
+
+## Troisième phase : branche Repas/Agenda redondante
+
+**Branche examinée :** `test-synchro-repas-agenda-20261105` (`c50774522dab83e2d02e695d3349a9db556aa44d`).
+
+Comparaison du contenu avec `main` :
+
+| Fichier modifié sur l'ancienne branche | Contrôle |
+| --- | --- |
+| `carnet-github.js` | SHA du fichier strictement identique à `main` |
+| `maison/accueil.js` | SHA du fichier strictement identique à `main` |
+| `maison/app.js` | SHA du fichier strictement identique à `main` |
+| `maison/modules.js` | SHA du fichier strictement identique à `main` |
+| `robot.mjs` | SHA du fichier strictement identique à `main` |
+| `maison/index.html` | Les lignes de l'ancienne version sont identiques à celles de `main` après suppression des seules versions de cache des ressources et des ajouts déjà présents pour Trajets (CSS et scripts) ; la version de `main` est plus récente |
+
+Pour cette branche uniquement, l'outil de nettoyage conserve un **contrôle de SHA précis des 6 fichiers côté `main` et de leur version ancienne**. Il refuse la suppression si le moindre fichier observé a changé, si une PR est ouverte ou si la branche a bougé. Cette condition spécifique ne s'applique à aucune autre branche.
+
+**Branches réservées aux prochains travaux :**
+- Recettes/photos : `test-refonte-recettes-photos-20261105`.
+- Trajets : `test-selection-mensuelle-trajets-20261105` et `test-presences-trajets-exclusions-20261105`.
+- Correctifs domotiques : `correctif/smartthings-jeton-et-diagnostic-20261104`, `correctif-cors-iphone-local-domotique-v4`.
+- Design et agenda historiques : branches restantes à évaluer. Aucune fusion fonctionnelle réalisée.
