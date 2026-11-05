@@ -241,6 +241,12 @@
       if(element.isConnected&&src)element.style.backgroundImage='url("'+src.replace(/"/g,'%22')+'")';
     });
   }
+  function previewPeriod(period){
+    // L'aperçu utilise l'API du bandeau existant, sans changer ses horaires.
+    if(window.mnJour?.preview)window.mnJour.preview(period);
+    lastMediaSig='';
+    void apply(document);
+  }
   function open(){
     hydrate();
     modalPeriod=currentPeriod();
@@ -272,11 +278,12 @@
     const btn=e.target.closest('[data-mn-bg-act]');if(!btn)return;
     const action=btn.dataset.mnBgAct,v=btn.dataset.v||'',id=btn.dataset.id||'';
     if(action==='open'){open();return}
-    if(action==='done'){closeSheet();return}
+    if(action==='done'){closeSheet();previewPeriod(null);return}
     if(action==='type'&&isType(v)){modalType=v;prefs.type=v;persist();draw();return}
-    if(action==='period'&&isPeriod(v)){modalPeriod=v;draw();return}
+    if(action==='period'&&isPeriod(v)){modalPeriod=v;previewPeriod(v);draw();return}
     if(action==='choose'){
       const item=find(id);if(!item)return;
+      previewPeriod(modalPeriod);
       if(prefs.mode==='fixed')prefs.fixed=item.id;
       else {prefs.mode='custom';prefs.chosen[modalPeriod]=item.id}
       prefs.type=modalType;persist();draw();return;
@@ -326,6 +333,9 @@
     const original=window.mnJour.mount;
     window.mnJour.mount=function(root){original(root);void apply(root)};
   }
+  document.querySelector('#sheet')?.addEventListener('close',()=>{
+    if(!document.querySelector('[data-mn-bg-library]'))previewPeriod(null);
+  });
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)document.querySelectorAll('.mn-bg-video').forEach(v=>v.pause());
     else void apply(document);
