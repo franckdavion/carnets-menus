@@ -143,9 +143,9 @@ function ptSelected(key,manual){
   return {label:p.label+" — "+p.address,coords: Number.isFinite(p.longitude)&&Number.isFinite(p.latitude)?{lon:p.longitude,lat:p.latitude}:null};
 }
 async function ptCoordinates(place) {
-  if(place.coords)return place.coords;
+  if(place.coords)return {...place.coords,resolved:place.label};
   const r=await ptGeo(place.label);
-  return {lon:r.lon,lat:r.lat};
+  return {lon:r.lon,lat:r.lat,resolved:r.label};
 }
 async function ptRoute(a,b){
   const params=new URLSearchParams({resource:"bdtopo-osrm",start:a.lon+","+a.lat,end:b.lon+","+b.lat,
@@ -180,7 +180,7 @@ async function ptCalculate(){
     const km=PRTR.total(done.map(x=>x.km));
     if(km<=0)throw new Error("La distance est nulle. Vérifiez les adresses.");
     PT.calculated={key:ev.key,signature:JSON.stringify(f),km,done,from:from.label,to:to.label,back:back.label,mode:f.trip_mode};
-    panel.textContent=done.map(x=>x.from+" → "+x.to+" : "+ptFmt(x.km)+" km").join(" · ")+" | Total estimé : "+ptFmt(km)+" km";
+    panel.textContent=done.map(x=>x.from+" → "+x.to+" : "+ptFmt(x.km)+" km").join(" · ")+" | Total estimé : "+ptFmt(km)+" km. Adresses retenues : "+[...coords.entries()].map(([source,point])=>source+" = "+point.resolved).join(" ; ");
   }catch(e){panel.textContent="Calcul impossible : "+e.message;}
 }
 async function ptSaveTrip(form) {
