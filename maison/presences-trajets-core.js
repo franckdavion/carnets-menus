@@ -73,9 +73,9 @@
   const activityKey = (title,child,kind) => {
     const n=norm(title);
     if(kind==="pp")return "pp";
-    if(/\\b(ortho|orthophoniste|orthophonie)\\b/.test(n))return "orthophonie";
-    if(/\\b(dentiste|dentaire)\\b/.test(n))return "dentiste";
-    if(/\\b(kine|kinesitherapeute)\\b/.test(n))return "kine";
+    if(/\b(ortho|orthophoniste|orthophonie)\b/.test(n))return "orthophonie";
+    if(/\b(dentiste|dentaire)\b/.test(n))return "dentiste";
+    if(/\b(kine|kinesitherapeute)\b/.test(n))return "kine";
     const stop=new Set();
     for(const name of [child && child.first_name,...(child && child.aliases || [])]) {
       for(const token of norm(name).split(" "))if(token)stop.add(token);
@@ -83,6 +83,13 @@
     if(child&&child.first_name)stop.add(norm(child.first_name)[0]);
     return n.split(" ").filter(t=>t&&!stop.has(t)).join(" ") || n;
   };
+  // Motif stable entre enfants et variantes courantes d'un même rendez-vous.
+  // Utilisé seulement pour les exclusions volontaires (jamais pour les présences).
+  function motifKey(row, children) {
+    const child=(children||[]).find(c=>c.id===row.child_id);
+    const key=norm(activityKey(row.title,child,row.kind||"activite"));
+    return key.slice(0,120);
+  }
   function fingerprint(row,child) {
     const start=row.local_time || "jour";
     return [row.day,start,row.kind||"activite",activityKey(row.title,child,row.kind||"activite")].join("|");
@@ -131,7 +138,7 @@
     throw new Error("Type de trajet inconnu.");
   }
   const total = lengths => Math.round(lengths.reduce((s,x)=>s+Number(x||0),0)*10)/10;
-  const API = {norm, matches, make, placeFor, matchingPlaces, duplicatePlace, resolvedLocation, fingerprint, dedupe, groupCandidates, legs, total};
+  const API = {norm, matches, make, placeFor, matchingPlaces, duplicatePlace, resolvedLocation, fingerprint, motifKey, dedupe, groupCandidates, legs, total};
   if (typeof module !== "undefined" && module.exports) module.exports=API;
   else root.PRTR=API;
 })(typeof window !== "undefined" ? window : globalThis);

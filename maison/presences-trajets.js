@@ -3,7 +3,8 @@
    des règles des présences. Les km restent PROPOSÉS jusqu'à validation. */
 const PT = {
   month: today().slice(0,7), child:"", places:null, records:null,
-  suggestions:[], marks:[], loading:false, syncing:false, monthSynced:"",
+  suggestions:[], marks:[], rules:[], ruleExcluded:[],
+  loading:false, syncing:false, monthSynced:"",
   error:"", syncError:"", calculated:null
 };
 const ptEsc = s => esc(String(s == null ? "" : s));
@@ -21,11 +22,15 @@ async function ptLoad(force=false) {
   PT.loading=true; PT.error="";
   try {
     const q=t=>sb.from(t).select("*").eq("household_id",S.hh.id);
-    const [a,b,c]=await Promise.all([q("child_trip_places"),q("child_trips"),q("child_trip_event_marks")]);
-    if (a.error || b.error || c.error) throw new Error((a.error||b.error||c.error).message);
+    const [a,b,c,d]=await Promise.all([
+      q("child_trip_places"),q("child_trips"),
+      q("child_trip_event_marks"),q("child_trip_ignore_rules")
+    ]);
+    if (a.error || b.error || c.error || d.error) throw new Error((a.error||b.error||c.error||d.error).message);
     PT.places=(a.data||[]).sort((a,b)=>Number(b.is_home)-Number(a.is_home)||a.label.localeCompare(b.label,"fr"));
     PT.records=(b.data||[]).sort((a,b)=>b.day.localeCompare(a.day));
     PT.marks=c.data||[];
+    PT.rules=d.data||[];
   } catch(e){PT.error=e.message||"Chargement impossible";}
   finally {PT.loading=false;softRender();}
   if(PT.places && !PT.monthSynced) ptSync();
@@ -52,10 +57,15 @@ async function ptSync(force=false) {
         page=j.nextPageToken||"";
       }while(page);
     }
-    // Un même événement copié dans deux agendas ne devient qu'une proposition.
+    // Les mêmes rendez-vous Google ne comptent qu'une fois, quel que soit l'agenda.
+    // Les exclusions ponctuelles sont persistantes, et les motifs exclus sont
+    // masqués sans altérer ni l'historique confirmé ni les événements Google.
     const marks=new Set((PT.marks||[]).map(m=>m.child_id+"|"+m.event_fingerprint));
-    PT.suggestions=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[])
+    const rules=new Set((PT.rules||[]).map(r=>r.motif_key));
+    const candidates=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[])
       .filter(x=>!marks.has(x.child_id+"|"+x.fingerprint));
+    PT.ruleExcluded=candidates.filter(x=>rules.has(PRTR.motifKey(x,PR.data.children)));
+    PT.suggestions=candidates.filter(x=>!rules.has(PRTR.motifKey(x,PR.data.children)));
     PT.monthSynced=key;
   }catch(e){PT.syncError=e.message||"Synchronisation impossible";}
   finally{PT.syncing=false;softRender();}
@@ -129,20 +139,34 @@ function ptCalendarsSheet() {
 async function ptSaveCalendars(form) {
   const cals=[...new Set(new FormData(form).getAll("calendar"))];
   await prSaveSet({trip_cals:cals});
-  PT.monthSynced="";PT.suggestions=[];closeSheet();softRender();if(cals.length)ptSync(true);
+  PT.monthSynced="";PT.suggestions=[];PT.ruleExcluded=[];closeSheet();softRender();if(cals.length)ptSync(true);
+}
+function ptRuleKey(ev){
+  return PRTR.motifKey(ev,PR.data.children);
+}
+function ptRuleLabel(ev){
+  const key=ptRuleKey(ev);
+  return key==="pp"?"Ping-pong":key?key.slice(0,1).toUpperCase()+key.slice(1):"Cette activité";
+}
+function ptOuting(ev){
+  return PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[]);
 }
 function ptTripForm(ev){
   const home=ptHome(), resolved=PRTR.resolvedLocation(ev,PT.places||[]);
   const dst=resolved.place;
   const child=prChild(ev.child_id);
   PT.calculated=null;
-  const groupable=PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[])
-    .filter(x=>x.key!==ev.key);
+  const outing=ptOuting(ev);
+  const groupable=outing.filter(x=>x.key!==ev.key);
   const groupHtml=groupable.length?'<div class="pr-note"><b>Un seul déplacement pour plusieurs enfants ?</b><p class="muted small">Cochez les autres rendez-vous effectués pendant la même sortie. Les kilomètres ne seront comptés qu’une fois.</p>'+
     groupable.map(x=>'<label class="field" style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pt_group" value="'+ptEsc(x.key)+'"'+(/\bcoiffeur\b/.test(PRTR.norm(ev.title))?' checked':'')+'> <span>'+ptEsc(prChild(x.child_id)?.first_name||"Enfant")+' — '+ptEsc(x.title)+(x.local_time&&x.local_time!=="jour"?" ("+ptEsc(x.local_time)+")":"")+'</span></label>').join("")+
     '</div>':'';
   openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
-    '<div class="btns" style="margin:8px 0 14px"><button type="button" class="btn block" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ne pas comptabiliser ce rendez-vous (0 km)</button></div>'+
+    '<div class="pr-note" style="margin:8px 0 14px"><strong>Ce déplacement n’est pas pris en charge ?</strong>'+
+    '<div class="btns" style="margin-top:8px"><button type="button" class="btn block" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ignorer uniquement ce rendez-vous (0 km)</button></div>'+
+    (outing.length>1?'<div class="btns"><button type="button" class="btn block" data-act="ptIgnoreOuting" data-v="'+ptEsc(ev.key)+'">Ignorer toute la sortie ('+outing.length+' rendez-vous)</button></div>':'')+
+    '<div class="btns"><button type="button" class="btn block" data-act="ptIgnoreMotif" data-v="'+ptEsc(ev.key)+'">Toujours ignorer « '+ptEsc(ptRuleLabel(ev))+' »</button></div>'+
+    '<p class="muted small">Le motif exclu s’applique aux rendez-vous de tous les enfants. Les trajets déjà confirmés ne changent pas.</p></div>'+
     '<form data-form="ptTrip">'+
     '<label class="field"><span class="label">Départ (domicile par défaut)</span><select class="input" name="origin">'+ptOptions(home?.id||"other")+'</select></label>'+
     '<label class="field"><span class="label">Autre départ, si sélectionné</span><input class="input" name="origin_text" placeholder="Adresse de départ"></label>'+
@@ -268,18 +292,86 @@ async function ptSaveTrip(form) {
     "un de ces rendez-vous est déjà comptabilisé. Aucune ligne supplémentaire n’a été ajoutée.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
-async function ptIgnore(key) {
-  const ev=PT.suggestions.find(x=>x.key===key);if(!ev)return;
-  if(!confirm("Écarter « "+ev.title+" » des kilomètres ?\n\nLe rendez-vous Google restera inchangé. Vous pourrez le rétablir dans « Rendez-vous écartés »."))return;
-  const row={household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,
-    event_id:ev.event_id,event_fingerprint:ev.fingerprint,day:ev.day,title:ev.title,decision:"ignored"};
-  try {
-    const {error}=await sb.from("child_trip_event_marks").insert(row);
+// Un rendez-vous ou toute la sortie : enregistrement atomique des marques
+// d'exclusion. Un événement confirmé (marque « counted ») ne peut être écarté
+// une deuxième fois grâce à la contrainte unique Supabase.
+async function ptIgnoreSelection(events) {
+  const unique=[...new Map(events.map(ev=>[ev.child_id+"|"+ev.fingerprint,ev])).values()];
+  if(!unique.length)return;
+  const names=unique.map(ev=>(prChild(ev.child_id)?.first_name||"Enfant")+" : "+ev.title);
+  const question=unique.length===1
+    ?"Ignorer « "+unique[0].title+" » pour le calcul des kilomètres ?"
+    :"Ignorer les "+unique.length+" rendez-vous de cette sortie ?\n\n"+names.join("\n");
+  if(!confirm(question+"\n\n0 km sera comptabilisé. Aucun rendez-vous Google ne sera modifié. Vous pourrez rétablir chaque exclusion."))return;
+  const rows=unique.map(ev=>({
+    household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,
+    event_id:ev.event_id,event_fingerprint:ev.fingerprint,
+    day:ev.day,title:ev.title,decision:"ignored"
+  }));
+  try{
+    // Une seule requête : tout le groupe est accepté ou rien ne l'est.
+    const {error}=await sb.from("child_trip_event_marks").insert(rows);
     if(error)throw error;
-    closeSheet();PT.suggestions=PT.suggestions.filter(x=>!(x.child_id===ev.child_id&&x.fingerprint===ev.fingerprint));
-    PT.marks.push(row);softRender();
-    toast("Rendez-vous écarté : 0 km comptabilisé. Google Agenda est inchangé.");
-  }catch(e){toast("Impossible d’écarter ce rendez-vous : "+(/duplicate|unique|23505/i.test(e.message||"")?"déjà traité.":e.message));}
+    const denied=new Set(rows.map(row=>row.child_id+"|"+row.event_fingerprint));
+    PT.marks=[...(PT.marks||[]),...rows];
+    PT.suggestions=PT.suggestions.filter(ev=>!denied.has(ev.child_id+"|"+ev.fingerprint));
+    PT.calculated=null;
+    closeSheet();softRender();
+    toast(unique.length===1?"Rendez-vous écarté (0 km).":"Sortie écartée : "+unique.length+" rendez-vous, 0 km.");
+  }catch(e){
+    toast("Impossible d'écarter : "+(/duplicate|23505|unique/i.test(e.message||"")
+      ?"au moins un de ces rendez-vous a déjà été traité. Actualisez les trajets.":e.message));
+  }
+}
+async function ptIgnore(key) {
+  const ev=PT.suggestions.find(x=>x.key===key);
+  if(ev)await ptIgnoreSelection([ev]);
+}
+async function ptIgnoreOuting(key) {
+  const ev=PT.suggestions.find(x=>x.key===key);
+  if(!ev)return;
+  const group=ptOuting(ev);
+  if(group.length<=1){await ptIgnoreSelection([ev]);return;}
+  await ptIgnoreSelection(group);
+}
+async function ptIgnoreMotif(key) {
+  const ev=PT.suggestions.find(x=>x.key===key);
+  if(!ev)return;
+  const motif_key=ptRuleKey(ev),motif_label=ptRuleLabel(ev);
+  if(!motif_key){toast("Motif non reconnu : précisez l'intitulé du rendez-vous.");return;}
+  if((PT.rules||[]).some(x=>x.motif_key===motif_key)){
+    toast("Ce motif est déjà exclu. Vous pouvez l'autoriser dans les règles.");return;
+  }
+  if(!confirm("Toujours ignorer « "+motif_label+" » ?\n\nTous les prochains rendez-vous de ce motif, pour tous les enfants du foyer, seront exclus automatiquement (0 km).\n\nLes kilomètres déjà confirmés restent inchangés. Vous pourrez retirer cette règle dans « Règles d’exclusion ». Google Agenda ne sera pas modifié."))return;
+  const row={household_id:S.hh.id,motif_key,motif_label};
+  try {
+    const {error}=await sb.from("child_trip_ignore_rules").insert(row);
+    if(error)throw error;
+    PT.rules=[...(PT.rules||[]),row];
+    const excluded=PT.suggestions.filter(x=>ptRuleKey(x)===motif_key);
+    PT.ruleExcluded=[...(PT.ruleExcluded||[]),...excluded];
+    PT.suggestions=PT.suggestions.filter(x=>ptRuleKey(x)!==motif_key);
+    PT.monthSynced="";
+    PT.calculated=null;
+    closeSheet();softRender();ptSync(true);
+    toast("Motif « "+motif_label+" » exclu pour les prochains rendez-vous.");
+  }catch(e){
+    toast("Règle non enregistrée : "+(/duplicate|23505|unique/i.test(e.message||"")
+      ?"ce motif est déjà exclu.":e.message));
+  }
+}
+async function ptRestoreRule(key) {
+  const rule=(PT.rules||[]).find(x=>x.motif_key===key);
+  if(!rule)return;
+  if(!confirm("Retirer la règle « "+rule.motif_label+" » ?\n\nLes rendez-vous de ce motif pourront à nouveau être proposés. Les rendez-vous écartés individuellement resteront écartés."))return;
+  const {error}=await sb.from("child_trip_ignore_rules").delete()
+    .eq("household_id",S.hh.id).eq("motif_key",key);
+  if(error){toast("Impossible de retirer la règle : "+error.message);return;}
+  PT.rules=PT.rules.filter(x=>x.motif_key!==key);
+  PT.ruleExcluded=[];
+  PT.monthSynced="";
+  softRender();ptSync(true);
+  toast("Règle retirée. Les rendez-vous peuvent à nouveau être proposés.");
 }
 async function ptRestoreIgnored(childId,fingerprint) {
   const row=(PT.marks||[]).find(x=>x.child_id===childId&&x.event_fingerprint===fingerprint&&x.decision==="ignored");
@@ -371,11 +463,21 @@ function ptTripsView(){
       (x.location?' · '+ptEsc(x.location):'')+'</small></span>›</button>').join(""):'<p class="muted small">Aucune proposition pour ce mois, ou tous les trajets sont déjà confirmés.</p>')+
     '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button> <button class="btn" data-act="ptCals">Choisir les agendas</button></section>';
   const ignored=(PT.marks||[]).filter(m=>m.decision==="ignored"&&m.day>=from&&m.day<=to&&(!PT.child||m.child_id===PT.child));
+  const automaticallyExcluded=(PT.ruleExcluded||[]).filter(x=>!PT.child||x.child_id===PT.child);
   const ignoredHtml='<section class="pr-panel"><details><summary><strong>Rendez-vous écartés ('+ignored.length+')</strong> — 0 km</summary>'+
     '<p class="muted small">Ces rendez-vous ne génèrent aucun kilomètre. Ils restent dans Google Agenda et peuvent être rétablis.</p>'+
     (ignored.length?ignored.map(x=>'<div class="pr-krow"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</small></span>'+
     '<button type="button" class="btn small" data-act="ptRestore" data-c="'+ptEsc(x.child_id)+'" data-fp="'+ptEsc(x.event_fingerprint)+'">Rétablir</button></div>').join(""):
     '<p class="muted small">Aucun rendez-vous écarté ce mois-ci.</p>')+'</details></section>';
+  const rulesHtml='<section class="pr-panel"><details><summary><strong>Règles d’exclusion ('+(PT.rules||[]).length+')</strong> · '+automaticallyExcluded.length+' rendez-vous masqué(s) ce mois</summary>'+
+    '<p class="muted small">Une règle exclut ce motif pour tous les enfants, y compris lors des prochaines synchronisations Google. Les trajets déjà confirmés restent dans l’historique.</p>'+
+    ((PT.rules||[]).length?(PT.rules||[]).map(rule=>
+      '<div class="pr-krow"><span class="pr-kn"><b>'+ptEsc(rule.motif_label)+'</b><small>Exclusion automatique · 0 km</small></span>'+
+      '<button type="button" class="btn small" data-act="ptRestoreRule" data-motif="'+ptEsc(rule.motif_key)+'">Retirer la règle</button></div>'
+    ).join(""):'<p class="muted small">Aucun motif exclu en permanence.</p>')+
+    (automaticallyExcluded.length?'<details style="margin-top:10px"><summary>Voir les '+automaticallyExcluded.length+' rendez-vous automatiquement écartés</summary>'+
+      automaticallyExcluded.map(x=>'<p class="muted small">'+ptEsc(prD(x.day))+' · '+ptEsc(x.title)+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</p>').join("")+
+      '</details>':'')+'</details></section>';
   const history='<section class="pr-panel"><h2 class="pr-h">Trajets confirmés · '+rec.length+'</h2>'+byKid+
     (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
     '<button class="btn" data-act="ptExport">Exporter le mois (Excel / CSV)</button></section>';
@@ -383,7 +485,7 @@ function ptTripsView(){
     '<section class="pr-panel"><div class="pr-bilan"><div><b>'+ptFmt(total)+' km</b><small>Confirmés</small></div><div><b>'+rec.length+'</b><small>Trajets effectués</small></div><div><b>'+displayed.length+'</b><small>À vérifier</small></div></div>'+
     '<label class="field"><span class="label">Filtrer les enfants</span><select class="input" data-pt-child><option value="">Tous les enfants</option>'+kids.map(c=>'<option value="'+ptEsc(c.id)+'"'+(PT.child===c.id?' selected':'')+'>'+ptEsc(c.first_name)+'</option>').join("")+'</select></label></section>'+
     (!ptHome()?'<section class="pr-panel"><p class="pr-note warn"><b>Première étape :</b> ajoutez le domicile pour calculer vos trajets.</p><button class="btn primary" data-act="ptPlaceNew">Configurer le domicile</button></section>':"")+
-    suggestBlock+history+ignoredHtml+places+'</div>';
+    suggestBlock+history+ignoredHtml+rulesHtml+places+'</div>';
 }
 /* Suggestion discrète dans la fiche de rendez-vous Maisonnée.
    Pas de saisie obligatoire ni de modification automatique de Google Agenda. */
@@ -478,7 +580,7 @@ document.addEventListener("click",async e=>{
   const a=b.dataset.act,v=b.dataset.v;
   if(a==="ptMonth"){
     const [y,m]=PT.month.split("-").map(Number),d=new Date(Date.UTC(y,m-1+Number(v),15));
-    PT.month=d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0");PT.monthSynced="";PT.suggestions=[];softRender();ptSync(true);
+    PT.month=d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0");PT.monthSynced="";PT.suggestions=[];PT.ruleExcluded=[];softRender();ptSync(true);
   }else if(a==="ptReload")ptLoad(true);
   else if(a==="ptSync")ptSync(true);
   else if(a==="ptCals")ptCalendarsSheet();
@@ -490,7 +592,10 @@ document.addEventListener("click",async e=>{
   else if(a==="ptDelete")ptDelete(v);
   else if(a==="ptExport")ptExport();
   else if(a==="ptIgnore")ptIgnore(v);
+  else if(a==="ptIgnoreOuting")ptIgnoreOuting(v);
+  else if(a==="ptIgnoreMotif")ptIgnoreMotif(v);
   else if(a==="ptRestore")ptRestoreIgnored(b.dataset.c,b.dataset.fp);
+  else if(a==="ptRestoreRule")ptRestoreRule(b.dataset.motif);
   else if(a==="ptUsePlace"){
     const place=ptPlaceById(b.dataset.place);
     const form=b.closest('form[data-form="event"]');
