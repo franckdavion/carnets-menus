@@ -128,13 +128,33 @@
       return found.place ? norm(found.place.address) : norm(found.address||"");
     };
     const origin=geo(anchor);
-    return [anchor,...(rows||[]).filter(r=>{
+    const minutes = r => {
+      const match=/^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(r.local_time||"");
+      return match?Number(match[1])*60+Number(match[2]):null;
+    };
+    const anchorTime=minutes(anchor);
+    // Empêcher la fusion de visites distinctes (matin et soir).
+    // Le regroupement est une suggestion que le foyer doit confirmer.
+    const maxGap=120, maxSpan=240;
+    const candidates=[anchor,...(rows||[]).filter(r=>{
       if(r.key===anchor.key || r.day!==anchor.day || r.child_id===anchor.child_id || r.kind!==anchor.kind)
         return false;
       if(activityKey(r.title,childOf(r.child_id),r.kind)!==activity)return false;
       const other=geo(r);
-      return !origin || !other || origin===other;
-    })].sort((a,b)=>(a.local_time||"").localeCompare(b.local_time||"")||a.title.localeCompare(b.title,"fr"));
+      if(origin&&other&&origin!==other)return false;
+      const time=minutes(r);
+      if((anchorTime===null)!==(time===null))return false;
+      if(anchorTime!==null&&Math.abs(time-anchorTime)>maxSpan)return false;
+      // Sans horaires, seuls les mêmes lieux connus peuvent être regroupés.
+      if(anchorTime===null&&(!origin||!other))return false;
+      return true;
+    })].sort((a,b)=>(minutes(a)??-1)-(minutes(b)??-1)||a.title.localeCompare(b.title,"fr"));
+    if(anchorTime===null)return candidates;
+    const anchorIndex=candidates.findIndex(r=>r.key===anchor.key);
+    let begin=anchorIndex,end=anchorIndex;
+    while(begin>0&&minutes(candidates[begin])-minutes(candidates[begin-1])<=maxGap)begin--;
+    while(end<candidates.length-1&&minutes(candidates[end+1])-minutes(candidates[end])<=maxGap)end++;
+    return candidates.slice(begin,end+1);
   }
   function legs(mode, home, destination, returnPlace) {
     if (mode === "one") return [[home, destination]];
