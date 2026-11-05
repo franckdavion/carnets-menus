@@ -29,7 +29,8 @@ const event = process.env.GITHUB_EVENT_NAME;
 const ref = process.env.GITHUB_REF;
 const inMain = ref === `refs/heads/${MAIN}` && ['workflow_dispatch', 'push'].includes(event);
 const inReview = event === 'pull_request' &&
-  /^refs\\/pull\\/\\d+\\/merge$/.test(ref || '') &&
+  (ref || '').startsWith('refs/pull/') &&
+  (ref || '').endsWith('/merge') &&
   process.env.GITHUB_BASE_REF === MAIN;
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY ||
     !(mode === 'simulation' ? (inReview || inMain) : inMain))
