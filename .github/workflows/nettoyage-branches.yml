@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Simulation ou suppression des 10 branches controlees"
+        description: "Simulation ou suppression des branches controlees"
         required: true
         type: choice
         default: simulation
@@ -22,7 +22,7 @@ on:
           - simulation
           - suppression
       confirmation:
-        description: "Pour supprimer, saisir SUPPRIMER-LES-10-BRANCHES-CONTROLEES"
+        description: "Pour supprimer, saisir SUPPRIMER-LES-BRANCHES-CONTROLEES"
         required: false
         type: string
 
@@ -75,4 +75,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLEANUP_MODE: suppression
-          CLEANUP_CONFIRMATION: ${{ github.event_name == 'push' && 'SUPPRIMER-LES-10-BRANCHES-CONTROLEES' || inputs.confirmation }}
+          CLEANUP_CONFIRMATION: ${{ github.event_name == 'push' && 'SUPPRIMER-LES-BRANCHES-CONTROLEES' || inputs.confirmation }}
