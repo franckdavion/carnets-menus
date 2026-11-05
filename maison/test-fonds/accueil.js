@@ -309,6 +309,11 @@ window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:(
 /* Maisonnée Ultimate : ajout non destructif sur l'accueil uniquement. */
 (()=>{'use strict';
 let meteo=null,meteoDernierSucces=0,meteoEnAttente=false,meteoCleActive='',meteoEssais=0,meteoRetryTimer=null,meteoSequence=0;
+// Lecture seule de la météo de Maisonnée : ne double pas les appels Open-Meteo.
+window.maisonneeHomeWeather=()=>({
+ code:Number.isInteger(Number(meteo?.current?.weather_code))?Number(meteo.current.weather_code):null,
+ city:place().city, observedAt:meteoDernierSucces||null, stale:!!meteoEnAttente
+});
 function place(){const h=window.maisonHomeStore.read();return {city:h.city||'Doullens',lat:Number.isFinite(h.lat)?h.lat:50.001,lon:Number.isFinite(h.lon)?h.lon:2.345}}
 const date=()=>new Intl.DateTimeFormat('fr-FR',{dateStyle:'full'}).format(new Date());
 // Éphéméride : données indépendantes de la météo et de la navigation.
@@ -639,6 +644,7 @@ async function load(){
   }
  }
  render();
+ window.maisonneeFondBibliotheque?.weatherChanged?.();
 }
 function init(){const app=document.querySelector('#app');if(!app)return;let homePaintQueued=false;new MutationObserver(()=>{if(!document.querySelector('main.view-home')||document.querySelector('#ultimate-dashboard'))return;if(homePaintQueued)return;homePaintQueued=true;requestAnimationFrame(()=>{homePaintQueued=false;if(document.querySelector('main.view-home')&&!document.querySelector('#ultimate-dashboard'))render()})}).observe(app,{childList:true});render();load();chargerEphemeride();setInterval(load,1800000);let lastDay=new Date().toDateString();setInterval(()=>{const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride();load()}},60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){const day=new Date().toDateString();if(day!==lastDay){lastDay=day;chargerEphemeride()}load()}})}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
