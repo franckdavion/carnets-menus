@@ -127,7 +127,7 @@
 })();
 </script>
 <script src="bandeau-jour.js"></script>
-<script src="test-repas/accueil.js?v=20261105-repas-preview-v1"></script>
+<script src="test-repas/accueil.js?v=20261105-recettes-split-v2"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
