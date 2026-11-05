@@ -133,7 +133,7 @@
 </script>
 <script src="bandeau-jour.js"></script>
 <script src="test-fonds/accueil.js?v=20261105-fonds-test-v1"></script>
-<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-menu-v2"></script>
+<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-menu-v3"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
