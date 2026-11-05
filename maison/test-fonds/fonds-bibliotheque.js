@@ -135,7 +135,7 @@
   function updateControls(frame){
     const hero=frame.querySelector('.ultimate-hero');
     if(!hero||hero.querySelector('[data-mn-bg-act="open"]'))return;
-    hero.insertAdjacentHTML('beforeend','<button type="button" class="mn-bg-open" data-mn-bg-act="open" aria-label="Choisir le fond d’accueil" title="Bibliothèque de fonds">▧</button>');
+    hero.insertAdjacentHTML('beforeend','<button type="button" class="mn-bg-open" data-mn-bg-act="open" aria-label="Choisir le fond d’accueil" title="Bibliothèque de fonds"><span aria-hidden="true">▧</span><span>Fonds</span></button>');
   }
   async function apply(root=document){
     hydrate();
@@ -225,7 +225,7 @@
       '<button type="submit" class="btn primary block">Ajouter cette adresse</button></form>'+
       '<div class="mn-bg-separator">ou depuis cet appareil</div>'+
       '<label class="mn-bg-upload btn">Importer un fichier '+(kind==='photo-animee'?'MP4, WebM, GIF ou photo':'image (JPG, PNG, WebP, GIF)')+
-        '<input type="file" data-mn-bg-file accept="'+(kind==='photo-animee'?'image/*,video/mp4,video/webm':'image/png,image/jpeg,image/webp,image/gif,image/avif')+'" hidden></label>'+
+        '<input type="file" data-mn-bg-file accept="'+(kind==='photo-animee'?'image/*,video/mp4,video/webm':'image/png,image/jpeg,image/webp,image/gif,image/avif')+'"></label>'+
       '<p class="muted small">Fichiers importés : disponibles hors ligne sur cet appareil. Les liens Web et les réglages se synchronisent avec ton compte ; les fichiers personnels restent locaux.</p></details>'+
       '<p class="muted small mn-bg-foot">Bibliothèque V1 · 4 fonds par catégorie déjà intégrés · formats compatibles : JPG, PNG, WebP, SVG intégrés, GIF, MP4 et WebM.</p>'+
       '<button type="button" class="btn primary block" data-mn-bg-act="done">Terminé</button></div>';
