@@ -3,7 +3,7 @@
    des règles des présences. Les km restent PROPOSÉS jusqu'à validation. */
 const PT = {
   month: today().slice(0,7), child:"", places:null, records:null,
-  suggestions:[], loading:false, syncing:false, monthSynced:"",
+  suggestions:[], marks:[], loading:false, syncing:false, monthSynced:"",
   error:"", syncError:"", calculated:null
 };
 const ptEsc = s => esc(String(s == null ? "" : s));
@@ -21,10 +21,11 @@ async function ptLoad(force=false) {
   PT.loading=true; PT.error="";
   try {
     const q=t=>sb.from(t).select("*").eq("household_id",S.hh.id);
-    const [a,b]=await Promise.all([q("child_trip_places"),q("child_trips")]);
-    if (a.error || b.error) throw new Error((a.error||b.error).message);
+    const [a,b,c]=await Promise.all([q("child_trip_places"),q("child_trips"),q("child_trip_event_marks")]);
+    if (a.error || b.error || c.error) throw new Error((a.error||b.error||c.error).message);
     PT.places=(a.data||[]).sort((a,b)=>Number(b.is_home)-Number(a.is_home)||a.label.localeCompare(b.label,"fr"));
     PT.records=(b.data||[]).sort((a,b)=>b.day.localeCompare(a.day));
+    PT.marks=c.data||[];
   } catch(e){PT.error=e.message||"Chargement impossible";}
   finally {PT.loading=false;softRender();}
   if(PT.places && !PT.monthSynced) ptSync();
@@ -52,7 +53,9 @@ async function ptSync(force=false) {
       }while(page);
     }
     // Un même événement copié dans deux agendas ne devient qu'une proposition.
-    PT.suggestions=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[]);
+    const marks=new Set((PT.marks||[]).map(m=>m.child_id+"|"+m.event_fingerprint));
+    PT.suggestions=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[])
+      .filter(x=>!marks.has(x.child_id+"|"+x.fingerprint));
     PT.monthSynced=key;
   }catch(e){PT.syncError=e.message||"Synchronisation impossible";}
   finally{PT.syncing=false;softRender();}
@@ -133,7 +136,12 @@ function ptTripForm(ev){
   const dst=resolved.place;
   const child=prChild(ev.child_id);
   PT.calculated=null;
-  openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><small>'+ptEsc(prDL(ev.day))+'</small></div>'+
+  const groupable=PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[])
+    .filter(x=>x.key!==ev.key);
+  const groupHtml=groupable.length?'<div class="pr-note"><b>Un seul déplacement pour plusieurs enfants ?</b><p class="muted small">Cochez les autres rendez-vous effectués pendant la même sortie. Les kilomètres ne seront comptés qu’une fois.</p>'+
+    groupable.map(x=>'<label class="field" style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pt_group" value="'+ptEsc(x.key)+'"> <span>'+ptEsc(prChild(x.child_id)?.first_name||"Enfant")+' — '+ptEsc(x.title)+(x.local_time&&x.local_time!=="jour"?" ("+ptEsc(x.local_time)+")":"")+'</span></label>').join("")+
+    '</div>':'';
+  openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
     '<form data-form="ptTrip">'+
     '<label class="field"><span class="label">Départ (domicile par défaut)</span><select class="input" name="origin">'+ptOptions(home?.id||"other")+'</select></label>'+
     '<label class="field"><span class="label">Autre départ, si sélectionné</span><input class="input" name="origin_text" placeholder="Adresse de départ"></label>'+
@@ -149,15 +157,30 @@ function ptTripForm(ev){
     '</select></label>'+
     '<label class="field"><span class="label">Lieu de retour (uniquement pour le mode personnalisé)</span><select class="input" name="return_to">'+ptOptions(home?.id||"other")+'</select></label>'+
     '<label class="field"><span class="label">Autre adresse de retour, si sélectionnée</span><input class="input" name="return_text" placeholder="Adresse du retour"></label>'+
+    groupHtml+
     '<div class="pr-note">Les trajets scolaires ne sont jamais proposés. Les kilomètres restent une estimation tant que vous ne les avez pas validés.</div>'+
     '<div id="ptDistance" class="pr-note">Aucune distance calculée.</div>'+
     '<div class="btns"><button type="button" class="btn" data-act="ptCalc">Calculer les kilomètres</button></div>'+
     '<div class="sheet-sticky btns"><button class="btn primary block" type="submit" '+(ev.day>today()?'disabled':'')+'>Confirmer le déplacement effectué</button></div>'+
     (ev.day>today()?'<p class="muted small">La confirmation sera possible le jour du rendez-vous ou après.</p>':'')+
+    '<div class="btns"><button class="btn block" type="button" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ne pas comptabiliser ce rendez-vous</button></div>'+
     '</form>',{ptTrip:ev.key});
+  ptUpdateTripFields(document.querySelector('#sheetIn form[data-form="ptTrip"]'));
 }
 function ptFields(form){
-  return Object.fromEntries(new FormData(form).entries());
+  const fd=new FormData(form),values=Object.fromEntries(fd.entries());
+  values.pt_group=fd.getAll("pt_group").sort().join(",");
+  return values;
+}
+function ptUpdateTripFields(form){
+  if(!form)return;
+  const toggle=(name,on)=>{const el=form.querySelector('[name="'+name+'"]');if(el){const f=el.closest(".field");if(f)f.style.display=on?"":"none";}};
+  const get=name=>form.querySelector('[name="'+name+'"]')?.value;
+  toggle("origin_text",get("origin")==="other");
+  toggle("destination_text",get("destination")==="other");
+  const custom=get("trip_mode")==="custom";
+  toggle("return_to",custom);
+  toggle("return_text",custom&&get("return_to")==="other");
 }
 function ptSelected(key,manual){
   if(key==="google")return {label:PT.current?.location||"",coords:null};
@@ -213,29 +236,73 @@ async function ptSaveTrip(form) {
     toast("Calculez d’abord les kilomètres pour ce trajet.");return;
   }
   if(ev.day>today()){toast("Impossible de confirmer un trajet futur.");return;}
-  const row={
+  const keys=new FormData(form).getAll("pt_group");
+  const extras=keys.map(key=>PT.suggestions.find(x=>x.key===key));
+  if(extras.some(x=>!x)||extras.length>11){
+    toast("Les rendez-vous sélectionnés ont changé. Rouvrez cette fiche.");return;
+  }
+  const allowed=PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[]);
+  if(extras.some(x=>!allowed.includes(x))){
+    toast("Ces rendez-vous ne peuvent pas être regroupés. Rouvrez la fiche.");return;
+  }
+  const selected=[ev,...extras], row={
     household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,event_id:ev.event_id,
     event_fingerprint:ev.fingerprint,day:ev.day,title:ev.title,category:ev.kind,
     origin_label:calc.from,destination_label:calc.to,return_label:calc.back,
     trip_mode:calc.mode,calculated_km:calc.km,distance_km:calc.km,legs:calc.done
   };
+  const linked=selected.map(x=>({child_id:x.child_id,calendar_id:x.calendar,
+    event_id:x.event_id,event_fingerprint:x.fingerprint,title:x.title,day:x.day}));
   const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
   try{
-    const exists=await sb.from("child_trips").select("id").eq("household_id",S.hh.id)
-      .eq("child_id",ev.child_id).eq("event_fingerprint",ev.fingerprint).limit(1);
-    if(exists.error)throw exists.error;
-    if((exists.data||[]).length)throw new Error("Ce déplacement est déjà dans l’historique.");
-    const {error}=await sb.from("child_trips").insert(row);
+    // La fonction SQL écrit le trajet et ses liens dans une seule transaction.
+    // Unicité par enfant et rendez-vous : aucune deuxième comptabilisation.
+    const {error}=await sb.rpc("confirm_child_trip_group",{p_trip:row,p_events:linked});
     if(error)throw error;
-    PT.calculated=null;closeSheet();await ptLoad(true);
-    PT.suggestions=PT.suggestions.filter(x=>x.key!==ev.key);softRender();toast("Trajet confirmé et conservé dans l’historique.");
-  }catch(e){toast("Trajet non enregistré : "+(e.code==="23505"?"déjà confirmé ; aucun doublon ajouté.":e.message));}
+    PT.calculated=null;closeSheet();
+    await ptLoad(true);
+    PT.suggestions=PT.suggestions.filter(x=>!selected.some(e=>e.child_id===x.child_id&&e.fingerprint===x.fingerprint));
+    softRender();
+    toast(selected.length>1?"Un seul aller-retour enregistré pour "+selected.length+" rendez-vous.":"Trajet confirmé et enregistré.");
+  }catch(e){toast("Trajet non enregistré : "+(/duplicate|unique|23505/i.test(e.message||"")?
+    "un de ces rendez-vous est déjà comptabilisé. Aucune ligne supplémentaire n’a été ajoutée.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
+}
+async function ptIgnore(key) {
+  const ev=PT.suggestions.find(x=>x.key===key);if(!ev)return;
+  if(!confirm("Écarter « "+ev.title+" » des kilomètres ?\n\nLe rendez-vous Google restera inchangé. Vous pourrez le rétablir dans « Rendez-vous écartés »."))return;
+  const row={household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,
+    event_id:ev.event_id,event_fingerprint:ev.fingerprint,day:ev.day,title:ev.title,decision:"ignored"};
+  try {
+    const {error}=await sb.from("child_trip_event_marks").insert(row);
+    if(error)throw error;
+    closeSheet();PT.suggestions=PT.suggestions.filter(x=>!(x.child_id===ev.child_id&&x.fingerprint===ev.fingerprint));
+    PT.marks.push(row);softRender();
+    toast("Rendez-vous écarté : 0 km comptabilisé. Google Agenda est inchangé.");
+  }catch(e){toast("Impossible d’écarter ce rendez-vous : "+(/duplicate|unique|23505/i.test(e.message||"")?"déjà traité.":e.message));}
+}
+async function ptRestoreIgnored(childId,fingerprint) {
+  const row=(PT.marks||[]).find(x=>x.child_id===childId&&x.event_fingerprint===fingerprint&&x.decision==="ignored");
+  if(!row)return;
+  const {error}=await sb.from("child_trip_event_marks").delete().eq("household_id",S.hh.id)
+    .eq("child_id",childId).eq("event_fingerprint",fingerprint).eq("decision","ignored");
+  if(error){toast("Impossible de rétablir : "+error.message);return;}
+  PT.marks=PT.marks.filter(x=>x!==row);
+  PT.monthSynced="";softRender();ptSync(true);
+  toast("Rendez-vous rétabli dans les propositions.");
+}
+function ptParticipantIds(rec) {
+  const ids=(PT.marks||[]).filter(x=>x.trip_id===rec.id&&x.decision==="counted").map(x=>x.child_id);
+  return [...new Set(ids.length?ids:[rec.child_id])];
+}
+function ptParticipantNames(rec) {
+  return ptParticipantIds(rec).map(id=>prChild(id)?.first_name||"Enfant").join(", ");
 }
 function ptEditSheet(id){
   const row=(PT.records||[]).find(x=>x.id===id);if(!row)return;
   openSheet("Corriger le kilométrage",'<form data-form="ptEdit">'+
     '<p><strong>'+ptEsc(row.title)+'</strong> · '+ptEsc(prD(row.day))+'</p>'+
+    '<p class="muted small">Enfants concernés : '+ptEsc(ptParticipantNames(row))+'</p>'+
     '<p class="muted small">Distance calculée initialement : '+ptFmt(row.calculated_km)+' km. Une correction ne modifie pas les événements Google.</p>'+
     '<label class="field"><span class="label">Kilomètres réellement parcourus</span><input class="input" name="distance" type="number" min="0" max="99999" step="0.1" required value="'+Number(row.distance_km)+'"></label>'+
     '<div class="sheet-sticky btns"><button class="btn primary block" type="submit">Enregistrer la correction</button></div>'+
@@ -257,10 +324,10 @@ async function ptDelete(id){
 }
 function ptExport(){
   const [from,to]=ptMonthBounds();
-  const records=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||x.child_id===PT.child));
+  const records=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||ptParticipantIds(x).includes(PT.child)));
   const csv=rows=>rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(";")).join("\r\n");
-  const lines=[["Date","Enfant","Motif","Départ","Destination","Retour","Type","Calculé (km)","Retenu (km)"]];
-  for(const r of records)lines.push([prD(r.day),prChild(r.child_id)?.first_name||"",r.title,r.origin_label,r.destination_label,r.return_label,r.trip_mode,ptFmt(r.calculated_km),ptFmt(r.distance_km)]);
+  const lines=[["Date","Enfants concernés","Motif","Départ","Destination","Retour","Type","Calculé (km)","Retenu (km)"]];
+  for(const r of records)lines.push([prD(r.day),ptParticipantNames(r),r.title,r.origin_label,r.destination_label,r.return_label,r.trip_mode,ptFmt(r.calculated_km),ptFmt(r.distance_km)]);
   lines.push(["TOTAL","","","","","","","",ptFmt(records.reduce((s,r)=>s+Number(r.distance_km),0))]);
   prDeliver(new Blob(["\uFEFF"+csv(lines)],{type:"text/csv;charset=utf-8"}),"Trajets-enfants-"+PT.month+".csv");
 }
@@ -268,10 +335,13 @@ function ptTripsView(){
   if(!ptAuthorized())return '<div class="pr-panel">Trajets disponibles après connexion au foyer.</div>';
   if(!PT.places&&!PT.loading&&!PT.error)ptLoad();
   if(PT.loading||!PT.places)return '<section class="pr-panel"><h2 class="pr-h">Trajets des enfants</h2><p class="muted">'+ptEsc(PT.error||"Chargement des lieux et de l’historique…")+'</p>'+(PT.error?'<button class="btn" data-act="ptReload">Réessayer</button>':"")+'</section>';
-  const [from,to]=ptMonthBounds(),kids=PR.data.children,rec=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||x.child_id===PT.child));
+  const [from,to]=ptMonthBounds(),kids=PR.data.children,rec=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||ptParticipantIds(x).includes(PT.child)));
   const suggestions=PT.suggestions.filter(x=>!PT.child||x.child_id===PT.child);
   const total=rec.reduce((s,r)=>s+Number(r.distance_km||0),0);
-  const byKid=kids.filter(c=>rec.some(r=>r.child_id===c.id)).map(c=>'<span class="pr-word">'+ptEsc(c.first_name)+' : '+ptFmt(rec.filter(r=>r.child_id===c.id).reduce((s,r)=>s+Number(r.distance_km),0))+' km</span>').join(" ");
+  // Le total familial compte chaque déplacement UNE fois. Les enfants
+  // concernés sont affichés, mais leurs participations ne sont pas additionnées.
+  const byKid=kids.filter(c=>rec.some(r=>ptParticipantIds(r).includes(c.id)))
+    .map(c=>'<span class="pr-word">'+ptEsc(c.first_name)+' : '+rec.filter(r=>ptParticipantIds(r).includes(c.id)).length+' trajet(s) concerné(s)</span>').join(" ");
   const header='<div class="pr-head"><button class="pr-arrow" data-act="ptMonth" data-v="-1" aria-label="Mois précédent">‹</button><h2 class="pr-title static">Trajets · '+ptEsc(ptMonthText())+'</h2><button class="pr-arrow" data-act="ptMonth" data-v="1" aria-label="Mois suivant">›</button></div>';
   const places='<section class="pr-panel"><h2 class="pr-h">Lieux habituels</h2>'+
     '<p class="muted small">Domicile par défaut, mais départ et retour modifiables pour chaque trajet. Les trajets vers l’école sont exclus.</p>'+
@@ -281,14 +351,20 @@ function ptTripsView(){
     '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):"Rendez-vous liés à un seul enfant ; aucun trajet scolaire n’est proposé.")+'</p>'+
     (suggestions.length?suggestions.map(x=>'<button class="pr-krow" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+' · '+(x.mode==="four"?"2 allers-retours":"Aller-retour")+(x.location?' · '+ptEsc(x.location):'')+'</small></span>›</button>').join(""):'<p class="muted small">Aucune proposition pour ce mois, ou tous les trajets sont déjà confirmés.</p>')+
     '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button> <button class="btn" data-act="ptCals">Choisir les agendas</button></section>';
+  const ignored=(PT.marks||[]).filter(m=>m.decision==="ignored"&&m.day>=from&&m.day<=to&&(!PT.child||m.child_id===PT.child));
+  const ignoredHtml='<section class="pr-panel"><details><summary><strong>Rendez-vous écartés ('+ignored.length+')</strong> — 0 km</summary>'+
+    '<p class="muted small">Ces rendez-vous ne génèrent aucun kilomètre. Ils restent dans Google Agenda et peuvent être rétablis.</p>'+
+    (ignored.length?ignored.map(x=>'<div class="pr-krow"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</small></span>'+
+    '<button type="button" class="btn small" data-act="ptRestore" data-c="'+ptEsc(x.child_id)+'" data-fp="'+ptEsc(x.event_fingerprint)+'">Rétablir</button></div>').join(""):
+    '<p class="muted small">Aucun rendez-vous écarté ce mois-ci.</p>')+'</details></section>';
   const history='<section class="pr-panel"><h2 class="pr-h">Trajets confirmés · '+rec.length+'</h2>'+byKid+
-    (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
+    (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
     '<button class="btn" data-act="ptExport">Exporter le mois (Excel / CSV)</button></section>';
   return '<div class="pr pt">'+header+
     '<section class="pr-panel"><div class="pr-bilan"><div><b>'+ptFmt(total)+' km</b><small>Confirmés</small></div><div><b>'+rec.length+'</b><small>Trajets effectués</small></div><div><b>'+suggestions.length+'</b><small>À vérifier</small></div></div>'+
     '<label class="field"><span class="label">Filtrer les enfants</span><select class="input" data-pt-child><option value="">Tous les enfants</option>'+kids.map(c=>'<option value="'+ptEsc(c.id)+'"'+(PT.child===c.id?' selected':'')+'>'+ptEsc(c.first_name)+'</option>').join("")+'</select></label></section>'+
     (!ptHome()?'<section class="pr-panel"><p class="pr-note warn"><b>Première étape :</b> ajoutez le domicile pour calculer vos trajets.</p><button class="btn primary" data-act="ptPlaceNew">Configurer le domicile</button></section>':"")+
-    suggestBlock+history+places+'</div>';
+    suggestBlock+history+ignoredHtml+places+'</div>';
 }
 /* Suggestion discrète dans la fiche de rendez-vous Maisonnée.
    Pas de saisie obligatoire ni de modification automatique de Google Agenda. */
@@ -394,6 +470,8 @@ document.addEventListener("click",async e=>{
   else if(a==="ptEdit")ptEditSheet(v);
   else if(a==="ptDelete")ptDelete(v);
   else if(a==="ptExport")ptExport();
+  else if(a==="ptIgnore")ptIgnore(v);
+  else if(a==="ptRestore")ptRestoreIgnored(b.dataset.c,b.dataset.fp);
   else if(a==="ptUsePlace"){
     const place=ptPlaceById(b.dataset.place);
     const form=b.closest('form[data-form="event"]');
@@ -405,7 +483,8 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.matches("[data-pt-child]")){PT.child=e.target.value;softRender();}
-  if(e.target.closest('form[data-form="ptTrip"]'))PT.calculated=null;
+  const trip=e.target.closest('form[data-form="ptTrip"]');
+  if(trip){PT.calculated=null;ptUpdateTripFields(trip);}
 });
 document.addEventListener("input",e=>{
   if(e.target.closest('form[data-form="ptTrip"]'))PT.calculated=null;
