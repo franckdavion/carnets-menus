@@ -316,24 +316,27 @@ function ptTripForm(ev,presetDestinationId=""){
 }
 // Édition de l'événement Google exact, dans le formulaire Agenda Maisonnée.
 async function ptOpenAgenda(key){
-  const ev=PT.suggestions.find(x=>x.key===key);
-  if(!ev)return toast("Ce trajet n’est plus proposé. Relisez Google Agenda.");
-  const back={key:ev.key,calendar:ev.calendar,event_id:ev.event_id,month:PT.month};
+  const record=key.startsWith("history:")?(PT.records||[]).find(x=>x.id===key.slice(8)):null;
+  const ev=record?null:PT.suggestions.find(x=>x.key===key);
+  if(!ev&&!record)return toast("Ce trajet n’est plus disponible. Actualisez la page.");
+  const calendar=record?.calendar_id||ev?.calendar, event_id=record?.event_id||ev?.event_id;
+  if(!calendar||!event_id)return toast("Ce trajet n’est pas lié à un événement Google modifiable.");
+  const back={key:ev?.key||"",calendar,event_id,month:PT.month,recordId:record?.id||""};
   try{
     if(!(await gEnsure()))throw new Error("Reconnectez Google Agenda dans Ma famille.");
-    const full=await gApi("calendars/"+encodeURIComponent(ev.calendar)+"/events/"+encodeURIComponent(ev.event_id));
+    const full=await gApi("calendars/"+encodeURIComponent(calendar)+"/events/"+encodeURIComponent(event_id));
     if(!full?.start||!full?.end)throw new Error("Rendez-vous Google introuvable.");
-    const access=G.list.find(c=>c.id===ev.calendar)?.accessRole;
+    const access=G.list.find(c=>c.id===calendar)?.accessRole;
     if(access&&access!=="owner"&&access!=="writer"){
       const link=full.htmlLink?'<p><a class="btn" target="_blank" rel="noopener noreferrer" href="'+ptEsc(full.htmlLink)+'">Ouvrir dans Google Agenda</a></p>':"";
       openSheet("Agenda en lecture seule",'<p>Vous ne pouvez pas modifier cet agenda depuis Maisonnée.</p>'+link+
         '<button type="button" class="btn block" data-act="ptBackToTrip">← Retour au trajet</button>',{ptTripReturn:back});
     }else{
-      const row=gToForm({id:full.id,title:full.summary||ev.title,place:full.location||"",
+      const row=gToForm({id:full.id,title:full.summary||ev?.title||record?.title,place:full.location||"",
         desc:full.description||"",gs:full.start,ge:full.end});
       if(!full.reminders||full.reminders.useDefault)row.gDefault=true;
       else row.reminders=(full.reminders.overrides||[]).map(x=>x.minutes);
-      eventSheet(row,null,!!row.start_time,{cal:ev.calendar,id:ev.event_id,rec:!!full.recurringEventId,colorId:full.colorId||""});
+      eventSheet(row,null,!!row.start_time,{cal:calendar,id:event_id,rec:!!full.recurringEventId,colorId:full.colorId||""});
       sheetCtx.ptTripReturn=back;
       document.querySelector('#sheetIn form[data-form="event"]')?.insertAdjacentHTML("afterbegin",
         '<button type="button" class="btn" data-act="ptBackToTrip" style="margin-bottom:12px">← Retour au trajet</button>');
@@ -344,6 +347,7 @@ async function ptOpenAgenda(key){
 }
 function ptBackToTrip(back=sheetCtx?.ptTripReturn){
   if(!back)return;
+  if(back.recordId){ptEditSheet(back.recordId);return;}
   const ev=PT.suggestions.find(x=>x.key===back.key)||
     PT.suggestions.find(x=>x.calendar===back.calendar&&x.event_id===back.event_id);
   if(ev)ptTripForm(ev);
@@ -352,6 +356,12 @@ function ptBackToTrip(back=sheetCtx?.ptTripReturn){
 async function ptAfterGoogleEventSave(back,updated){
   if(!back)return;
   try{
+    if(back.recordId){
+      await ptLoad(true);
+      ptEditSheet(back.recordId);
+      toast("Agenda mis à jour. Le trajet déjà confirmé et ses kilomètres restent inchangés.");
+      return;
+    }
     const newDay=updated?.start?PRC.eventDays(updated)?.start:null;
     if(newDay&&newDay.slice(0,7)!==PT.month){
       PT.month=newDay.slice(0,7);PT.suggestions=[];PT.ruleExcluded=[];
@@ -674,7 +684,9 @@ function ptParticipantNames(rec) {
 function ptEditSheet(id){
   const row=(PT.records||[]).find(x=>x.id===id);if(!row)return;
   openSheet("Corriger le kilométrage",'<form data-form="ptEdit">'+
-    '<p><strong>'+ptEsc(row.title)+'</strong> · '+ptEsc(prD(row.day))+'</p>'+
+    (row.calendar_id&&row.event_id?
+      '<button type="button" class="pr-krow" data-act="ptOpenAgenda" data-v="history:'+ptEsc(id)+'" style="width:100%;text-align:left;margin-bottom:10px"><span class="pr-kn"><b>'+ptEsc(row.title)+'</b><small>'+ptEsc(prD(row.day))+' · ✎ Modifier dans l’agenda</small></span>›</button>':
+      '<p><strong>'+ptEsc(row.title)+'</strong> · '+ptEsc(prD(row.day))+'</p>')+
     '<p class="muted small">Enfants concernés : '+ptEsc(ptParticipantNames(row))+'</p>'+
     '<p class="muted small">Distance calculée initialement : '+ptFmt(row.calculated_km)+' km. Une correction ne modifie pas les événements Google.</p>'+
     '<label class="field"><span class="label">Kilomètres réellement parcourus</span><input class="input" name="distance" type="number" min="0" max="99999" step="0.1" required value="'+Number(row.distance_km)+'"></label>'+
