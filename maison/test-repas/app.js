@@ -4,7 +4,7 @@
 
 const SB_URL = "https://cluqleqbbidozpioekog.supabase.co";
 const SB_KEY = "sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
-const CARNET_URL = "../";
+const CARNET_URL = new URL("../", document.baseURI).href; // Tient compte de <base href="../"> sur la page de test.
 
 /* ---------- small helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
