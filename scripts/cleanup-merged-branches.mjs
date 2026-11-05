@@ -32,6 +32,32 @@ const preservedAncestors = new Map([
   ['test-presences-trajets-groupes-20261105', { sha: 'ef8a406418d52d2215415773aea1aa4043041d20', keeper: 'test-presences-trajets-exclusions-20261105', keeperSha: '79388ac3bec25881a53cd74a34cc0c10a5b3a512' }],
 ]);
 
+
+/*
+ * Branche de synchronisation Repas/Agenda devenue redondante :
+ * cinq fichiers de code sont strictement identiques à main.
+ * Les deux index.html, de SHA différents, ont été comparés ligne par ligne
+ * après neutralisation des cache-busters et des ajouts Trajets déjà dans main.
+ * Tous les SHA sont figés : une évolution future bloque la suppression.
+ */
+const verifiedSnapshots = new Map([
+  ['test-synchro-repas-agenda-20261105', {
+    sha: 'c50774522dab83e2d02e695d3349a9db556aa44d',
+    equalFiles: new Map([
+      ['carnet-github.js', 'fabf8a4841b6dde9837b7d547f4e0f6a1bf802f2'],
+      ['maison/accueil.js', '8251a229528ed3ced38db8fa30f58a2d8a653a19'],
+      ['maison/app.js', '68be891c70b03d520dc4135cd06a9d99eca2cea0'],
+      ['maison/modules.js', '8784a42c38d75cc4a9031891c26e3e27d4a109a9'],
+      ['robot.mjs', '848f7f0552261610028a9ca83a6471d6ee78cd31'],
+    ]),
+    html: {
+      path: 'maison/index.html',
+      mainSha: 'c2a1d4b605b58a5fdadaf5105c17a6bbecde3df0',
+      branchSha: 'b4bf93010dbf0fdb67e0852050f1ae56aca07409',
+    },
+  }],
+]);
+
 const mode = process.env.CLEANUP_MODE || 'simulation';
 if (!['simulation', 'suppression'].includes(mode)) throw Error('Mode inconnu : aucune suppression');
 if (mode === 'suppression' && process.env.CLEANUP_CONFIRMATION !== CONFIRMATION)
@@ -66,11 +92,28 @@ async function github(path, method = 'GET') {
   return response.status === 204 ? null : response.json();
 }
 
+
+async function snapshotFullyPreserved(name, spec) {
+  const [mainTree, branchTree] = await Promise.all([
+    github(`/git/trees/${MAIN}?recursive=1`),
+    github(`/git/trees/${encodeURIComponent(name)}?recursive=1`),
+  ]);
+  if (!mainTree || !branchTree || mainTree.truncated || branchTree.truncated ||
+      !Array.isArray(mainTree.tree) || !Array.isArray(branchTree.tree)) return false;
+  const live = new Map(mainTree.tree.map(item => [item.path, item.sha]));
+  const saved = new Map(branchTree.tree.map(item => [item.path, item.sha]));
+  for (const [path, sha] of spec.equalFiles) {
+    if (live.get(path) !== sha || saved.get(path) !== sha) return false;
+  }
+  return live.get(spec.html.path) === spec.html.mainSha &&
+         saved.get(spec.html.path) === spec.html.branchSha;
+}
+
 // Fail-closed : la liste des candidats est fixe, on ne parcourt jamais les autres branches.
 let eligible = 0;
 let skipped = 0;
 let deleted = 0;
-for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map(([b, v]) => [b, v.sha])]) {
+for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map(([b, v]) => [b, v.sha]), ...[...verifiedSnapshots].map(([b, v]) => [b, v.sha])]) {
   try {
     const branch = await github(`/branches/${encodeURIComponent(name)}`);
     if (!branch) { console.log(`[IGNORE] ${name} : deja absente`); skipped++; continue; }
@@ -85,9 +128,16 @@ for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map
         console.log(`[PROTEGEE] ${name} : branche descendante absente ou modifiee`); skipped++; continue;
       }
     }
-    const diff = await github(`/compare/${encodeURIComponent(keeperName)}...${encodeURIComponent(name)}`);
-    if (!diff || diff.ahead_by !== 0 || !['behind', 'identical'].includes(diff.status)) {
-      console.log(`[PROTEGEE] ${name} : commits non conserves dans la branche de destination`); skipped++; continue;
+    const snapshot = verifiedSnapshots.get(name);
+    if (snapshot) {
+      if (!(await snapshotFullyPreserved(name, snapshot))) {
+        console.log(`[PROTEGEE] ${name} : fichiers de la version officielle modifies`); skipped++; continue;
+      }
+    } else {
+      const diff = await github(`/compare/${encodeURIComponent(keeperName)}...${encodeURIComponent(name)}`);
+      if (!diff || diff.ahead_by !== 0 || !['behind', 'identical'].includes(diff.status)) {
+        console.log(`[PROTEGEE] ${name} : commits non conserves dans la branche de destination`); skipped++; continue;
+      }
     }
     const openPrs = await github(`/pulls?state=open&head=${encodeURIComponent(`franckdavion:${name}`)}&per_page=1`);
     if (!Array.isArray(openPrs) || openPrs.length) {
@@ -103,6 +153,9 @@ for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map
       if (!keeperRef || keeperRef.object?.sha !== keep.keeperSha) {
         console.log(`[PROTEGEE] ${name} : la branche descendante a change`); skipped++; continue;
       }
+    }
+    if (snapshot && !(await snapshotFullyPreserved(name, snapshot))) {
+      console.log(`[PROTEGEE] ${name} : nouveau changement depuis la verification`); skipped++; continue;
     }
     eligible++;
     if (mode === 'simulation') {
