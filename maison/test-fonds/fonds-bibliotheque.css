@@ -172,10 +172,14 @@ body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="fog"] .mn-bg-weather-f
 @keyframes mn-bg-snow{from{background-position:0 -100px}to{background-position:30px 120px}}
 @keyframes mn-bg-fog{from{transform:translateX(-6%)}to{transform:translateX(8%)}}
 @keyframes mn-bg-storm{0%,85%,100%{filter:brightness(1)}87%{filter:brightness(1.12)}}
-body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-sky-fx *,
-body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-weather-fx *,
-body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-sky-fx *,
-body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-weather-fx *{animation-play-state:paused!important}
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-weather-fx::before,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-weather-fx::after,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-weather-fx::before,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-weather-fx::after{animation:none!important}
 @media(prefers-reduced-motion:reduce){
  body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::before,
  body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::after,
@@ -184,3 +188,9 @@ body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-weather-fx *{animation-pl
  .mn-bg-live-preview[data-mn-bg-preview-weather]::before{animation:none!important}
 }
 @media(max-width:380px){.mn-bg-conditions{gap:4px}.mn-bg-conditions button{font-size:11px;padding:7px 2px}}
+
+/* Nuance du paysage photographique selon la météo, sans nouveau téléchargement. */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-photo{filter:saturate(.74) brightness(.82)}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-photo{filter:saturate(.7) brightness(.69)}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="fog"] .mn-bg-photo{filter:saturate(.62) brightness(.92)}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-photo{filter:saturate(.79) brightness(1.10)}
