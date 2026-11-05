@@ -5,6 +5,22 @@
   const VERSION=1, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
   const PERIODS=[['matin','Matin'],['aprem','Après-midi'],['soir','Soir'],['nuit','Nuit']];
   const TYPES=[['photo','Photos'],['illustration','Animations'],['photo-animee','Photos animées']];
+  const CONDITIONS=[['clear','Soleil'],['clouds','Nuageux'],['rain','Pluie'],['storm','Orage'],['snow','Neige'],['fog','Brouillard']];
+  const isCondition=c=>CONDITIONS.some(x=>x[0]===c);
+  // Codes WMO utilisés par Open-Meteo : même convention que la météo d'accueil.
+  function weatherFromCode(value){
+    if(value===null||value===undefined||value==='')return {category:'unknown',intensity:'normal'};
+    const n=Number(value);
+    if(!Number.isInteger(n))return {category:'unknown',intensity:'normal'};
+    if(n===0)return {category:'clear',intensity:'normal'};
+    if([1,2,3].includes(n))return {category:'clouds',intensity:'normal'};
+    if([45,48].includes(n))return {category:'fog',intensity:'normal'};
+    if([95,96,99].includes(n))return {category:'storm',intensity:'strong'};
+    if([71,73,75,77,85,86].includes(n))return {category:'snow',intensity:[75,86].includes(n)?'strong':'normal'};
+    if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(n))
+      return {category:'rain',intensity:[65,67,82].includes(n)?'strong':[51,53,61,80].includes(n)?'light':'normal'};
+    return {category:'unknown',intensity:'normal'};
+  }
   const photos={matin:'assets/fonds/matin.png',aprem:'assets/fonds/apres-midi.png',soir:'assets/fonds/soir.png',nuit:'assets/fonds/nuit.png'};
   const builtins=[...PERIODS.flatMap(([p,label])=>[
     {id:'p-'+p,name:'Photo '+label,type:'photo',media:'image',src:photos[p],period:p,builtin:true},
@@ -12,7 +28,8 @@
     {id:'m-'+p,name:'Photo en mouvement '+label,type:'photo-animee',media:'image-motion',src:photos[p],period:p,builtin:true}
   ]),{id:'v-flower',name:'Fleur qui éclot · vidéo',type:'photo-animee',media:'video',
     src:'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',period:'aprem',builtin:true}];
-  const defaultPrefs=()=>({version:VERSION,mode:'auto',type:'photo',period:'matin',fixed:'p-matin',chosen:{},motion:true,custom:[]});
+  const defaultPrefs=()=>({version:VERSION,mode:'auto',type:'photo',period:'matin',fixed:'p-matin',
+    chosen:{},weatherSource:'city',weatherChoices:{},motion:true,custom:[]});
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const memberId=()=>typeof S!=='undefined'&&S.me?String(S.me):'local';
   const storageKey=()=>KEY+'_'+memberId();
@@ -42,15 +59,21 @@
   };
   const normalize=x=>{
     const p=defaultPrefs();if(!x||typeof x!=='object')return p;
-    p.mode=['auto','custom','fixed'].includes(x.mode)?x.mode:'auto';
+    p.mode=['auto','custom','fixed','weather'].includes(x.mode)?x.mode:'auto';
     p.type=isType(x.type)?x.type:'photo';
     p.period=isPeriod(x.period)?x.period:'matin';
     p.fixed=safeId(x.fixed)?x.fixed:'p-matin';
     p.motion=x.motion!==false;
+    p.weatherSource=x.weatherSource==='gps'?'gps':'city';
     p.custom=Array.isArray(x.custom)?x.custom.map(validateItem).filter(Boolean).slice(0,60):[];
     const ids=new Set([...builtins,...p.custom].map(a=>a.id));
     p.chosen={};
     for(const [period] of PERIODS)if(ids.has(x.chosen?.[period]))p.chosen[period]=x.chosen[period];
+    p.weatherChoices={};
+    for(const [condition] of CONDITIONS)for(const [period] of PERIODS){
+      const key=condition+':'+period;
+      if(ids.has(x.weatherChoices?.[key]))p.weatherChoices[key]=x.weatherChoices[key];
+    }
     if(!ids.has(p.fixed))p.fixed='p-matin';
     return p;
   };
@@ -65,15 +88,52 @@
     if(remote&&!remoteLoaded){prefs=normalize(remote);remoteLoaded=true;lastMediaSig='';}
   }
   let modalType=prefs.type,modalPeriod=prefs.period,addOpen=false,objectUrls=new Map(),saving=false,needCloudSave=false;
-  let lastMediaSig='',lastEnabled=null,previewing=false;
+  let lastMediaSig='',lastEnabled=null,previewing=false,modalWeather='clear';
+  // Coordonnées GPS en mémoire uniquement, jamais dans le profil ni localStorage.
+  const gps={code:null,at:0,lastAttempt:0,pending:false,error:''};
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
   const defaultId=(type,period)=>({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period;
   const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||'matin';
-  function currentItem(period=currentPeriod()){
-    const wanted=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
+  function conditionNow(){
+    const home=typeof window.maisonneeHomeWeather==='function'?window.maisonneeHomeWeather():{};
+    const usingGPS=prefs.weatherSource==='gps'&&gps.code!==null&&Date.now()-gps.at<45*60000;
+    const code=usingGPS?gps.code:home.code, weather=weatherFromCode(code);
+    return {...weather,code,source:usingGPS?'gps':'city',fallback:prefs.weatherSource==='gps'&&!usingGPS,
+      city:home.city||'ville du foyer',stale:usingGPS?false:!!home.stale};
+  }
+  function currentItem(period=currentPeriod(),condition){
+    let wanted;
+    if(prefs.mode==='weather'){
+      const cat=isCondition(condition)?condition:conditionNow().category;
+      const entry=prefs.weatherChoices[cat+':'+period];
+      const chosen=find(entry);
+      wanted=chosen?.type===prefs.type?chosen.id:defaultId(prefs.type,period);
+    }else wanted=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
       (prefs.chosen[period]||defaultId(prefs.type,period)):defaultId(prefs.type,period);
     return find(wanted)||find(defaultId('photo',period));
+  }
+  async function refreshGPS(force=false){
+    if(prefs.mode!=='weather'||prefs.weatherSource!=='gps'||document.hidden)return;
+    if(gps.pending||(!force&&Date.now()-gps.lastAttempt<25*60000))return;
+    gps.lastAttempt=Date.now();gps.pending=true;gps.error='';
+    try{
+      if(!navigator.geolocation)throw new Error('Géolocalisation non disponible');
+      const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,
+        {enableHighAccuracy:false,timeout:12000,maximumAge:600000}));
+      // L'emplacement précis part uniquement vers l'API météo ; il n'est pas enregistré.
+      const params=new URLSearchParams({latitude:String(pos.coords.latitude),longitude:String(pos.coords.longitude),
+        current:'weather_code',timezone:'auto',forecast_days:'1'});
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+      let response;
+      try{response=await fetch('https://api.open-meteo.com/v1/forecast?'+params,{cache:'no-store',signal:controller.signal})}
+      finally{clearTimeout(timer)}
+      if(!response.ok)throw new Error('Prévisions GPS momentanément indisponibles');
+      const j=await response.json(),code=Number(j.current?.weather_code);
+      if(!Number.isInteger(code)||weatherFromCode(code).category==='unknown')throw new Error('Conditions météo non reconnues');
+      gps.code=code;gps.at=Date.now();
+    }catch(e){gps.code=null;gps.error=e?.code===1?'Accès à la position refusé':String(e.message||'Position indisponible');}
+    finally{gps.pending=false;lastMediaSig='';void apply(document);draw();}
   }
   async function save(){
     localStorage.setItem(storageKey(),JSON.stringify(prefs));
