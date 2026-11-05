@@ -197,19 +197,33 @@
     hydrate();
     const frame=root.querySelector?.('.mn-dayframe')||(root.matches?.('.mn-dayframe')?root:null);
     if(!frame)return;
-    const period=frame.dataset.mnBand||'matin',item=currentItem(period),moving=effectiveMotion();
-    const sig=[item.id,period,moving,document.hidden].join('|');
+    if(prefs.mode==='weather'&&prefs.weatherSource==='gps')void refreshGPS();
+    const period=frame.dataset.mnBand||'matin',forecast=prefs.mode==='weather'?conditionNow():null;
+    const category=forecast?.category||'none',item=currentItem(period,category),moving=effectiveMotion();
+    const sig=[item.id,period,moving,document.hidden,category,forecast?.code??'',forecast?.source??''].join('|');
     if(sig===lastMediaSig&&frame.dataset.mnBgItem===item.id)return;
     lastMediaSig=sig;
     frame.dataset.mnBgItem=item.id;
+    frame.dataset.mnBgWeather=category;
+    frame.dataset.mnBgStrength=forecast?.intensity||'normal';
     frame.dataset.mnBgArt=item.media==='svg-native'?item.period:'';
     frame.classList.toggle('mn-bg-illustration',item.media==='svg-native');
     frame.classList.toggle('mn-bg-motion-off',!moving);
+    // Effets dans le bandeau, toujours derrière le texte (et sans clic capturé).
+    const hero=frame.querySelector('.ultimate-hero');
+    if(hero&&!hero.querySelector(':scope > .mn-bg-sky-fx')){
+      const fx=document.createElement('div');fx.className='mn-bg-sky-fx';fx.setAttribute('aria-hidden','true');
+      hero.insertBefore(fx,hero.querySelector('.mn-band-copy'));
+    }
     const l=layer(frame);
     l.replaceChildren();
+    if(category!=='none'&&category!=='unknown'){
+      const atmosphere=document.createElement('div');atmosphere.className='mn-bg-weather-fx';
+      atmosphere.setAttribute('aria-hidden','true');l.appendChild(atmosphere);
+    }
     // Sans personnalisation : conserver exactement le fond photo d'origine,
     // sans calque supplémentaire ni changement d'opacité.
-    if(item.builtin&&item.media==='image'&&item.id==='p-'+period){
+    if(prefs.mode!=='weather'&&item.builtin&&item.media==='image'&&item.id==='p-'+period){
       l.style.display='none';
       frame.style.removeProperty('background-image');
       return;
@@ -249,7 +263,10 @@
     }
   }
   function tile(item){
-    const chosen=(prefs.mode==='fixed'?prefs.fixed:prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod))===item.id;
+    const wanted=prefs.mode==='weather'?
+      (prefs.weatherChoices[modalWeather+':'+modalPeriod]||defaultId(prefs.type,modalPeriod)):
+      (prefs.mode==='fixed'?prefs.fixed:prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod));
+    const chosen=wanted===item.id;
     const selected=chosen?' is-selected':'';
     let visual;
     if(item.media==='svg-native'){
@@ -268,23 +285,23 @@
       '</div>';
   }
   function currentPreview(){
-    const selected=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
-      prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod):defaultId(prefs.type,modalPeriod);
-    const item=find(selected)||find('p-'+modalPeriod);
+    const item=currentItem(modalPeriod,modalWeather);
+    const cond=prefs.mode==='weather'?' data-mn-bg-preview-weather="'+esc(modalWeather)+'"':'';
     const label=PERIODS.find(x=>x[0]===modalPeriod)?.[1]||'Matin';
     const intro=modalPeriod==='matin'?'Bonjour':modalPeriod==='aprem'?'Bel après-midi':
       modalPeriod==='soir'?'Bonsoir':'Bonne nuit';
-    const text='<span class="mn-bg-preview-caption">'+intro+' · '+esc(item.name)+'</span>';
+    const labelWeather=prefs.mode==='weather'?CONDITIONS.find(x=>x[0]===modalWeather)?.[1]+' · ':'';
+    const text='<span class="mn-bg-preview-caption">'+intro+' · '+esc(labelWeather)+esc(item.name)+'</span>';
     if(item.media==='svg-native'){
-      return '<div class="mn-bg-live-preview mn-bg-preview-art mn-bg-mini-'+esc(modalPeriod)+'"><span class="mn-bg-preview-star">✦</span>'+text+'</div>';
+      return '<div class="mn-bg-live-preview mn-bg-preview-art mn-bg-mini-'+esc(modalPeriod)+'"'+cond+'><span class="mn-bg-preview-star">✦</span>'+text+'</div>';
     }
     if(item.media==='video'){
-      return '<div class="mn-bg-live-preview">'+
+      return '<div class="mn-bg-live-preview"'+cond+'>'+
         '<video data-mn-bg-preview-video="'+esc(item.id)+'" muted loop autoplay playsinline preload="metadata" poster="'+esc(photos[modalPeriod])+'"'+
         (!item.local?' src="'+esc(item.src)+'"':'')+'></video>'+text+'</div>';
     }
     const moving=item.media==='image-motion'&&effectiveMotion();
-    return '<div class="mn-bg-live-preview"><div class="mn-bg-preview-photo'+(moving?' mn-bg-preview-moving':'')+'"'+
+    return '<div class="mn-bg-live-preview"'+cond+'><div class="mn-bg-preview-photo'+(moving?' mn-bg-preview-moving':'')+'"'+
       (item.local?' data-mn-bg-preview-local="'+esc(item.id)+'"':
       ' style="background-image:url(&quot;'+esc(item.src)+'&quot;)"')+'></div>'+text+'</div>';
   }
