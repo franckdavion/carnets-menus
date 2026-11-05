@@ -1,0 +1,41 @@
+name: Nettoyage prudent des anciennes branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Simulation (aucune suppression) ou suppression des 10 branches controlees"
+        required: true
+        type: choice
+        default: simulation
+        options:
+          - simulation
+          - suppression
+      confirmation:
+        description: "Pour supprimer : saisir SUPPRIMER-LES-10-BRANCHES-CONTROLEES"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nettoyage-anciennes-branches
+  cancel-in-progress: false
+
+jobs:
+  nettoyage:
+    if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recuperer la version officielle pour executer le script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verifier les branches, sans toucher aux donnees applicatives
+        run: node scripts/cleanup-merged-branches.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_MODE: ${{ inputs.mode }}
+          CLEANUP_CONFIRMATION: ${{ inputs.confirmation }}
