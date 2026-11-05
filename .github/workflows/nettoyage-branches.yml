@@ -1,0 +1,78 @@
+name: Nettoyage prudent des anciennes branches
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/nettoyage-branches.yml'
+      - 'scripts/cleanup-merged-branches.mjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/nettoyage-branches.yml'
+      - 'scripts/cleanup-merged-branches.mjs'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Simulation ou suppression des 10 branches controlees"
+        required: true
+        type: choice
+        default: simulation
+        options:
+          - simulation
+          - suppression
+      confirmation:
+        description: "Pour supprimer, saisir SUPPRIMER-LES-10-BRANCHES-CONTROLEES"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nettoyage-anciennes-branches
+  cancel-in-progress: false
+
+jobs:
+  verification:
+    if: >-
+      github.repository == 'franckdavion/carnets-menus' &&
+      (github.event_name == 'pull_request' || github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch'))
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recuperer uniquement le code du depot
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Simulation (aucune suppression possible avec ce jeton en lecture seule)
+        run: node scripts/cleanup-merged-branches.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_MODE: simulation
+
+  nettoyage:
+    needs: verification
+    if: >-
+      github.repository == 'franckdavion/carnets-menus' &&
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'suppression'))
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Recuperer le code apres validation de la simulation
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Supprimer uniquement les branches deja fusionnees et inchangees
+        run: node scripts/cleanup-merged-branches.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_MODE: suppression
+          CLEANUP_CONFIRMATION: ${{ github.event_name == 'push' && 'SUPPRIMER-LES-10-BRANCHES-CONTROLEES' || inputs.confirmation }}
