@@ -290,6 +290,94 @@ function ptTripsView(){
     (!ptHome()?'<section class="pr-panel"><p class="pr-note warn"><b>Première étape :</b> ajoutez le domicile pour calculer vos trajets.</p><button class="btn primary" data-act="ptPlaceNew">Configurer le domicile</button></section>':"")+
     suggestBlock+history+places+'</div>';
 }
+/* Suggestion discrète dans la fiche de rendez-vous Maisonnée.
+   Pas de saisie obligatoire ni de modification automatique de Google Agenda. */
+let ptEventPlacesBusy=false;
+async function ptEnsureEventPlaces(){
+  if(PT.places||ptEventPlacesBusy||!prOn()||!sb)return;
+  ptEventPlacesBusy=true;
+  try {
+    const {data,error}=await sb.from("child_trip_places")
+      .select("id,label,address,keywords,is_home").eq("household_id",S.hh.id);
+    if(error)throw error;
+    if(!PT.places) PT.places=data||[];
+  }catch(err){console.warn("Lieux connus indisponibles",err);}
+  finally {
+    ptEventPlacesBusy=false;
+    const form=document.querySelector('#sheetIn form[data-form="event"]');
+    if(form)ptUpdateEventPlaceHint(form);
+  }
+}
+function ptUpdateEventPlaceHint(form){
+  const hint=form?.querySelector("[data-pt-event-hint]"),location=form?.querySelector('[name="place"]');
+  const title=form?.querySelector('[name="title"]');
+  if(!hint||!location||!title)return;
+  hint.replaceChildren();
+  if(!PT.places){
+    hint.textContent="Recherche des lieux enregistrés dans Présences…";
+    return;
+  }
+  const places=PRTR.matchingPlaces(title.value,PT.places);
+  const known=places.length===1?places[0]:null;
+  if(places.length>1) {
+    hint.textContent="Plusieurs lieux portent cette abréviation. Vérifiez les lieux favoris dans Présences → Trajets.";
+    return;
+  }
+  if(known){
+    const msg=document.createElement("span");
+    msg.textContent="Lieu reconnu : "+known.label+". Pour le calcul des kilomètres, il n’est pas nécessaire de remplir « Où » dans Google Agenda.";
+    hint.append(msg);
+    if(!location.value.trim()) {
+      const btn=document.createElement("button");
+      btn.type="button";btn.className="linkbtn small";
+      btn.dataset.act="ptUsePlace";btn.dataset.place=known.id;
+      btn.textContent="Ajouter ce lieu au rendez-vous Google";
+      hint.append(document.createTextNode(" "),btn);
+    }
+  }else if(!location.value.trim()){
+    hint.textContent="Lieu facultatif. Vous pouvez le saisir ici ou l'enregistrer une fois dans Présences → Trajets.";
+  }else{
+    hint.textContent="Cette adresse sera conservée dans le rendez-vous. Vous pourrez aussi choisir un lieu favori dans Trajets.";
+  }
+  const dl=form.querySelector("#ptEventLocations");
+  if(dl){
+    dl.replaceChildren();
+    for(const p of PT.places.filter(x=>!x.is_home)){
+      const o=document.createElement("option");
+      o.value=p.address;o.label=p.label;dl.append(o);
+    }
+  }
+}
+function ptEnhanceEventSheet(form){
+  if(!prOn()||!form||form.dataset.form!=="event"||form.dataset.ptPlacesEnhanced)return;
+  const location=form.querySelector('[name="place"]');
+  if(!location)return;
+  form.dataset.ptPlacesEnhanced="1";
+  const datalist=document.createElement("datalist");
+  datalist.id="ptEventLocations";
+  location.setAttribute("list",datalist.id);
+  location.setAttribute("placeholder","Adresse ou lieu favori — facultatif");
+  location.parentElement.append(datalist);
+  const hint=document.createElement("div");
+  hint.className="muted small";hint.dataset.ptEventHint="";
+  hint.style.marginTop="5px";
+  location.closest("label")?.insertAdjacentElement("afterend",hint);
+  const update=()=>ptUpdateEventPlaceHint(form);
+  form.querySelector('[name="title"]')?.addEventListener("input",update);
+  location.addEventListener("input",update);
+  update();ptEnsureEventPlaces();
+}
+(function ptWatchEventSheets(){
+  const target=document.querySelector("#sheetIn");
+  if(!target||typeof MutationObserver==="undefined")return;
+  const observer=new MutationObserver(()=>{
+    const form=target.querySelector('form[data-form="event"]');
+    if(form)ptEnhanceEventSheet(form);
+  });
+  observer.observe(target,{childList:true});
+  const open=target.querySelector('form[data-form="event"]');
+  if(open)ptEnhanceEventSheet(open);
+})();
 document.addEventListener("click",async e=>{
   const b=e.target.closest('[data-act^="pt"]');if(!b)return;
   const a=b.dataset.act,v=b.dataset.v;
@@ -306,6 +394,14 @@ document.addEventListener("click",async e=>{
   else if(a==="ptEdit")ptEditSheet(v);
   else if(a==="ptDelete")ptDelete(v);
   else if(a==="ptExport")ptExport();
+  else if(a==="ptUsePlace"){
+    const place=ptPlaceById(b.dataset.place);
+    const form=b.closest('form[data-form="event"]');
+    if(place&&form){
+      const loc=form.querySelector('[name="place"]');
+      if(loc){loc.value=place.address;loc.dispatchEvent(new Event("input",{bubbles:true}));}
+    }
+  }
 });
 document.addEventListener("change",e=>{
   if(e.target.matches("[data-pt-child]")){PT.child=e.target.value;softRender();}
