@@ -661,7 +661,7 @@ function ptTripsView(){
   // concernés sont affichés, mais leurs participations ne sont pas additionnées.
   const byKid=kids.filter(c=>rec.some(r=>ptParticipantIds(r).includes(c.id)))
     .map(c=>'<span class="pr-word">'+ptEsc(c.first_name)+' : '+rec.filter(r=>ptParticipantIds(r).includes(c.id)).length+' trajet(s) concerné(s)</span>').join(" ");
-  const header='<header class="pt-top"><div><span class="pt-kicker">PRÉSENCES DES ENFANTS</span><h2>Mes trajets</h2></div>'+
+  const header='<header class="pt-top"><div><span class="pt-kicker">VERSION TEST V2 · NOUVELLE INTERFACE</span><h2>Mes trajets</h2></div>'+
     '<div class="pt-top-actions"><button type="button" class="pt-icon-btn" data-act="ptSync" aria-label="Actualiser depuis Google Agenda"'+(PT.syncing?' disabled':'')+'>↻</button>'+
     '<button type="button" class="pt-icon-btn" data-act="ptSettings" aria-label="Réglages des trajets">⚙</button></div></header>'+
     '<div class="pt-monthbar"><button type="button" class="pr-arrow" data-act="ptMonth" data-v="-1" aria-label="Mois précédent">‹</button>'+
