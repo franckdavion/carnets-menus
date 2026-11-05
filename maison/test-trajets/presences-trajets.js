@@ -673,7 +673,6 @@ function ptTripsView(){
     '<button class="btn" data-act="ptPlaceNew">+ Ajouter un lieu</button></section>';
   const chosen=displayed.filter(x=>PT.selected.has(x.event.key)&&x.event.day<=today()).length;
   const eligible=displayed.filter(x=>x.event.day<=today()).length;
-  const eligible=displayed.filter(x=>x.event.day<=today()).length;
   let previousDay="";
   const cards=displayed.map(({event:x,group})=>{
     const dayHeader=x.day!==previousDay?'<h4 class="pt-day">'+ptEsc(prD(x.day))+'</h4>':"";
