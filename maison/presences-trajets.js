@@ -502,9 +502,10 @@ async function ptIgnoreSelection(events) {
     [child_id+"|"+ev.fingerprint,{...ev,child_id}]))).values()];
   if(!unique.length)return;
   const names=unique.map(ev=>(prChild(ev.child_id)?.first_name||"Enfant")+" : "+ev.title);
-  const question=unique.length===1
-    ?"Ignorer « "+unique[0].title+" » pour le calcul des kilomètres ?"
-    :"Ignorer les "+unique.length+" rendez-vous de cette sortie ?\n\n"+names.join("\n");
+  const eventCount=new Set(unique.map(ev=>ev.key)).size;
+  const question=eventCount===1
+    ?"Ignorer « "+unique[0].title+" » pour tous les enfants concernés ?"
+    :"Ignorer les "+eventCount+" rendez-vous de cette sortie ?\n\n"+names.join("\n");
   if(!confirm(question+"\n\n0 km sera comptabilisé. Aucun rendez-vous Google ne sera modifié. Vous pourrez rétablir chaque exclusion."))return;
   const rows=unique.map(ev=>({
     household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,
@@ -520,7 +521,7 @@ async function ptIgnoreSelection(events) {
     PT.suggestions=PT.suggestions.filter(ev=>!ptEventIds(ev).some(id=>denied.has(id+"|"+ev.fingerprint)));
     PT.calculated=null;
     closeSheet();ptBatchAdvance(unique);softRender();
-    toast(unique.length===1?"Rendez-vous écarté (0 km).":"Sortie écartée : "+unique.length+" rendez-vous, 0 km.");
+    toast(eventCount===1?"Rendez-vous écarté (0 km).":"Sortie écartée : "+eventCount+" rendez-vous, 0 km.");
   }catch(e){
     toast("Impossible d'écarter : "+(/duplicate|23505|unique/i.test(e.message||"")
       ?"au moins un de ces rendez-vous a déjà été traité. Actualisez les trajets.":e.message));
@@ -669,7 +670,7 @@ function ptTripsView(){
   const chosen=displayed.filter(x=>PT.selected.has(x.event.key)&&x.event.day<=today()).length;
   const eligible=displayed.filter(x=>x.event.day<=today()).length;
   const suggestBlock='<section class="pr-panel"><h2 class="pr-h">À vérifier · '+displayed.length+' sortie(s)</h2>'+
-    '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):(PT.syncedAt?"Google Agenda (Trajets) relu à "+new Date(PT.syncedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". ":"")+"Rendez-vous liés à un seul enfant ; aucun trajet scolaire n’est proposé.")+'</p>'+
+    '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):(PT.syncedAt?"Google Agenda (Trajets) relu à "+new Date(PT.syncedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". ":"")+"Rendez-vous concernant un ou plusieurs enfants ; aucun trajet scolaire n’est proposé.")+'</p>'+
     '<div class="pr-note"><b>Sélectionner les déplacements à enregistrer ce mois-ci</b><p class="muted small">Cochez uniquement les sorties que vous avez réalisées et souhaitez comptabiliser. Les autres restent en attente. Chaque distance sera vérifiée avant confirmation.</p>'+
     '<div class="btns"><button type="button" class="btn" data-act="ptSelectAll"'+(!eligible?' disabled':'')+'>Tout cocher (effectués)</button> <button type="button" class="btn" data-act="ptClearSelection"'+(!chosen?' disabled':'')+'>Tout décocher</button></div>'+
     '<button type="button" class="btn primary block" data-act="ptBatchStart"'+(!chosen?' disabled':'')+'>Examiner et enregistrer '+chosen+' sortie(s) sélectionnée(s)</button></div>'+
