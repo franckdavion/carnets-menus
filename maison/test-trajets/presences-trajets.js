@@ -142,6 +142,7 @@ function ptTripForm(ev){
     groupable.map(x=>'<label class="field" style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pt_group" value="'+ptEsc(x.key)+'"'+(/\bcoiffeur\b/.test(PRTR.norm(ev.title))?' checked':'')+'> <span>'+ptEsc(prChild(x.child_id)?.first_name||"Enfant")+' — '+ptEsc(x.title)+(x.local_time&&x.local_time!=="jour"?" ("+ptEsc(x.local_time)+")":"")+'</span></label>').join("")+
     '</div>':'';
   openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
+    '<div class="btns" style="margin:8px 0 14px"><button type="button" class="btn block" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ne pas comptabiliser ce rendez-vous (0 km)</button></div>'+
     '<form data-form="ptTrip">'+
     '<label class="field"><span class="label">Départ (domicile par défaut)</span><select class="input" name="origin">'+ptOptions(home?.id||"other")+'</select></label>'+
     '<label class="field"><span class="label">Autre départ, si sélectionné</span><input class="input" name="origin_text" placeholder="Adresse de départ"></label>'+
@@ -163,7 +164,6 @@ function ptTripForm(ev){
     '<div class="btns"><button type="button" class="btn" data-act="ptCalc">Calculer les kilomètres</button></div>'+
     '<div class="sheet-sticky btns"><button class="btn primary block" type="submit" '+(ev.day>today()?'disabled':'')+'>Confirmer le déplacement effectué</button></div>'+
     (ev.day>today()?'<p class="muted small">La confirmation sera possible le jour du rendez-vous ou après.</p>':'')+
-    '<div class="btns"><button class="btn block" type="button" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ne pas comptabiliser ce rendez-vous</button></div>'+
     '</form>',{ptTrip:ev.key});
   ptUpdateTripFields(document.querySelector('#sheetIn form[data-form="ptTrip"]'));
 }
