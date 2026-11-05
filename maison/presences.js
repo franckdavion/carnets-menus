@@ -468,7 +468,7 @@ document.addEventListener("click", async e => {
   const act = b.dataset.act, v = b.dataset.v;
   if (!act || !act.startsWith("pr")) return;
   switch (act) {
-    case "prTab": PR.tab = v; render(); window.scrollTo(0, 0); break;
+    case "prTab": PR.tab = v; render(); window.scrollTo(0, 0); if (v === "trips" && typeof ptRefresh === "function") ptRefresh(); break;
     case "prReload": PR.loadErr = ""; prLoad(true); render(); break;
     case "prNav": {
       const n = +v;
@@ -485,7 +485,7 @@ document.addEventListener("click", async e => {
     case "prAnChild": PR.an.child = v; render(); break;
     case "prAnKind": PR.an.kind = v; render(); break;
     case "prSyncYear": prSync(`${PR.an.y}-01-01`, `${PR.an.y}-12-31`, true); break;
-    case "prRefresh": PR.synced.clear(); { const [a, z] = prWin(); prSync(a, z, true); } break;
+    case "prRefresh": PR.synced.clear(); { const [a, z] = prWin(); prSync(a, z, true); if (PR.tab === "trips" && typeof ptRefresh === "function") ptRefresh(); } break;
     case "prCals": prCalsSheet(); break;
     case "prGConnect": gConnect(false, "presences"); break;
     case "prDay": prDaySheet(b.dataset.c, b.dataset.d); break;

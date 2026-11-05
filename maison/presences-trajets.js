@@ -5,7 +5,7 @@ const PT = {
   month: today().slice(0,7), child:"", places:null, records:null,
   suggestions:[], marks:[], rules:[], ruleExcluded:[],
   loading:false, syncing:false, monthSynced:"",
-  error:"", syncError:"", calculated:null
+  error:"", syncError:"", calculated:null, syncedAt:0
 };
 const ptEsc = s => esc(String(s == null ? "" : s));
 const ptFmt = n => Number(n || 0).toLocaleString("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -67,8 +67,18 @@ async function ptSync(force=false) {
     PT.ruleExcluded=candidates.filter(x=>rules.has(PRTR.motifKey(x,PR.data.children)));
     PT.suggestions=candidates.filter(x=>!rules.has(PRTR.motifKey(x,PR.data.children)));
     PT.monthSynced=key;
+    PT.syncedAt=Date.now();
   }catch(e){PT.syncError=e.message||"Synchronisation impossible";}
   finally{PT.syncing=false;softRender();}
+}
+// Une mise à jour de Présences ne relisait auparavant que son calendrier.
+// Recharger les décisions et kilomètres du foyer puis relire les événements Google,
+// même lorsqu'un rendez-vous a été ajouté rétroactivement au mois affiché.
+async function ptRefresh() {
+  if (!ptAuthorized() || PT.loading || PT.syncing) return;
+  await ptLoad(true);
+  if (PT.error) return;
+  if (PT.places && !PT.syncing) await ptSync(true);
 }
 function ptOptions(selected,includeOther=true) {
   const saved=(PT.places||[]).map(p=>'<option value="'+ptEsc(p.id)+'"'+(selected===p.id?' selected':'')+'>'+ptEsc(p.label)+'</option>').join("");
@@ -589,7 +599,7 @@ function ptTripsView(){
     (PT.places||[]).map(p=>'<button class="pr-krow" data-act="ptPlaceEdit" data-v="'+ptEsc(p.id)+'"><span class="pr-kn"><b>'+ptEsc(p.is_home?"Domicile · "+p.label:p.label)+'</b><small>'+ptEsc(p.address)+(p.keywords?' · Google : '+ptEsc(p.keywords):'')+'</small></span>›</button>').join("")+
     '<button class="btn" data-act="ptPlaceNew">+ Ajouter un lieu</button></section>';
   const suggestBlock='<section class="pr-panel"><h2 class="pr-h">À vérifier · '+displayed.length+' sortie(s)</h2>'+
-    '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):"Rendez-vous liés à un seul enfant ; aucun trajet scolaire n’est proposé.")+'</p>'+
+    '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):(PT.syncedAt?"Google Agenda (Trajets) relu à "+new Date(PT.syncedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". ":"")+"Rendez-vous liés à un seul enfant ; aucun trajet scolaire n’est proposé.")+'</p>'+
     (displayed.length?displayed.map(({event:x,group})=>'<button class="pr-krow" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><span class="pr-kn"><b>'+ptEsc(group.length>1?"Coiffeur — "+group.length+" enfants":x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+
       ptEsc(group.length>1?group.map(e=>prChild(e.child_id)?.first_name||"Enfant").join(", "):(prChild(x.child_id)?.first_name||""))+' · '+
       (group.length>1?"Un seul aller-retour proposé pour les "+group.length+" rendez-vous":x.mode==="four"?"2 allers-retours":"Aller-retour")+
@@ -715,7 +725,7 @@ document.addEventListener("click",async e=>{
     const [y,m]=PT.month.split("-").map(Number),d=new Date(Date.UTC(y,m-1+Number(v),15));
     PT.month=d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0");PT.monthSynced="";PT.suggestions=[];PT.ruleExcluded=[];softRender();ptSync(true);
   }else if(a==="ptReload")ptLoad(true);
-  else if(a==="ptSync")ptSync(true);
+  else if(a==="ptSync")ptRefresh();
   else if(a==="ptCals")ptCalendarsSheet();
   else if(a==="ptPlaceNew")ptPlaceForm(null);
   else if(a==="ptPlaceEdit")ptPlaceForm(ptPlaceById(v));
