@@ -212,6 +212,27 @@
       (!item.builtin?'<button type="button" class="mn-bg-delete" data-mn-bg-act="remove" data-id="'+esc(item.id)+'" aria-label="Supprimer '+esc(item.name)+'">×</button>':'')+
       '</div>';
   }
+  function currentPreview(){
+    const selected=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
+      prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod):defaultId(prefs.type,modalPeriod);
+    const item=find(selected)||find('p-'+modalPeriod);
+    const label=PERIODS.find(x=>x[0]===modalPeriod)?.[1]||'Matin';
+    const intro=modalPeriod==='matin'?'Bonjour':modalPeriod==='aprem'?'Bel après-midi':
+      modalPeriod==='soir'?'Bonsoir':'Bonne nuit';
+    const text='<span class="mn-bg-preview-caption">'+intro+' · '+esc(item.name)+'</span>';
+    if(item.media==='svg-native'){
+      return '<div class="mn-bg-live-preview mn-bg-preview-art mn-bg-mini-'+esc(modalPeriod)+'"><span class="mn-bg-preview-star">✦</span>'+text+'</div>';
+    }
+    if(item.media==='video'){
+      return '<div class="mn-bg-live-preview">'+
+        '<video data-mn-bg-preview-video="'+esc(item.id)+'" muted loop autoplay playsinline preload="metadata" poster="'+esc(photos[modalPeriod])+'"'+
+        (!item.local?' src="'+esc(item.src)+'"':'')+'></video>'+text+'</div>';
+    }
+    const moving=item.media==='image-motion'&&effectiveMotion();
+    return '<div class="mn-bg-live-preview"><div class="mn-bg-preview-photo'+(moving?' mn-bg-preview-moving':'')+'"'+
+      (item.local?' data-mn-bg-preview-local="'+esc(item.id)+'"':
+      ' style="background-image:url(&quot;'+esc(item.src)+'&quot;)"')+'></div>'+text+'</div>';
+  }
   function html(){
     const kind=modalType,all=catalog().filter(x=>x.type===kind);
     const typelabel=TYPES.find(t=>t[0]===kind)?.[1]||'Photos';
@@ -224,8 +245,9 @@
           '<option value="'+k+'"'+(prefs.mode===k?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
       '<div class="mn-bg-periods" aria-label="Période à personnaliser">'+PERIODS.map(([id,name])=>
         '<button type="button" data-mn-bg-act="period" data-v="'+id+'" aria-pressed="'+(id===modalPeriod)+'">'+name+'</button>').join('')+'</div>'+
-      '<p class="mn-bg-help">'+(prefs.mode==='auto'?'La photo suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
+      '<p class="mn-bg-help">'+(prefs.mode==='auto'?'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
+      currentPreview()+
       '<div class="mn-bg-gallery" role="group" aria-label="'+esc(typelabel)+'">'+all.map(tile).join('')+'</div>'+
       '<label class="mn-bg-motion-label"><input type="checkbox" data-mn-bg-motion '+(prefs.motion?'checked':'')+'> Autoriser les animations (si l’appareil le permet)</label>'+
       '<details class="mn-bg-add" '+(addOpen?'open':'')+'><summary>＋ Ajouter à la bibliothèque « '+esc(typelabel)+' »</summary>'+
@@ -245,6 +267,18 @@
     const scroll=document.querySelector('#sheetIn')?.scrollTop||0;
     host.innerHTML=html();
     requestAnimationFrame(()=>{const el=document.querySelector('#sheetIn');if(el)el.scrollTop=scroll;});
+    host.querySelectorAll('[data-mn-bg-preview-local]').forEach(async element=>{
+      const item=find(element.dataset.mnBgPreviewLocal),src=await mediaSrc(item);
+      if(element.isConnected&&src)element.style.backgroundImage='url("'+src.replace(/"/g,'%22')+'")';
+    });
+    host.querySelectorAll('[data-mn-bg-preview-video]').forEach(async element=>{
+      const item=find(element.dataset.mnBgPreviewVideo);
+      if(!item||!effectiveMotion()){element.pause();return;}
+      const src=await mediaSrc(item);
+      if(!element.isConnected||!src)return;
+      if(!element.src)element.src=src;
+      element.play().catch(()=>{});
+    });
     host.querySelectorAll('[data-mn-bg-thumb]').forEach(async element=>{
       const item=find(element.dataset.mnBgThumb),src=await mediaSrc(item);
       if(element.isConnected&&src)element.style.backgroundImage='url("'+src.replace(/"/g,'%22')+'")';
