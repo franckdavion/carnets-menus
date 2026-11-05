@@ -18,7 +18,7 @@
 d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));d.setAttribute("data-depth",g("cm_depth","plat"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Caveat:wght@600;700&family=Abril+Fatface&display=swap">
-<link rel="stylesheet" href="carnet.css">
+<link rel="stylesheet" href="carnet.css?v=20261105rec3">
 
 </head><body>
 <div class="wrap">
@@ -100,21 +100,38 @@ d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_
 
   <!-- RECETTES -->
   <section class="view" id="v-rec" hidden>
-    <div class="row" style="justify-content:space-between">
-      <h2>Recettes</h2>
-      <div class="row">
-      <button class="btn" data-act="impPaste">📝 Texte libre</button>
-      <button class="btn" data-act="goFind">Importer du web ↓</button>
-      <button class="btn" data-act="impOpen">📸 Importer une photo</button>
-      <button class="btn" data-act="openReview">🖼️ Revoir les photos</button>
-      <button class="btn primary" data-act="newRecipe">+ Nouvelle recette</button></div>
+    <div class="rec-head">
+      <h2>Mes recettes</h2>
+      <details class="rec-actions" id="recActions">
+        <summary class="btn primary">＋ Ajouter</summary>
+        <button type="button" class="rec-actions-backdrop" data-act="recActionsClose" aria-label="Fermer le menu Ajouter" onclick="this.closest('details').open=false"></button>
+        <div class="rec-actions-menu">
+          <button type="button" data-act="newRecipe"><span aria-hidden="true">✏️</span><span><b>Créer une recette</b><small>Écrire une nouvelle fiche</small></span></button>
+          <button type="button" data-act="goFind"><span aria-hidden="true">🌐</span><span><b>Importer depuis Internet</b><small>Copier le lien d'une recette</small></span></button>
+          <button type="button" data-act="impOpen"><span aria-hidden="true">📷</span><span><b>Photographier une recette</b><small>À partir d'un livre ou d'une photo</small></span></button>
+          <button type="button" data-act="impPaste"><span aria-hidden="true">📝</span><span><b>Coller du texte</b><small>Organiser ingrédients et étapes</small></span></button>
+          <button type="button" data-act="openReview"><span aria-hidden="true">🖼️</span><span><b>Revoir les photos</b><small>Corriger une illustration</small></span></button>
+        </div>
+      </details>
     </div>
     <div id="propBox"></div>
+    <input class="search" id="q" type="search" placeholder="Rechercher une recette ou un ingrédient">
+    <div class="rec-two">
+      <button type="button" class="rec-all" data-act="recAll">Toutes</button>
+      <button type="button" class="fav-quick" id="favQuick" data-act="kindFav" aria-pressed="false">★ Favoris</button>
+      <button type="button" class="filt-btn" id="filtBtn" data-act="openFilt">Filtres (0) ▾</button>
+    </div>
     <details class="fr-rec" id="frRecBox"><summary>🧺 Qu'est-ce que je fais avec…</summary><div id="frSlotRec"></div></details>
-    <input class="search" id="q" type="search" placeholder="Chercher une recette ou un ingrédient">
-    <div class="rec-two"><button type="button" class="fav-quick" id="favQuick" data-act="kindFav" aria-pressed="false">⭐ Mes Favoris</button><button type="button" class="filt-btn" id="filtBtn" data-act="openFilt">🎛️ Filtres (0) ▾</button></div>
     <div class="muted" id="filtSum" style="font-size:13px"></div>
+    <div class="rec-list-head">
+      <span>Les recettes</span>
+      <div class="rec-layout" aria-label="Présentation des recettes">
+        <button type="button" data-act="recLayout" data-v="list" aria-label="Liste compacte" aria-pressed="true" title="Liste compacte">☰</button>
+        <button type="button" data-act="recLayout" data-v="gallery" aria-label="Galerie photos" aria-pressed="false" title="Galerie photos">▦</button>
+      </div>
+    </div>
     <div class="cards" id="recList"></div>
+    <details class="rec-web-panel" id="recWebPanel"><summary>Importer des recettes depuis Internet</summary>
     <form class="idea" id="findForm" novalidate style="margin-top:8px">
       <span class="label">Trouver de nouvelles recettes</span>
       <input id="findIn" class="search" type="search" placeholder="Ex. gratin courgettes" autocomplete="off">
@@ -128,6 +145,7 @@ d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_
       <button class="btn primary" type="submit" style="align-self:flex-start">Importer dans le carnet</button>
       <div id="importStatus" class="muted" style="font-size:13px"></div>
     </form>
+    </details>
   </section>
 
   <!-- COURSES (prepare at home, tick in the store, then "Courses terminées") -->
@@ -558,7 +576,7 @@ Préparation :
 <script src="carnet-semaine.js?v=20261031achat"></script>
 <script src="carnet-courses.js"></script>
 <script src="carnet-repas.js?v=20261031achat"></script>
-<script src="carnet-partage.js?v=20261031achat"></script>
+<script src="carnet-partage.js?v=20261105rec3"></script>
 <script src="carnet-cloud.js?v=20261031achat"></script>
 <script src="maison/pont.js"></script>
 
