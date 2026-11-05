@@ -23,10 +23,17 @@ const mode = process.env.CLEANUP_MODE || 'simulation';
 if (!['simulation', 'suppression'].includes(mode)) throw Error('Mode inconnu : aucune suppression');
 if (mode === 'suppression' && process.env.CLEANUP_CONFIRMATION !== CONFIRMATION)
   throw Error('Phrase de confirmation incorrecte : aucune suppression');
+// Simulation sur la Pull Request ; sur main, simulation puis nettoyage apres
+// fusion explicitement demandee. Tout autre contexte est refuse.
+const event = process.env.GITHUB_EVENT_NAME;
+const ref = process.env.GITHUB_REF;
+const inMain = ref === `refs/heads/${MAIN}` && ['workflow_dispatch', 'push'].includes(event);
+const inReview = event === 'pull_request' &&
+  /^refs\\/pull\\/\\d+\\/merge$/.test(ref || '') &&
+  process.env.GITHUB_BASE_REF === MAIN;
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY ||
-    process.env.GITHUB_REF !== `refs/heads/${MAIN}` ||
-    process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch')
-  throw Error('Ce nettoyage ne fonctionne que manuellement sur main de ce depot');
+    !(mode === 'simulation' ? (inReview || inMain) : inMain))
+  throw Error('Contexte inattendu : aucune suppression');
 if (!process.env.GITHUB_TOKEN) throw Error('Jeton GitHub absent');
 
 const base = `/repos/${REPOSITORY}`;
