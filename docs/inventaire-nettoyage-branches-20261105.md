@@ -66,3 +66,38 @@ Ces branches contiennent des commits absents de l'historique de `main`. **Ne pas
 - Ne pas fusionner plusieurs versions de Trajets ou de CSS sans tests de régression.
 - Ne pas confondre `0 commit en avance` avec `0 différence visuelle` pour les branches divergentes.
 - Préserver les réglages, l'historique des achats et le mode hors ligne.
+
+
+---
+
+## Mise à jour : deuxième phase de nettoyage (5 novembre 2026)
+
+Après la première phase réussie, **17 branches** restaient : `main` et 16 branches divergentes. Les anciennes étapes ci-dessous ont été comparées directement avec une **branche descendante conservée**. Dans les six cas : `ahead_by = 0` (leur historique est entièrement conservé).
+
+| Branche intermédiaire à retirer | Branche descendante à conserver |
+| --- | --- |
+| `test-design-c-meteo-fiable-20261104` | `test-design-cplus-v4-miroir-lumineux` |
+| `test-design-cplus-ultra-premium-v2` | `test-design-cplus-v4-miroir-lumineux` |
+| `test-design-cplus-v3-contours-rotatifs` | `test-design-cplus-v4-miroir-lumineux` |
+| `test-presences-trajets-20261105` | `test-presences-trajets-exclusions-20261105` |
+| `test-presences-trajets-antidoublons-20261105` | `test-presences-trajets-exclusions-20261105` |
+| `test-presences-trajets-groupes-20261105` | `test-presences-trajets-exclusions-20261105` |
+
+Le script exige que la branche descendante existe toujours, que son SHA soit inchangé et que le commit de la branche à retirer soit intégralement contenu dedans. Il refuse toute suppression en cas de divergence, de changement de SHA ou de Pull Request ouverte.
+
+**Branches à conserver et à revoir avant la dernière consolidation :**
+
+- `correctif/smartthings-jeton-et-diagnostic-20261104` : diagnostic SmartThings à confronter à l'intégration actuelle.
+- `correctif-cors-iphone-local-domotique-v4` : ancien correctif iPhone et fonctions Cloud.
+- `design-c-ultra-premium-accueil-explorer` : variante design à comparer aux versions acceptées.
+- `online-preview-maisonnee-agenda-20261104` : prévisualisation agenda, sans conclusion de validation.
+- `test-agenda-plus-google-style-20261104` : agenda et Google Tasks.
+- `test-design-cplus-v4-miroir-lumineux` : dernière branche de la série C+.
+- `test-presences-trajets-exclusions-20261105` : dernier état de la série historique Trajets.
+- `test-refonte-recettes-photos-20261105` : refonte Recettes en attente.
+- `test-selection-mensuelle-trajets-20261105` : sélection mensuelle des trajets en cours de test.
+- `test-synchro-repas-agenda-20261105` : ancien chantier de synchronisation Repas/Agenda.
+
+**Important :** les six branches ancêtres ne sont pas toutes incluses dans `main`. Leurs commits sont conservés dans les deux branches descendantes explicitement protégées. La suppression ne signifie **pas** validation ni fusion des fonctionnalités correspondantes.
+
+Cible à terme : `main` et une branche de développement `test`, sans fusion automatique des fonctionnalités non validées.
