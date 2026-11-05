@@ -18,7 +18,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="stylesheet" href="maison.css?v=20261105-trajets-prod-v1">
 <link rel="stylesheet" href="trajets-v2.css?v=20261105-trajets-v2-prod-1">
-<link rel="stylesheet" href="test-fonds/fonds-bibliotheque.css?v=20261105-fonds-meteo-v4">
+<link rel="stylesheet" href="test-fonds/fonds-bibliotheque.css?v=20261105-fonds-meteo-v5">
 
 </head>
 <body>
@@ -132,8 +132,8 @@
 })();
 </script>
 <script src="bandeau-jour.js"></script>
-<script src="test-fonds/accueil.js?v=20261105-fonds-meteo-v4"></script>
-<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-meteo-v4"></script>
+<script src="test-fonds/accueil.js?v=20261105-fonds-meteo-v5"></script>
+<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-meteo-v5"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
