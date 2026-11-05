@@ -5,7 +5,7 @@
  */
 const REPOSITORY = 'franckdavion/carnets-menus';
 const MAIN = 'main';
-const CONFIRMATION = 'SUPPRIMER-LES-10-BRANCHES-CONTROLEES';
+const CONFIRMATION = 'SUPPRIMER-LES-BRANCHES-CONTROLEES';
 const candidates = new Map([
   ['correctif-rafraichissement-trajets-20261105', '3209a2ebf045e99b728f9c4007314d7adfd26cb9'],
   ['publication-presences-trajets-20261105', '0e14375fe2fc57ccff063c7f1d1b866da4dc73e0'],
