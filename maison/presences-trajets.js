@@ -31,7 +31,7 @@ async function ptLoad(force=false) {
 }
 async function ptSync(force=false) {
   if (!ptAuthorized() || PT.syncing || !PT.places) return;
-  const key=PT.month, cals=prSet().cals||[];
+  const key=PT.month, cals=prSet().trip_cals||prSet().cals||[];
   if (!cals.length) {PT.syncError="Choisissez d'abord les agendas Google dans Enfants.";softRender();return;}
   if (!force && PT.monthSynced===key) return;
   PT.syncing=true; PT.syncError="";softRender();
@@ -105,6 +105,23 @@ async function ptSavePlace(form) {
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
 const ptPlaceById = id => (PT.places||[]).find(p=>p.id===id);
+
+function ptCalendarsSheet() {
+  const picked=new Set(prSet().trip_cals||prSet().cals||[]);
+  if(!G.list.length) {
+    openSheet("Agendas des trajets",'<p class="muted small">La liste des agendas Google est indisponible pour le moment.</p><button class="btn" data-act="prGConnect">Connecter Google Agenda</button> <button class="btn" data-act="ptCals">Réessayer</button>');
+    if(G.connected)gFetch().then(()=>{if(document.querySelector("#sheet").open)ptCalendarsSheet();});
+    return;
+  }
+  openSheet("Agendas des trajets",'<p class="muted small">Choisissez les agendas des activités et rendez-vous. Ce choix ne change pas les agendas analysés pour les présences.</p>'+
+    '<form data-form="ptCals">'+G.list.map(c=>'<label class="pr-krow"><input type="checkbox" name="calendar" value="'+ptEsc(c.id)+'"'+(picked.has(c.id)?' checked':'')+'><span class="pr-kn"><b>'+ptEsc(c.name)+'</b></span></label>').join("")+
+    '<div class="sheet-sticky btns"><button class="btn primary block" type="submit">Enregistrer les agendas</button></div></form>');
+}
+async function ptSaveCalendars(form) {
+  const cals=[...new Set(new FormData(form).getAll("calendar"))];
+  await prSaveSet({trip_cals:cals});
+  PT.monthSynced="";PT.suggestions=[];closeSheet();softRender();if(cals.length)ptSync(true);
+}
 function ptTripForm(ev){
   const home=ptHome(), auto=PRTR.placeFor(ev,PT.places||[]);
   const match=(PT.places||[]).find(p=>ev.location&&PRTR.norm(p.address)===PRTR.norm(ev.location));
@@ -252,7 +269,7 @@ function ptTripsView(){
   const suggestBlock='<section class="pr-panel"><h2 class="pr-h">À vérifier · '+suggestions.length+' déplacement(s)</h2>'+
     '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):"Rendez-vous liés à un seul enfant ; aucun trajet scolaire n’est proposé.")+'</p>'+
     (suggestions.length?suggestions.map(x=>'<button class="pr-krow" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+' · '+(x.mode==="four"?"2 allers-retours":"Aller-retour")+(x.location?' · '+ptEsc(x.location):'')+'</small></span>›</button>').join(""):'<p class="muted small">Aucune proposition pour ce mois, ou tous les trajets sont déjà confirmés.</p>')+
-    '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button></section>';
+    '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button> <button class="btn" data-act="ptCals">Choisir les agendas</button></section>';
   const history='<section class="pr-panel"><h2 class="pr-h">Trajets confirmés · '+rec.length+'</h2>'+byKid+
     (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
     '<button class="btn" data-act="ptExport">Exporter le mois (Excel / CSV)</button></section>';
@@ -270,6 +287,7 @@ document.addEventListener("click",async e=>{
     PT.month=d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0");PT.monthSynced="";PT.suggestions=[];softRender();ptSync(true);
   }else if(a==="ptReload")ptLoad(true);
   else if(a==="ptSync")ptSync(true);
+  else if(a==="ptCals")ptCalendarsSheet();
   else if(a==="ptPlaceNew")ptPlaceForm(null);
   else if(a==="ptPlaceEdit")ptPlaceForm(ptPlaceById(v));
   else if(a==="ptTrip"){const ev=PT.suggestions.find(x=>x.key===v);if(ev)ptTripForm(ev);}
@@ -290,4 +308,5 @@ document.addEventListener("submit",async e=>{
   if(f.dataset.form==="ptPlace")await ptSavePlace(f);
   else if(f.dataset.form==="ptTrip")await ptSaveTrip(f);
   else if(f.dataset.form==="ptEdit")await ptEditSave(f);
+  else if(f.dataset.form==="ptCals")await ptSaveCalendars(f);
 });
