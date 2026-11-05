@@ -152,7 +152,7 @@ let who = null;                               // member filter on Today and Tâc
 let weekA = mondayOf(today()), weekR = mondayOf(today());
 let repasTab = "menu";
 let S = blank();
-function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null, shelly: [], vShelly: false }; }
+function blank() { return { hh: null, me: null, members: [], tasks: [], log: [], events: [], meals: [], shop: [], msgs: [], locs: [], v2: true, bdays: [], exp: [], docs: [], sched: [], v3: true, photos: [], v4: true, recipes: null, carnetPlan: null, shelly: [], vShelly: false }; }
 const TABLES = { members: "household_members", tasks: "tasks", log: "task_log", events: "events", meals: "meals", shop: "shopping_items", msgs: "messages", locs: "member_locations" };
 const V2 = ["msgs", "locs"]; // tables added by supabase/migrations/0002_messages_positions.sql
 
@@ -264,6 +264,37 @@ window.maisonneeLoyaltyCloudSession = async function () {
     userId: account.id };
 };
 
+/* Lecture de l'aperçu des repas dans le Carnet commun : même source que la page Repas.
+   L'ancien tableau meals reste intact pour le pont et ses actions existantes. */
+async function refreshCarnetPlan() {
+  const owner = S.hh && S.hh.carnet_user;
+  if (mode !== "cloud" || !sb || !owner) return;
+  try {
+    const { data, error } = await sb.from("user_state").select("menu,updated_at").eq("user_id", owner).maybeSingle();
+    if (error) throw error;
+    const weeks = data && data.menu && data.menu.menu && data.menu.menu.weeks;
+    if (!weeks || typeof weeks !== "object") return;
+    const ids = [...new Set(Object.values(weeks).flatMap(w => Object.values(w || {}).map(slot => slot && slot.id).filter(Boolean)))];
+    const names = { ...(S.carnetPlan && S.carnetPlan.owner === owner ? S.carnetPlan.names : {}) };
+    const legacy = ids.filter(id => !id.startsWith("c-"));
+    if (legacy.length) {
+      const result = await sb.from("recipes").select("legacy_id,name").in("legacy_id", legacy);
+      if (!result.error) for (const recipe of result.data || []) names[recipe.legacy_id] = recipe.name;
+    }
+    const custom = ids.filter(id => id.startsWith("c-")).map(id => id.slice(2));
+    if (custom.length) {
+      const result = await sb.from("recipes").select("id,name").in("id", custom);
+      if (!result.error) for (const recipe of result.data || []) names["c-" + recipe.id] = recipe.name;
+    }
+    if (!S.hh || S.hh.carnet_user !== owner) return;
+    S.carnetPlan = { owner, weeks, names, updatedAt: data.updated_at };
+    saveLocal();
+    if (screen === "app" && view === "home") softRender();
+  } catch (error) {
+    console.warn("Aperçu des repas du Carnet : synchronisation différée", error);
+  }
+}
+
 async function loadCloud(hid) {
   const since = addDays(today(), -60);
   const [hh, mm, tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
@@ -287,12 +318,14 @@ async function loadCloud(hid) {
   // messages and positions need the second script; the rest of the app works without it
   const v2 = !ms.error && !lc.error;
   const recipes = S.recipes, favs = S.favs;
+  const carnetPlan = S.carnetPlan && S.carnetPlan.owner === hh.data.carnet_user ? S.carnetPlan : null;
   S = { v5: "carnet_user" in hh.data, favs, hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
     msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
-    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes, shelly: [], vShelly: false };
+    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes, carnetPlan, shelly: [], vShelly: false };
   const shly = await sb.from("shelly_devices").select("*").eq("household_id", hid).order("position");
   S.vShelly = !shly.error;
   S.shelly = S.vShelly ? (shly.data || []) : [];
+  await refreshCarnetPlan();
   saveLocal();
 }
 
@@ -407,6 +440,10 @@ function listen(hid) {
       }
       saveLocal(); softRender();
     });
+  }
+  if (S.hh && S.hh.carnet_user) {
+    rt.on("postgres_changes", { event: "*", schema: "public", table: "user_state", filter: "user_id=eq." + S.hh.carnet_user },
+      () => { refreshCarnetPlan(); });
   }
   rt.on("postgres_changes", { event: "UPDATE", schema: "public", table: "households", filter: "id=eq." + hid }, p => { S.hh = p.new; saveLocal(); softRender(); });
   rt.subscribe();
@@ -634,6 +671,20 @@ function occurrences(from, to) {
 const recipeOf = id => (S.recipes || DEMO_RECIPES).find(r => r.id === id) || null;
 const mealAt = (day, slot) => S.meals.find(m => m.day === day && m.slot === slot) || null;
 function mealName(m) { if (!m) return ""; if (m.recipe_id) { const r = recipeOf(m.recipe_id); if (r) return r.name; } return m.label || (m.recipe_id ? "Recette" : ""); }
+/* null = carnet non chargé ; chaîne vide = réellement aucun repas pour ce créneau. */
+function carnetMealName(day, slot) {
+  if (!(S.hh && S.hh.carnet_user)) return mealName(mealAt(day, slot));
+  const plan = S.carnetPlan;
+  if (!plan || plan.owner !== S.hh.carnet_user) return null;
+  const week = plan.weeks && plan.weeks[mondayOf(day)] || {};
+  const meal = week[cap(DAYS[isoDay(day) - 1]) + "|" + slot];
+  if (!meal) return "";
+  if (meal.note) return String(meal.note);
+  if (meal.left) return "Restes : " + String(meal.left);
+  if (!meal.id) return "";
+  const recipe = (S.recipes || []).find(r => r.legacy_id === meal.id || "c-" + r.id === meal.id);
+  return recipe && recipe.name || (plan.names && plan.names[meal.id]) || "Repas prévu";
+}
 function fmtQty(q, u) {
   if (!q) return u && u !== "pièce" ? u : "";
   let n = q;
