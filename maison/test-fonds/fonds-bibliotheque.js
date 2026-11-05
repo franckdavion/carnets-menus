@@ -133,16 +133,10 @@
     if(!el){el=document.createElement('div');el.className='mn-bg-layer';el.setAttribute('aria-hidden','true');frame.prepend(el)}
     return el;
   }
-  function updateControls(frame){
-    const hero=frame.querySelector('.ultimate-hero');
-    if(!hero||hero.querySelector('[data-mn-bg-act="open"]'))return;
-    hero.insertAdjacentHTML('beforeend','<button type="button" class="mn-bg-open" data-mn-bg-act="open" aria-label="Choisir le fond d’accueil" title="Bibliothèque de fonds"><span aria-hidden="true">▧</span><span>Fonds</span></button>');
-  }
   async function apply(root=document){
     hydrate();
     const frame=root.querySelector?.('.mn-dayframe')||(root.matches?.('.mn-dayframe')?root:null);
     if(!frame)return;
-    updateControls(frame);
     const period=frame.dataset.mnBand||'matin',item=currentItem(period),moving=effectiveMotion();
     const sig=[item.id,period,moving,document.hidden].join('|');
     if(sig===lastMediaSig&&frame.dataset.mnBgItem===item.id)return;
@@ -372,6 +366,20 @@
   document.addEventListener('toggle',e=>{
     if(e.target.matches('.mn-bg-add'))addOpen=e.target.open;
   },true);
+  // Réglage accessible dans Ma famille, pas sur le bandeau météo.
+  // Seule la vue existante est étendue ; aucune autre navigation n'est remplacée.
+  if(typeof VIEWS!=='undefined'&&typeof VIEWS.foyer==='function'){
+    const originalFamilyView=VIEWS.foyer;
+    VIEWS.foyer=function(){
+      const original=originalFamilyView.apply(this,arguments);
+      return original+'<h2>Personnalisation de l’accueil</h2>'+
+        '<div class="card mn-bg-family-card">'+
+        '<div class="mn-bg-family-desc"><strong>Fonds d’écran</strong>'+
+        '<p class="muted small">Photos, animations et photos animées. Choisissez un fond pour chaque moment de la journée.</p></div>'+
+        '<button type="button" class="btn mn-bg-family-action" data-mn-bg-act="open">Choisir les fonds</button>'+
+        '</div>';
+    };
+  }
   // Compatibilité avec le bandeau existant, sans altérer la météo ni sa logique.
   if(window.mnJour?.mount){
     const original=window.mnJour.mount;
