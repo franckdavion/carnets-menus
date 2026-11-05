@@ -94,12 +94,20 @@ async function ptRefresh() {
   if (PT.error) return;
   if (PT.places && !PT.syncing) await ptSync(true);
 }
+// Recalcul immédiat pour les champs iPhone : softRender() attend sinon que
+// l'input ou le select perde le focus, laissant temporairement des totaux périmés.
+function ptRenderSelectionNow(){
+  const position=window.scrollY;
+  if(document.activeElement?.matches?.("input, select"))document.activeElement.blur();
+  render();
+  window.scrollTo(0,position);
+}
 // La sélection est locale à l'écran et ne confirme aucun kilomètre toute seule.
 function ptChangeMonth(month) {
   if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||PT.month===month)return;
   PT.month=month;PT.monthSynced="";PT.suggestions=[];PT.ruleExcluded=[];
   PT.selected.clear();PT.batch=[];PT.batchTotal=0;
-  softRender();ptSync(true);
+  ptRenderSelectionNow();ptSync(true);
 }
 function ptSelectedTrips() {
   const visible=PT.suggestions.filter(x=>ptIncludesChild(x,PT.child));
@@ -877,17 +885,12 @@ document.addEventListener("change",e=>{
   if(e.target.matches("[data-pt-select]")){
     const k=e.target.dataset.ptSelect;
     const entry=ptSelectedTrips().find(x=>x.event.key===k);
-    if(entry){if(e.target.checked)PT.selected.add(k);else PT.selected.delete(k);softRender();}
+    if(entry){if(e.target.checked)PT.selected.add(k);else PT.selected.delete(k);ptRenderSelectionNow();}
     return;
   }
   if(e.target.matches("[data-pt-child]")){
     PT.child=e.target.value;PT.selected.clear();
-    // Un select iPhone reste parfois actif après "change". softRender() attendrait
-    // sa perte de focus et laisserait affichés les trajets de tous les enfants.
-    const position=window.scrollY;
-    e.target.blur();
-    render();
-    window.scrollTo(0,position);
+    ptRenderSelectionNow();
   }
   const trip=e.target.closest('form[data-form="ptTrip"]');
   if(trip){PT.calculated=null;ptUpdateTripFields(trip);}
