@@ -80,3 +80,107 @@ body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-kenburns{animation-play-s
 .mn-bg-foot{color:#9fbfdb!important}
 @media(min-width:700px){.mn-bg-lib{max-width:620px;margin:auto}.mn-bg-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}.mn-bg-tile-preview{height:120px}}
 @media(max-width:350px){.mn-bg-gallery{gap:6px}.mn-bg-tile-name{font-size:12px}.mn-bg-tabs button{font-size:10px}}
+
+
+/* Météo réelle — calques décoratifs non interactifs, isolés au bandeau d'accueil. */
+.mn-bg-weather-settings{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px solid #72b1e46b;border-radius:15px;background:rgba(8,27,61,.65);}
+.mn-bg-weather-settings .field{margin:0}
+.mn-bg-weather-settings p{margin:0;color:#bfd8f3;font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+.mn-bg-settings-label{display:block;color:#e7f5ff;font-size:13px;margin-top:2px}
+.mn-bg-conditions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.mn-bg-conditions button{min-width:0;min-height:40px;padding:7px 4px;border-radius:12px;border:1px solid #609fc6a6;background:#102d54;color:#cce6f9;font-size:12px;font-weight:700}
+.mn-bg-conditions button[aria-pressed="true"]{border-color:#c3efff;background:#1d72bf;box-shadow:0 0 9px #52caff85;color:#fff}
+body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;isolation:isolate}
+body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden;isolation:isolate}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="none"] .mn-bg-sky-fx,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="unknown"] .mn-bg-sky-fx{display:none}
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration[data-mn-bg-weather]:not([data-mn-bg-weather="none"]) .mn-bg-layer{display:block}
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-bg-photo,
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-bg-video{display:none}
+body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::before,
+body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::after{content:"";position:absolute;inset:-25%;display:block;pointer-events:none;opacity:0}
+/* Ciel clair : halo solaire discret (ou lueur de lune la nuit). */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="clear"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="clear"] .mn-bg-weather-fx::before{
+  opacity:.55;background:radial-gradient(ellipse at 15% 5%,rgba(255,228,152,.62),transparent 42%);
+}
+body:has(main.view-home) .mn-dayframe[data-mn-band="nuit"][data-mn-bg-weather="clear"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-band="nuit"][data-mn-bg-weather="clear"] .mn-bg-weather-fx::before{
+  opacity:.5;background:radial-gradient(ellipse at 22% 14%,rgba(161,206,255,.48),transparent 42%);
+}
+/* Nuages : bancs gris-bleutés glissant lentement. */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="clouds"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="clouds"] .mn-bg-weather-fx::before{
+  opacity:.56;background:radial-gradient(ellipse at 16% 16%,rgba(213,227,244,.83),transparent 42%),
+  radial-gradient(ellipse at 65% 14%,rgba(184,201,222,.67),transparent 50%),linear-gradient(180deg,rgba(27,45,79,.30),transparent 65%);
+  animation:mn-bg-clouds 38s ease-in-out infinite alternate;
+}
+/* Pluie : traits fins en diagonale, vitesse douce pour économiser la batterie. */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-weather-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-weather-fx::before{
+  opacity:.66;background:repeating-linear-gradient(105deg,transparent 0 19px,rgba(197,231,255,.35) 20px 21px,transparent 22px 38px);
+  background-size:200px 200px;animation:mn-bg-rain 2.9s linear infinite;
+}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-weather-fx::after,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-weather-fx::after{
+  opacity:.54;background:linear-gradient(180deg,rgba(22,38,67,.57),transparent 82%);
+}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-strength="light"][data-mn-bg-weather="rain"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-strength="light"][data-mn-bg-weather="rain"] .mn-bg-weather-fx::before{opacity:.32}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-strength="strong"][data-mn-bg-weather="rain"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-strength="strong"][data-mn-bg-weather="rain"] .mn-bg-weather-fx::before{opacity:.9}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-weather-fx::after{
+  opacity:.66;background:linear-gradient(130deg,rgba(7,13,37,.57),rgba(22,31,77,.25));
+  animation:mn-bg-storm 18s ease-in-out infinite;
+}
+/* Neige : flocons arrondis répartis sur plusieurs couches. */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-weather-fx::before{
+  opacity:.83;background-image:radial-gradient(2px 2px at 14px 22px,#fff 97%,transparent),
+    radial-gradient(3px 3px at 110px 68px,#fff 97%,transparent),
+    radial-gradient(2px 2px at 183px 129px,#fff 97%,transparent);
+  background-size:220px 170px;animation:mn-bg-snow 16s linear infinite;
+}
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-sky-fx::after,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-weather-fx::after{
+  opacity:.38;background:linear-gradient(180deg,rgba(202,219,238,.28),transparent 66%);
+}
+/* Brouillard : nappe de brume presque immobile. */
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="fog"] .mn-bg-sky-fx::before,
+body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="fog"] .mn-bg-weather-fx::before{
+  opacity:.70;background:linear-gradient(0deg,rgba(197,214,226,.66),rgba(153,183,204,.4) 36%,transparent 83%);
+  animation:mn-bg-fog 27s ease-in-out infinite alternate;
+}
+/* Prévisualisation dans la feuille, sans changer les conditions réelles. */
+.mn-bg-live-preview[data-mn-bg-preview-weather]::before{content:"";position:absolute;z-index:1;inset:0;opacity:.3;pointer-events:none}
+.mn-bg-live-preview[data-mn-bg-preview-weather="clear"]::before{background:radial-gradient(circle at 20% 5%,#ffe59cbf,transparent 56%)}
+.mn-bg-live-preview[data-mn-bg-preview-weather="clouds"]::before{background:linear-gradient(180deg,#a5c1d5a0,transparent 70%)}
+.mn-bg-live-preview[data-mn-bg-preview-weather="rain"]::before,
+.mn-bg-live-preview[data-mn-bg-preview-weather="storm"]::before{opacity:.60;background:repeating-linear-gradient(105deg,transparent 0 14px,#d4ebff7e 15px 16px,transparent 17px 28px);animation:mn-bg-rain 4s linear infinite}
+.mn-bg-live-preview[data-mn-bg-preview-weather="storm"]::before{background:repeating-linear-gradient(105deg,transparent 0 14px,#a8d3fb7e 15px 16px,transparent 17px 28px),linear-gradient(#12223f55,#12223f55)}
+.mn-bg-live-preview[data-mn-bg-preview-weather="snow"]::before{opacity:.9;background:radial-gradient(2px 2px at 15px 24px,#fff 98%,transparent),radial-gradient(3px 3px at 76px 61px,#fff 98%,transparent);background-size:110px 80px;animation:mn-bg-snow 12s linear infinite}
+.mn-bg-live-preview[data-mn-bg-preview-weather="fog"]::before{opacity:.64;background:linear-gradient(0deg,#cedfe6ca,#aec9d988,transparent)}
+@keyframes mn-bg-clouds{from{transform:translateX(-6%) scale(1)}to{transform:translateX(6%) scale(1.09)}}
+@keyframes mn-bg-rain{from{background-position:0 0}to{background-position:20px 200px}}
+@keyframes mn-bg-snow{from{background-position:0 -100px}to{background-position:30px 120px}}
+@keyframes mn-bg-fog{from{transform:translateX(-6%)}to{transform:translateX(8%)}}
+@keyframes mn-bg-storm{0%,85%,100%{filter:brightness(1)}87%{filter:brightness(1.12)}}
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-sky-fx *,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-bg-weather-fx *,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-sky-fx *,
+body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-weather-fx *{animation-play-state:paused!important}
+@media(prefers-reduced-motion:reduce){
+ body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::before,
+ body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::after,
+ body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::before,
+ body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::after,
+ .mn-bg-live-preview[data-mn-bg-preview-weather]::before{animation:none!important}
+}
+@media(max-width:380px){.mn-bg-conditions{gap:4px}.mn-bg-conditions button{font-size:11px;padding:7px 2px}}
