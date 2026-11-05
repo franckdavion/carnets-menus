@@ -127,3 +127,22 @@ Pour cette branche uniquement, l'outil de nettoyage conserve un **contrôle de S
 - Trajets : `test-selection-mensuelle-trajets-20261105` et `test-presences-trajets-exclusions-20261105`.
 - Correctifs domotiques : `correctif/smartthings-jeton-et-diagnostic-20261104`, `correctif-cors-iphone-local-domotique-v4`.
 - Design et agenda historiques : branches restantes à évaluer. Aucune fusion fonctionnelle réalisée.
+
+
+---
+
+## Quatrième phase : style C+ et anciens correctifs Domotique
+
+Branches proposées au nettoyage, après contrôle des ajouts entre l'ancêtre commun et les branches :
+
+| Branche | Fonctionnalités ajoutées et préservées dans `main` | Différences sans reprise à l'identique |
+| --- | --- | --- |
+| `test-design-cplus-v4-miroir-lumineux` | 53 lignes de météo/accueil et 138 lignes de CSS C+ V4 déjà présentes dans `main` | 2 versions de cache dans `maison/index.html` |
+| `correctif-cors-iphone-local-domotique-v4` | Même météo et CSS, 4 autorisations CORS locales présentes dans les fonctions cloud de `main` | 2 versions de cache dans `maison/index.html` |
+| `correctif/smartthings-jeton-et-diagnostic-20261104` | 39 lignes d'interface SmartThings et 40 lignes de correction des fonctions SmartThings présentes dans `main` | 1 version de cache dans `maison/index.html` |
+
+Le contrôle des lignes ajoutées est **en plus** de la comparaison de l'arbre : pour toute suppression, le script vérifie les SHA exacts de tous les fichiers modifiés de la branche et de leur équivalent actuel dans `main`. Toute modification de l'un de ces fichiers bloque l'opération. Les noms et SHA des branches sont figés, et les PR ouvertes empêchent la suppression.
+
+Les branches `design-c-ultra-premium-accueil-explorer`, `online-preview-maisonnee-agenda-20261104`, `test-agenda-plus-google-style-20261104`, `test-presences-trajets-exclusions-20261105`, `test-refonte-recettes-photos-20261105` et `test-selection-mensuelle-trajets-20261105` sont **exclues de ce nettoyage** : leurs différences méritent un examen ou des tests supplémentaires.
+
+La suppression de ces branches de correctifs n'affecte ni la configuration réelle des modules Domotique ni les Edge Functions déployées dans Supabase. Elle retire uniquement les anciennes références GitHub, après que leurs contributions ont été constatées dans les fichiers de `main`.
