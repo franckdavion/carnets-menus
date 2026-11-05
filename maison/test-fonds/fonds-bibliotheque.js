@@ -151,6 +151,14 @@
     frame.classList.toggle('mn-bg-motion-off',!moving);
     const l=layer(frame);
     l.replaceChildren();
+    // Sans personnalisation : conserver exactement le fond photo d'origine,
+    // sans calque supplémentaire ni changement d'opacité.
+    if(item.builtin&&item.media==='image'&&item.id==='p-'+period){
+      l.style.display='none';
+      frame.style.removeProperty('background-image');
+      return;
+    }
+    l.style.display='';
     if(item.media==='svg-native'){
       frame.style.setProperty('background-image','none','important');
       return;
