@@ -2314,7 +2314,14 @@ document.addEventListener("submit", async e => {
           if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
           const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (!r.ok) throw new Error(r.status === 403 ? "Google refuse la modification : cet agenda est peut-être en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
-          closeSheet(); toast("Modifié dans Google Agenda.", null, null, null, "agenda"); if (typeof gFetch === "function") gFetch();
+          // Une modification ouverte depuis Trajets retourne à sa fiche,
+          // après relecture Google, sans confirmer de kilomètres.
+          const returnTrip = sheetCtx?.ptTripReturn;
+          const updatedGoogleEvent = returnTrip ? await r.json().catch(() => null) : null;
+          if (returnTrip && typeof ptAfterGoogleEventSave === "function")
+            await ptAfterGoogleEventSave(returnTrip, updatedGoogleEvent);
+          else { closeSheet(); toast("Modifié dans Google Agenda.", null, null, null, "agenda"); }
+          if (typeof gFetch === "function") gFetch();
         } catch (err) { eventFormFeedback(f, "Modification impossible : " + (err.message || "réseau ?")); }
         finally { btn.disabled = false; }
         break;
