@@ -25,22 +25,85 @@
       seen.add(key);
       const n = norm(e.summary);
       const kind = pingpong.test(n) ? "pp" : health.test(n) ? "medical" : "activite";
-      rows.push({
+      const local_time=e.start.dateTime?PRC.paris(e.start.dateTime).hm:"jour";
+      const row={
         key, calendar, event_id: e.id, child_id: ids[0],
-        day: span.start, title: e.summary.slice(0, 200),
+        day: span.start, local_time, title: e.summary.slice(0, 200),
         location: String(e.location || "").trim().slice(0, 400),
         kind, mode: kind === "pp" ? "four" : "round"
-      });
+      };
+      row.fingerprint=fingerprint(row,children.find(c=>c.id===ids[0]));
+      rows.push(row);
     }
     return rows;
   }
+  const aliases = p => String(p && p.keywords || "").split(/[,;]/).map(norm).filter(Boolean);
+  function matchingPlaces(title, places) {
+    const text=" "+norm(title)+" ";
+    return (places || []).filter(p=>!p.is_home&&aliases(p).some(k=>text.includes(" "+k+" ")));
+  }
+  // Une ambiguïté de lieux ne doit jamais choisir arbitrairement une adresse.
   function placeFor(ev, places) {
-    const text = norm(ev.title);
-    const choices = (places || []).filter(p => !p.is_home && String(p.keywords || "").trim());
-    return choices.find(p => String(p.keywords).split(/[,;]/).some(k => {
-      const needle = norm(k);
-      return needle && (" " + text + " ").includes(" " + needle + " ");
-    })) || null;
+    const matches=matchingPlaces(ev.title,places);
+    return matches.length===1?matches[0]:null;
+  }
+  function duplicatePlace(draft, places, ownId) {
+    const title=norm(draft.label), addr=norm(draft.address);
+    const words=aliases(draft);
+    for(const p of places||[]) {
+      if(p.id===ownId)continue;
+      if(title&&norm(p.label)===title) return {place:p,reason:"nom"};
+      if(addr&&norm(p.address)===addr) return {place:p,reason:"adresse"};
+      if(words.some(w=>aliases(p).includes(w))) return {place:p,reason:"abréviation"};
+    }
+    return null;
+  }
+  function resolvedLocation(ev,places){
+    const viaAlias=placeFor(ev,places);
+    if(viaAlias)return {place:viaAlias,origin:"favori"};
+    const google=norm(ev.location);
+    if(google){
+      const candidates=(places||[]).filter(p=>!p.is_home &&
+        (norm(p.address)===google || norm(p.label)===google || norm(p.label+" "+p.address)===google));
+      if(candidates.length===1)return {place:candidates[0],origin:"google-favori"};
+      return {place:null,origin:"google",address:ev.location};
+    }
+    return {place:null,origin:"missing"};
+  }
+  const activityKey = (title,child,kind) => {
+    const n=norm(title);
+    if(kind==="pp")return "pp";
+    if(/\\b(ortho|orthophoniste|orthophonie)\\b/.test(n))return "orthophonie";
+    if(/\\b(dentiste|dentaire)\\b/.test(n))return "dentiste";
+    if(/\\b(kine|kinesitherapeute)\\b/.test(n))return "kine";
+    const stop=new Set();
+    for(const name of [child && child.first_name,...(child && child.aliases || [])]) {
+      for(const token of norm(name).split(" "))if(token)stop.add(token);
+    }
+    if(child&&child.first_name)stop.add(norm(child.first_name)[0]);
+    return n.split(" ").filter(t=>t&&!stop.has(t)).join(" ") || n;
+  };
+  function fingerprint(row,child) {
+    const start=row.local_time || "jour";
+    return [row.day,start,row.kind||"activite",activityKey(row.title,child,row.kind||"activite")].join("|");
+  }
+  function dedupe(rows, confirmed=[]) {
+    const seen=new Set();
+    for(const r of confirmed){
+      if(r.event_fingerprint)seen.add(r.child_id+"|"+r.event_fingerprint);
+      seen.add(r.child_id+"|"+r.calendar_id+"|"+r.event_id);
+    }
+    const ordered=[...(rows||[])].sort((a,b)=>
+      Number(!!b.location)-Number(!!a.location)||a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
+    const found=[];
+    for(const r of ordered) {
+      const key=r.child_id+"|"+r.fingerprint;
+      const exact=r.child_id+"|"+r.calendar+"|"+r.event_id;
+      if(seen.has(key)||seen.has(exact))continue;
+      seen.add(key);seen.add(exact);
+      found.push(r);
+    }
+    return found.sort((a,b)=>a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
   }
   function legs(mode, home, destination, returnPlace) {
     if (mode === "one") return [[home, destination]];
@@ -50,7 +113,7 @@
     throw new Error("Type de trajet inconnu.");
   }
   const total = lengths => Math.round(lengths.reduce((s,x)=>s+Number(x||0),0)*10)/10;
-  const API = {norm, matches, make, placeFor, legs, total};
+  const API = {norm, matches, make, placeFor, matchingPlaces, duplicatePlace, resolvedLocation, fingerprint, dedupe, legs, total};
   if (typeof module !== "undefined" && module.exports) module.exports=API;
   else root.PRTR=API;
 })(typeof window !== "undefined" ? window : globalThis);
