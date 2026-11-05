@@ -142,6 +142,7 @@
     if(sig===lastMediaSig&&frame.dataset.mnBgItem===item.id)return;
     lastMediaSig=sig;
     frame.dataset.mnBgItem=item.id;
+    frame.dataset.mnBgArt=item.media==='svg-native'?item.period:'';
     frame.classList.toggle('mn-bg-illustration',item.media==='svg-native');
     frame.classList.toggle('mn-bg-motion-off',!moving);
     const l=layer(frame);
