@@ -273,7 +273,9 @@ function ptTripForm(ev,presetDestinationId=""){
     ?'<div class="pr-note"><b>Sélection du mois · '+(PT.batchTotal-PT.batch.length+1)+' / '+PT.batchTotal+
       '</b><p class="muted small">Vérifiez la distance de ce déplacement, puis confirmez pour passer au suivant.</p>'+
       '<button type="button" class="btn" data-act="ptBatchStop">Arrêter la sélection</button></div>':'';
-  openSheet("Trajet · "+childrenLabel,batchBanner+'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
+  openSheet("Trajet · "+childrenLabel,batchBanner+'<div class="card"><button type="button" data-act="ptOpenAgenda" data-v="'+ptEsc(ev.key)+'" style="display:block;width:100%;text-align:left;padding:0;border:0;background:none;color:inherit;cursor:pointer" aria-label="Modifier le rendez-vous dans Google Agenda">'+
+    '<strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div>'+
+    '<div class="muted small" style="margin-top:9px;color:#91ddff;font-weight:700">✎ Modifier dans l’agenda ›</div></button></div>'+
     '<div class="pr-note" style="margin:8px 0 14px"><strong>Ce déplacement n’est pas pris en charge ?</strong>'+
     '<div class="btns" style="margin-top:8px"><button type="button" class="btn block" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ignorer uniquement ce rendez-vous (0 km)</button></div>'+
     (outing.length>1?'<div class="btns"><button type="button" class="btn block" data-act="ptIgnoreOuting" data-v="'+ptEsc(ev.key)+'">Ignorer toute la sortie ('+outing.length+' rendez-vous)</button></div>':'')+
@@ -312,6 +314,61 @@ function ptTripForm(ev,presetDestinationId=""){
     '</form>',{ptTrip:ev.key});
   ptUpdateTripFields(document.querySelector('#sheetIn form[data-form="ptTrip"]'));
 }
+// Édition de l'événement Google exact, dans le formulaire Agenda Maisonnée.
+async function ptOpenAgenda(key){
+  const ev=PT.suggestions.find(x=>x.key===key);
+  if(!ev)return toast("Ce trajet n’est plus proposé. Relisez Google Agenda.");
+  const back={key:ev.key,calendar:ev.calendar,event_id:ev.event_id,month:PT.month};
+  try{
+    if(!(await gEnsure()))throw new Error("Reconnectez Google Agenda dans Ma famille.");
+    const full=await gApi("calendars/"+encodeURIComponent(ev.calendar)+"/events/"+encodeURIComponent(ev.event_id));
+    if(!full?.start||!full?.end)throw new Error("Rendez-vous Google introuvable.");
+    const access=G.list.find(c=>c.id===ev.calendar)?.accessRole;
+    if(access&&access!=="owner"&&access!=="writer"){
+      const link=full.htmlLink?'<p><a class="btn" target="_blank" rel="noopener noreferrer" href="'+ptEsc(full.htmlLink)+'">Ouvrir dans Google Agenda</a></p>':"";
+      openSheet("Agenda en lecture seule",'<p>Vous ne pouvez pas modifier cet agenda depuis Maisonnée.</p>'+link+
+        '<button type="button" class="btn block" data-act="ptBackToTrip">← Retour au trajet</button>',{ptTripReturn:back});
+    }else{
+      const row=gToForm({id:full.id,title:full.summary||ev.title,place:full.location||"",
+        desc:full.description||"",gs:full.start,ge:full.end});
+      if(!full.reminders||full.reminders.useDefault)row.gDefault=true;
+      else row.reminders=(full.reminders.overrides||[]).map(x=>x.minutes);
+      eventSheet(row,null,!!row.start_time,{cal:ev.calendar,id:ev.event_id,rec:!!full.recurringEventId,colorId:full.colorId||""});
+      sheetCtx.ptTripReturn=back;
+      document.querySelector('#sheetIn form[data-form="event"]')?.insertAdjacentHTML("afterbegin",
+        '<button type="button" class="btn" data-act="ptBackToTrip" style="margin-bottom:12px">← Retour au trajet</button>');
+    }
+    const close=document.querySelector('#sheetIn .sheet-top [data-act="closeSheet"]');
+    if(close)close.dataset.act="ptBackToTrip";
+  }catch(e){toast("Ouverture de l’agenda impossible : "+(e.message||"erreur Google"));}
+}
+function ptBackToTrip(back=sheetCtx?.ptTripReturn){
+  if(!back)return;
+  const ev=PT.suggestions.find(x=>x.key===back.key)||
+    PT.suggestions.find(x=>x.calendar===back.calendar&&x.event_id===back.event_id);
+  if(ev)ptTripForm(ev);
+  else{closeSheet();softRender();toast("Événement introuvable dans les trajets de ce mois.");}
+}
+async function ptAfterGoogleEventSave(back,updated){
+  if(!back)return;
+  try{
+    const newDay=updated?.start?PRC.eventDays(updated)?.start:null;
+    if(newDay&&newDay.slice(0,7)!==PT.month){
+      PT.month=newDay.slice(0,7);PT.suggestions=[];PT.ruleExcluded=[];
+      PT.selected.clear();PT.batch=[];PT.batchTotal=0;
+    }
+    await ptLoad(true);
+    PT.monthSynced="";
+    await ptSync(true);
+    const ev=PT.suggestions.find(x=>x.calendar===back.calendar&&x.event_id===back.event_id);
+    if(ev){ptTripForm(ev);toast("Rendez-vous modifié. Recalculez les kilomètres du trajet.");}
+    else{closeSheet();render();toast("Rendez-vous modifié. Il n’est plus proposé comme trajet : vérifiez la date et les enfants.");}
+  }catch(e){
+    closeSheet();render();
+    toast("Rendez-vous modifié, mais actualisation des trajets impossible : "+(e.message||"erreur Google"));
+  }
+}
+
 function ptFields(form){
   const fd=new FormData(form),values=Object.fromEntries(fd.entries());
   values.pt_group=fd.getAll("pt_group").sort().join(",");
@@ -859,6 +916,8 @@ document.addEventListener("click",async e=>{
   else if(a==="ptPlaceNew")ptPlaceForm(null);
   else if(a==="ptPlaceEdit")ptPlaceForm(ptPlaceById(v));
   else if(a==="ptTrip"){const ev=PT.suggestions.find(x=>x.key===v);if(ev)ptTripForm(ev);}
+   else if(a==="ptOpenAgenda")ptOpenAgenda(v);
+   else if(a==="ptBackToTrip")ptBackToTrip();
   else if(a==="ptCalc")ptCalculate();
   else if(a==="ptSaveDestination")ptSaveDestination();
   else if(a==="ptManualShow")ptShowManual();
