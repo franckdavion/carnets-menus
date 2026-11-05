@@ -194,3 +194,12 @@ body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="rain"] .mn-bg-photo{fi
 body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="storm"] .mn-bg-photo{filter:saturate(.7) brightness(.69)}
 body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="fog"] .mn-bg-photo{filter:saturate(.62) brightness(.92)}
 body:has(main.view-home) .mn-dayframe[data-mn-bg-weather="snow"] .mn-bg-photo{filter:saturate(.79) brightness(1.10)}
+
+/* Le choix « Autoriser les animations » pilote aussi les anciens SVG du bandeau. */
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-cloud,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-steam,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-rays,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-dusk,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-star,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-halo,
+body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-win{animation:none!important}
