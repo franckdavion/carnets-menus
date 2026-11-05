@@ -445,13 +445,12 @@ function apercuMaison(){
  try{
   if(typeof S==='undefined'||!S)return vide;
   const d=typeof today==='function'?today():'';
-  if(typeof mealAt==='function'&&d){
+  if(typeof carnetMealName==='function'&&d){
    const hour=new Date().getHours();
    let slot=hour<15?'midi':'soir';
-   let meal=typeof mealAt==='function'?mealAt(d,slot):null;
-   if(!meal&&typeof mealAt==='function'){const other=slot==='midi'?'soir':'midi';if(mealAt(d,other)){meal=mealAt(d,other);slot=other;}}
-   const nom=meal&&typeof mealName==='function'?mealName(meal):'';
-   vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom||'Rien de prévu',m:nom?'Au menu':'Choisir un plat',day:d,slot};
+   let nom=carnetMealName(d,slot);
+   if(nom===''){const other=slot==='midi'?'soir':'midi';const suivant=carnetMealName(d,other);if(suivant){nom=suivant;slot=other;}}
+   vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom===null?'Menu en cours de synchronisation':nom||'Rien de prévu',m:nom===null?'Synchronisation en cours':nom?'Au menu':'Choisir un plat',day:d,slot};
   }
   const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
   vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
@@ -495,7 +494,7 @@ function render(){
   const corps=`<strong>${esc(ligne)}</strong>${meta?`<small>${esc(meta)}</small>`:''}`;
   if(k==='agenda')return wrap(k,`<div class="mn-card mn-card-cal mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${tete}</button><button type="button" class="mn-card-src" data-act="homeCal" aria-haspopup="dialog" aria-label="Choisir l’agenda affiché, actuellement ${esc(kicker)}">${esc(kicker)} ▾</button><button type="button" class="mn-card-open" data-act="go" data-v="agenda">${corps}</button></div>`);
   if(k==='repas'&&g.repas.day&&g.repas.slot)return wrap(k,`<div class="mn-card mn-card-repas mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="repas">${tete}</button><button type="button" class="mn-card-open" data-act="homeRepas" data-day="${esc(g.repas.day)}" data-slot="${esc(g.repas.slot)}" aria-label="${ligne&&ligne!=='Rien de prévu'?'Ouvrir la fiche de '+ligne:'Choisir le repas'}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`);
-  if(k==='recettes'&&g.recette.id)return wrap(k,`<button type="button" class="mn-card mn-card-${ton(k)}" data-act="homeRecette" data-v="${esc(g.recette.id)}">${tete}${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button>`);
+  if(k==='recettes'&&g.recette.id)return wrap(k,`<div class="mn-card mn-card-${ton(k)} mn-card-split"><button type="button" class="mn-card-open" data-act="go" data-v="recettes" aria-label="Ouvrir le Carnet de menus">${tete}</button><button type="button" class="mn-card-open" data-act="homeRecette" data-v="${esc(g.recette.id)}" aria-label="Ouvrir la fiche de ${esc(g.recette.t)}">${kicker?`<span class="mn-card-k">${esc(kicker)}</span>`:''}${corps}</button></div>`);
   if(k==='domotique'){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
     if(typeof window.domScheduleState==='function'){
