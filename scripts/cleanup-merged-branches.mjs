@@ -58,6 +58,43 @@ const verifiedSnapshots = new Map([
   }],
 ]);
 
+
+// Branches historiques dont toutes les lignes de code ajoutees sont retrouvees
+// dans main. Les versions d'index.html diffèrent par les anciens cache-busters.
+// Chaque fichier de chaque branche et chaque fichier de main est epingle par SHA.
+// Le moindre changement bloque la suppression. Les travaux sont encore dans main.
+const preservedPatchSnapshots = new Map([
+  ['test-design-cplus-v4-miroir-lumineux', {
+    sha: '9ea7d5a13144b6ba139cf1a7beb282a987c18eba',
+    pairs: new Map([
+      ['maison/index.html', ['c2a1d4b605b58a5fdadaf5105c17a6bbecde3df0', '43f758db2ffa099b421fdea27fc034c6641512d8']],
+      ['maison/accueil.js', ['8251a229528ed3ced38db8fa30f58a2d8a653a19', '468291ab5435649ba76feaa54039d0db4c94d9ec']],
+      ['maison/maison.css', ['302d044fa348744b5d36490de865126efad2d69e', 'ddcbfc258fa4bf2a657ffdd7a10d49d1baf859cf']],
+    ]),
+  }],
+  ['correctif-cors-iphone-local-domotique-v4', {
+    sha: '09a9a1082b6a4089e4495934d3cc159497244b98',
+    pairs: new Map([
+      ['maison/index.html', ['c2a1d4b605b58a5fdadaf5105c17a6bbecde3df0', '43f758db2ffa099b421fdea27fc034c6641512d8']],
+      ['maison/accueil.js', ['8251a229528ed3ced38db8fa30f58a2d8a653a19', '468291ab5435649ba76feaa54039d0db4c94d9ec']],
+      ['maison/maison.css', ['302d044fa348744b5d36490de865126efad2d69e', 'ddcbfc258fa4bf2a657ffdd7a10d49d1baf859cf']],
+      ['maison/supabase/functions/dreame/index.ts', ['897ceeb66f2e4233e8c41bd057ee232fc4d106e3', '897ceeb66f2e4233e8c41bd057ee232fc4d106e3']],
+      ['maison/supabase/functions/melcloud/index.ts', ['1c5cce20ef96abecb17e03730d575462582251c8', '1c5cce20ef96abecb17e03730d575462582251c8']],
+      ['maison/supabase/functions/shelly-cloud/index.ts', ['7179c95a9d2e2dd9d9b0c2105e3b0cd0d7303033', '7179c95a9d2e2dd9d9b0c2105e3b0cd0d7303033']],
+      ['maison/supabase/functions/smartthings/index.ts', ['b4f4ecda768dbcf4007b9969e8cf2fdb9d57546d', 'ff46e934128f8af2dee930d3b7ffff0c8e113568']],
+    ]),
+  }],
+  ['correctif/smartthings-jeton-et-diagnostic-20261104', {
+    sha: '6a9bd0a8a0a180e3b1d72d70f034ac744012c3e4',
+    pairs: new Map([
+      ['maison/index.html', ['c2a1d4b605b58a5fdadaf5105c17a6bbecde3df0', '8fca2c4e727d9e0940063b5cc074b86ac85fca7b']],
+      ['maison/modules.js', ['8784a42c38d75cc4a9031891c26e3e27d4a109a9', 'c87235a2995bd3f9b0573d87575e1768ffc248aa']],
+      ['maison/supabase/functions/smartthings-tv-test/index.ts', ['00cb1fcf53982c9a23d65ea812e160875fdec180', '00cb1fcf53982c9a23d65ea812e160875fdec180']],
+      ['maison/supabase/functions/smartthings/index.ts', ['b4f4ecda768dbcf4007b9969e8cf2fdb9d57546d', 'b4f4ecda768dbcf4007b9969e8cf2fdb9d57546d']],
+    ]),
+  }],
+]);
+
 const mode = process.env.CLEANUP_MODE || 'simulation';
 if (!['simulation', 'suppression'].includes(mode)) throw Error('Mode inconnu : aucune suppression');
 if (mode === 'suppression' && process.env.CLEANUP_CONFIRMATION !== CONFIRMATION)
@@ -105,6 +142,12 @@ async function snapshotFullyPreserved(name, spec) {
   for (const [path, sha] of spec.equalFiles) {
     if (live.get(path) !== sha || saved.get(path) !== sha) return false;
   }
+  if (spec.pairs) {
+    for (const [path, [mainSha, branchSha]] of spec.pairs) {
+      if (live.get(path) !== mainSha || saved.get(path) !== branchSha) return false;
+    }
+    return true;
+  }
   return live.get(spec.html.path) === spec.html.mainSha &&
          saved.get(spec.html.path) === spec.html.branchSha;
 }
@@ -113,7 +156,7 @@ async function snapshotFullyPreserved(name, spec) {
 let eligible = 0;
 let skipped = 0;
 let deleted = 0;
-for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map(([b, v]) => [b, v.sha]), ...[...verifiedSnapshots].map(([b, v]) => [b, v.sha])]) {
+for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map(([b, v]) => [b, v.sha]), ...[...verifiedSnapshots].map(([b, v]) => [b, v.sha]), ...[...preservedPatchSnapshots].map(([b, v]) => [b, v.sha])]) {
   try {
     const branch = await github(`/branches/${encodeURIComponent(name)}`);
     if (!branch) { console.log(`[IGNORE] ${name} : deja absente`); skipped++; continue; }
@@ -128,7 +171,7 @@ for (const [name, expectedSha] of [...candidates, ...[...preservedAncestors].map
         console.log(`[PROTEGEE] ${name} : branche descendante absente ou modifiee`); skipped++; continue;
       }
     }
-    const snapshot = verifiedSnapshots.get(name);
+    const snapshot = verifiedSnapshots.get(name) || preservedPatchSnapshots.get(name);
     if (snapshot) {
       if (!(await snapshotFullyPreserved(name, snapshot))) {
         console.log(`[PROTEGEE] ${name} : fichiers de la version officielle modifies`); skipped++; continue;
