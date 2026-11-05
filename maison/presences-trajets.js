@@ -880,7 +880,15 @@ document.addEventListener("change",e=>{
     if(entry){if(e.target.checked)PT.selected.add(k);else PT.selected.delete(k);softRender();}
     return;
   }
-  if(e.target.matches("[data-pt-child]")){PT.child=e.target.value;PT.selected.clear();softRender();}
+  if(e.target.matches("[data-pt-child]")){
+    PT.child=e.target.value;PT.selected.clear();
+    // Un select iPhone reste parfois actif après "change". softRender() attendrait
+    // sa perte de focus et laisserait affichés les trajets de tous les enfants.
+    const position=window.scrollY;
+    e.target.blur();
+    render();
+    window.scrollTo(0,position);
+  }
   const trip=e.target.closest('form[data-form="ptTrip"]');
   if(trip){PT.calculated=null;ptUpdateTripFields(trip);}
 });
