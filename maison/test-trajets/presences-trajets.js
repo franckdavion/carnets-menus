@@ -12,6 +12,8 @@ const ptEsc = s => esc(String(s == null ? "" : s));
 const ptFmt = n => Number(n || 0).toLocaleString("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1});
 const ptHome = () => (PT.places || []).find(x=>x.is_home);
 const ptKey = r => r.calendar_id+"|"+r.event_id+"|"+r.child_id;
+const ptEventIds = ev => ev?.child_ids?.length ? ev.child_ids : [ev.child_id];
+const ptIncludesChild = (ev,id) => !id || ptEventIds(ev).includes(id);
 const ptMonthBounds = () => {
   const [y,m]=PT.month.split("-").map(Number);
   return [PRC.mFirst(y,m),PRC.mLast(y,m)];
@@ -67,7 +69,7 @@ async function ptSync(force=false) {
     const marks=new Set((PT.marks||[]).map(m=>m.child_id+"|"+m.event_fingerprint));
     const rules=new Set((PT.rules||[]).map(r=>r.motif_key));
     const candidates=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[])
-      .filter(x=>!marks.has(x.child_id+"|"+x.fingerprint));
+      .filter(x=>!ptEventIds(x).some(id=>marks.has(id+"|"+x.fingerprint)));
     // Si un événement a été confirmé, déplacé ou écarté depuis un autre appareil,
     // ne pas laisser une sélection périmée le comptabiliser.
     const pending=new Set(candidates.filter(x=>!rules.has(PRTR.motifKey(x,PR.data.children))).map(x=>x.key));
@@ -100,7 +102,7 @@ function ptChangeMonth(month) {
   softRender();ptSync(true);
 }
 function ptSelectedTrips() {
-  const visible=PT.suggestions.filter(x=>!PT.child||x.child_id===PT.child);
+  const visible=PT.suggestions.filter(x=>ptIncludesChild(x,PT.child));
   return ptDisplayedSuggestions(visible).filter(x=>x.event.day<=today());
 }
 function ptSelectAll() {
@@ -239,7 +241,7 @@ function ptTripForm(ev,presetDestinationId=""){
   if(PT.batch.length&&PT.batch[0]!==ev.key){PT.batch=[];PT.batchTotal=0;}
   const home=ptHome(), resolved=PRTR.resolvedLocation(ev,PT.places||[]);
   const dst=(presetDestinationId&&ptPlaceById(presetDestinationId))||resolved.place;
-  const child=prChild(ev.child_id);
+  const childrenLabel=ptEventIds(ev).map(id=>prChild(id)?.first_name||"Enfant").join(", ");
   PT.current=ev;
   PT.calculated=null;
   const outing=ptOuting(ev);
@@ -251,7 +253,7 @@ function ptTripForm(ev,presetDestinationId=""){
     ?'<div class="pr-note"><b>Sélection du mois · '+(PT.batchTotal-PT.batch.length+1)+' / '+PT.batchTotal+
       '</b><p class="muted small">Vérifiez la distance de ce déplacement, puis confirmez pour passer au suivant.</p>'+
       '<button type="button" class="btn" data-act="ptBatchStop">Arrêter la sélection</button></div>':'';
-  openSheet("Trajet · "+(child?.first_name||"Enfant"),batchBanner+'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
+  openSheet("Trajet · "+childrenLabel,batchBanner+'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
     '<div class="pr-note" style="margin:8px 0 14px"><strong>Ce déplacement n’est pas pris en charge ?</strong>'+
     '<div class="btns" style="margin-top:8px"><button type="button" class="btn block" data-act="ptIgnore" data-v="'+ptEsc(ev.key)+'">Ignorer uniquement ce rendez-vous (0 km)</button></div>'+
     (outing.length>1?'<div class="btns"><button type="button" class="btn block" data-act="ptIgnoreOuting" data-v="'+ptEsc(ev.key)+'">Ignorer toute la sortie ('+outing.length+' rendez-vous)</button></div>':'')+
@@ -471,8 +473,10 @@ async function ptSaveTrip(form) {
     origin_label:calc.from,destination_label:calc.to,return_label:calc.back,
     trip_mode:calc.mode,calculated_km:calc.manual?0:calc.km,distance_km:calc.km,legs:calc.done
   };
-  const linked=selected.map(x=>({child_id:x.child_id,calendar_id:x.calendar,
-    event_id:x.event_id,event_fingerprint:x.fingerprint,title:x.title,day:x.day}));
+  const linked=selected.flatMap(x=>ptEventIds(x).map(child_id=>({
+    child_id,calendar_id:x.calendar,event_id:x.event_id,
+    event_fingerprint:x.fingerprint,title:x.title,day:x.day
+  })));
   const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
   try{
     // La fonction SQL écrit le trajet et ses liens dans une seule transaction.
@@ -481,10 +485,11 @@ async function ptSaveTrip(form) {
     if(error)throw error;
     PT.calculated=null;closeSheet();
     await ptLoad(true);
-    PT.suggestions=PT.suggestions.filter(x=>!selected.some(e=>e.child_id===x.child_id&&e.fingerprint===x.fingerprint));
+    PT.suggestions=PT.suggestions.filter(x=>!selected.some(e=>e.key===x.key));
     ptBatchAdvance(selected);
     softRender();
-    toast(selected.length>1?"Un seul aller-retour enregistré pour "+selected.length+" rendez-vous.":"Trajet confirmé et enregistré.");
+    toast(selected.length>1?"Un seul aller-retour enregistré pour "+selected.length+" rendez-vous.":
+      ptEventIds(ev).length>1?"Un seul déplacement enregistré pour "+ptEventIds(ev).length+" enfants.":"Trajet confirmé et enregistré.");
   }catch(e){toast("Trajet non enregistré : "+(/duplicate|unique|23505/i.test(e.message||"")?
     "un de ces rendez-vous est déjà comptabilisé. Aucune ligne supplémentaire n’a été ajoutée.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
@@ -493,7 +498,8 @@ async function ptSaveTrip(form) {
 // d'exclusion. Un événement confirmé (marque « counted ») ne peut être écarté
 // une deuxième fois grâce à la contrainte unique Supabase.
 async function ptIgnoreSelection(events) {
-  const unique=[...new Map(events.map(ev=>[ev.child_id+"|"+ev.fingerprint,ev])).values()];
+  const unique=[...new Map(events.flatMap(ev=>ptEventIds(ev).map(child_id=>
+    [child_id+"|"+ev.fingerprint,{...ev,child_id}]))).values()];
   if(!unique.length)return;
   const names=unique.map(ev=>(prChild(ev.child_id)?.first_name||"Enfant")+" : "+ev.title);
   const question=unique.length===1
@@ -511,7 +517,7 @@ async function ptIgnoreSelection(events) {
     if(error)throw error;
     const denied=new Set(rows.map(row=>row.child_id+"|"+row.event_fingerprint));
     PT.marks=[...(PT.marks||[]),...rows];
-    PT.suggestions=PT.suggestions.filter(ev=>!denied.has(ev.child_id+"|"+ev.fingerprint));
+    PT.suggestions=PT.suggestions.filter(ev=>!ptEventIds(ev).some(id=>denied.has(id+"|"+ev.fingerprint)));
     PT.calculated=null;
     closeSheet();ptBatchAdvance(unique);softRender();
     toast(unique.length===1?"Rendez-vous écarté (0 km).":"Sortie écartée : "+unique.length+" rendez-vous, 0 km.");
@@ -647,7 +653,7 @@ function ptTripsView(){
   if(!PT.places&&!PT.loading&&!PT.error)ptLoad();
   if(PT.loading||!PT.places)return '<section class="pr-panel"><h2 class="pr-h">Trajets des enfants</h2><p class="muted">'+ptEsc(PT.error||"Chargement des lieux et de l’historique…")+'</p>'+(PT.error?'<button class="btn" data-act="ptReload">Réessayer</button>':"")+'</section>';
   const [from,to]=ptMonthBounds(),kids=PR.data.children,rec=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||ptParticipantIds(x).includes(PT.child)));
-  const suggestions=PT.suggestions.filter(x=>!PT.child||x.child_id===PT.child);
+  const suggestions=PT.suggestions.filter(x=>ptIncludesChild(x,PT.child));
   const displayed=ptDisplayedSuggestions(suggestions);
   const total=rec.reduce((s,r)=>s+Number(r.distance_km||0),0);
   // Le total familial compte chaque déplacement UNE fois. Les enfants
@@ -670,12 +676,12 @@ function ptTripsView(){
     (displayed.length?displayed.map(({event:x,group})=>'<div style="display:flex;align-items:stretch;gap:8px;margin:8px 0">'+
       '<label style="display:flex;align-items:center;justify-content:center;flex:0 0 36px"><input type="checkbox" data-pt-select="'+ptEsc(x.key)+'" aria-label="Sélectionner '+ptEsc(x.title)+'" style="width:22px;height:22px;accent-color:#55baff"'+(PT.selected.has(x.key)&&x.day<=today()?' checked':'')+(x.day>today()?' disabled':'')+'></label>'+
       '<button type="button" class="pr-krow" style="flex:1;min-width:0;margin:0" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><span class="pr-kn"><b>'+ptEsc(group.length>1?"Coiffeur — "+group.length+" enfants":x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+
-      ptEsc(group.length>1?group.map(e=>prChild(e.child_id)?.first_name||"Enfant").join(", "):(prChild(x.child_id)?.first_name||""))+' · '+
+      ptEsc([...new Set(group.flatMap(e=>ptEventIds(e)))].map(id=>prChild(id)?.first_name||"Enfant").join(", "))+' · '+
       (x.day>today()?"À venir · ":group.length>1?"Un seul aller-retour pour "+group.length+" rendez-vous · ":"")+
       (x.mode==="four"?"2 allers-retours":"Aller-retour")+(x.location?' · '+ptEsc(x.location):'')+'</small></span>›</button></div>').join(""):'<p class="muted small">Aucune proposition pour ce mois, ou tous les trajets sont déjà confirmés.</p>')+
     '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button> <button class="btn" data-act="ptCals">Choisir les agendas</button></section>';
   const ignored=(PT.marks||[]).filter(m=>m.decision==="ignored"&&m.day>=from&&m.day<=to&&(!PT.child||m.child_id===PT.child));
-  const automaticallyExcluded=(PT.ruleExcluded||[]).filter(x=>!PT.child||x.child_id===PT.child);
+  const automaticallyExcluded=(PT.ruleExcluded||[]).filter(x=>ptIncludesChild(x,PT.child));
   const ignoredHtml='<section class="pr-panel"><details><summary><strong>Rendez-vous écartés ('+ignored.length+')</strong> — 0 km</summary>'+
     '<p class="muted small">Ces rendez-vous ne génèrent aucun kilomètre. Ils restent dans Google Agenda et peuvent être rétablis.</p>'+
     (ignored.length?ignored.map(x=>'<div class="pr-krow"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</small></span>'+
