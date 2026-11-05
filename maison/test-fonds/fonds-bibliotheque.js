@@ -64,7 +64,7 @@
     if(remote&&!remoteLoaded){prefs=normalize(remote);remoteLoaded=true;lastMediaSig='';}
   }
   let modalType=prefs.type,modalPeriod=prefs.period,addOpen=false,objectUrls=new Map(),saving=false,needCloudSave=false;
-  let lastMediaSig='',lastEnabled=null;
+  let lastMediaSig='',lastEnabled=null,previewing=false;
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
   const defaultId=(type,period)=>({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period;
@@ -243,6 +243,7 @@
   }
   function previewPeriod(period){
     // L'aperçu utilise l'API du bandeau existant, sans changer ses horaires.
+    previewing=!!period;
     if(window.mnJour?.preview)window.mnJour.preview(period);
     lastMediaSig='';
     void apply(document);
@@ -334,7 +335,7 @@
     window.mnJour.mount=function(root){original(root);void apply(root)};
   }
   document.querySelector('#sheet')?.addEventListener('close',()=>{
-    if(!document.querySelector('[data-mn-bg-library]'))previewPeriod(null);
+    if(previewing)previewPeriod(null);
   });
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)document.querySelectorAll('.mn-bg-video').forEach(v=>v.pause());
