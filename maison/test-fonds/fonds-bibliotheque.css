@@ -1,11 +1,11 @@
 /* Bibliothèque des fonds d'accueil V1 — portée strictement limitée aux classes mn-bg. */
 body:has(main.view-home) .mn-dayframe.mn-bg-illustration{background-image:none!important;background-color:#09182f!important;}
 body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-band-sky{display:block!important;}
-body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-band-art{opacity:0;}
-body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-dayband[data-mn-band="matin"] .mn-band-matin,
-body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-dayband[data-mn-band="aprem"] .mn-band-aprem,
-body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-dayband[data-mn-band="soir"] .mn-band-soir,
-body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-dayband[data-mn-band="nuit"] .mn-band-nuit{opacity:1;}
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration .mn-band-art{opacity:0!important;}
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration[data-mn-bg-art="matin"] .mn-band-matin,
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration[data-mn-bg-art="aprem"] .mn-band-aprem,
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration[data-mn-bg-art="soir"] .mn-band-soir,
+body:has(main.view-home) .mn-dayframe.mn-bg-illustration[data-mn-bg-art="nuit"] .mn-band-nuit{opacity:1!important;}
 body:has(main.view-home) .mn-dayframe .mn-bg-layer{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;isolation:isolate;}
 body:has(main.view-home) .mn-dayframe .mn-bg-photo,
 body:has(main.view-home) .mn-dayframe .mn-bg-video{position:absolute;inset:-2%;width:104%;height:104%;object-fit:cover;object-position:center;background-repeat:no-repeat;background-position:center;background-size:cover;transform:translateZ(0);}
