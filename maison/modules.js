@@ -3270,6 +3270,7 @@ VIEWS.agenda = function () {
           </span>
           <span class="cal-month-toggle-chevron mz-round-btn mz-round-btn--lg" aria-hidden="true">${I.right}</span>
         </button>
+        <span data-mz-agenda-search-anchor></span>
         <button class="icon-btn plain mz-round-btn mz-round-btn--sm mz-round-btn--nav cal-month-arrow" data-act="calMonth" data-v="1" aria-label="Mois suivant" ${calMonthOpen ? "" : "hidden"}>${I.right}</button>
       </div>
       <div id="calMonthContent" ${calMonthOpen ? "" : "hidden"}>
@@ -4904,10 +4905,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   VIEWS.agenda = function () {
-    const base = originalAgenda();
-    return '<div class="mz-agenda-search-toolbar"><strong>Mon agenda</strong>' +
-      '<button type="button" class="mz-round-btn mz-round-btn--sm mz-agenda-magnifier" data-act="mzAgendaSearchToggle" aria-label="Rechercher dans l’agenda" aria-expanded="' + opened + '">' + magnifier + '</button></div>' +
-      (opened ? '<section class="mz-agenda-search-panel" aria-label="Rechercher dans l’agenda">' +
+    const base = originalAgenda().replace(
+      '<span data-mz-agenda-search-anchor></span>',
+      '<button type="button" class="mz-round-btn mz-round-btn--sm mz-agenda-magnifier" data-act="mzAgendaSearchToggle" aria-label="Rechercher dans l’agenda" aria-expanded="' + opened + '">' + magnifier + '</button>'
+    );
+    return (opened ? '<section class="mz-agenda-search-panel" aria-label="Rechercher dans l’agenda">' +
         '<div class="mz-agenda-search-inputrow"><input id="mzAgendaSearchInput" class="input" type="search" autocomplete="off" enterkeyhint="search" placeholder="Nom, événement, lieu, tâche…" aria-label="Rechercher dans l’agenda" value="' + esc(search) + '">' +
         '<button type="button" class="mz-round-btn mz-round-btn--sm mz-agenda-search-x" data-act="mzAgendaSearchClose" aria-label="Fermer la recherche">' + I.close + '</button></div>' +
         '<div id="mzAgendaSearchResults" aria-live="polite">' + resultMarkup() + '</div>' +
