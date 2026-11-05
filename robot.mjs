@@ -306,15 +306,25 @@ async function syncGoogle(agenda) {
     }
     return r.status === 204 ? {} : r.json().catch(() => ({}));
   };
+  // La lecture des événements est autorisée par le scope calendar.events du robot.
+  // Contrairement à calendars.get, elle indique aussi son droit réel sur cet agenda.
+  const target = await call("GET", base + "?maxResults=1&showDeleted=false");
+  if (!target || String(target.summary || "").trim().toLocaleLowerCase("fr") !== "repas")
+    throw new Error("L'agenda cible du robot ne porte pas le nom « Repas ». Vérifiez GOOGLE_AGENDA.");
+  if (!["writer","owner","writerWithoutPrivateAccess"].includes(String(target.accessRole || "")))
+    throw new Error("Le compte robot doit disposer du droit « Modifier les événements » sur l'agenda Repas.");
   const times = agenda.times || { midi: ["12:00", "13:30"], soir: ["19:30", "21:00"] };
   const desired = {};
-  for (const [k, name] of Object.entries(agenda.calendar || {})) {
+  for (const [k, item] of Object.entries(agenda.calendar || {})) {
+    const name = typeof item === "string" ? item : item && item.t;
+    if (!name) continue;
+    const extra = typeof item === "object" && item && item.d ? String(item.d) : "";
     const [date, meal] = k.split("|"); const t = times[meal] || times.soir;
     desired["carnet" + date.replace(/-/g, "") + meal] = {
       summary: (meal === "midi" ? "Midi : " : "Soir : ") + name,
       start: { dateTime: `${date}T${t[0]}:00`, timeZone: "Europe/Paris" },
       end: { dateTime: `${date}T${t[1]}:00`, timeZone: "Europe/Paris" },
-      transparency: "transparent", description: "Ajouté par le Carnet de menus", status: "confirmed",
+      transparency: "transparent", description: "Ajouté par le Carnet de menus" + (extra ? "\n" + extra : ""), status: "confirmed",
     };
   }
   const today = new Date().toISOString().slice(0, 10);
@@ -331,7 +341,8 @@ async function syncGoogle(agenda) {
     const ex = existing[id];
     const same = ex && ex.status !== "cancelled" && ex.summary === ev.summary &&
       String(ex.start && ex.start.dateTime || "").slice(11, 16) === ev.start.dateTime.slice(11, 16) &&
-      String(ex.start && ex.start.dateTime || "").slice(0, 10) === ev.start.dateTime.slice(0, 10);
+      String(ex.start && ex.start.dateTime || "").slice(0, 10) === ev.start.dateTime.slice(0, 10) &&
+      String(ex.description || "") === ev.description;
     if (same) continue;
     if (!ex) {
       const r = await fetch(base, { method: "POST", headers: H, body: JSON.stringify({ id, ...ev }) });
@@ -346,7 +357,7 @@ async function syncGoogle(agenda) {
     if (day && day < today) continue;   // past meals stay as history
     await call("DELETE", `${base}/${id}`); removed++;
   }
-  return { added, changed, removed, total: Object.keys(desired).length };
+  return { added, changed, removed, total: Object.keys(desired).length, target: String(target.summary || "") + " (" + cal.slice(0, 12) + "…)" };
 }
 
 async function main() {
@@ -373,7 +384,7 @@ async function main() {
     let st;
     try {
       const r = await syncGoogle(JSON.parse(fs.readFileSync("agenda.json", "utf8")));
-      st = { ok: true, at: new Date().toISOString(), msg: `${r.total} repas dans l'agenda (${r.added} ajoutés, ${r.changed} modifiés, ${r.removed} retirés)` };
+      st = { ok: true, at: new Date().toISOString(), msg: `${r.total} repas dans l'agenda ${r.target} (${r.added} ajoutés, ${r.changed} modifiés, ${r.removed} retirés)` };
     } catch (e) { st = { ok: false, at: new Date().toISOString(), msg: String(e.message || e) }; }
     console.log("Agenda Google :", st.msg);
     fs.writeFileSync("agenda-status.json", JSON.stringify(st, null, 1));
