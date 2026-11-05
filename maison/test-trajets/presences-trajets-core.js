@@ -16,8 +16,9 @@
     for (const e of items || []) {
       if (!e || e.status === "cancelled" || !e.id || !e.summary || !e.start) continue;
       const ids = matches(e.summary, children, PRC);
-      // Eviter une attribution incorrecte lorsque plusieurs enfants sont mentionnés.
-      if (ids.length !== 1) continue;
+      // Un événement concernant plusieurs enfants reste UN déplacement unique.
+      // Tous les enfants nommés sont associés à ce déplacement lors de sa confirmation.
+      if (!ids.length) continue;
       const span = PRC.eventDays(e);
       if (!span || span.end !== span.start) continue;
       const key = calendar + "|" + e.id + "|" + ids[0];
@@ -27,12 +28,12 @@
       const kind = pingpong.test(n) ? "pp" : health.test(n) ? "medical" : "activite";
       const local_time=e.start.dateTime?PRC.paris(e.start.dateTime).hm:"jour";
       const row={
-        key, calendar, event_id: e.id, child_id: ids[0],
+        key, calendar, event_id: e.id, child_id: ids[0], child_ids: ids,
         day: span.start, local_time, title: e.summary.slice(0, 200),
         location: String(e.location || "").trim().slice(0, 400),
         kind, mode: kind === "pp" ? "four" : "round"
       };
-      row.fingerprint=fingerprint(row,children.find(c=>c.id===ids[0]));
+      row.fingerprint=fingerprint(row,children.find(c=>c.id===ids[0]),children);
       rows.push(row);
     }
     return rows;
@@ -76,29 +77,33 @@
     }
     return {place:null,origin:"missing"};
   }
-  const activityKey = (title,child,kind) => {
+  const activityKey = (title,child,kind,otherChildren=[]) => {
     const n=norm(title);
     if(kind==="pp")return "pp";
     if(/\b(ortho|orthophoniste|orthophonie)\b/.test(n))return "orthophonie";
     if(/\b(dentiste|dentaire)\b/.test(n))return "dentiste";
     if(/\b(kine|kinesitherapeute)\b/.test(n))return "kine";
     const stop=new Set();
-    for(const name of [child && child.first_name,...(child && child.aliases || [])]) {
-      for(const token of norm(name).split(" "))if(token)stop.add(token);
+    for(const person of [child,...otherChildren.filter(c=>c&&c.id!==child?.id)]) {
+      for(const name of [person&&person.first_name,...(person&&person.aliases||[])]) {
+        for(const token of norm(name).split(" "))if(token)stop.add(token);
+      }
+      if(person&&person.first_name)stop.add(norm(person.first_name)[0]);
     }
-    if(child&&child.first_name)stop.add(norm(child.first_name)[0]);
     return n.split(" ").filter(t=>t&&!stop.has(t)).join(" ") || n;
   };
   // Motif stable entre enfants et variantes courantes d'un même rendez-vous.
   // Utilisé seulement pour les exclusions volontaires (jamais pour les présences).
   function motifKey(row, children) {
     const child=(children||[]).find(c=>c.id===row.child_id);
-    const key=norm(activityKey(row.title,child,row.kind||"activite"));
+    const others=(row.child_ids||[]).map(id=>(children||[]).find(c=>c.id===id)).filter(Boolean);
+    const key=norm(activityKey(row.title,child,row.kind||"activite",others));
     return key.slice(0,120);
   }
-  function fingerprint(row,child) {
+  function fingerprint(row,child,children=[]) {
+    const others=(row.child_ids||[]).map(id=>children.find(c=>c.id===id)).filter(Boolean);
     const start=row.local_time || "jour";
-    return [row.day,start,row.kind||"activite",activityKey(row.title,child,row.kind||"activite")].join("|");
+    return [row.day,start,row.kind||"activite",activityKey(row.title,child,row.kind||"activite",others)].join("|");
   }
   function dedupe(rows, confirmed=[]) {
     const seen=new Set();
@@ -110,10 +115,14 @@
       Number(!!b.location)-Number(!!a.location)||a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
     const found=[];
     for(const r of ordered) {
-      const key=r.child_id+"|"+r.fingerprint;
-      const exact=r.child_id+"|"+r.calendar+"|"+r.event_id;
-      if(seen.has(key)||seen.has(exact))continue;
-      seen.add(key);seen.add(exact);
+      const ids=r.child_ids?.length?r.child_ids:[r.child_id];
+      // Un seul enfant déjà traité suffit à bloquer un second comptage
+      // lorsque le titre Google a ensuite été modifié pour en nommer plusieurs.
+      if(ids.some(id=>seen.has(id+"|"+r.fingerprint)||seen.has(id+"|"+r.calendar+"|"+r.event_id)))continue;
+      for(const id of ids){
+        seen.add(id+"|"+r.fingerprint);
+        seen.add(id+"|"+r.calendar+"|"+r.event_id);
+      }
       found.push(r);
     }
     return found.sort((a,b)=>a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
