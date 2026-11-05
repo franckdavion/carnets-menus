@@ -143,6 +143,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------- vue ---------- */
 const PR_TABS = [["cal", "Calendrier", '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.5M8 17h2"/>'],
   ["stats", "Statistiques", '<path d="M5 20V13M10 20V9M15 20v-6M20 20V5"/>'],
+  ["trips", "Trajets", '<path d="M5 17h14M7 17l-1 3M17 17l1 3M4 13l2-6h12l2 6v4H4zM6 13h.01M18 13h.01"/>'],
   ["export", "Relevés", '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 6 20V4a.5.5 0 0 1 .5-.5z"/><path d="M14 3.5V8h4M9 13h6M9 16.5h6"/>'],
   ["kids", "Enfants", '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.6 2.8-5.4 5.5-5.4s4.9 1.8 5.5 5.4"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.5 14.3c2.6-.4 4.6 1 5 4.7"/>']];
 const prIco = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -154,7 +155,7 @@ VIEWS.presences = function () {
   if (!PR.data) return `<div class="empty"><strong>Présences indisponibles pour l'instant.</strong>${esc(PR.loadErr)}<br><button class="btn" data-act="prReload">Réessayer</button></div>`;
   prKick();
   const tab = PR_TABS.map(([k, t, ic]) => `<button data-act="prTab" data-v="${k}" aria-pressed="${PR.tab === k}">${prIco(ic)}<span>${t}</span></button>`).join("");
-  const body = PR.tab === "stats" ? prStatsTab() : PR.tab === "export" ? prExportTab() : PR.tab === "kids" ? prKidsTab() : prCalTab();
+  const body = PR.tab === "stats" ? prStatsTab() : PR.tab === "trips" ? ptTripsView() : PR.tab === "export" ? prExportTab() : PR.tab === "kids" ? prKidsTab() : prCalTab();
   return `<div class="pr"><nav class="pr-side"><div class="pr-brand">${prIco(PR_TABS[0][2])}<b>Présences<br>des enfants</b></div><div class="pr-tabs" role="group" aria-label="Rubriques">${tab}</div></nav>
     <div class="pr-main">${prSyncBar()}${prAmbBar()}${body}</div></div>`;
 };
