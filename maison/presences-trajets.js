@@ -155,15 +155,27 @@ function ptPlaceForm(place,draft={}) {
     '<p class="muted small">Le lieu est vérifié avec la Géoplateforme. Pour une commune, la distance est une estimation routière et non le trajet exact jusqu’au cabinet ou à la salle.</p>'+
     '<div class="sheet-sticky btns"><button class="btn primary block" type="submit">Vérifier et enregistrer</button></div></form>',{ptPlace:place?.id||"",ptReturnTrip:draft.tripKey||""});
 }
+// Google Agenda peut fournir « Vignacourt, 80650 Vignacourt, France » :
+ // c'est une commune, et non une adresse de rue.
+function ptGoogleCommune(value){
+  const m=String(value||"").trim().match(/^([^,]+),\s*(\d{5})\s+([^,]+?)(?:,\s*(?:France|FR))?\s*$/i);
+  return m&&PRTR.norm(m[1])===PRTR.norm(m[3])?{name:m[3].trim(),postcode:m[2]}:null;
+}
 async function ptGeo(address) {
-  const q=String(address||"").trim();
-  if(q.length<5)throw new Error("Renseignez une adresse complète.");
-  const r=await fetch("https://data.geopf.fr/geocodage/search?index=address&q="+encodeURIComponent(q)+"&limit=3",{cache:"no-store"});
+  const commune=ptGoogleCommune(address);
+  const q=commune?commune.name:String(address||"").trim();
+  if(q.length<2)throw new Error("Renseignez une commune ou une adresse.");
+  const url="https://data.geopf.fr/geocodage/search?index=address&q="+encodeURIComponent(q)+
+    (commune?"&postcode="+encodeURIComponent(commune.postcode):"")+"&limit=5";
+  const r=await fetch(url,{cache:"no-store"});
   if(!r.ok)throw new Error("Le service de recherche d'adresse est momentanément indisponible.");
   const j=await r.json(), features=(j.features||[]).filter(f=>Array.isArray(f.geometry?.coordinates)&&f.geometry.coordinates.length===2);
   // Pour une commune, privilégier le localisant administratif s'il est proposé.
-  const byCommune=!/\d{1,4}\s/.test(q)&&!/(?:rue|avenue|boulevard|chemin|impasse|route|place|allée|allee)\b/i.test(q);
-  const f=byCommune?(features.find(x=>x.properties?.type==="municipality")||features[0]):features[0];
+  const byCommune=!!commune||ptIsCommune(q);
+  // Ne pas prendre une commune homonyme si Google fournit son code postal.
+  const matches=commune?features.filter(x=>PRTR.norm(x.properties?.city||x.properties?.name||"")===PRTR.norm(commune.name)||
+    (x.properties?.type==="municipality"&&PRTR.norm(x.properties?.label||"").includes(PRTR.norm(commune.name)))):features;
+  const f=byCommune?(matches.find(x=>x.properties?.type==="municipality")||matches[0]):matches[0];
   if(!f)throw new Error("Lieu introuvable. Indiquez la commune ou une adresse précise.");
   if(f.properties?.score!=null&&Number(f.properties.score)<0.45)throw new Error("Adresse trop imprécise : complétez-la.");
   return {lon:+f.geometry.coordinates[0],lat:+f.geometry.coordinates[1],label:f.properties?.label||q};
@@ -311,8 +323,8 @@ function ptIsCommune(text){
   // Une commune suffit pour l'estimation ; une voie ou un numéro de bâtiment
   // signale au contraire une adresse précise.
   const t=String(text||"").trim();
-  return !!t && !/\b(?:rue|avenue|av\.?|boulevard|bd\.?|route|chemin|impasse|allée|allee|place|quai|square)\b/i.test(t)
-    && !/\b\d{1,4}\s+[A-Za-zÀ-ÿ]/.test(t);
+  return !!ptGoogleCommune(t) || (!!t && !/\b(?:rue|avenue|av\.?|boulevard|bd\.?|route|chemin|impasse|allée|allee|place|quai|square)\b/i.test(t)
+    && !/\b\d{1,4}\s+[A-Za-zÀ-ÿ]/.test(t));
 }
 function ptCommuneSuggestion(value){
   const v=String(value||"").trim();
