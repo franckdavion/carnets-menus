@@ -311,7 +311,7 @@ window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:(
 let meteo=null,meteoDernierSucces=0,meteoEnAttente=false,meteoCleActive='',meteoEssais=0,meteoRetryTimer=null,meteoSequence=0;
 // Lecture seule de la météo de Maisonnée : ne double pas les appels Open-Meteo.
 window.maisonneeHomeWeather=()=>({
- code:Number.isInteger(Number(meteo?.current?.weather_code))?Number(meteo.current.weather_code):null,
+ code:meteo?.current?.weather_code!=null&&Number.isInteger(Number(meteo.current.weather_code))?Number(meteo.current.weather_code):null,
  city:place().city, observedAt:meteoDernierSucces||null, stale:!!meteoEnAttente
 });
 function place(){const h=window.maisonHomeStore.read();return {city:h.city||'Doullens',lat:Number.isFinite(h.lat)?h.lat:50.001,lon:Number.isFinite(h.lon)?h.lon:2.345}}
