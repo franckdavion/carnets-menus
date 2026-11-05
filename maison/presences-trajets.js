@@ -185,7 +185,12 @@ function ptTripForm(ev){
     groupHtml+
     '<div class="pr-note">Les trajets scolaires ne sont jamais proposés. Les kilomètres restent une estimation tant que vous ne les avez pas validés.</div>'+
     '<div id="ptDistance" class="pr-note">Aucune distance calculée.</div>'+
-    '<div class="btns"><button type="button" class="btn" data-act="ptCalc">Calculer les kilomètres</button></div>'+
+    '<div class="btns"><button type="button" class="btn" data-act="ptCalc">Calculer les kilomètres</button>'+
+    '<button type="button" class="btn" data-act="ptManualShow">Saisir les km réels</button></div>'+
+    '<label class="field" data-pt-manual style="display:none"><span class="label">Distance réellement parcourue (km)</span>'+
+    '<input class="input" name="manual_km" type="number" min="0.1" max="99999" step="0.1" inputmode="decimal" placeholder="Ex. 24,5">'+
+    '<small class="muted">Utilisez cette option si le calcul automatique échoue. Le kilométrage sera marqué comme saisi manuellement.</small>'+
+    '<button class="btn" type="button" data-act="ptManualApply">Utiliser cette distance</button></label>'+
     '<div class="sheet-sticky btns"><button class="btn primary block" type="submit" '+(ev.day>today()?'disabled':'')+'>Confirmer le déplacement effectué</button></div>'+
     (ev.day>today()?'<p class="muted small">La confirmation sera possible le jour du rendez-vous ou après.</p>':'')+
     '</form>',{ptTrip:ev.key});
@@ -219,13 +224,68 @@ async function ptCoordinates(place) {
   return {lon:r.lon,lat:r.lat,resolved:r.label};
 }
 async function ptRoute(a,b){
-  const params=new URLSearchParams({resource:"bdtopo-osrm",start:a.lon+","+a.lat,end:b.lon+","+b.lat,
-    profile:"car",optimization:"fastest",distanceUnit:"kilometer",timeUnit:"minute",crs:"EPSG:4326"});
-  const r=await fetch("https://data.geopf.fr/navigation/itineraire?"+params.toString(),{cache:"no-store"});
-  if(!r.ok)throw new Error("Calcul routier indisponible ("+r.status+").");
-  const j=await r.json(),d=Number(j.distance);
-  if(!Number.isFinite(d)||d<0)throw new Error("Distance routière non disponible pour ces adresses.");
-  return d;
+  const valid=p=>Number.isFinite(Number(p?.lon))&&Number.isFinite(Number(p?.lat))&&
+    Number(p.lon)>=-180&&Number(p.lon)<=180&&Number(p.lat)>=-90&&Number(p.lat)<=90;
+  if(!valid(a)||!valid(b))throw new Error("Coordonnées incomplètes. Vérifiez les adresses de départ et d'arrivée.");
+  const url="https://data.geopf.fr/navigation/itineraire";
+  const failures=[];
+  // Les deux moteurs IGN documentés ont des graphes et règles de calcul distincts.
+  // Le second peut réussir si le premier ne peut raccorder l'adresse à une route.
+  for(const resource of ["bdtopo-osrm","bdtopo-valhalla"]){
+    const params=new URLSearchParams({
+      resource,start:a.lon+","+a.lat,end:b.lon+","+b.lat,
+      profile:"car",optimization:"fastest",distanceUnit:"kilometer"
+    });
+    try {
+      const response=await fetch(url+"?"+params,{cache:"no-store",headers:{Accept:"application/json"}});
+      if(!response.ok){
+        let detail="";
+        try{
+          const error=await response.json();
+          detail=String(error?.message||error?.detail||error?.error||"").slice(0,180);
+        }catch(_){}
+        failures.push(resource+" HTTP "+response.status+(detail?" ("+detail+")":""));
+        if(response.status===401||response.status===403||response.status===429)break;
+        continue;
+      }
+      const data=await response.json();
+      const km=Number(data?.distance);
+      if(Number.isFinite(km)&&km>=0)return km;
+      failures.push(resource+" : réponse sans distance routière valide");
+    }catch(e){failures.push(resource+" : réseau indisponible");}
+  }
+  throw new Error("Le service IGN n'a pas trouvé de trajet routier. "+
+    failures.join(" ; ")+". Vérifiez les adresses ou saisissez les km réels manuellement.");
+}
+function ptShowManual(){
+  const form=document.querySelector('#sheetIn form[data-form="ptTrip"]');
+  if(!form)return;
+  const section=form.querySelector("[data-pt-manual]");
+  if(section){section.style.display="";section.querySelector("input")?.focus();}
+}
+function ptManualApply(){
+  const form=document.querySelector('#sheetIn form[data-form="ptTrip"]');
+  if(!form||!sheetCtx?.ptTrip)return;
+  const ev=PT.suggestions.find(x=>x.key===sheetCtx.ptTrip);
+  if(!ev)return;
+  const f=ptFields(form),km=Number(String(f.manual_km||"").replace(",","."));
+  if(!Number.isFinite(km)||km<=0||km>99999){toast("Indiquez une distance réelle valide, supérieure à 0 km.");return;}
+  let from,to,back;
+  try{
+    PT.current=ev;
+    from=ptSelected(f.origin,f.origin_text);
+    to=ptSelected(f.destination,f.destination_text);
+    back=ptSelected(f.return_to,f.return_text);
+    if(!from.label||!to.label)throw new Error("Indiquez le départ et la destination avant de saisir les kilomètres.");
+    if(f.trip_mode==="custom"&&!back.label)throw new Error("Indiquez l'adresse de retour.");
+  }catch(e){toast(e.message);return;}
+  const rounded=Math.round(km*10)/10;
+  PT.calculated={key:ev.key,signature:JSON.stringify(f),km:rounded,
+    done:[{from:from.label,to:to.label,km:rounded,source:"manual"}],
+    from:from.label,to:to.label,back:back.label,mode:f.trip_mode,manual:true};
+  const panel=form.querySelector("#ptDistance");
+  if(panel)panel.textContent="Distance saisie manuellement : "+ptFmt(rounded)+
+    " km au total. Aucun calcul routier automatique n'a été validé.";
 }
 async function ptCalculate(){
   const form=document.querySelector("#sheetIn form[data-form=ptTrip]");
@@ -252,7 +312,8 @@ async function ptCalculate(){
     if(km<=0)throw new Error("La distance est nulle. Vérifiez les adresses.");
     PT.calculated={key:ev.key,signature:JSON.stringify(f),km,done,from:from.label,to:to.label,back:back.label,mode:f.trip_mode};
     panel.textContent=done.map(x=>x.from+" → "+x.to+" : "+ptFmt(x.km)+" km").join(" · ")+" | Total estimé : "+ptFmt(km)+" km. Adresses retenues : "+[...coords.entries()].map(([source,point])=>source+" = "+point.resolved).join(" ; ");
-  }catch(e){panel.textContent="Calcul impossible : "+e.message;}
+  }catch(e){panel.textContent="Calcul impossible : "+e.message+
+      " Vous pouvez essayer une adresse plus précise ou utiliser « Saisir les km réels ».";}
 }
 async function ptSaveTrip(form) {
   const ev=PT.suggestions.find(x=>x.key===sheetCtx?.ptTrip),calc=PT.calculated;
@@ -273,7 +334,7 @@ async function ptSaveTrip(form) {
     household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,event_id:ev.event_id,
     event_fingerprint:ev.fingerprint,day:ev.day,title:ev.title,category:ev.kind,
     origin_label:calc.from,destination_label:calc.to,return_label:calc.back,
-    trip_mode:calc.mode,calculated_km:calc.km,distance_km:calc.km,legs:calc.done
+    trip_mode:calc.mode,calculated_km:calc.manual?0:calc.km,distance_km:calc.km,legs:calc.done
   };
   const linked=selected.map(x=>({child_id:x.child_id,calendar_id:x.calendar,
     event_id:x.event_id,event_fingerprint:x.fingerprint,title:x.title,day:x.day}));
@@ -588,6 +649,8 @@ document.addEventListener("click",async e=>{
   else if(a==="ptPlaceEdit")ptPlaceForm(ptPlaceById(v));
   else if(a==="ptTrip"){const ev=PT.suggestions.find(x=>x.key===v);if(ev)ptTripForm(ev);}
   else if(a==="ptCalc")ptCalculate();
+  else if(a==="ptManualShow")ptShowManual();
+  else if(a==="ptManualApply")ptManualApply();
   else if(a==="ptEdit")ptEditSheet(v);
   else if(a==="ptDelete")ptDelete(v);
   else if(a==="ptExport")ptExport();
