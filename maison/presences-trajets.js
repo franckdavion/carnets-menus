@@ -139,7 +139,7 @@ function ptTripForm(ev){
   const groupable=PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[])
     .filter(x=>x.key!==ev.key);
   const groupHtml=groupable.length?'<div class="pr-note"><b>Un seul déplacement pour plusieurs enfants ?</b><p class="muted small">Cochez les autres rendez-vous effectués pendant la même sortie. Les kilomètres ne seront comptés qu’une fois.</p>'+
-    groupable.map(x=>'<label class="field" style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pt_group" value="'+ptEsc(x.key)+'"'+(/\\bcoiffeur\\b/.test(PRTR.norm(ev.title))?' checked':'')+'> <span>'+ptEsc(prChild(x.child_id)?.first_name||"Enfant")+' — '+ptEsc(x.title)+(x.local_time&&x.local_time!=="jour"?" ("+ptEsc(x.local_time)+")":"")+'</span></label>').join("")+
+    groupable.map(x=>'<label class="field" style="display:flex;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="pt_group" value="'+ptEsc(x.key)+'"'+(/\bcoiffeur\b/.test(PRTR.norm(ev.title))?' checked':'')+'> <span>'+ptEsc(prChild(x.child_id)?.first_name||"Enfant")+' — '+ptEsc(x.title)+(x.local_time&&x.local_time!=="jour"?" ("+ptEsc(x.local_time)+")":"")+'</span></label>').join("")+
     '</div>':'';
   openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><div class="muted small" style="margin-top:5px">'+ptEsc(prDL(ev.day))+'</div></div>'+
     '<form data-form="ptTrip">'+
@@ -337,7 +337,7 @@ function ptDisplayedSuggestions(rows) {
   const done=new Set(),result=[];
   for(const ev of rows){
     if(done.has(ev.key))continue;
-    const hair=/\\bcoiffeur\\b/.test(PRTR.norm(ev.title));
+    const hair=/\bcoiffeur\b/.test(PRTR.norm(ev.title));
     const group=hair?PRTR.groupCandidates(ev,rows,PR.data.children,PT.places||[]):[ev];
     if(group.length>1){
       for(const x of group)done.add(x.key);
