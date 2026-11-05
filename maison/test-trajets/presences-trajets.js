@@ -75,7 +75,9 @@ function ptOptions(selected,includeOther=true) {
   return saved+(includeOther?'<option value="other"'+(selected==="other"?' selected':'')+'>Autre adresse (saisir ci-dessous)</option>':"");
 }
 function ptPlaceForm(place,draft={}) {
-  const isHome=place?place.is_home:!ptHome();
+  // Ajouter une destination depuis un rendez-vous ne doit jamais créer
+  // involontairement un second domicile.
+  const isHome=place?place.is_home:(!draft.tripKey&&!ptHome());
   const disabled=!!ptHome() && (!place || !place.is_home);
   openSheet(place?"Modifier le lieu":"Ajouter un lieu",'<form data-form="ptPlace">'+
     '<label class="field"><span class="label">Nom du lieu</span><input class="input" name="label" required maxlength="90" value="'+ptEsc(place?.label||draft.label||(isHome?"Domicile":""))+'" placeholder="Ex. Flixecourt ou Orthophoniste"></label>'+
@@ -158,6 +160,16 @@ function ptRuleLabel(ev){
 function ptOuting(ev){
   return PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[]);
 }
+function ptGoogleDifferent(ev,place) {
+  if(!ev?.location||!place)return false;
+  const google=PRTR.norm(ev.location).replace(/ france$/,"");
+  const address=PRTR.norm(place.address), label=PRTR.norm(place.label);
+  if(!google||google===address||google===label||google===PRTR.norm(place.label+" "+place.address))return false;
+  // Une commune Google et un favori situé dans cette commune sont compatibles.
+  if(ptIsCommune(ev.location)&&(" "+address+" ").includes(" "+google+" "))return false;
+  // Un lieu précis différent mérite toujours un contrôle par l'utilisateur.
+  return true;
+}
 function ptTripForm(ev,presetDestinationId=""){
   const home=ptHome(), resolved=PRTR.resolvedLocation(ev,PT.places||[]);
   const dst=(presetDestinationId&&ptPlaceById(presetDestinationId))||resolved.place;
@@ -185,6 +197,9 @@ function ptTripForm(ev,presetDestinationId=""){
     (dst?'<p class="muted small">Lieu favori : '+ptEsc(dst.label)+'. Inutile de saisir une adresse dans Google.</p>':
       ev.location?'<p class="muted small">Commune ou lieu fourni par Google Agenda : '+ptEsc(ev.location)+'</p>':
       '<p class="muted small">Choisissez une commune ou un lieu favori, sans obligation de renseigner une rue.</p>')+
+    (dst&&ptGoogleDifferent(ev,dst)?'<div class="pr-note warn"><b>Vérifier le lieu :</b> Google indique « '+ptEsc(ev.location)+
+      ' » et le favori suggère « '+ptEsc(dst.label)+' — '+ptEsc(dst.address)+
+      ' ». Si le rendez-vous est exceptionnel, choisissez « Adresse du rendez-vous Google » dans le menu Destination.</div>':'')+
     '<div class="btns" style="margin:8px 0 12px"><button type="button" class="btn" data-act="ptSaveDestination">☆ Enregistrer cette destination en favori</button></div>'+
     '<label class="field"><span class="label">Type de déplacement</span><select class="input" name="trip_mode">'+
     [['four','Deux allers-retours (déposer puis rechercher)'],['round','Un aller-retour'],['one','Aller simple'],['custom','Retour à une autre adresse']].map(([value,label])=>'<option value="'+value+'"'+(ev.mode===value?' selected':'')+'>'+label+'</option>').join("")+
@@ -525,13 +540,20 @@ async function ptDelete(id){
   if(error)return toast(error.message);
   closeSheet();await ptLoad(true);PT.monthSynced="";ptSync(true);toast("Trajet supprimé.");
 }
+function ptSourceLabel(row) {
+  const sources=(Array.isArray(row.legs)?row.legs:[]).map(x=>x?.source||"");
+  if(sources.includes("manual"))return "Km saisis manuellement";
+  if(sources.includes("estimate-commune"))return "Estimation entre communes";
+  if(sources.includes("routing"))return "Itinéraire routier estimé";
+  return "Méthode non précisée";
+}
 function ptExport(){
   const [from,to]=ptMonthBounds();
   const records=(PT.records||[]).filter(x=>x.day>=from&&x.day<=to&&(!PT.child||ptParticipantIds(x).includes(PT.child)));
   const csv=rows=>rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(";")).join("\r\n");
-  const lines=[["Date","Enfants concernés","Motif","Départ","Destination","Retour","Type","Calculé (km)","Retenu (km)"]];
-  for(const r of records)lines.push([prD(r.day),ptParticipantNames(r),r.title,r.origin_label,r.destination_label,r.return_label,r.trip_mode,ptFmt(r.calculated_km),ptFmt(r.distance_km)]);
-  lines.push(["TOTAL","","","","","","","",ptFmt(records.reduce((s,r)=>s+Number(r.distance_km),0))]);
+  const lines=[["Date","Enfants concernés","Motif","Départ","Destination","Retour","Type","Calculé (km)","Retenu (km)","Origine du kilométrage"]];
+  for(const r of records)lines.push([prD(r.day),ptParticipantNames(r),r.title,r.origin_label,r.destination_label,r.return_label,r.trip_mode,ptFmt(r.calculated_km),ptFmt(r.distance_km),ptSourceLabel(r)]);
+  lines.push(["TOTAL","","","","","","","",ptFmt(records.reduce((s,r)=>s+Number(r.distance_km),0)),""]);
   prDeliver(new Blob(["\uFEFF"+csv(lines)],{type:"text/csv;charset=utf-8"}),"Trajets-enfants-"+PT.month+".csv");
 }
 // Les rendez-vous coiffeur successifs restent trois événements Google, mais
@@ -590,7 +612,7 @@ function ptTripsView(){
       automaticallyExcluded.map(x=>'<p class="muted small">'+ptEsc(prD(x.day))+' · '+ptEsc(x.title)+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</p>').join("")+
       '</details>':'')+'</details></section>';
   const history='<section class="pr-panel"><h2 class="pr-h">Trajets confirmés · '+rec.length+'</h2>'+byKid+
-    (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
+    (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+' · '+ptEsc(ptSourceLabel(x))+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
     '<button class="btn" data-act="ptExport">Exporter le mois (Excel / CSV)</button></section>';
   return '<div class="pr pt">'+header+
     '<section class="pr-panel"><div class="pr-bilan"><div><b>'+ptFmt(total)+' km</b><small>Confirmés</small></div><div><b>'+rec.length+'</b><small>Trajets effectués</small></div><div><b>'+displayed.length+'</b><small>À vérifier</small></div></div>'+
