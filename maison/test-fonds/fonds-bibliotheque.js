@@ -305,6 +305,17 @@
       (item.local?' data-mn-bg-preview-local="'+esc(item.id)+'"':
       ' style="background-image:url(&quot;'+esc(item.src)+'&quot;)"')+'></div>'+text+'</div>';
   }
+  function weatherStatus(){
+    const snapshot=conditionNow(),name=CONDITIONS.find(x=>x[0]===snapshot.category)?.[1]||'indisponible';
+    const time=snapshot.stale?' (dernière prévision)':'';
+    if(prefs.weatherSource==='gps'){
+      if(gps.pending)return 'Recherche de la météo à la position actuelle…';
+      if(snapshot.source==='gps')return 'Position actuelle : '+name+'. Dernière lecture GPS : '+new Date(gps.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'.';
+      return (gps.error?gps.error+'. ':'Position GPS non renseignée. ')+
+        'Repli sur '+snapshot.city+' : '+name+time+'.';
+    }
+    return snapshot.city+' : '+name+time+'.';
+  }
   function html(){
     const kind=modalType,all=catalog().filter(x=>x.type===kind);
     const typelabel=TYPES.find(t=>t[0]===kind)?.[1]||'Photos';
@@ -313,11 +324,24 @@
       '<div class="mn-bg-tabs" role="tablist" aria-label="Type de fonds">'+TYPES.map(([id,name])=>
         '<button type="button" role="tab" aria-selected="'+(id===kind)+'" data-mn-bg-act="type" data-v="'+id+'">'+name+'</button>').join('')+'</div>'+
       '<div class="mn-bg-mode"><label class="field"><span class="label">Affichage</span><select class="input" data-mn-bg-mode>'+
-        [['auto','Automatique selon l’heure'],['custom','Choisir chaque période'],['fixed','Un seul fond toute la journée']].map(([k,v])=>
+        [['auto','Automatique selon l’heure'],['weather','Météo réelle (heure + conditions)'],['custom','Choisir chaque période'],['fixed','Un seul fond toute la journée']].map(([k,v])=>
           '<option value="'+k+'"'+(prefs.mode===k?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
+      (prefs.mode==='weather'?
+        '<div class="mn-bg-weather-settings"><label class="field"><span class="label">Météo de référence</span>'+
+        '<select class="input" data-mn-bg-source>'+
+        '<option value="city"'+(prefs.weatherSource==='city'?' selected':'')+'>Ville météo de Maisonnée</option>'+
+        '<option value="gps"'+(prefs.weatherSource==='gps'?' selected':'')+'>Position de cet appareil (GPS)</option></select></label>'+
+        '<p class="muted small" role="status">'+esc(weatherStatus())+'</p>'+
+        (prefs.weatherSource==='gps'?'<button type="button" class="btn" data-mn-bg-act="refreshWeather">Actualiser ma météo GPS</button>':'')+
+        '<p class="muted small">GPS facultatif, utilisé seulement pour la météo du fond. Coordonnées envoyées à Open-Meteo sans être enregistrées dans Maisonnée.</p>'+
+        '<b class="mn-bg-settings-label">Prévisualiser une condition</b>'+
+        '<div class="mn-bg-conditions" role="group" aria-label="Conditions à personnaliser">'+CONDITIONS.map(([id,label])=>
+          '<button type="button" data-mn-bg-act="condition" data-v="'+id+'" aria-pressed="'+(modalWeather===id)+'">'+label+'</button>').join('')+'</div></div>':'')+
       '<div class="mn-bg-periods" aria-label="Période à personnaliser">'+PERIODS.map(([id,name])=>
         '<button type="button" data-mn-bg-act="period" data-v="'+id+'" aria-pressed="'+(id===modalPeriod)+'">'+name+'</button>').join('')+'</div>'+
-      '<p class="mn-bg-help">'+(prefs.mode==='auto'?'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
+      '<p class="mn-bg-help">'+(prefs.mode==='weather'?
+        'Le temps actuel choisit automatiquement les effets ; cette sélection règle le fond pour la condition et l’heure affichées.':
+        prefs.mode==='auto'?'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
       currentPreview()+
       '<div class="mn-bg-gallery" role="group" aria-label="'+esc(typelabel)+'">'+all.map(tile).join('')+'</div>'+
@@ -367,6 +391,9 @@
     hydrate();
     modalPeriod=currentPeriod();
     modalType=prefs.type;addOpen=false;
+    const actual=conditionNow().category;
+    modalWeather=isCondition(actual)?actual:'clear';
+    if(prefs.mode==='weather'&&prefs.weatherSource==='gps')void refreshGPS();
     openSheet('Bibliothèque des fonds','<div data-mn-bg-library></div>');
     draw();
   }
@@ -375,7 +402,10 @@
     const checked=validateItem(item);
     if(!checked)throw new Error('Format ou adresse non valide.');
     prefs.custom=[...prefs.custom,checked].slice(-60);
-    prefs.mode='custom';prefs.type=checked.type;prefs.chosen[modalPeriod]=checked.id;
+    prefs.type=checked.type;
+    if(prefs.mode==='weather')prefs.weatherChoices[modalWeather+':'+modalPeriod]=checked.id;
+    else if(prefs.mode==='fixed')prefs.fixed=checked.id;
+    else {prefs.mode='custom';prefs.chosen[modalPeriod]=checked.id;}
     persist();draw();
   }
   async function addFile(file){
@@ -397,10 +427,13 @@
     if(action==='done'){closeSheet();previewPeriod(null);return}
     if(action==='type'&&isType(v)){modalType=v;prefs.type=v;persist();draw();return}
     if(action==='period'&&isPeriod(v)){modalPeriod=v;previewPeriod(v);draw();return}
+    if(action==='condition'&&isCondition(v)){modalWeather=v;draw();return}
+    if(action==='refreshWeather'){gps.lastAttempt=0;void refreshGPS(true);draw();return}
     if(action==='choose'){
       const item=find(id);if(!item)return;
       previewPeriod(modalPeriod);
       if(prefs.mode==='fixed')prefs.fixed=item.id;
+      else if(prefs.mode==='weather')prefs.weatherChoices[modalWeather+':'+modalPeriod]=item.id;
       else {prefs.mode='custom';prefs.chosen[modalPeriod]=item.id}
       prefs.type=modalType;persist();draw();return;
     }
@@ -408,6 +441,7 @@
       const item=prefs.custom.find(x=>x.id===id);if(!item||!confirm('Supprimer « '+item.name+' » de la bibliothèque ?'))return;
       prefs.custom=prefs.custom.filter(x=>x.id!==id);
       for(const [period]of PERIODS)if(prefs.chosen[period]===id)delete prefs.chosen[period];
+      for(const key of Object.keys(prefs.weatherChoices))if(prefs.weatherChoices[key]===id)delete prefs.weatherChoices[key];
       if(prefs.fixed===id)prefs.fixed='p-matin';
       if(item.local){await dbRun('delete',id).catch(()=>{});const old=objectUrls.get(id);if(old)URL.revokeObjectURL(old);objectUrls.delete(id)}
       persist();draw();
@@ -416,7 +450,15 @@
   document.addEventListener('change',async e=>{
     const el=e.target;
     if(el.matches('[data-mn-bg-mode]')){
-      prefs.mode=el.value;persist();draw();return;
+      prefs.mode=['auto','weather','custom','fixed'].includes(el.value)?el.value:'auto';
+      persist();if(prefs.mode==='weather'&&prefs.weatherSource==='gps')void refreshGPS();
+      draw();return;
+    }
+    if(el.matches('[data-mn-bg-source]')){
+      prefs.weatherSource=el.value==='gps'?'gps':'city';
+      gps.error='';persist();
+      if(prefs.weatherSource==='gps')void refreshGPS(true);
+      draw();return;
     }
     if(el.matches('[data-mn-bg-motion]')){
       prefs.motion=el.checked;persist();draw();return;
@@ -474,6 +516,7 @@
   });
   setInterval(()=>{if(!document.hidden)void apply(document)},30000);
   window.maisonneeFondBibliotheque={open,apply,catalog,prefs:()=>JSON.parse(JSON.stringify(prefs)),
-    // API d'ajout standardisée : manifeste versionné, sans duplicata de CSS.
+    weatherChanged(){lastMediaSig='';void apply(document);draw()},
+    // API catalogue compatible avec les trois types existants.
     register(item){addItem(item)}};
 })();
