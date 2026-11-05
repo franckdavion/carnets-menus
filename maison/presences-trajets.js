@@ -51,9 +51,8 @@ async function ptSync(force=false) {
         page=j.nextPageToken||"";
       }while(page);
     }
-    const confirmed=new Set((PT.records||[]).map(ptKey));
-    PT.suggestions=found.filter(x=>x.day>=from&&x.day<=to&&!confirmed.has(x.key))
-      .sort((a,b)=>a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
+    // Un même événement copié dans deux agendas ne devient qu'une proposition.
+    PT.suggestions=PRTR.dedupe(found.filter(x=>x.day>=from&&x.day<=to),PT.records||[]);
     PT.monthSynced=key;
   }catch(e){PT.syncError=e.message||"Synchronisation impossible";}
   finally{PT.syncing=false;softRender();}
@@ -89,6 +88,8 @@ async function ptSavePlace(form) {
   const fd=new FormData(form), id=sheetCtx?.ptPlace;
   const label=String(fd.get("label")||"").trim(),address=String(fd.get("address")||"").trim(),keywords=String(fd.get("keywords")||"").trim();
   if(!label||!address){toast("Indiquez le nom et l'adresse.");return;}
+  const duplicate=PRTR.duplicatePlace({label,address,keywords},PT.places||[],id);
+  if(duplicate){toast("Lieu déjà enregistré ("+duplicate.reason+") : "+duplicate.place.label+". Modifiez sa fiche.");return;}
   const is_home=fd.has("is_home");
   if(is_home&&ptHome()&&ptHome().id!==id){toast("Modifiez le domicile existant.");return;}
   const btn=form.querySelector("[type=submit]");if(btn)btn.disabled=true;
@@ -96,12 +97,17 @@ async function ptSavePlace(form) {
     const coords=await ptGeo(address);
     const ok=confirm("Adresse trouvée : "+coords.label+"\n\nEst-ce bien ce lieu ?");
     if(!ok)return;
+    // Relire la base juste avant l'écriture (deux appareils peuvent ajouter un lieu).
+    const current=await sb.from("child_trip_places").select("id,label,address,keywords,is_home").eq("household_id",S.hh.id);
+    if(current.error)throw current.error;
+    const dup=PRTR.duplicatePlace({label,address:coords.label,keywords},current.data||[],id);
+    if(dup)throw new Error("Lieu déjà enregistré ("+dup.reason+") : "+dup.place.label+".");
     const row={household_id:S.hh.id,label,address:coords.label,keywords,is_home,longitude:coords.lon,latitude:coords.lat};
     const q=id?sb.from("child_trip_places").update(row).eq("id",id).eq("household_id",S.hh.id):sb.from("child_trip_places").insert(row);
     const {error}=await q;
     if(error)throw error;
     closeSheet();await ptLoad(true);toast("Lieu enregistré.");
-  }catch(e){toast("Lieu non enregistré : "+e.message);}
+  }catch(e){toast("Lieu non enregistré : "+(e.code==="23505"?"nom ou adresse déjà enregistré.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
 const ptPlaceById = id => (PT.places||[]).find(p=>p.id===id);
@@ -123,9 +129,8 @@ async function ptSaveCalendars(form) {
   PT.monthSynced="";PT.suggestions=[];closeSheet();softRender();if(cals.length)ptSync(true);
 }
 function ptTripForm(ev){
-  const home=ptHome(), auto=PRTR.placeFor(ev,PT.places||[]);
-  const match=(PT.places||[]).find(p=>ev.location&&PRTR.norm(p.address)===PRTR.norm(ev.location));
-  const dst=auto||match;
+  const home=ptHome(), resolved=PRTR.resolvedLocation(ev,PT.places||[]);
+  const dst=resolved.place;
   const child=prChild(ev.child_id);
   PT.calculated=null;
   openSheet("Trajet · "+(child?.first_name||"Enfant"),'<div class="card"><strong>'+ptEsc(ev.title)+'</strong><small>'+ptEsc(prDL(ev.day))+'</small></div>'+
@@ -136,7 +141,9 @@ function ptTripForm(ev){
     (ev.location?'<option value="google"'+(!dst?' selected':'')+'>Adresse du rendez-vous Google</option>':"")+
     ptOptions(dst?.id||(!ev.location?"other":"google"))+'</select></label>'+
     '<label class="field"><span class="label">Autre destination, si sélectionnée</span><input class="input" name="destination_text" placeholder="Adresse du lieu"></label>'+
-    (ev.location?'<p class="muted small">Google Agenda : '+ptEsc(ev.location)+'</p>':'')+
+    (dst?'<p class="muted small">Lieu reconnu dans Présences : '+ptEsc(dst.label)+'. Inutile de saisir l’adresse dans Google.</p>':
+      ev.location?'<p class="muted small">Lieu fourni par Google Agenda : '+ptEsc(ev.location)+'</p>':
+      '<p class="muted small">Aucun lieu reconnu : choisissez un lieu favori ou saisissez une adresse.</p>')+
     '<label class="field"><span class="label">Type de déplacement</span><select class="input" name="trip_mode">'+
     [['four','Deux allers-retours (déposer puis rechercher)'],['round','Un aller-retour'],['one','Aller simple'],['custom','Retour à une autre adresse']].map(([value,label])=>'<option value="'+value+'"'+(ev.mode===value?' selected':'')+'>'+label+'</option>').join("")+
     '</select></label>'+
@@ -208,17 +215,21 @@ async function ptSaveTrip(form) {
   if(ev.day>today()){toast("Impossible de confirmer un trajet futur.");return;}
   const row={
     household_id:S.hh.id,child_id:ev.child_id,calendar_id:ev.calendar,event_id:ev.event_id,
-    day:ev.day,title:ev.title,category:ev.kind,
+    event_fingerprint:ev.fingerprint,day:ev.day,title:ev.title,category:ev.kind,
     origin_label:calc.from,destination_label:calc.to,return_label:calc.back,
     trip_mode:calc.mode,calculated_km:calc.km,distance_km:calc.km,legs:calc.done
   };
   const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
   try{
-    const {error}=await sb.from("child_trips").upsert(row,{onConflict:"household_id,child_id,calendar_id,event_id"});
+    const exists=await sb.from("child_trips").select("id").eq("household_id",S.hh.id)
+      .eq("child_id",ev.child_id).eq("event_fingerprint",ev.fingerprint).limit(1);
+    if(exists.error)throw exists.error;
+    if((exists.data||[]).length)throw new Error("Ce déplacement est déjà dans l’historique.");
+    const {error}=await sb.from("child_trips").insert(row);
     if(error)throw error;
     PT.calculated=null;closeSheet();await ptLoad(true);
     PT.suggestions=PT.suggestions.filter(x=>x.key!==ev.key);softRender();toast("Trajet confirmé et conservé dans l’historique.");
-  }catch(e){toast("Trajet non enregistré : "+e.message);}
+  }catch(e){toast("Trajet non enregistré : "+(e.code==="23505"?"déjà confirmé ; aucun doublon ajouté.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
 function ptEditSheet(id){
