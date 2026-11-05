@@ -139,14 +139,14 @@ async function snapshotFullyPreserved(name, spec) {
       !Array.isArray(mainTree.tree) || !Array.isArray(branchTree.tree)) return false;
   const live = new Map(mainTree.tree.map(item => [item.path, item.sha]));
   const saved = new Map(branchTree.tree.map(item => [item.path, item.sha]));
-  for (const [path, sha] of spec.equalFiles) {
-    if (live.get(path) !== sha || saved.get(path) !== sha) return false;
-  }
   if (spec.pairs) {
     for (const [path, [mainSha, branchSha]] of spec.pairs) {
       if (live.get(path) !== mainSha || saved.get(path) !== branchSha) return false;
     }
     return true;
+  }
+  for (const [path, sha] of spec.equalFiles) {
+    if (live.get(path) !== sha || saved.get(path) !== sha) return false;
   }
   return live.get(spec.html.path) === spec.html.mainSha &&
          saved.get(spec.html.path) === spec.html.branchSha;
