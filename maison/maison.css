@@ -3217,3 +3217,18 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px
 }
 .mz-shop-saved-status .btn{min-height:36px;padding:6px 11px;font-size:12px}
+
+/* Présences / Trajets : réutilise le design Présences, cinq onglets accessibles sur iPhone. */
+.pr .pt{display:flex;flex-direction:column;gap:14px}
+.pr .pt .pr-bilan{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:14px;text-align:center}
+.pr .pt .pr-bilan>div{padding:11px 5px;border-radius:14px;background:rgba(14,43,79,.64);border:1px solid rgba(135,191,249,.32);min-width:0}
+.pr .pt .pr-bilan b{display:block;font-size:clamp(15px,4vw,21px);color:#fff}
+.pr .pt .pr-bilan small{display:block;font-size:11px;color:#c7dfff;margin-top:5px}
+.pr .pt .pr-krow{margin-top:8px;min-width:0}
+.pr .pt .pr-krow .pr-kn{min-width:0;overflow-wrap:anywhere}
+.pr .pt .pr-krow strong{flex-shrink:0;white-space:nowrap}
+.pr .pt .pr-head .pr-title{font-size:17px}
+@media(max-width:759px){
+  .pr .pr-tabs{display:flex;overflow-x:auto;overscroll-behavior-x:contain;gap:5px;scrollbar-width:thin}
+  .pr .pr-tabs button{flex:0 0 89px;min-width:89px;font-size:11px}
+}
