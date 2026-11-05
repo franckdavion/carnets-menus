@@ -63,8 +63,14 @@
     if(viaAlias)return {place:viaAlias,origin:"favori"};
     const google=norm(ev.location);
     if(google){
+      // « Flixecourt, France » peut correspondre au favori « Flixecourt ».
+      // Ne jamais associer une commune à une adresse précise par simple
+      // proximité : un lieu favori doit porter le nom exact de la commune.
+      const commune=google.endsWith(" france")?google.slice(0,-7).trim():google;
       const candidates=(places||[]).filter(p=>!p.is_home &&
-        (norm(p.address)===google || norm(p.label)===google || norm(p.label+" "+p.address)===google));
+        (norm(p.address)===google || norm(p.label)===google ||
+         norm(p.label+" "+p.address)===google || norm(p.label)===commune ||
+         norm(p.address)===commune));
       if(candidates.length===1)return {place:candidates[0],origin:"google-favori"};
       return {place:null,origin:"google",address:ev.location};
     }
