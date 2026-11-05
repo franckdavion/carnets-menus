@@ -373,12 +373,14 @@
     const originalFamilyView=VIEWS.foyer;
     VIEWS.foyer=function(){
       const original=originalFamilyView.apply(this,arguments);
-      return original+'<h2>Personnalisation de l’accueil</h2>'+
+      const panel='<h2>Personnalisation de l’accueil</h2>'+
         '<div class="card mn-bg-family-card">'+
         '<div class="mn-bg-family-desc"><strong>Fonds d’écran</strong>'+
         '<p class="muted small">Photos, animations et photos animées. Choisissez un fond pour chaque moment de la journée.</p></div>'+
         '<button type="button" class="btn mn-bg-family-action" data-mn-bg-act="open">Choisir les fonds</button>'+
         '</div>';
+      return original.includes('<h2>Membres</h2>')?
+        original.replace('<h2>Membres</h2>',panel+'<h2>Membres</h2>'):original+panel;
     };
   }
   // Compatibilité avec le bandeau existant, sans altérer la météo ni sa logique.
