@@ -86,8 +86,12 @@ function calendarLog(m,prev){
     DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
       MEALS.forEach(([meal])=>{const sl=slots[slotKey(d,meal)],r=sl&&m.recipes[sl.id],key=date+"|"+meal;
         const extra=sl?["entree","dessert"].map(c=>sl[c]&&m.recipes[sl[c]]&&m.recipes[sl[c]].name).filter(Boolean):[];
-        const t=r&&r.name+(extra.length?" (+ "+extra.join(", ")+")":"");
-        if(r)cal[key]=sl.extra&&sl.extra.length?{t,d:"En plus : "+sl.extra.join(", ")}:t; else if(date>=today)delete cal[key];});});}
+        const title=r&&r.name
+          ? r.name+(extra.length?" (+ "+extra.join(", ")+")":"")
+          : sl&&sl.note ? String(sl.note).trim()
+          : sl&&sl.left ? "Restes : "+String(sl.left).trim() : "";
+        if(title)cal[key]=sl&&sl.extra&&sl.extra.length?{t:title,d:"En plus : "+sl.extra.join(", ")}:title;
+        else if(date>=today)delete cal[key];});});}
   const limit=ymd(addDays(new Date(),-371));
   for(const k of Object.keys(cal))if(k.slice(0,10)<limit)delete cal[k];
   return Object.fromEntries(Object.keys(cal).sort().map(k=>[k,cal[k]]));
@@ -114,20 +118,21 @@ let icsBusy=false;
 async function publishIcs(cal){
   if(!sync||!siteRepo()||icsBusy)return;
   const ics=buildIcs(cal||{});
-  if(LS.get("cm_ics_last","")===ics)return;
+  if(LS.get("cm_ics_last","")===ics&&Date.now()-Number(LS.get("cm_ics_checked_at",0))<3600000)return;
   icsBusy=true; const line=$("#icsStatus");
   try{
     for(let i=0;i<3;i++){
       const g=await gh("GET",null,siteRepo(),"menu.ics");let sha=null;
-      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===ics){LS.set("cm_ics_last",ics);break;}}
+      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===ics){LS.set("cm_ics_last",ics);LS.set("cm_ics_checked_at",Date.now());break;}}
       else if(g.status!==404)throw{status:g.status};
       const p=await gh("PUT",Object.assign({message:"Agenda des repas",content:b64e(ics)},sha?{sha}:{}),siteRepo(),"menu.ics");
       if(p.status===409||p.status===422)continue;
       if(!p.ok)throw{status:p.status};
-      LS.set("cm_ics_last",ics);break;
+      LS.set("cm_ics_last",ics);LS.set("cm_ics_checked_at",Date.now());break;
     }
     if(line)line.textContent="Agenda publié à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". Google le relit toutes les quelques heures.";
   }catch(e){
+    console.warn("Publication menu.ics",e);
     if(line)line.textContent=e&&(e.status===403||e.status===404)?"Agenda non publié : la clé n'a pas le droit d'écrire dans "+siteRepo()+" (ajoutez ce dépôt à la clé, Contents : Read and write).":"Agenda non publié pour l'instant, nouvel essai à la prochaine synchronisation.";
   }finally{icsBusy=false;}
 }
@@ -136,19 +141,20 @@ let agendaBusy=false;
 async function publishAgenda(cal){
   if(!sync||agendaBusy)return;
   const body=J({v:1,times:{midi:["12:00","13:30"],soir:["19:30","21:00"]},calendar:cal||{}});
-  if(LS.get("cm_agenda_last","")===body)return;
+  if(LS.get("cm_agenda_last","")===body&&Date.now()-Number(LS.get("cm_agenda_checked_at",0))<3600000)return;
   agendaBusy=true;
   try{
     for(let i=0;i<3;i++){
       const g=await gh("GET",null,sync.repo,"agenda.json");let sha=null;
-      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===body){LS.set("cm_agenda_last",body);break;}}
-      else if(g.status!==404)break;
+      if(g.status===200){const d=await g.json();sha=d.sha;if(b64d(d.content)===body){LS.set("cm_agenda_last",body);LS.set("cm_agenda_checked_at",Date.now());break;}}
+      else if(g.status!==404)throw {status:g.status};
       const p=await gh("PUT",Object.assign({message:"Agenda des repas",content:b64e(body)},sha?{sha}:{}),sync.repo,"agenda.json");
       if(p.status===409||p.status===422)continue;
-      if(p.ok)LS.set("cm_agenda_last",body);
+      if(!p.ok)throw {status:p.status};
+      LS.set("cm_agenda_last",body);LS.set("cm_agenda_checked_at",Date.now());
       break;
     }
-  }catch(e){}finally{agendaBusy=false;}
+  }catch(e){console.warn("Publication agenda.json",e);}finally{agendaBusy=false;}
 }
 async function showGoogleStatus(){
   const line=$("#gStatus"); if(!line)return; line.textContent="";
