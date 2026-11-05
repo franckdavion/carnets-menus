@@ -105,6 +105,24 @@
     }
     return found.sort((a,b)=>a.day.localeCompare(b.day)||a.title.localeCompare(b.title,"fr"));
   }
+  // Rendez-vous successifs pour une même activité : regroupement proposé mais
+  // toujours confirmé par l'utilisateur. Jamais de groupement entre lieux différents.
+  function groupCandidates(anchor, rows, children, places=[]) {
+    const childOf=id=>(children||[]).find(c=>c.id===id);
+    const activity=activityKey(anchor.title,childOf(anchor.child_id),anchor.kind);
+    const geo = r => {
+      const found=resolvedLocation(r,places);
+      return found.place ? norm(found.place.address) : norm(found.address||"");
+    };
+    const origin=geo(anchor);
+    return [anchor,...(rows||[]).filter(r=>{
+      if(r.key===anchor.key || r.day!==anchor.day || r.child_id===anchor.child_id || r.kind!==anchor.kind)
+        return false;
+      if(activityKey(r.title,childOf(r.child_id),r.kind)!==activity)return false;
+      const other=geo(r);
+      return !origin || !other || origin===other;
+    })].sort((a,b)=>(a.local_time||"").localeCompare(b.local_time||"")||a.title.localeCompare(b.title,"fr"));
+  }
   function legs(mode, home, destination, returnPlace) {
     if (mode === "one") return [[home, destination]];
     if (mode === "round") return [[home, destination],[destination, home]];
@@ -113,7 +131,7 @@
     throw new Error("Type de trajet inconnu.");
   }
   const total = lengths => Math.round(lengths.reduce((s,x)=>s+Number(x||0),0)*10)/10;
-  const API = {norm, matches, make, placeFor, matchingPlaces, duplicatePlace, resolvedLocation, fingerprint, dedupe, legs, total};
+  const API = {norm, matches, make, placeFor, matchingPlaces, duplicatePlace, resolvedLocation, fingerprint, dedupe, groupCandidates, legs, total};
   if (typeof module !== "undefined" && module.exports) module.exports=API;
   else root.PRTR=API;
 })(typeof window !== "undefined" ? window : globalThis);
