@@ -37,6 +37,15 @@ body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-kenburns{animation-play-s
 .mn-bg-periods button{min-width:0;padding:9px 1px;border:1px solid #578cba75;border-radius:13px;background:#0d294c;color:#cbe7ff;font-size:clamp(10px,2.7vw,13px);font-weight:700;}
 .mn-bg-periods button[aria-pressed="true"]{background:linear-gradient(145deg,#2678c4,#135194);border-color:#98daff;color:#fff;}
 .mn-bg-help{color:#aaceea!important}
+.mn-bg-live-preview{position:relative;isolation:isolate;min-height:104px;height:clamp(104px,19vw,150px);border:1px solid #73bbf6a0;border-radius:15px;overflow:hidden;background:linear-gradient(135deg,#193c73,#091a38);box-shadow:inset 0 1px 0 #ffffff3b;display:flex;align-items:end;}
+.mn-bg-live-preview::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(0deg,rgba(4,13,34,.78),rgba(6,17,43,.04) 77%);}
+.mn-bg-live-preview video,.mn-bg-live-preview .mn-bg-preview-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;background-size:cover;background-position:center;background-repeat:no-repeat;}
+.mn-bg-live-preview .mn-bg-preview-moving{animation:mn-bg-zoom 24s ease-in-out infinite alternate;}
+.mn-bg-live-preview .mn-bg-preview-caption{position:relative;z-index:2;padding:12px 13px;color:#fff;font-weight:750;font-size:14px;line-height:1.3;text-shadow:0 2px 5px #001;}
+.mn-bg-preview-art{justify-content:space-between;align-items:center;}
+.mn-bg-preview-art .mn-bg-preview-star{font-size:58px;opacity:.75;padding:9px 0 0 22px;text-shadow:0 2px 15px #fff8;}
+.mn-bg-preview-art .mn-bg-preview-caption{align-self:end;text-align:right;}
+@media(prefers-reduced-motion:reduce){.mn-bg-live-preview .mn-bg-preview-moving{animation:none!important}}
 .mn-bg-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
 .mn-bg-tile{position:relative;min-width:0;border:1px solid #5592cb6e;border-radius:16px;background:linear-gradient(145deg,#1d406c,#091d40);overflow:hidden;box-shadow:inset 0 1px 0 #ffffff20}
 .mn-bg-tile.is-selected{border-color:#7dddff;box-shadow:0 0 0 1px #7dddff7a,0 0 14px #0489fc55}
