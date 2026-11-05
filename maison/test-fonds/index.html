@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<base href="/carnets-menus/maison/">
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maisonnée — TEST bibliothèque de fonds V1</title>
+<meta name="description" content="Les tâches, l'agenda et les repas de la maison, partagés entre vous.">
+<meta name="theme-color" content="#F1F4F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121926" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Maisonnée">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="maison.css?v=20261105-trajets-prod-v1">
+<link rel="stylesheet" href="trajets-v2.css?v=20261105-trajets-v2-prod-1">
+<link rel="stylesheet" href="test-fonds/fonds-bibliotheque.css?v=20261105-fonds-test-v1">
+
+</head>
+<body>
+<div id="app"></div>
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="espace.js"></script>
+<script src="push-config.js"></script>
+<script src="supabase/functions/_shared/cal.js"></script>
+<script src="app.js?v=20261105-trajet-agenda-retour-v1"></script>
+<script src="essai-cartes.js?v=20261104-auto-cartes-v2"></script>
+<script src="modules.js?v=20261105-repas-agenda-prod-v1"></script>
+<script>try{sessionStorage.removeItem("mz_maj_attempts")}catch(e){}</script>
+<script src="../ingredient-arts.js"></script>
+<script src="../ingredient-emojis.js"></script>
+<script src="repas.js?v=20261031choix"></script>
+<script src="courses.js?v=20261031choix"></script>
+<script src="gtaches.js"></script>
+<script src="catalogue.js"></script>
+<script src="presences-core.js"></script>
+<script src="presences-trajets-core.js?v=20261105-trajets-v2-prod-1"></script>
+<script src="presences.js?v=20261105-trajets-refresh-v2"></script>
+<script src="presences-trajets.js?v=20261105-trajet-agenda-retour-v1"></script>
+<script src="presences-export.js"></script>
+<script src="natif.js"></script>
+<script>
+// iOS / PWA : champ actif visible au-dessus du clavier, dans les pages ET les feuilles.
+(() => {
+  const vv = window.visualViewport;
+  const sheet = document.getElementById('sheet');
+  if (!vv || !sheet) return;
+  const root = document.documentElement;
+  const editable = el => el && el.matches('input:not([type=checkbox]):not([type=radio]):not([type=hidden]), textarea, select, [contenteditable="true"]');
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+  let baselineHeight = vv.height;
+  let timer;
+  const activeField = () => editable(document.activeElement) ? document.activeElement : null;
+  const obstruction = () => Math.max(0, baselineHeight - vv.height, window.innerHeight - vv.offsetTop - vv.height);
+
+  function adjust() {
+    const field = activeField();
+    const keyboard = isTouch && !!field && obstruction() > 130;
+    root.style.setProperty('--maison-vh', Math.max(180, vv.height - 12) + 'px');
+    // Ne pas changer le positionnement des feuilles déjà validé.
+    if (sheet.open && keyboard) {
+      sheet.classList.add('maison-keyboard');
+      sheet.style.top = Math.max(0, vv.offsetTop + 6) + 'px';
+      sheet.style.height = Math.max(180, vv.height - 12) + 'px';
+      sheet.style.maxHeight = Math.max(180, vv.height - 12) + 'px';
+    } else {
+      sheet.classList.remove('maison-keyboard');
+      sheet.style.removeProperty('top');
+      sheet.style.removeProperty('height');
+      sheet.style.removeProperty('max-height');
+    }
+    const inline = keyboard && !sheet.open && !!field;
+    root.classList.toggle('mz-inline-keyboard', inline);
+    if (inline) {
+      root.style.setProperty('--mz-keyboard-space', Math.min(600, Math.ceil(obstruction())) + 'px');
+      root.style.setProperty('--mz-visible-bottom', Math.round(vv.offsetTop + vv.height) + 'px');
+    } else {
+      root.style.removeProperty('--mz-keyboard-space');
+      root.style.removeProperty('--mz-visible-bottom');
+      if (!field && obstruction() < 80) baselineHeight = vv.height;
+    }
+  }
+
+  function showFocused() {
+    adjust();
+    const field = activeField();
+    if (!field) return;
+    if (sheet.open) {
+      if (!sheet.contains(field)) return;
+      const r = field.getBoundingClientRect(), b = sheet.getBoundingClientRect();
+      if (r.bottom > b.bottom - 24) sheet.scrollTop += r.bottom - b.bottom + 24;
+      else if (r.top < b.top + 18) sheet.scrollTop -= b.top + 18 - r.top;
+      return;
+    }
+    if (!root.classList.contains('mz-inline-keyboard')) return;
+    const r = field.getBoundingClientRect();
+    // 84 px : marge pour la barre de suggestions du clavier iPhone.
+    const top = vv.offsetTop + 64, bottom = vv.offsetTop + vv.height - 84;
+    if (bottom - top < 100) return;
+    const delta = r.bottom > bottom ? r.bottom - bottom : r.top < top ? r.top - top : 0;
+    if (Math.abs(delta) > 3) window.scrollBy({ top: Math.ceil(delta), behavior: 'auto' });
+  }
+
+  vv.addEventListener('resize', () => {
+    adjust();
+    clearTimeout(timer);
+    timer = setTimeout(showFocused, 150);
+  }, { passive: true });
+  vv.addEventListener('scroll', adjust, { passive: true });
+  document.addEventListener('focusin', e => {
+    if (!editable(e.target)) return;
+    setTimeout(showFocused, 100);
+    setTimeout(showFocused, 350);
+    setTimeout(showFocused, 600);
+  });
+  document.addEventListener('input', e => {
+    if (editable(e.target) && e.target.matches('textarea, [contenteditable="true"]')) requestAnimationFrame(showFocused);
+  }, { passive: true });
+  document.addEventListener('focusout', () => setTimeout(adjust, 300));
+  sheet.addEventListener('close', adjust);
+  window.addEventListener('orientationchange', () => setTimeout(() => {
+    if (!activeField()) baselineHeight = vv.height;
+    adjust();
+    showFocused();
+  }, 300));
+  adjust();
+})();
+</script>
+<script src="bandeau-jour.js"></script>
+<script src="test-fonds/accueil.js?v=20261105-fonds-test-v1"></script>
+<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-test-v1"></script>
+<script defer src="../navigation-retour.js"></script>
+
+<script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
+</body>
+</html>
