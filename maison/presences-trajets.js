@@ -74,17 +74,18 @@ function ptOptions(selected,includeOther=true) {
   const saved=(PT.places||[]).map(p=>'<option value="'+ptEsc(p.id)+'"'+(selected===p.id?' selected':'')+'>'+ptEsc(p.label)+'</option>').join("");
   return saved+(includeOther?'<option value="other"'+(selected==="other"?' selected':'')+'>Autre adresse (saisir ci-dessous)</option>':"");
 }
-function ptPlaceForm(place) {
+function ptPlaceForm(place,draft={}) {
   const isHome=place?place.is_home:!ptHome();
   const disabled=!!ptHome() && (!place || !place.is_home);
   openSheet(place?"Modifier le lieu":"Ajouter un lieu",'<form data-form="ptPlace">'+
-    '<label class="field"><span class="label">Nom du lieu</span><input class="input" name="label" required maxlength="90" value="'+ptEsc(place?place.label:(isHome?"Domicile":""))+'" placeholder="Ex. Ping-pong"></label>'+
-    '<label class="field"><span class="label">Adresse complète</span><input class="input" name="address" required maxlength="400" value="'+ptEsc(place?.address||"")+'" placeholder="Numéro, rue, code postal, ville"></label>'+
-    '<label class="field"><span class="label">Abréviations Google Agenda (facultatif)</span><input class="input" name="keywords" maxlength="300" value="'+ptEsc(place?.keywords||"")+'" placeholder="Ex. PP, ping-pong"></label>'+
+    '<label class="field"><span class="label">Nom du lieu</span><input class="input" name="label" required maxlength="90" value="'+ptEsc(place?.label||draft.label||(isHome?"Domicile":""))+'" placeholder="Ex. Flixecourt ou Orthophoniste"></label>'+
+    '<label class="field"><span class="label">Commune ou adresse précise</span><input class="input" name="address" required maxlength="400" value="'+ptEsc(place?.address||draft.address||"")+'" placeholder="Ex. Flixecourt, ou 12 rue du Centre, Flixecourt"></label>'+
+    '<p class="muted small">La commune seule suffit par défaut : les kilomètres seront estimés entre communes. Indiquez une rue uniquement si vous souhaitez plus de précision.</p>'+
+    '<label class="field"><span class="label">Abréviations Google Agenda (facultatif)</span><input class="input" name="keywords" maxlength="300" value="'+ptEsc(place?.keywords||draft.keywords||"")+'" placeholder="Ex. PP, ping-pong"></label>'+
     '<label class="field"><input type="checkbox" name="is_home" '+(isHome?'checked':'')+' '+(disabled?'disabled':'')+'> Lieu de départ par défaut (domicile)</label>'+
     (disabled?'<p class="muted small">Pour changer le domicile, modifiez d’abord la fiche « Domicile ».</p>':'')+
-    '<p class="muted small">Les coordonnées sont vérifiées avec le service public Géoplateforme. Vérifiez que l’adresse proposée est correcte.</p>'+
-    '<div class="sheet-sticky btns"><button class="btn primary block" type="submit">Vérifier et enregistrer</button></div></form>',{ptPlace:place?.id||""});
+    '<p class="muted small">Le lieu est vérifié avec la Géoplateforme. Pour une commune, la distance est une estimation routière et non le trajet exact jusqu’au cabinet ou à la salle.</p>'+
+    '<div class="sheet-sticky btns"><button class="btn primary block" type="submit">Vérifier et enregistrer</button></div></form>',{ptPlace:place?.id||"",ptReturnTrip:draft.tripKey||""});
 }
 async function ptGeo(address) {
   const q=String(address||"").trim();
@@ -92,13 +93,15 @@ async function ptGeo(address) {
   const r=await fetch("https://data.geopf.fr/geocodage/search?index=address&q="+encodeURIComponent(q)+"&limit=3",{cache:"no-store"});
   if(!r.ok)throw new Error("Le service de recherche d'adresse est momentanément indisponible.");
   const j=await r.json(), features=(j.features||[]).filter(f=>Array.isArray(f.geometry?.coordinates)&&f.geometry.coordinates.length===2);
-  const f=features[0];
-  if(!f)throw new Error("Adresse introuvable. Indiquez la rue, le code postal et la commune.");
+  // Pour une commune, privilégier le localisant administratif s'il est proposé.
+  const byCommune=!/\d{1,4}\s/.test(q)&&!/(?:rue|avenue|boulevard|chemin|impasse|route|place|allée|allee)\b/i.test(q);
+  const f=byCommune?(features.find(x=>x.properties?.type==="municipality")||features[0]):features[0];
+  if(!f)throw new Error("Lieu introuvable. Indiquez la commune ou une adresse précise.");
   if(f.properties?.score!=null&&Number(f.properties.score)<0.45)throw new Error("Adresse trop imprécise : complétez-la.");
   return {lon:+f.geometry.coordinates[0],lat:+f.geometry.coordinates[1],label:f.properties?.label||q};
 }
 async function ptSavePlace(form) {
-  const fd=new FormData(form), id=sheetCtx?.ptPlace;
+  const fd=new FormData(form), id=sheetCtx?.ptPlace, returnTrip=sheetCtx?.ptReturnTrip||"";
   const label=String(fd.get("label")||"").trim(),address=String(fd.get("address")||"").trim(),keywords=String(fd.get("keywords")||"").trim();
   if(!label||!address){toast("Indiquez le nom et l'adresse.");return;}
   const duplicate=PRTR.duplicatePlace({label,address,keywords},PT.places||[],id);
@@ -117,9 +120,13 @@ async function ptSavePlace(form) {
     if(dup)throw new Error("Lieu déjà enregistré ("+dup.reason+") : "+dup.place.label+".");
     const row={household_id:S.hh.id,label,address:coords.label,keywords,is_home,longitude:coords.lon,latitude:coords.lat};
     const q=id?sb.from("child_trip_places").update(row).eq("id",id).eq("household_id",S.hh.id):sb.from("child_trip_places").insert(row);
-    const {error}=await q;
+    const {data,error}=await q.select("id");
     if(error)throw error;
-    closeSheet();await ptLoad(true);toast("Lieu enregistré.");
+    closeSheet();await ptLoad(true);
+    const ev=returnTrip?PT.suggestions.find(x=>x.key===returnTrip):null;
+    const newPlaceId=data?.[0]?.id||(PT.places||[]).find(x=>x.label===label)?.id;
+    if(ev&&newPlaceId)ptTripForm(ev,newPlaceId);
+    toast("Lieu favori enregistré. Il sera proposé dans les destinations.");
   }catch(e){toast("Lieu non enregistré : "+(e.code==="23505"?"nom ou adresse déjà enregistré.":e.message));}
   finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
@@ -151,10 +158,11 @@ function ptRuleLabel(ev){
 function ptOuting(ev){
   return PRTR.groupCandidates(ev,PT.suggestions,PR.data.children,PT.places||[]);
 }
-function ptTripForm(ev){
+function ptTripForm(ev,presetDestinationId=""){
   const home=ptHome(), resolved=PRTR.resolvedLocation(ev,PT.places||[]);
-  const dst=resolved.place;
+  const dst=(presetDestinationId&&ptPlaceById(presetDestinationId))||resolved.place;
   const child=prChild(ev.child_id);
+  PT.current=ev;
   PT.calculated=null;
   const outing=ptOuting(ev);
   const groupable=outing.filter(x=>x.key!==ev.key);
@@ -174,9 +182,10 @@ function ptTripForm(ev){
     (ev.location?'<option value="google"'+(!dst?' selected':'')+'>Adresse du rendez-vous Google</option>':"")+
     ptOptions(dst?.id||(!ev.location?"other":"google"))+'</select></label>'+
     '<label class="field"><span class="label">Autre destination, si sélectionnée</span><input class="input" name="destination_text" placeholder="Adresse du lieu"></label>'+
-    (dst?'<p class="muted small">Lieu reconnu dans Présences : '+ptEsc(dst.label)+'. Inutile de saisir l’adresse dans Google.</p>':
-      ev.location?'<p class="muted small">Lieu fourni par Google Agenda : '+ptEsc(ev.location)+'</p>':
-      '<p class="muted small">Aucun lieu reconnu : choisissez un lieu favori ou saisissez une adresse.</p>')+
+    (dst?'<p class="muted small">Lieu favori : '+ptEsc(dst.label)+'. Inutile de saisir une adresse dans Google.</p>':
+      ev.location?'<p class="muted small">Commune ou lieu fourni par Google Agenda : '+ptEsc(ev.location)+'</p>':
+      '<p class="muted small">Choisissez une commune ou un lieu favori, sans obligation de renseigner une rue.</p>')+
+    '<div class="btns" style="margin:8px 0 12px"><button type="button" class="btn" data-act="ptSaveDestination">☆ Enregistrer cette destination en favori</button></div>'+
     '<label class="field"><span class="label">Type de déplacement</span><select class="input" name="trip_mode">'+
     [['four','Deux allers-retours (déposer puis rechercher)'],['round','Un aller-retour'],['one','Aller simple'],['custom','Retour à une autre adresse']].map(([value,label])=>'<option value="'+value+'"'+(ev.mode===value?' selected':'')+'>'+label+'</option>').join("")+
     '</select></label>'+
@@ -211,12 +220,48 @@ function ptUpdateTripFields(form){
   toggle("return_to",custom);
   toggle("return_text",custom&&get("return_to")==="other");
 }
+function ptIsCommune(text){
+  // Une commune suffit pour l'estimation ; une voie ou un numéro de bâtiment
+  // signale au contraire une adresse précise.
+  const t=String(text||"").trim();
+  return !!t && !/\b(?:rue|avenue|av\.?|boulevard|bd\.?|route|chemin|impasse|allée|allee|place|quai|square)\b/i.test(t)
+    && !/\b\d{1,4}\s+[A-Za-zÀ-ÿ]/.test(t);
+}
+function ptCommuneSuggestion(value){
+  const v=String(value||"").trim();
+  if(ptIsCommune(v))return v.replace(/,?\s*France\s*$/i,"").trim();
+  return v;
+}
+function ptSaveDestination(){
+  const form=document.querySelector('#sheetIn form[data-form="ptTrip"]');
+  const ev=PT.suggestions.find(x=>x.key===sheetCtx?.ptTrip);
+  if(!form||!ev)return;
+  PT.current=ev;
+  const f=ptFields(form);
+  if(f.destination!=="other"&&f.destination!=="google"){
+    const place=ptPlaceById(f.destination);
+    if(place){toast("Ce lieu est déjà enregistré : "+place.label+". Vous pouvez le modifier dans Lieux habituels.");return;}
+  }
+  const input=f.destination==="google"?ev.location:String(f.destination_text||"").trim();
+  const address=ptCommuneSuggestion(input);
+  if(!address){toast("Indiquez d'abord une commune ou une destination.");return;}
+  const city=ptIsCommune(address);
+  const label=city?address:(PRTR.norm(ev.title).includes("pp")?"Ping-pong":address);
+  ptPlaceForm(null,{label,address,keywords:"",tripKey:ev.key});
+}
 function ptSelected(key,manual){
-  if(key==="google")return {label:PT.current?.location||"",coords:null};
-  if(key==="other")return {label:String(manual||"").trim(),coords:null};
+  if(key==="google"){
+    const label=PT.current?.location||"";
+    return {label,coords:null,precision:ptIsCommune(label)?"commune":"adresse"};
+  }
+  if(key==="other"){
+    const label=String(manual||"").trim();
+    return {label,coords:null,precision:ptIsCommune(label)?"commune":"adresse"};
+  }
   const p=ptPlaceById(key);
   if(!p)throw new Error("Sélectionnez un lieu valide.");
-  return {label:p.label+" — "+p.address,coords: Number.isFinite(p.longitude)&&Number.isFinite(p.latitude)?{lon:p.longitude,lat:p.latitude}:null};
+  return {label:p.label+" — "+p.address,coords: Number.isFinite(p.longitude)&&Number.isFinite(p.latitude)?{lon:p.longitude,lat:p.latitude}:null,
+    precision:ptIsCommune(p.address)?"commune":"adresse"};
 }
 async function ptCoordinates(place) {
   if(place.coords)return {...place.coords,resolved:place.label};
@@ -300,6 +345,7 @@ async function ptCalculate(){
     if(!from.label||!to.label)throw new Error("Indiquez l’adresse de départ et celle d’arrivée.");
     if(f.trip_mode==="custom"&&!back.label)throw new Error("Indiquez le lieu de retour.");
     const locs=PRTR.legs(f.trip_mode,from,to,back);
+    const estimateCommune=[from,to,...(f.trip_mode==="custom"?[back]:[])].some(x=>x.precision==="commune");
     const coords=new Map();
     for(const pair of locs)for(const place of pair)if(!coords.has(place.label))coords.set(place.label,await ptCoordinates(place));
     const cache=new Map(),done=[];
@@ -310,8 +356,12 @@ async function ptCalculate(){
     }
     const km=PRTR.total(done.map(x=>x.km));
     if(km<=0)throw new Error("La distance est nulle. Vérifiez les adresses.");
-    PT.calculated={key:ev.key,signature:JSON.stringify(f),km,done,from:from.label,to:to.label,back:back.label,mode:f.trip_mode};
-    panel.textContent=done.map(x=>x.from+" → "+x.to+" : "+ptFmt(x.km)+" km").join(" · ")+" | Total estimé : "+ptFmt(km)+" km. Adresses retenues : "+[...coords.entries()].map(([source,point])=>source+" = "+point.resolved).join(" ; ");
+    PT.calculated={key:ev.key,signature:JSON.stringify(f),km,
+      done:done.map(x=>({...x,source:estimateCommune?"estimate-commune":"routing"})),
+      from:from.label,to:to.label,back:back.label,mode:f.trip_mode};
+    panel.textContent=done.map(x=>x.from+" → "+x.to+" : "+ptFmt(x.km)+" km").join(" · ")+" | Total estimé : "+ptFmt(km)+" km."+
+      (estimateCommune?" Estimation entre communes : la distance jusqu’à l’adresse exacte peut différer.":" Distance calculée selon les adresses indiquées.")+
+      " Lieux retenus : "+[...coords.entries()].map(([source,point])=>source+" = "+point.resolved).join(" ; ");
   }catch(e){panel.textContent="Calcul impossible : "+e.message+
       " Vous pouvez essayer une adresse plus précise ou utiliser « Saisir les km réels ».";}
 }
@@ -649,6 +699,7 @@ document.addEventListener("click",async e=>{
   else if(a==="ptPlaceEdit")ptPlaceForm(ptPlaceById(v));
   else if(a==="ptTrip"){const ev=PT.suggestions.find(x=>x.key===v);if(ev)ptTripForm(ev);}
   else if(a==="ptCalc")ptCalculate();
+  else if(a==="ptSaveDestination")ptSaveDestination();
   else if(a==="ptManualShow")ptShowManual();
   else if(a==="ptManualApply")ptManualApply();
   else if(a==="ptEdit")ptEditSheet(v);
