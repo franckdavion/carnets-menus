@@ -94,7 +94,7 @@ async function ptRefresh() {
 }
 // La sélection est locale à l'écran et ne confirme aucun kilomètre toute seule.
 function ptChangeMonth(month) {
-  if(!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)||PT.month===month)return;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||PT.month===month)return;
   PT.month=month;PT.monthSynced="";PT.suggestions=[];PT.ruleExcluded=[];
   PT.selected.clear();PT.batch=[];PT.batchTotal=0;
   softRender();ptSync(true);
