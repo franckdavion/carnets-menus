@@ -58,6 +58,9 @@ async function ptSync(force=false) {
         page=j.nextPageToken||"";
       }while(page);
     }
+    // Si l'utilisateur a changé de mois pendant la réponse de Google,
+    // ignorer entièrement les résultats devenus périmés.
+    if(PT.month!==key)return;
     // Les mêmes rendez-vous Google ne comptent qu'une fois, quel que soit l'agenda.
     // Les exclusions ponctuelles sont persistantes, et les motifs exclus sont
     // masqués sans altérer ni l'historique confirmé ni les événements Google.
