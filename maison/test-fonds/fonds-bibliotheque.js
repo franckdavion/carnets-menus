@@ -97,7 +97,7 @@
   const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||'matin';
   function conditionNow(){
     const home=typeof window.maisonneeHomeWeather==='function'?window.maisonneeHomeWeather():{};
-    const usingGPS=prefs.weatherSource==='gps'&&gps.code!==null&&Date.now()-gps.at<45*60000;
+    const usingGPS=prefs.weatherSource==='gps'&&gps.code!==null&&Date.now()-gps.at<35*60000;
     const code=usingGPS?gps.code:home.code, weather=weatherFromCode(code);
     return {...weather,code,source:usingGPS?'gps':'city',fallback:prefs.weatherSource==='gps'&&!usingGPS,
       city:home.city||'ville du foyer',stale:usingGPS?false:!!home.stale};
@@ -115,7 +115,7 @@
   }
   async function refreshGPS(force=false){
     if(prefs.mode!=='weather'||prefs.weatherSource!=='gps'||document.hidden)return;
-    if(gps.pending||(!force&&Date.now()-gps.lastAttempt<25*60000))return;
+    if(gps.pending||(!force&&Date.now()-gps.lastAttempt<15*60000))return;
     gps.lastAttempt=Date.now();gps.pending=true;gps.error='';
     try{
       if(!navigator.geolocation)throw new Error('Géolocalisation non disponible');
@@ -236,9 +236,14 @@
     frame.style.removeProperty('background-image');
     const imageFallback=photos[period];
     if(item.media==='video'){
+      if(!moving||document.hidden){
+        const still=document.createElement('div');still.className='mn-bg-photo';
+        still.style.backgroundImage='url("'+imageFallback+'")';l.appendChild(still);
+        return;
+      }
       const video=document.createElement('video');
       video.className='mn-bg-video';
-      video.autoplay=true;video.muted=true;video.loop=true;video.playsInline=true;
+      video.autoplay=moving&&!document.hidden;video.muted=true;video.loop=true;video.playsInline=true;
       video.preload='metadata';video.setAttribute('aria-hidden','true');
       video.poster=imageFallback;video.addEventListener('error',()=>{
         if(!video.isConnected)return;
