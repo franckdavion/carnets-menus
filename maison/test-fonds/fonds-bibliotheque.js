@@ -56,7 +56,14 @@
   const localRead=()=>{try{return JSON.parse(localStorage.getItem(storageKey())||'null')}catch(_){return null}};
   const memberPrefs=()=>{try{const me=typeof meM==='function'?meM():null;return me?.home_prefs?.background_media_v1||null}catch(_){return null}};
   let prefs=normalize(memberPrefs()||localRead());
-  let modalType=prefs.type,modalPeriod=prefs.period,addOpen=false,objectUrls=new Map(),saving=false;
+  let owner=memberId(),remoteLoaded=!!memberPrefs();
+  function hydrate(){
+    const id=memberId();
+    if(id!==owner){owner=id;prefs=normalize(memberPrefs()||localRead());remoteLoaded=!!memberPrefs();lastMediaSig='';}
+    const remote=memberPrefs();
+    if(remote&&!remoteLoaded){prefs=normalize(remote);remoteLoaded=true;lastMediaSig='';}
+  }
+  let modalType=prefs.type,modalPeriod=prefs.period,addOpen=false,objectUrls=new Map(),saving=false,needCloudSave=false;
   let lastMediaSig='',lastEnabled=null;
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
@@ -69,6 +76,7 @@
   }
   async function save(){
     localStorage.setItem(storageKey(),JSON.stringify(prefs));
+    remoteLoaded=true;
     try{
       const me=typeof meM==='function'?meM():null;
       if(!me||typeof S==='undefined'||!S.members)return;
@@ -76,11 +84,18 @@
       const next={...(me.home_prefs||{}),background_media_v1:prefs};
       me.home_prefs=next;
       if(typeof saveLocal==='function')saveLocal();
-      if(typeof mode!=='undefined'&&mode==='cloud'&&typeof sb!=='undefined'&&sb&&!saving){
+      if(typeof mode!=='undefined'&&mode==='cloud'&&typeof sb!=='undefined'&&sb){
+        needCloudSave=true;
+        if(saving)return;
         saving=true;
         try{
-          const {error}=await sb.from('household_members').update({home_prefs:next}).eq('id',me.id);
-          if(error)console.warn('Bibliothèque de fonds : synchronisation',error.message);
+          while(needCloudSave){
+            needCloudSave=false;
+            const current=typeof meM==='function'?meM():me;
+            const newest={...(current?.home_prefs||{}),background_media_v1:prefs};
+            const {error}=await sb.from('household_members').update({home_prefs:newest}).eq('id',me.id);
+            if(error)console.warn('Bibliothèque de fonds : synchronisation',error.message);
+          }
         }finally{saving=false;}
       }
     }catch(e){console.warn('Bibliothèque de fonds : préférences locales conservées',e)}
@@ -123,6 +138,7 @@
     hero.insertAdjacentHTML('beforeend','<button type="button" class="mn-bg-open" data-mn-bg-act="open" aria-label="Choisir le fond d’accueil" title="Bibliothèque de fonds">▧</button>');
   }
   async function apply(root=document){
+    hydrate();
     const frame=root.querySelector?.('.mn-dayframe')||(root.matches?.('.mn-dayframe')?root:null);
     if(!frame)return;
     updateControls(frame);
@@ -226,6 +242,7 @@
     });
   }
   function open(){
+    hydrate();
     modalPeriod=currentPeriod();
     modalType=prefs.type;addOpen=false;
     openSheet('Bibliothèque des fonds','<div data-mn-bg-library></div>');
