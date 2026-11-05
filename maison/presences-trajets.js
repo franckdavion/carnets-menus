@@ -6,7 +6,7 @@ const PT = {
   suggestions:[], marks:[], rules:[], ruleExcluded:[],
   loading:false, syncing:false, monthSynced:"",
   error:"", syncError:"", calculated:null, syncedAt:0,
-  selected:new Set(), batch:[], batchTotal:0
+  selected:new Set(), batch:[], batchTotal:0, view:"pending", settingsHtml:""
 };
 const ptEsc = s => esc(String(s == null ? "" : s));
 const ptFmt = n => Number(n || 0).toLocaleString("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -661,26 +661,40 @@ function ptTripsView(){
   // concernés sont affichés, mais leurs participations ne sont pas additionnées.
   const byKid=kids.filter(c=>rec.some(r=>ptParticipantIds(r).includes(c.id)))
     .map(c=>'<span class="pr-word">'+ptEsc(c.first_name)+' : '+rec.filter(r=>ptParticipantIds(r).includes(c.id)).length+' trajet(s) concerné(s)</span>').join(" ");
-  const header='<div class="pr-head"><button class="pr-arrow" data-act="ptMonth" data-v="-1" aria-label="Mois précédent">‹</button><h2 class="pr-title static">Trajets · '+ptEsc(ptMonthText())+'</h2><button class="pr-arrow" data-act="ptMonth" data-v="1" aria-label="Mois suivant">›</button></div>'+
-    '<label class="field" style="margin:0 0 12px"><span class="label">Choisir le mois à traiter</span><input class="input" type="month" data-pt-month value="'+ptEsc(PT.month)+'" aria-label="Mois du relevé kilométrique"></label>';
+  const header='<header class="pt-top"><div><span class="pt-kicker">PRÉSENCES DES ENFANTS</span><h2>Mes trajets</h2></div>'+
+    '<div class="pt-top-actions"><button type="button" class="pt-icon-btn" data-act="ptSync" aria-label="Actualiser depuis Google Agenda"'+(PT.syncing?' disabled':'')+'>↻</button>'+
+    '<button type="button" class="pt-icon-btn" data-act="ptSettings" aria-label="Réglages des trajets">⚙</button></div></header>'+
+    '<div class="pt-monthbar"><button type="button" class="pr-arrow" data-act="ptMonth" data-v="-1" aria-label="Mois précédent">‹</button>'+
+    '<label class="pt-month-label"><b>'+ptEsc(ptMonthText())+'</b><small>Changer de mois</small><input type="month" data-pt-month value="'+ptEsc(PT.month)+'" aria-label="Choisir le mois à traiter"></label>'+
+    '<button type="button" class="pr-arrow" data-act="ptMonth" data-v="1" aria-label="Mois suivant">›</button></div>';
   const places='<section class="pr-panel"><h2 class="pr-h">Lieux habituels</h2>'+
     '<p class="muted small">Domicile par défaut, mais départ et retour modifiables pour chaque trajet. Les trajets vers l’école sont exclus.</p>'+
     (PT.places||[]).map(p=>'<button class="pr-krow" data-act="ptPlaceEdit" data-v="'+ptEsc(p.id)+'"><span class="pr-kn"><b>'+ptEsc(p.is_home?"Domicile · "+p.label:p.label)+'</b><small>'+ptEsc(p.address)+(p.keywords?' · Google : '+ptEsc(p.keywords):'')+'</small></span>›</button>').join("")+
     '<button class="btn" data-act="ptPlaceNew">+ Ajouter un lieu</button></section>';
   const chosen=displayed.filter(x=>PT.selected.has(x.event.key)&&x.event.day<=today()).length;
   const eligible=displayed.filter(x=>x.event.day<=today()).length;
-  const suggestBlock='<section class="pr-panel"><h2 class="pr-h">À vérifier · '+displayed.length+' sortie(s)</h2>'+
-    '<p class="muted small">'+(PT.syncing?"Lecture des rendez-vous Google…":PT.syncError?"Google : "+ptEsc(PT.syncError):(PT.syncedAt?"Google Agenda (Trajets) relu à "+new Date(PT.syncedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+". ":"")+"Rendez-vous concernant un ou plusieurs enfants ; aucun trajet scolaire n’est proposé.")+'</p>'+
-    '<div class="pr-note"><b>Sélectionner les déplacements à enregistrer ce mois-ci</b><p class="muted small">Cochez uniquement les sorties que vous avez réalisées et souhaitez comptabiliser. Les autres restent en attente. Chaque distance sera vérifiée avant confirmation.</p>'+
-    '<div class="btns"><button type="button" class="btn" data-act="ptSelectAll"'+(!eligible?' disabled':'')+'>Tout cocher (effectués)</button> <button type="button" class="btn" data-act="ptClearSelection"'+(!chosen?' disabled':'')+'>Tout décocher</button></div>'+
-    '<button type="button" class="btn primary block" data-act="ptBatchStart"'+(!chosen?' disabled':'')+'>Examiner et enregistrer '+chosen+' sortie(s) sélectionnée(s)</button></div>'+
-    (displayed.length?displayed.map(({event:x,group})=>'<div style="display:flex;align-items:stretch;gap:8px;margin:8px 0">'+
-      '<label style="display:flex;align-items:center;justify-content:center;flex:0 0 36px"><input type="checkbox" data-pt-select="'+ptEsc(x.key)+'" aria-label="Sélectionner '+ptEsc(x.title)+'" style="width:22px;height:22px;accent-color:#55baff"'+(PT.selected.has(x.key)&&x.day<=today()?' checked':'')+(x.day>today()?' disabled':'')+'></label>'+
-      '<button type="button" class="pr-krow" style="flex:1;min-width:0;margin:0" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><span class="pr-kn"><b>'+ptEsc(group.length>1?"Coiffeur — "+group.length+" enfants":x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+
-      ptEsc([...new Set(group.flatMap(e=>ptEventIds(e)))].map(id=>prChild(id)?.first_name||"Enfant").join(", "))+' · '+
-      (x.day>today()?"À venir · ":group.length>1?"Un seul aller-retour pour "+group.length+" rendez-vous · ":"")+
-      (x.mode==="four"?"2 allers-retours":"Aller-retour")+(x.location?' · '+ptEsc(x.location):'')+'</small></span>›</button></div>').join(""):'<p class="muted small">Aucune proposition pour ce mois, ou tous les trajets sont déjà confirmés.</p>')+
-    '<button class="btn" data-act="ptSync"'+(PT.syncing?' disabled':'')+'>↻ Relire Google Agenda</button> <button class="btn" data-act="ptCals">Choisir les agendas</button></section>';
+  let previousDay="";
+  const cards=displayed.map(({event:x,group})=>{
+    const dayHeader=x.day!==previousDay?'<h4 class="pt-day">'+ptEsc(prD(x.day))+'</h4>':"";
+    previousDay=x.day;
+    const names=[...new Set(group.flatMap(e=>ptEventIds(e)))].map(id=>prChild(id)?.first_name||"Enfant").join(", ");
+    const name=group.length>1?"Coiffeur — "+group.length+" enfants":x.title;
+    const future=x.day>today(),checked=PT.selected.has(x.key)&&!future;
+    return dayHeader+'<div class="pt-trip'+(checked?' is-selected':'')+(future?' is-future':'')+'">'+
+      '<label class="pt-check"><input type="checkbox" data-pt-select="'+ptEsc(x.key)+'" aria-label="Sélectionner '+ptEsc(name)+'"'+(checked?' checked':'')+(future?' disabled':'')+'><span aria-hidden="true"></span></label>'+
+      '<button type="button" class="pt-trip-main" data-act="ptTrip" data-v="'+ptEsc(x.key)+'"><b>'+ptEsc(name)+'</b>'+
+      '<small>'+ptEsc(names)+(x.location?' · '+ptEsc(x.location):' · Destination à préciser')+'</small>'+
+      '<em>'+ptEsc(future?'À venir':group.length>1?'Sortie commune':x.mode==="four"?"Deux allers-retours":"Aller-retour")+'</em></button>'+
+      '<span class="pt-chevron" aria-hidden="true">›</span></div>';
+  }).join("");
+  const syncText=PT.syncing?"Lecture de Google Agenda…":PT.syncError?"Google : "+ptEsc(PT.syncError):
+    PT.syncedAt?"Google Agenda actualisé à "+new Date(PT.syncedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"Synchronisation Google en attente";
+  const suggestBlock='<section class="pt-panel"><div class="pt-panel-title"><h3>Déplacements proposés</h3><small>'+syncText+'</small></div>'+
+    (displayed.length?'<div class="pt-select-tools"><button type="button" data-act="ptSelectAll"'+(!eligible?' disabled':'')+'>Tout cocher</button>'+
+    '<button type="button" data-act="ptClearSelection"'+(!chosen?' disabled':'')+'>Tout décocher</button></div>'+cards:
+    '<div class="pt-empty"><b>Aucun trajet à vérifier</b><p>Les trajets confirmés sont dans l’historique. Vous pouvez relire Google Agenda avec ↻.</p></div>')+
+    '</section><div class="pt-fixed-cta"><button type="button" class="btn primary block" data-act="ptBatchStart"'+(!chosen?' disabled':'')+'>'+
+    (chosen?'Examiner et enregistrer '+chosen+' trajet'+(chosen>1?'s':''):'Sélectionner les trajets à enregistrer')+'</button></div>';
   const ignored=(PT.marks||[]).filter(m=>m.decision==="ignored"&&m.day>=from&&m.day<=to&&(!PT.child||m.child_id===PT.child));
   const automaticallyExcluded=(PT.ruleExcluded||[]).filter(x=>ptIncludesChild(x,PT.child));
   const ignoredHtml='<section class="pr-panel"><details><summary><strong>Rendez-vous écartés ('+ignored.length+')</strong> — 0 km</summary>'+
@@ -697,15 +711,28 @@ function ptTripsView(){
     (automaticallyExcluded.length?'<details style="margin-top:10px"><summary>Voir les '+automaticallyExcluded.length+' rendez-vous automatiquement écartés</summary>'+
       automaticallyExcluded.map(x=>'<p class="muted small">'+ptEsc(prD(x.day))+' · '+ptEsc(x.title)+' · '+ptEsc(prChild(x.child_id)?.first_name||"")+'</p>').join("")+
       '</details>':'')+'</details></section>';
-  const history='<section class="pr-panel"><h2 class="pr-h">Trajets confirmés · '+rec.length+'</h2>'+byKid+
-    (rec.length?rec.map(x=>'<button class="pr-krow" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span class="pr-kn"><b>'+ptEsc(x.title)+'</b><small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+' · '+ptEsc(x.origin_label)+' → '+ptEsc(x.destination_label)+' · '+ptEsc(ptSourceLabel(x))+'</small></span><strong>'+ptFmt(x.distance_km)+' km</strong></button>').join(""):'<p class="muted small">Aucun déplacement confirmé sur cette période.</p>')+
-    '<button class="btn" data-act="ptExport">Exporter le mois (Excel / CSV)</button></section>';
-  return '<div class="pr pt">'+header+
-    '<section class="pr-panel"><div class="pr-bilan"><div><b>'+ptFmt(total)+' km</b><small>Confirmés</small></div><div><b>'+rec.length+'</b><small>Trajets effectués</small></div><div><b>'+displayed.length+'</b><small>À vérifier</small></div></div>'+
-    '<label class="field"><span class="label">Filtrer les enfants</span><select class="input" data-pt-child><option value="">Tous les enfants</option>'+kids.map(c=>'<option value="'+ptEsc(c.id)+'"'+(PT.child===c.id?' selected':'')+'>'+ptEsc(c.first_name)+'</option>').join("")+'</select></label></section>'+
-    (!ptHome()?'<section class="pr-panel"><p class="pr-note warn"><b>Première étape :</b> ajoutez le domicile pour calculer vos trajets.</p><button class="btn primary" data-act="ptPlaceNew">Configurer le domicile</button></section>':"")+
-    suggestBlock+history+ignoredHtml+rulesHtml+places+'</div>';
+  const history='<section class="pt-panel"><div class="pt-panel-title"><h3>Trajets confirmés</h3><small>'+rec.length+' sortie(s) · '+ptFmt(total)+' km ce mois</small></div>'+
+    (rec.length?rec.map(x=>'<button type="button" class="pt-history-item" data-act="ptEdit" data-v="'+ptEsc(x.id)+'"><span><b>'+ptEsc(x.title)+'</b>'+
+    '<small>'+ptEsc(prD(x.day))+' · '+ptEsc(ptParticipantNames(x))+'</small><small>'+ptEsc(x.destination_label)+'</small></span>'+
+    '<strong>'+ptFmt(x.distance_km)+' <small>km</small></strong></button>').join(""):
+    '<div class="pt-empty"><b>Aucun trajet confirmé</b><p>Les déplacements validés seront affichés ici.</p></div>')+
+    '<button type="button" class="btn block pt-export" data-act="ptExport">Exporter le mois (CSV)</button></section>';
+  PT.settingsHtml='<div class="pt-settings"><p class="muted small">Agendas Google, lieux habituels et exclusions. Aucun kilomètre confirmé n’est modifié ici.</p>'+
+    '<section class="pr-panel"><h2 class="pr-h">Agendas Google</h2><button type="button" class="pr-krow" data-act="ptCals"><span class="pr-kn"><b>Choisir les agendas</b><small>Calendriers des déplacements</small></span>›</button>'+
+    '<button type="button" class="pr-krow" data-act="ptSync"><span class="pr-kn"><b>Relire Google Agenda</b><small>Actualiser le mois affiché</small></span>↻</button></section>'+
+    places+rulesHtml+ignoredHtml+'</div>';
+  const summary='<section class="pt-stats"><div><strong>'+displayed.length+'</strong><small>À vérifier</small></div><div><strong>'+rec.length+'</strong><small>Confirmés</small></div>'+
+    '<div><strong>'+ptFmt(total)+'</strong><small>Km validés</small></div></section>';
+  const tabs='<nav class="pt-switch" role="tablist" aria-label="Afficher les trajets">'+
+    '<button type="button" role="tab" aria-selected="'+(PT.view!=="history")+'" data-act="ptView" data-v="pending">À traiter <span>'+displayed.length+'</span></button>'+
+    '<button type="button" role="tab" aria-selected="'+(PT.view==="history")+'" data-act="ptView" data-v="history">Historique <span>'+rec.length+'</span></button></nav>';
+  const filter='<label class="pt-filter"><span>Enfants</span><select class="input" data-pt-child><option value="">Tous les enfants</option>'+
+    kids.map(c=>'<option value="'+ptEsc(c.id)+'"'+(PT.child===c.id?' selected':'')+'>'+ptEsc(c.first_name)+'</option>').join("")+'</select></label>';
+  return '<div class="pr pt pt-v2">'+header+summary+tabs+filter+
+    (!ptHome()?'<div class="pr-note warn">Ajoutez votre domicile dans les réglages pour calculer vos trajets.</div>':'')+
+    (PT.view==="history"?history:suggestBlock)+'</div>';
 }
+
 /* Suggestion discrète dans la fiche de rendez-vous Maisonnée.
    Pas de saisie obligatoire ni de modification automatique de Google Agenda. */
 let ptEventPlacesBusy=false;
@@ -800,7 +827,9 @@ document.addEventListener("click",async e=>{
   if(a==="ptMonth"){
     const [y,m]=PT.month.split("-").map(Number),d=new Date(Date.UTC(y,m-1+Number(v),15));
     ptChangeMonth(d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0"));
-  }else if(a==="ptReload")ptLoad(true);
+  }else if(a==="ptView"){if(v==="pending"||v==="history"){PT.view=v;softRender();}}
+   else if(a==="ptSettings")openSheet("Réglages des trajets",PT.settingsHtml||"Aucun réglage disponible.");
+   else if(a==="ptReload")ptLoad(true);
   else if(a==="ptSync")ptRefresh();
   else if(a==="ptSelectAll")ptSelectAll();
   else if(a==="ptClearSelection")ptClearSelection();
