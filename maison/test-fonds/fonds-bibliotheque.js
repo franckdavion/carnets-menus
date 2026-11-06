@@ -144,12 +144,28 @@
       const hasMotion=selected.some(id=>items.some(item=>item.id===id&&item.media==='image-motion'));
       if(((p.mode==='auto'||p.mode==='weather')&&!hasMotion)||hasVideo)p.type='video';
     }
+    // Normaliser les anciens choix, puis replacer les vidéos enregistrées
+    // dans une mauvaise plage sur leur horaire d'origine.
+    const entry=id=>items.find(item=>item.id===id);
     p.chosen={};
-    for(const [period] of PERIODS)if(ids.has(x.chosen?.[period]))p.chosen[period]=x.chosen[period];
+    for(const [period] of PERIODS){
+      const id=x.chosen?.[period],item=entry(id);
+      if(item&&(item.type!=='video'||item.period===period))p.chosen[period]=id;
+    }
+    for(const [period] of PERIODS){
+      const id=x.chosen?.[period],item=entry(id);
+      if(item?.type==='video'&&item.period!==period&&!p.chosen[item.period])p.chosen[item.period]=id;
+    }
     p.weatherChoices={};
     for(const [condition] of CONDITIONS)for(const [period] of PERIODS){
-      const key=condition+':'+period;
-      if(ids.has(x.weatherChoices?.[key]))p.weatherChoices[key]=x.weatherChoices[key];
+      const key=condition+':'+period,id=x.weatherChoices?.[key],item=entry(id);
+      if(item&&(item.type!=='video'||item.period===period))p.weatherChoices[key]=id;
+    }
+    for(const [condition] of CONDITIONS)for(const [period] of PERIODS){
+      const id=x.weatherChoices?.[condition+':'+period],item=entry(id);
+      if(item?.type!=='video'||item.period===period)continue;
+      const destination=condition+':'+item.period;
+      if(!p.weatherChoices[destination])p.weatherChoices[destination]=id;
     }
     if(!ids.has(p.fixed))p.fixed='p-matin';
     // Ancien « fond fixe » vidéo : réaffecter la vidéo à son horaire au lieu
