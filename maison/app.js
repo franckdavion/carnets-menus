@@ -592,6 +592,8 @@ async function mzResumeCloudSession() {
       await loadSb();
       const { data, error } = await sb.auth.getSession();
       if (error) throw error;
+      // Ne pas réactiver un compte si l'utilisateur s'est déconnecté entre-temps.
+      if (mode !== "cloud" || screen === "auth" || screen === "welcome") return;
       if (!data?.session?.user) {
         if (!mzAuthNeedsLogin) {
           mzAuthNeedsLogin = true;
