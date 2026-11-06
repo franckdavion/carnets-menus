@@ -144,7 +144,7 @@ async function disablePush() {
 /* ---------- state ---------- */
 let mode = LS.get("mz_mode", null);          // "demo" | "cloud" | null
 let sb = null, user = null, rt = null;
-let sbLoading = null, mzAuthNeedsLogin = false, mzAuthResumeRunning = null;
+let sbLoading = null, mzAuthNeedsLogin = false, mzAuthResumeRunning = null, mzAuthHooked = false, mzEnterCloudRunning = null;
 let screen = "loading";                       // loading | welcome | auth | setup | app
 let authMode = "login", authErr = "", setupErr = "", joinPreview = null;
 let view = LS.get("mz_view", "home");
@@ -251,10 +251,11 @@ function loadSb() {
         sb = window.supabase.createClient(SB_URL, SB_KEY, {
           auth: { persistSession: true, autoRefreshToken: true, storageKey: "cm_sb_auth" }
         });
+        mzHookAuth(sb);
         ok(sb);
       } catch (e) { ko(e); }
     };
-    if (window.supabase) return go();
+    if (window.supabase) { go(); mzHookAuth(sb); return; }
     const s = document.createElement("script");
     let done = false;
     const finish = error => {
@@ -280,6 +281,39 @@ function loadSb() {
     document.head.appendChild(s);
   }).catch(e => { sbLoading = null; throw e; });
   return sbLoading;
+}
+
+function mzHookAuth(client) {
+  if (mzAuthHooked || !client?.auth?.onAuthStateChange) return;
+  mzAuthHooked = true;
+  client.auth.onAuthStateChange((event, session) => {
+    if (!session?.user) return;
+    if (mode !== "cloud" && !LS.get("mz_hh", null) && !LS.get("mz_mode", null)) return;
+    user = session.user;
+    mzAuthNeedsLogin = false;
+    if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+      if (!rt) enterCloud().catch(e => console.warn("Foyer après session", e));
+    }
+  });
+}
+
+async function mzReadSession(tries) {
+  await loadSb();
+  let session = null;
+  for (let i = 0; i < (tries || 4); i++) {
+    const { data, error } = await sb.auth.getSession();
+    if (error) throw error;
+    session = data?.session || null;
+    if (session?.user) return session;
+    await new Promise(ok => setTimeout(ok, 400 * (i + 1)));
+  }
+  return session;
+}
+
+function mzWakeDomotique() {
+  try {
+    if (typeof window.domWakeAfterAuth === "function") window.domWakeAfterAuth();
+  } catch (e) {}
 }
 
 /* Pont dédié au portefeuille familial. Les identifiants sont vérifiés côté
@@ -587,10 +621,8 @@ async function init() {
   if (navigator.onLine === false) return;
   try {
     const boot = (async () => {
-      await loadSb();
-      const { data, error } = await sb.auth.getSession();
-      if (error) throw error;
-      user = data?.session?.user || null;
+      const session = await mzReadSession(5);
+      user = session?.user || null;
     })();
     await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
@@ -602,10 +634,9 @@ async function init() {
   }
   if (!user) {
     if (mode === "cloud" || LS.get("mz_hh", null)) {
-      mzAuthNeedsLogin = true;
-      // Ne pas afficher « reconnecte-toi quand Internet sera disponible »
-      // à chaque démarrage : conserver la vue locale et proposer une action.
+      // Session pas encore hydratée (iPhone PWA) : on n’oblige pas à se déconnecter.
       mzOfflineStartup("", false);
+      mzResumeCloudSession();
       return;
     }
     mode = null; screen = "welcome"; return render();
@@ -628,23 +659,13 @@ async function mzResumeCloudSession() {
   if (mzAuthResumeRunning) return mzAuthResumeRunning;
   mzAuthResumeRunning = (async () => {
     try {
-      await loadSb();
-      const { data, error } = await sb.auth.getSession();
-      if (error) throw error;
-      // Ne pas réactiver un compte si l'utilisateur s'est déconnecté entre-temps.
+      const session = await mzReadSession(5);
       if (mode !== "cloud" || screen === "auth" || screen === "welcome") return;
-      if (!data?.session?.user) {
-        if (!mzAuthNeedsLogin) {
-          mzAuthNeedsLogin = true;
-          if (screen === "app") render();
-        }
-        return;
-      }
-      user = data.session.user;
+      if (!session?.user) return;
+      user = session.user;
       mzAuthNeedsLogin = false;
       await enterCloud();
     } catch (e) {
-      // Conserver l'accès local si le réseau est annoncé mais indisponible.
       console.warn("Session : reprise différée", e);
     }
   })();
@@ -653,6 +674,14 @@ async function mzResumeCloudSession() {
 }
 
 async function enterCloud() {
+  if (!user || !sb) return;
+  if (mzEnterCloudRunning) return mzEnterCloudRunning;
+  mzEnterCloudRunning = mzEnterCloudBody();
+  try { await mzEnterCloudRunning; }
+  finally { mzEnterCloudRunning = null; }
+}
+
+async function mzEnterCloudBody() {
   const { data: mine, error } = await sb.from("household_members").select("household_id").eq("user_id", user.id);
   if (error || !Array.isArray(mine)) {
     // Erreur API ou réseau : ne jamais traiter cela comme un foyer inexistant.
@@ -675,15 +704,17 @@ async function enterCloud() {
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
   listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll(); mzLoadNoticePrefs();
+  mzWakeDomotique();
   loadRecipes().then(() => softRender());
 }
 
-window.addEventListener("online", () => { if (mode === "cloud" && !user) mzResumeCloudSession(); });
+window.addEventListener("online", () => { if (mode === "cloud") mzResumeCloudSession(); });
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || mode !== "cloud") return;
-  if (!user) return mzResumeCloudSession();
+  if (!user || !rt) return mzResumeCloudSession();
   if (!S.hh) return;
   try { await mzPollShopAdds(); await loadCloud(S.hh.id); softRender(); } catch (e) {}
+  mzWakeDomotique();
   geoTick();
 });
 

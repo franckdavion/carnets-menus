@@ -211,6 +211,16 @@ const DOM_DREAME_STATE_MIN_MS = 45000;
 const DOM_DREAME_CMD_DEBOUNCE_MS = 2500;
 let domHeroLive = null;
 let domSoftTimer = 0;
+window.domWakeAfterAuth = function () {
+  domMelStatusAt = 0; domDreameStatusAt = 0; domStStatusAt = 0; domStateAt = 0; domViewStateAt = 0;
+  if (view === "domotique" || view === "home") {
+    domScheduleState(true);
+    void domMelRefreshStatus().then(() => domMelRefreshState(true)).then(changed => { if (changed) domSoftRender(); });
+    if (typeof domDreamePollOnView === "function") setTimeout(domDreamePollOnView, 0);
+    if (typeof domStPollOnView === "function") setTimeout(domStPollOnView, 0);
+    if (typeof maisonneeHomePaint === "function" && view === "home") maisonneeHomePaint();
+  }
+};
 function domSoftRender() {
   if (view !== "domotique") return;
   if (domSoftTimer) return;

@@ -1,6 +1,6 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v144";
+const CACHE = "carnet-archive-maison-v145";
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css", "trajets-v2.css", "fonds-bibliotheque.css",
   "espace.js", "push-config.js", "shared-constants.js", "vendor/supabase.min.js", "supabase/functions/_shared/cal.js",
@@ -20,6 +20,18 @@ self.addEventListener("fetch", e => {
   // Ne pas intercepter jsDelivr : sur iPhone PWA, fetch() du CDN via le SW
   // échoue souvent avec « Load failed » et bloque Supabase / la domotique.
   if (!own) return;
+  // Cache d’abord pour supabase.min.js : un aller-retour GitHub Pages à froid
+  // fait rater getSession sur iPhone, et toute la domotique reste « non connectée ».
+  if (/\/vendor\/supabase\.min\.js$/.test(u.pathname)) {
+    e.respondWith(caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true }).then(hit => {
+      if (hit) return hit;
+      return fetch(new Request(e.request, { cache: "reload" })).then(r => {
+        if (r.ok) c.put(e.request, r.clone());
+        return r;
+      });
+    })));
+    return;
+  }
   e.respondWith(fetch(new Request(e.request, { cache: "no-cache" }))
     .then(r => { if (r.ok || r.type === "opaque") { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); } return r; })
     // En ligne, privilégier la version publiée. Hors ligne, la requête
