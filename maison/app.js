@@ -144,6 +144,7 @@ async function disablePush() {
 /* ---------- state ---------- */
 let mode = LS.get("mz_mode", null);          // "demo" | "cloud" | null
 let sb = null, user = null, rt = null;
+let sbLoading = null, mzAuthNeedsLogin = false, mzAuthResumeRunning = null;
 let screen = "loading";                       // loading | welcome | auth | setup | app
 let authMode = "login", authErr = "", setupErr = "", joinPreview = null;
 let view = LS.get("mz_view", "home");
@@ -234,14 +235,35 @@ function fail(e) {
 /* ---------- Supabase ---------- */
 function loadSb() {
   if (sb) return Promise.resolve(sb);
-  return new Promise((ok, ko) => {
-    const go = () => { sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "cm_sb_auth" } }); ok(sb); };
+  // Un seul chargement CDN et un seul client Supabase, même si les cartes
+  // familiales et l'initialisation de Maisonnée démarrent en même temps.
+  if (sbLoading) return sbLoading;
+  sbLoading = new Promise((ok, ko) => {
+    const go = () => {
+      try {
+        sb = window.supabase.createClient(SB_URL, SB_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, storageKey: "cm_sb_auth" }
+        });
+        ok(sb);
+      } catch (e) { ko(e); }
+    };
     if (window.supabase) return go();
     const s = document.createElement("script");
+    let done = false;
+    const finish = error => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      if (error) { s.remove(); ko(error); }
+      else go();
+    };
+    const timer = setTimeout(() => finish(new Error("Chargement Supabase trop long")), 12000);
     s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
-    s.onload = go; s.onerror = () => ko(new Error("supabase"));
+    s.onload = () => finish(null);
+    s.onerror = () => finish(new Error("Bibliothèque Supabase indisponible"));
     document.head.appendChild(s);
-  });
+  }).catch(e => { sbLoading = null; throw e; });
+  return sbLoading;
 }
 
 /* Pont dédié au portefeuille familial. Les identifiants sont vérifiés côté
@@ -250,7 +272,9 @@ window.maisonneeLoyaltyCloudSession = async function () {
   if (navigator.onLine === false) return { offline: true };
   const client = await loadSb();
   const auth = await client.auth.getUser();
-  if (auth.error || !auth.data?.user) return { login: true };
+  // Une panne de réseau ne signifie pas que la session a disparu.
+  if (auth.error) throw auth.error;
+  if (!auth.data?.user) return { login: true };
   const account = auth.data.user;
   const membership = await client.from("household_members").select("household_id")
     .eq("user_id", account.id);
@@ -481,7 +505,7 @@ async function loadRecipes() {
 /* Démarrage PWA : une panne réseau ne prouve jamais que le foyer a disparu.
    Ne jamais effacer la session ni présenter la création de foyer par défaut.
    L'accès local conserve la vue et les données du foyer quand elles existent. */
-function mzOfflineStartup(reason) {
+function mzOfflineStartup(reason, notify = true) {
   const snapshot = LS.get("mz_cache", null);
   if (snapshot && snapshot.hh) {
     if (!S.hh || S.hh.id !== snapshot.hh.id) S = { ...blank(), ...snapshot, recipes: null };
@@ -494,7 +518,7 @@ function mzOfflineStartup(reason) {
     screen = "app";
     render();
   }
-  toast(reason || "Connexion indisponible : données locales uniquement.");
+  if (notify) toast(reason || "Connexion indisponible : données locales uniquement.");
 }
 /* ---------- startup ---------- */
 async function init() {
@@ -527,8 +551,9 @@ async function init() {
   try {
     const boot = (async () => {
       await loadSb();
-      const { data } = await sb.auth.getSession();
-      user = data.session ? data.session.user : null;
+      const { data, error } = await sb.auth.getSession();
+      if (error) throw error;
+      user = data?.session?.user || null;
     })();
     await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
@@ -539,17 +564,53 @@ async function init() {
   }
   if (!user) {
     if (mode === "cloud" || LS.get("mz_hh", null)) {
-      mzOfflineStartup("Session non vérifiable : reconnecte-toi quand Internet sera disponible.");
+      mzAuthNeedsLogin = true;
+      // Ne pas afficher « reconnecte-toi quand Internet sera disponible »
+      // à chaque démarrage : conserver la vue locale et proposer une action.
+      mzOfflineStartup("", false);
       return;
     }
     mode = null; screen = "welcome"; return render();
   }
+  mzAuthNeedsLogin = false;
   try {
     await enterCloud();
   } catch (e) {
     console.warn("Foyer : vérification différée", e);
     mzOfflineStartup("Foyer non vérifiable : données locales conservées.");
   }
+}
+
+// Après un retour de réseau ou une réouverture de l'iPhone, retenter sans
+// ouvrir de formulaire, sans effacer le cache et sans créer de nouveau foyer.
+async function mzResumeCloudSession() {
+  if (navigator.onLine === false || mode !== "cloud" || user ||
+      screen === "auth" || screen === "welcome" || screen === "setup") return;
+  if (mzAuthResumeRunning) return mzAuthResumeRunning;
+  mzAuthResumeRunning = (async () => {
+    try {
+      await loadSb();
+      const { data, error } = await sb.auth.getSession();
+      if (error) throw error;
+      // Ne pas réactiver un compte si l'utilisateur s'est déconnecté entre-temps.
+      if (mode !== "cloud" || screen === "auth" || screen === "welcome") return;
+      if (!data?.session?.user) {
+        if (!mzAuthNeedsLogin) {
+          mzAuthNeedsLogin = true;
+          if (screen === "app") render();
+        }
+        return;
+      }
+      user = data.session.user;
+      mzAuthNeedsLogin = false;
+      await enterCloud();
+    } catch (e) {
+      // Conserver l'accès local si le réseau est annoncé mais indisponible.
+      console.warn("Session : reprise différée", e);
+    }
+  })();
+  try { await mzAuthResumeRunning; }
+  finally { mzAuthResumeRunning = null; }
 }
 
 async function enterCloud() {
@@ -578,8 +639,11 @@ async function enterCloud() {
   loadRecipes().then(() => softRender());
 }
 
+window.addEventListener("online", () => { if (mode === "cloud" && !user) mzResumeCloudSession(); });
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState !== "visible" || mode !== "cloud" || !S.hh || !user) return;
+  if (document.visibilityState !== "visible" || mode !== "cloud") return;
+  if (!user) return mzResumeCloudSession();
+  if (!S.hh) return;
   try { await mzPollShopAdds(); await loadCloud(S.hh.id); softRender(); } catch (e) {}
   geoTick();
 });
@@ -1248,7 +1312,7 @@ function render() {
     : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : `${avatars}${mzBellHtml()}`}`;
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
-    <main class="wrap view-${view}" id="main">${VIEWS[view]()}</main>
+    <main class="wrap view-${view}" id="main">${mzAuthNeedsLogin && navigator.onLine !== false ? `<div class="card" role="status" style="margin-top:12px"><div class="inline" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>Connexion à renouveler sur cet iPhone. Tes données locales restent disponibles.</span><button class="btn" type="button" data-act="auth" data-v="login">Se reconnecter</button></div></div>` : ""}${VIEWS[view]()}</main>
     ${view === "agenda" || (view === "docs" && S.v3) ? `<div class="cal-create" id="calCreate">
       <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : "Choisir le type de création"}" hidden>
         ${view === "docs" ? `
@@ -2172,7 +2236,7 @@ document.addEventListener("click", async e => {
     }
     case "logout": if (sb) await sb.auth.signOut({ scope: "local" }); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
     case "auth": authMode = v; authErr = ""; screen = "auth"; render(); break;
-    case "back": screen = "welcome"; render(); break;
+    case "back": screen = mode === "cloud" && S.hh ? "app" : "welcome"; render(); break;
     case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "home"; render(); geoTick(); break;
     case "leaveDemo": mode = null; LS.del("mz_mode"); S = blank(); screen = "welcome"; render(); break;
     case "resetDemo": if (confirm("Effacer toutes les données de la démo ?")) { LS.del("mz_demo"); S = demoData(); saveLocal(); view = "home"; render(); toast("Démo remise à zéro."); } break;
@@ -2385,7 +2449,7 @@ document.addEventListener("submit", async e => {
         else r = await sb.auth.signInWithPassword({ email: fd.email.trim(), password: fd.password });
         if (r.error) throw r.error;
         if (!r.data.session) { authErr = "Compte créé. Ouvrez l'e-mail de confirmation, puis revenez vous connecter."; authMode = "login"; render(); break; }
-        user = r.data.session.user; await enterCloud();
+        user = r.data.session.user; mzAuthNeedsLogin = false; await enterCloud();
       } catch (er) {
         authErr = /invalid login/i.test(er.message || "") ? "E-mail ou mot de passe incorrect." : /already registered/i.test(er.message || "") ? "Un compte existe déjà avec cet e-mail : connectez-vous." : "Connexion impossible pour l'instant. Vérifiez le réseau et réessayez.";
         render();
