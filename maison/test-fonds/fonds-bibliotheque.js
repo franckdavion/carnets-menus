@@ -408,7 +408,9 @@
     const label=PERIODS.find(x=>x[0]===modalPeriod)?.[1]||'Matin';
     const intro=modalPeriod==='matin'?'Bonjour':modalPeriod==='aprem'?'Bel après-midi':
       modalPeriod==='soir'?'Bonsoir':'Bonne nuit';
-    const labelWeather=prefs.mode==='weather'?CONDITIONS.find(x=>x[0]===modalWeather)?.[1]+' · ':'';
+    const weatherLabel=modalPeriod==='nuit'&&modalWeather==='clear'?'Ciel dégagé':
+      (CONDITIONS.find(x=>x[0]===modalWeather)?.[1]||'Météo');
+    const labelWeather=prefs.mode==='weather'?weatherLabel+' · ':'';
     const text='<span class="mn-bg-preview-caption">'+intro+' · '+esc(labelWeather)+esc(item.name)+'</span>';
     if(item.media==='svg-native'){
       return '<div class="mn-bg-live-preview mn-bg-preview-art mn-bg-mini-'+esc(modalPeriod)+'"'+cond+'><span class="mn-bg-preview-star">✦</span>'+text+'</div>';
@@ -424,7 +426,8 @@
       ' style="background-image:url(&quot;'+esc(item.src)+'&quot;)"')+'></div>'+text+'</div>';
   }
   function weatherStatus(){
-    const snapshot=conditionNow(),name=CONDITIONS.find(x=>x[0]===snapshot.category)?.[1]||'indisponible';
+    const snapshot=conditionNow(),name=snapshot.category==='clear'&&currentPeriod()==='nuit'?'Ciel dégagé':
+      (CONDITIONS.find(x=>x[0]===snapshot.category)?.[1]||'indisponible');
     const time=snapshot.stale?' (dernière prévision)':'';
     if(prefs.weatherSource==='gps'){
       if(gps.pending)return 'Recherche de la météo à la position actuelle…';
