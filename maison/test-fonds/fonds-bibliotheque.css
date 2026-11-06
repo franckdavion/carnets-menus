@@ -229,3 +229,7 @@ body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-win{animation:none!im
 @media(min-width:541px){
  .mn-bg-tabs button{font-size:clamp(11px,1.5vw,13px)}
 }
+
+/* Verrouillage horaire des vidéos : rappel discret dans les réglages. */
+.mn-bg-lock-help{margin:0 0 10px;padding:9px 11px;border:1px solid rgba(112,184,234,.38);border-radius:12px;background:rgba(13,51,94,.32);color:#cce7fc;font-size:12px;line-height:1.45}
+.mn-bg-mode select option:disabled{color:#8299ae}
