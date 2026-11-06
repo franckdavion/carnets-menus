@@ -367,7 +367,9 @@
       const url=await mediaSrc(item);
       if(frame.dataset.mnBgItem!==item.id||!still.isConnected)return;
       // URL externe ou fichier iPhone indisponible : fond d'origine conservé.
-      still.style.backgroundImage='url("'+(url||imageFallback).replace(/"/g,'%22')+'")';
+      // La deuxième couche garantit un fond si l'image distante échoue sur iPhone.
+      const mainUrl=(url||imageFallback).replace(/"/g,'%22');
+      still.style.backgroundImage='url("'+mainUrl+'"),url("'+imageFallback+'")';
     }
   }
   function tile(item){
@@ -384,7 +386,7 @@
       visual='<div class="mn-bg-mini-art mn-bg-mini-video" style="background-image:url(&quot;'+
         esc(photos[item.period]||photos.aprem)+'&quot;)"><span>▶</span></div>';
     }else{
-      visual='<img loading="lazy" alt="" src="'+esc(item.src)+'">';
+      visual='<img loading="lazy" decoding="async" alt="" src="'+esc(item.thumb||item.src)+'">';
     }
     return '<div class="mn-bg-tile'+selected+'"><button type="button" class="mn-bg-tile-pick" data-mn-bg-act="choose" data-id="'+esc(item.id)+'">'+
       '<span class="mn-bg-tile-preview">'+visual+'</span><span class="mn-bg-tile-name">'+esc(item.name)+'</span>'+
@@ -462,7 +464,7 @@
           'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.'):
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
       currentPreview()+
-      (kind==='video'?
+      (kind==='video'||kind==='photo-animee'?
         '<div class="mn-bg-video-groups">'+
           PERIODS.map(([period,label])=>{
             const group=all.filter(x=>x.period===period);
@@ -484,7 +486,8 @@
       '<p class="muted small mn-bg-foot">'+
         (kind==='video'?'Bibliothèque · '+catalog().filter(x=>x.type==='video').length+
           ' vidéos réelles · Lecture sans son · Une vidéo chargée à la fois.':
-          kind==='photo-animee'?'Photos avec mouvement doux · pas de lecture vidéo.':
+          kind==='photo-animee'?'Bibliothèque · '+catalog().filter(x=>x.type==='photo-animee').length+
+            ' photos avec mouvement doux, classées par moment de la journée.':
           'Médias organisés par type et par moment de la journée.')+'</p>'+
       '<button type="button" class="btn primary block" data-mn-bg-act="done">Terminé</button></div>';
   }
