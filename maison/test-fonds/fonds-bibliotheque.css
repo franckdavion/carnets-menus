@@ -32,7 +32,7 @@ body:has(main.view-home) .mn-dayframe.is-paused .mn-bg-kenburns{animation-play-s
 @media(max-width:450px){.mn-bg-family-action{width:100%;justify-content:center}.mn-bg-family-card{gap:10px}}
 .mn-bg-lib{display:flex;flex-direction:column;gap:13px;min-width:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));color:var(--text,#eaf7ff)}
 .mn-bg-lib>p{margin:0;font-size:13px;line-height:1.45}
-.mn-bg-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:#0b2549b8;border:1px solid #509cde6e;padding:4px;border-radius:17px;}
+.mn-bg-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;background:#0b2549b8;border:1px solid #509cde6e;padding:4px;border-radius:17px;}
 .mn-bg-tabs button{min-width:0;border:0;background:transparent;border-radius:12px;padding:11px 3px;font-size:clamp(10px,2.8vw,13px);line-height:1.25;font-weight:750;color:#b8d1ec;}
 .mn-bg-tabs button[aria-selected="true"]{background:linear-gradient(145deg,#2381d3,#0b4a9e);color:#fff;box-shadow:0 0 11px #087bdb78;}
 .mn-bg-mode .field{margin:0}
@@ -220,3 +220,12 @@ body:has(main.view-home) .mn-dayframe.mn-bg-motion-off .mn-win{animation:none!im
 .mn-bg-video-group .mn-bg-tile-name{padding-bottom:4px}
 .mn-bg-video-group .mn-bg-tile-type{padding-bottom:7px}
 @media(max-width:360px){.mn-bg-video-credit{font-size:9px;padding-left:7px;padding-right:7px}.mn-bg-video-group h3{font-size:14px}}
+
+/* Bibliothèque V7 : quatre catégories lisibles, même sur iPhone étroit. */
+@media(max-width:540px){
+ .mn-bg-tabs{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .mn-bg-tabs button{min-height:39px;padding:9px 6px;font-size:12px;line-height:1.25}
+}
+@media(min-width:541px){
+ .mn-bg-tabs button{font-size:clamp(11px,1.5vw,13px)}
+}
