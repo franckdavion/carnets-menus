@@ -4851,11 +4851,10 @@ document.addEventListener("DOMContentLoaded", function () {
     filterOffline();
   };
   function preferLocalShop() {
-    if (state.manualOffline || entries().length) return true;
+    if (state.manualOffline) return true;
     if (!canNetwork()) return true;
-    if (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred()) return true;
-    if (state.record && CK && CK.err) return true;
-    if (state.record && CK && !CK.ready && CK.startedAt && Date.now() - CK.startedAt > 2500) return true;
+    // En ligne : liste du Carnet. La copie iPhone n’est plus affichée comme « hors ligne »
+    // juste parce que l’iframe Carnet met plus de 2 s.
     return false;
   }
   VIEWS.courses = function () {

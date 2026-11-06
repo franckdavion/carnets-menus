@@ -2,7 +2,18 @@
 const SB_URL="https://cluqleqbbidozpioekog.supabase.co",SB_KEY="sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
 const SHARED_F=["name","cat","cats","time","serves","ing","steps","image","tags","source"],PRIV_F=["fav","ratings","photo","pick","noAuto","autoIdx","noPh","viewServ","autoPick"];
 let cloud={sb:null,user:null,profile:null,admin:false,busy:false,members:null,msg:""},acctMode="login",cloudT=null;
-function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";sc.onload=()=>ok(window.supabase);sc.onerror=ko;document.head.appendChild(sc);});}
+function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{
+  const urls=["maison/vendor/supabase.min.js","vendor/supabase.min.js","https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"];
+  const tryUrl=i=>{
+    if(i>=urls.length)return ko(new Error("Bibliothèque Supabase indisponible"));
+    const sc=document.createElement("script");
+    sc.src=urls[i];
+    sc.onload=()=>ok(window.supabase);
+    sc.onerror=()=>{sc.remove();tryUrl(i+1);};
+    document.head.appendChild(sc);
+  };
+  tryUrl(0);
+});}
 async function sbc(){if(cloud.sb)return cloud.sb;const S=await loadSb();cloud.sb=S.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"cm_sb_auth"}});return cloud.sb;}
 const cloudOn=()=>!!(cloud.user&&cloud.profile&&cloud.profile.status==="active");
 async function cloudInit(){if(!LS.get("cm_sb_auth",null)&&!localStorage.getItem("cm_sb_auth"))return; // never signed in: nothing to load

@@ -697,11 +697,9 @@ async function loadRecipes() {
 /* Magasin / Wi‑Fi captive : iPhone peut dire « en ligne » sans joindre Supabase.
    Dans ce cas on garde l'app, la liste magasin et les cartes locales. */
 function mzStoreLocalPreferred() {
-  if (user) return false;
-  if (navigator.onLine === false) return true;
-  if (mzAuthNeedsLogin) return true;
-  if (mode === "cloud" && (LS.get("mz_hh", null) || (LS.get("mz_cache", null) || {}).hh)) return true;
-  return false;
+  // Uniquement le vrai hors-ligne. Un foyer en cache sans `user` encore hydraté
+  // ne doit plus bloquer le Carnet ni forcer le mode magasin « avion ».
+  return navigator.onLine === false;
 }
 window.mzStoreLocalPreferred = mzStoreLocalPreferred;
 
@@ -859,6 +857,7 @@ async function mzEnterCloudBody() {
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
   listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll(); mzLoadNoticePrefs();
   mzWakeDomotique();
+  if (typeof carnetBoot === "function") try { carnetBoot(); } catch (_) {}
   loadRecipes().then(() => softRender());
 }
 

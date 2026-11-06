@@ -11,41 +11,71 @@ let rWeek = mondayOf(today()), rPick = null;                     // semaine affi
 // read by the hidden Carnet: it only syncs on its own while this page is open
 Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && (view === "repas" || view === "courses") });
 
-function carnetBoot() {
-  carnetLive();
-  if (CK.frame || mode !== "cloud") return;
-  if (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred()) return;
-  CK.startedAt = Date.now();
-  const f = document.createElement("iframe");
-  f.src = CARNET_URL + "?arriere-plan=maisonnee";
-  f.title = "Carnet de menus (arrière-plan)";
-  f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
-  f.style.cssText = "position:absolute;left:-9999px;top:0;width:390px;height:700px;border:0;opacity:0;pointer-events:none";
-  document.body.appendChild(f); CK.frame = f;
-  const t0 = Date.now();
-  const tick = async () => {
-    let ok = false;
-    try { ok = cev("typeof planWeek==='function' && typeof cloudOn==='function' && cloudOn() && !!recipes && Object.keys(recipes).length>0"); } catch (_) {}
-    if (ok) {
-      try { await cev("cloudSync()"); } catch (_) {}
-      CK.ready = true; CK.waiters.splice(0).forEach(w => w());
-      if (view === "repas" || view === "courses") softRender();
-      return;
-    }
-    if (Date.now() - t0 > 45000) {
-      let why = "";
-      try { why = cev("cloud.user ? (cloud.profile && cloud.profile.status !== 'active' ? 'pending' : 'empty') : 'nouser'"); } catch (_) { why = "load"; }
-      CK.err = why === "pending" ? "Votre compte n'est pas encore validé dans le Carnet de menus."
-        : why === "nouser" ? "Connectez-vous une fois au Carnet de menus avec votre compte."
-        : why === "empty" ? "Le livre de recettes du Carnet est vide."
-        : "Le Carnet de menus ne répond pas (réseau ?).";
-      if (view === "repas" || view === "courses") softRender();
-      return;
-    }
-    setTimeout(tick, 600);
-  };
-  f.addEventListener("load", () => { CK.ready = false; setTimeout(tick, 400); });
+async function carnetSeedAuth() {
+  try {
+    if (typeof loadSb === "function") await loadSb();
+    if (!sb) return;
+    const { data } = await sb.auth.getSession();
+    const ses = data?.session;
+    if (!ses?.access_token) return;
+    try { localStorage.setItem("cm_sb_auth", JSON.stringify(ses)); } catch (_) {}
+  } catch (_) {}
 }
+function carnetBoot(force) {
+  carnetLive();
+  if (mode !== "cloud") return;
+  if (navigator.onLine === false) return;
+  if (CK.frame && !force && (CK.ready || !CK.err)) return;
+  if (CK.frame && (force || CK.err)) {
+    try { CK.frame.remove(); } catch (_) {}
+    CK.frame = null; CK.ready = false; CK.err = "";
+  }
+  if (CK.frame) return;
+  CK.startedAt = Date.now();
+  CK.err = "";
+  CK.ready = false;
+  carnetSeedAuth().finally(() => {
+    if (CK.frame || mode !== "cloud") return;
+    const f = document.createElement("iframe");
+    f.src = CARNET_URL + "?arriere-plan=maisonnee&t=" + Date.now();
+    f.title = "Carnet de menus (arrière-plan)";
+    f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
+    f.style.cssText = "position:absolute;left:-9999px;top:0;width:390px;height:700px;border:0;opacity:0;pointer-events:none";
+    document.body.appendChild(f); CK.frame = f;
+    const t0 = Date.now();
+    let ticking = false;
+    const tick = async () => {
+      if (ticking) return;
+      ticking = true;
+      let ok = false;
+      try { ok = cev("typeof planWeek==='function' && typeof cloudOn==='function' && cloudOn() && !!recipes && Object.keys(recipes).length>0"); } catch (_) {}
+      if (ok) {
+        try { await cev("cloudSync()"); } catch (_) {}
+        CK.ready = true; CK.err = ""; CK.waiters.splice(0).forEach(w => w());
+        if (view === "repas" || view === "courses") softRender();
+        ticking = false;
+        return;
+      }
+      if (Date.now() - t0 > 20000) {
+        let why = "";
+        try { why = cev("cloud.user ? (cloud.profile && cloud.profile.status !== 'active' ? 'pending' : 'empty') : 'nouser'"); } catch (_) { why = "load"; }
+        CK.err = why === "pending" ? "Votre compte n'est pas encore validé dans le Carnet de menus."
+          : why === "nouser" ? "Session Carnet absente sur cet iPhone. Réessayez : Maisonnée recopie la connexion."
+          : why === "empty" ? "Le livre de recettes du Carnet est vide."
+          : "Le Carnet de menus ne répond pas. Réessayez, le réseau iPhone peut bloquer le cadre caché.";
+        if (view === "repas" || view === "courses") softRender();
+        ticking = false;
+        return;
+      }
+      ticking = false;
+      setTimeout(tick, 500);
+    };
+    f.addEventListener("load", () => { CK.ready = false; setTimeout(tick, 300); });
+    // iOS n’envoie pas toujours `load` sur une iframe hors écran.
+    setTimeout(tick, 800);
+  });
+}
+window.carnetBoot = carnetBoot;
 // the others' changes arrive in the hidden Carnet (checked every 15 s): Repas and Courses are redrawn when its data changed
 let ckSig = "";
 setInterval(() => {
@@ -208,8 +238,8 @@ function weekSlots(wk) {
 VIEWS.repas = function () {
   if (mode !== "cloud") return `<div class="empty"><strong>Disponible avec un vrai foyer.</strong>La semaine de repas utilise le Carnet de menus du foyer.</div>`;
   carnetBoot();
-  if (CK.err) return `<div class="empty"><strong>Repas indisponibles pour l'instant.</strong>${esc(CK.err)}<div class="btns"><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a></div></div>`;
-  if (!CK.ready) return `<div class="empty"><strong>Chargement du Carnet de menus…</strong>Recettes et réglages du foyer, quelques secondes la première fois.</div>`;
+  if (CK.err) return `<div class="empty"><strong>Repas indisponibles pour l'instant.</strong>${esc(CK.err)}<div class="btns"><button class="btn primary" type="button" data-act="rCarnetRetry">Réessayer</button><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a></div></div>`;
+  if (!CK.ready) return `<div class="empty"><strong>Chargement du Carnet de menus…</strong>Recettes et réglages du foyer, quelques secondes la première fois.${Date.now() - (CK.startedAt || 0) > 8000 ? `<div class="btns" style="margin-top:12px"><button class="btn" type="button" data-act="rCarnetRetry">Réessayer le chargement</button></div>` : ""}</div>`;
   let sl; try { sl = weekSlots(rWeek); } catch (_) { CK.ready = false; return `<div class="empty"><strong>Chargement du Carnet de menus…</strong></div>`; }
   const d = today(), cur = mondayOf(d);
   const filled = Object.values(sl).filter(x => x.s && x.name && !x.past), open = filled.filter(x => !x.s.lock);
@@ -671,11 +701,12 @@ function rNoteSheet(k) {
 /* ---------- actions ---------- */
 const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
-  const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek") return;
+  const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek" && b.dataset.act !== "rCarnetRetry") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut", "rHomeFav", "rHomeCook"].includes(act)) return;
-  if (act !== "rWeek") cev(`curWeek=${JSON.stringify(rWeek)}`);
+  if (!["rCarnetRetry", "rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut", "rHomeFav", "rHomeCook"].includes(act)) return;
+  if (act !== "rWeek" && act !== "rCarnetRetry") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
+    case "rCarnetRetry": carnetBoot(true); render(); break;
     case "rPortion": case "rPortionCustom": {
       let f=Number(b.dataset.f);
       if(act==="rPortionCustom"){const old=cj(`(()=>{const s=${slotJs(v)};return mealPortionFactor(s);})()`);const input=prompt("Coefficient de portion pour ce repas (0,25 à 4)",String(old).replace('.',','));if(input===null)break;f=Number(input.replace(',','.'));}
