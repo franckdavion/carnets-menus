@@ -2488,7 +2488,7 @@ document.addEventListener("click", e => {
     const action = melCmd.dataset.domMelCmd;
     if (!action || melCmd.disabled || domMelBusy) return;
     domMelBusy = action;
-    render();
+    if (view !== "home") render();
     domRunMelCommand(() => melcloudServer("command", { action })).then(r => {
       if (!r) return;
       domMelState = r;
@@ -2496,7 +2496,7 @@ document.addEventListener("click", e => {
       toast("Consigne MELCloud mise à jour", null, null, null, "domotique");
       const sheet = document.getElementById("sheet");
       if (sheet && sheet.open && document.querySelector(".dom-mel-panel")) domMitsuSheet();
-    }).catch(err => { if (err) toast(err.message); }).finally(() => { domMelBusy = ""; render(); });
+    }).catch(err => { if (err) toast(err.message); }).finally(() => { domMelBusy = ""; if (view !== "home") render(); });
     return;
   }
   const dreAutoToggle = e.target.closest("[data-dom-dreame-auto-toggle]");
@@ -2839,7 +2839,7 @@ document.addEventListener("click", e => {
     const segment_id = parseInt(dreRoom.dataset.domDreameRoom, 10);
     if (!Number.isFinite(segment_id)) return;
     domDreameBusy = "room_" + segment_id;
-    render();
+    if (view !== "home") render();
     domRunDreameCommand(() => dreameServer("command", { action: "clean_room", segment_id })).then(r => {
       if (!r) return;
       domDreameMergeState(r);
@@ -2848,7 +2848,7 @@ document.addEventListener("click", e => {
       domDreameTask = "start";
       domDreameFillHosts();
       setTimeout(() => { domDreameRefreshState(true).then(() => { domDreameFillHosts(); render(); }).catch(() => {}); }, 2500);
-    }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; render(); });
+    }).catch(err => { if (err) toast(err.message); }).finally(() => { domDreameBusy = ""; if (view !== "home") render(); });
     return;
   }
   if (e.target.closest("[data-dom-st-retry]")) {
@@ -2890,7 +2890,7 @@ document.addEventListener("click", e => {
     const action = stCmd.dataset.domStCmd;
     if (!action || stCmd.disabled) return;
     domStBusy = action;
-    render();
+    if (view !== "home") render();
     domRunStCommand(() => smartthingsServer("command", { action })).then(r => {
       if (!r) return;
       domStState = r;
@@ -2898,7 +2898,7 @@ document.addEventListener("click", e => {
       toast("Commande TV envoyée", null, null, null, "domotique");
       const sheet = document.getElementById("sheet");
       if (sheet && sheet.open && document.querySelector(".dom-tv-panel")) domTvSheet(true);
-    }).catch(err => { if (err) toast(err.message); }).finally(() => { domStBusy = ""; render(); });
+    }).catch(err => { if (err) toast(err.message); }).finally(() => { domStBusy = ""; if (view !== "home") render(); });
     return;
   }
   const z = e.target.closest("[data-dom-zone]"); if (z) { domZone = z.dataset.domZone; render(); return; }
@@ -2966,7 +2966,7 @@ document.addEventListener("click", e => {
     const zone = zb.dataset.domZoneBatch, action = zb.dataset.domAction;
     if (!zone || !action || zb.disabled) return;
     domBusy = "zone-" + zone + "-" + action;
-    render();
+    if (view !== "home") render();
     const labels = { Monter: "Tout ouvrir", Descendre: "Tout fermer", Stop: "Stop" };
     domRunCommand(() => shellyServer("command-zone", { zone, action })).then(r => {
       if (!r) return;
@@ -2975,7 +2975,7 @@ document.addEventListener("click", e => {
       domScheduleStateAfterCmd();
     }).catch(err => { if (err) toast(err.message); }).finally(() => {
       domBusy = "";
-      render();
+      if (view !== "home") render();
     });
     return;
   }

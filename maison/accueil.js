@@ -547,6 +547,17 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  if(window.maisonneeModuleGrid?.editing?.())window.maisonneeModuleGrid.mount(main);
 }
 window.maisonneeHomePaint=render;
+(()=>{let pause;window.addEventListener('scroll',()=>{
+  const frame=document.querySelector('main.view-home .mn-dayframe');
+  if(!frame)return;
+  frame.classList.add('is-paused');
+  document.documentElement.classList.add('mz-scrolling');
+  clearTimeout(pause);
+  pause=setTimeout(()=>{
+    frame.classList.remove('is-paused');
+    document.documentElement.classList.remove('mz-scrolling');
+  },200);
+},{passive:true});})();
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"],[data-act="homeRepas"]');if(!b)return;
  if(b.dataset.act==='homeRepas'){if(typeof openHomeMeal==='function')openHomeMeal(b.dataset.day,b.dataset.slot);return}

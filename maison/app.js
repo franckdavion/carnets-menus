@@ -489,16 +489,22 @@ function listen(hid) {
   rt.subscribe();
 }
 // re-render without disturbing an open sheet or a field being typed in
-let pending = false;
+let pending = false, homePaintTimer = null;
 function softRender() {
   // live views update in place so typing a message or looking at the map is not interrupted
   if (screen === "app" && view === "messages" && $("#msgList") && !$("#sheet").open) { renderMsgs(); return; }
   if (screen === "app" && view === "carte" && map && !$("#sheet").open) { drawMarkers(); refreshLocList(); return; }
   if ($("#sheet").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) { pending = true; return; }
   if (screen === "app" && view === "home" && document.querySelector("#ultimate-dashboard") && typeof window.maisonneeHomePaint === "function") {
-    window.maisonneeHomePaint();
-    if (typeof updateBadge === "function") updateBadge();
-    renderBellOnly();
+    // Realtime / courses : regrouper les peintures, sinon l’accueil clignote et rame au scroll.
+    clearTimeout(homePaintTimer);
+    homePaintTimer = setTimeout(() => {
+      homePaintTimer = null;
+      if (view !== "home" || typeof window.maisonneeHomePaint !== "function") return;
+      window.maisonneeHomePaint();
+      if (typeof updateBadge === "function") updateBadge();
+      renderBellOnly();
+    }, 220);
     return;
   }
   render();

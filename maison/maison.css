@@ -7,7 +7,7 @@
 *{box-sizing:border-box;}
 html{-webkit-text-size-adjust:100%;}
 /* the page never slides sideways: nothing may stick out, and horizontal swipes only scroll the rows made for it */
-html,body{width:100%;overflow-x:clip;overscroll-behavior-x:none;max-width:100%;}
+html,body{width:100%;overflow-x:hidden;overscroll-behavior-x:none;max-width:100%;}
 #app,main,.wrap{min-width:0;max-width:100%;}
 .inline>*{min-width:0;}
 body{touch-action:pan-y pinch-zoom;}
@@ -898,6 +898,14 @@ p .pr-word{padding-right:11px;}
 /* Maisonnée Ultimate — accueil uniquement, aucune modification des autres vues */
 
 body:has(main.view-home) .top{background:rgba(7,19,38,.90);backdrop-filter:blur(18px);}
+html.mz-scrolling .mn-bg-kenburns{animation-play-state:paused!important;will-change:auto!important}
+html.mz-scrolling .mn-bg-sky-fx::before,html.mz-scrolling .mn-bg-sky-fx::after,
+html.mz-scrolling .mn-bg-weather-fx::before,html.mz-scrolling .mn-bg-weather-fx::after{animation:none!important}
+@media (pointer:coarse) and (min-width:700px){
+  body:has(main.view-home) .top{backdrop-filter:none;-webkit-backdrop-filter:none}
+  body:has(main.view-home) .mn-dayframe .mn-bg-kenburns{animation:none!important;will-change:auto!important}
+  body:has(main.view-home) .mn-dayframe .mn-bg-photo{filter:none}
+}
 body:has(main.view-home) .top .hh-name{color:#eaf7ff;}
 body:has(main.view-home) .top .icon-btn{color:#eaf7ff;}
 body:has(main.view-home) .pill{background:linear-gradient(145deg,#102d50,#07172e);border:1px solid #3781b4;}
