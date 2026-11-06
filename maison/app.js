@@ -266,58 +266,112 @@ function fail(e) {
 }
 
 /* ---------- Supabase ---------- */
+const MZ_AUTH_KEY = "cm_sb_auth";
+const mzAuthMem = Object.create(null);
+function mzAuthIdb() {
+  return new Promise((ok, ko) => {
+    const req = indexedDB.open("mz-auth-idb-v1", 1);
+    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains("kv")) req.result.createObjectStore("kv"); };
+    req.onsuccess = () => ok(req.result);
+    req.onerror = () => ko(req.error);
+  });
+}
+async function mzAuthIdbGet(key) {
+  try {
+    const db = await mzAuthIdb();
+    return await new Promise((ok, ko) => {
+      const q = db.transaction("kv").objectStore("kv").get(key);
+      q.onsuccess = () => ok(q.result || null);
+      q.onerror = () => ko(q.error);
+    });
+  } catch (e) { return null; }
+}
+function mzAuthIdbPut(key, val) {
+  mzAuthIdb().then(db => {
+    const tx = db.transaction("kv", "readwrite").objectStore("kv");
+    if (val == null) tx.delete(key); else tx.put(val, key);
+  }).catch(() => {});
+}
+async function mzAuthStorage() {
+  try {
+    const idbVal = await mzAuthIdbGet(MZ_AUTH_KEY);
+    if (idbVal) mzAuthMem[MZ_AUTH_KEY] = idbVal;
+  } catch (e) {}
+  try {
+    const lsVal = localStorage.getItem(MZ_AUTH_KEY);
+    if (lsVal) mzAuthMem[MZ_AUTH_KEY] = lsVal;
+  } catch (e) {}
+  return {
+    getItem: k => (k in mzAuthMem ? mzAuthMem[k] : null),
+    setItem: (k, v) => {
+      mzAuthMem[k] = v;
+      try { localStorage.setItem(k, v); } catch (e) {}
+      mzAuthIdbPut(k, v);
+    },
+    removeItem: k => {
+      delete mzAuthMem[k];
+      try { localStorage.removeItem(k); } catch (e) {}
+      mzAuthIdbPut(k, null);
+    }
+  };
+}
 function loadSb() {
   if (sb) return Promise.resolve(sb);
   // Un seul chargement CDN et un seul client Supabase, même si les cartes
   // familiales et l'initialisation de Maisonnée démarrent en même temps.
   if (sbLoading) return sbLoading;
-  sbLoading = new Promise((ok, ko) => {
-    const go = () => {
-      try {
-        sb = window.supabase.createClient(SB_URL, SB_KEY, {
-          auth: { persistSession: true, autoRefreshToken: true, storageKey: "cm_sb_auth" }
-        });
-        mzHookAuth(sb);
-        ok(sb);
-      } catch (e) { ko(e); }
-    };
-    if (window.supabase) { go(); mzHookAuth(sb); return; }
-    const s = document.createElement("script");
-    let done = false;
-    const finish = error => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      if (error) { s.remove(); ko(error); }
-      else go();
-    };
-    const timer = setTimeout(() => finish(new Error("Chargement Supabase trop long")), 12000);
-    // Copie locale (PWA) : Safari affiche souvent « Load failed » si le SW
-    // intercepte le CDN jsDelivr à froid, et la session / la domotique ne démarrent pas.
-    s.src = "vendor/supabase.min.js";
-    s.onload = () => finish(null);
-    s.onerror = () => {
-      s.remove();
-      const cdn = document.createElement("script");
-      cdn.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
-      cdn.onload = () => finish(null);
-      cdn.onerror = () => finish(new Error("Bibliothèque Supabase indisponible"));
-      document.head.appendChild(cdn);
-    };
-    document.head.appendChild(s);
-  }).catch(e => { sbLoading = null; throw e; });
+  sbLoading = (async () => {
+    const storage = await mzAuthStorage();
+    await new Promise((ok, ko) => {
+      if (window.supabase) return ok();
+      const s = document.createElement("script");
+      let done = false;
+      const finish = error => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (error) { s.remove(); ko(error); }
+        else ok();
+      };
+      const timer = setTimeout(() => finish(new Error("Chargement Supabase trop long")), 12000);
+      s.src = "vendor/supabase.min.js";
+      s.onload = () => finish(null);
+      s.onerror = () => {
+        s.remove();
+        const cdn = document.createElement("script");
+        cdn.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+        cdn.onload = () => finish(null);
+        cdn.onerror = () => finish(new Error("Bibliothèque Supabase indisponible"));
+        document.head.appendChild(cdn);
+      };
+      document.head.appendChild(s);
+    });
+    sb = window.supabase.createClient(SB_URL, SB_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storageKey: MZ_AUTH_KEY,
+        storage,
+        detectSessionInUrl: false
+      }
+    });
+    mzHookAuth(sb);
+    return sb;
+  })().catch(e => { sbLoading = null; throw e; });
   return sbLoading;
 }
 
 function mzRememberAuth(session) {
   const access = session?.access_token, refresh = session?.refresh_token;
   if (!access || !refresh) return;
-  try {
-    localStorage.setItem("mz_auth_tokens", JSON.stringify({ access_token: access, refresh_token: refresh, at: Date.now() }));
-  } catch (e) {}
+  const raw = JSON.stringify({ access_token: access, refresh_token: refresh, at: Date.now() });
+  try { localStorage.setItem("mz_auth_tokens", raw); } catch (e) {}
+  mzAuthIdbPut("mz_auth_tokens", raw);
 }
 function mzForgetAuth() {
   try { localStorage.removeItem("mz_auth_tokens"); } catch (e) {}
+  mzAuthIdbPut("mz_auth_tokens", null);
+  mzAuthIdbPut(MZ_AUTH_KEY, null);
 }
 function mzHookAuth(client) {
   if (mzAuthHooked || !client?.auth?.onAuthStateChange) return;
