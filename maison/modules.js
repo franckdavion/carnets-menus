@@ -1302,7 +1302,7 @@ async function shellyServer(action, body) {
       return out;
     } catch (e) {
       if (e && e.name === "AbortError") throw new Error("Délai dépassé en contactant Shelly Cloud. Réessayez.");
-      throw e;
+      throw new Error(typeof mzNetMsg === "function" ? mzNetMsg(e) : (e.message || e));
     } finally {
       if (timer) clearTimeout(timer);
     }

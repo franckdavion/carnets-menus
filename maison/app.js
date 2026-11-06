@@ -227,6 +227,13 @@ async function addMany(key, rows) {
     if (error) { const ids = rows.map(r => r.id); S[key] = S[key].filter(x => !ids.includes(x.id)); saveLocal(); render(); fail(error); }
   }
 }
+function mzNetMsg(e) {
+  const m = String((e && e.message) || e || "");
+  if (/load failed|failed to fetch|networkerror|chargement supabase|bibliothèque supabase/i.test(m))
+    return "Réseau : le serveur n'a pas répondu. Réessaie dans un instant.";
+  return m;
+}
+window.mzNetMsg = mzNetMsg;
 function fail(e) {
   console.warn(e);
   toast(navigator.onLine === false ? "Pas de connexion : la modification n'a pas été enregistrée." : "La modification n'a pas été enregistrée. Réessayez dans un instant.");
@@ -258,9 +265,18 @@ function loadSb() {
       else go();
     };
     const timer = setTimeout(() => finish(new Error("Chargement Supabase trop long")), 12000);
-    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+    // Copie locale (PWA) : Safari affiche souvent « Load failed » si le SW
+    // intercepte le CDN jsDelivr à froid, et la session / la domotique ne démarrent pas.
+    s.src = "vendor/supabase.min.js";
     s.onload = () => finish(null);
-    s.onerror = () => finish(new Error("Bibliothèque Supabase indisponible"));
+    s.onerror = () => {
+      s.remove();
+      const cdn = document.createElement("script");
+      cdn.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+      cdn.onload = () => finish(null);
+      cdn.onerror = () => finish(new Error("Bibliothèque Supabase indisponible"));
+      document.head.appendChild(cdn);
+    };
     document.head.appendChild(s);
   }).catch(e => { sbLoading = null; throw e; });
   return sbLoading;

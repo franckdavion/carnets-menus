@@ -1,9 +1,9 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v139";
+const CACHE = "carnet-archive-maison-v140";
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css", "trajets-v2.css", "fonds-bibliotheque.css",
-  "espace.js", "push-config.js", "shared-constants.js", "supabase/functions/_shared/cal.js",
+  "espace.js", "push-config.js", "shared-constants.js", "vendor/supabase.min.js", "supabase/functions/_shared/cal.js",
   "app.js", "essai-cartes.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
   "presences-core.js", "presences-trajets-core.js", "presences.js", "presences-trajets.js", "presences-export.js",
   "natif.js", "accueil.js", "bandeau-jour.js", "fonds-bibliotheque.js",
@@ -17,9 +17,10 @@ self.addEventListener("fetch", e => {
   const u = new URL(e.request.url);
   const scopePath = new URL("./", self.location).pathname;
   const own = u.origin === self.location.origin && (u.pathname.startsWith(scopePath) || /\/(ingredient-arts|ingredient-emojis|navigation-retour)\.js$/.test(u.pathname));
-  const lib = /fonts\.(googleapis|gstatic)\.com$|cdn\.jsdelivr\.net$/.test(u.hostname);
-  if (!own && !lib) return;
-  e.respondWith(fetch(own ? new Request(e.request, { cache: "no-cache" }) : e.request)
+  // Ne pas intercepter jsDelivr : sur iPhone PWA, fetch() du CDN via le SW
+  // échoue souvent avec « Load failed » et bloque Supabase / la domotique.
+  if (!own) return;
+  e.respondWith(fetch(new Request(e.request, { cache: "no-cache" }))
     .then(r => { if (r.ok || r.type === "opaque") { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); } return r; })
     // En ligne, privilégier la version publiée. Hors ligne, la requête
     // peut contenir ?v=... alors que le précache contient le fichier sans query.
