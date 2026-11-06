@@ -2170,7 +2170,7 @@ document.addEventListener("click", async e => {
       if (error) { fail(error); break; }
       LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "setup"; render(); break;
     }
-    case "logout": if (sb) await sb.auth.signOut(); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
+    case "logout": if (sb) await sb.auth.signOut({ scope: "local" }); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
     case "auth": authMode = v; authErr = ""; screen = "auth"; render(); break;
     case "back": screen = "welcome"; render(); break;
     case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "home"; render(); geoTick(); break;
