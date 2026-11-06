@@ -20,10 +20,10 @@ function cxData() {
     const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0,n:x.n}));
     const plan=visibleShopDates().map(x=>({key:x.key,lab:x.dn+" "+x.d.getDate(),w:ymd(mondayOf(x.d)),meals:MEALS.map(([m,lab])=>{const k=slotKey(x.dn,m),s=x.wk[k];
       return s&&recipes[s.id]?{k,id:s.id,m:lab,name:recipes[s.id].name,n:s.n||menu.people||4,lock:!!s.lock,state:["Proposé","Gardé","En courses","Courses faites","Terminé"].includes(s.mealState)?s.mealState:(s.lock?"En courses":s.keep?"Gardé":"Proposé")}:null;}).filter(Boolean)})).filter(d=>d.meals.length);
-    const items=shopping().map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||"",r:RAYONS.includes(i.r)?i.r:"Divers",from:i.from||[],on:!!menu.checked[i.key],miss:(menu.missed||{})[i.key]||""}));
+    const items=shopping().map(i=>({key:i.key,n:(menu.shopNameOverrides||{})[i.key]||i.n,qt:fmt(i.q,i.u)||"",r:RAYONS.includes(i.r)?i.r:"Divers",from:i.from||[],on:!!menu.checked[i.key],miss:(menu.missed||{})[i.key]||""}));
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
-    const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
+    const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:(menu.shopNameOverrides||{})[i.key]||i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
     return {days,plan,items,extras,xr,have,duplicateWarnings:shoppingDuplicateWarnings(),learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
 }
 /* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
@@ -94,7 +94,7 @@ VIEWS.courses = function () {
   const tick = i => `<span class="box">${I.tick}</span>`;
   const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}" data-mz-shop-name="${esc(String(i.n || i.t || "").trim().toLocaleLowerCase("fr"))}">
       <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
-      <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
+      <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-ref="${esc(ref)}" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}" title="Appui long : modifier · appui court : rayon">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
       ${i.on ? "" : ref.startsWith("k:") ? `<button type="button" class="cx-have" data-act="cxHave" data-v="${esc(i.key)}">J'ai déjà</button>` : `<button type="button" class="cx-x" data-act="cxRmX" data-v="${i.ix}" aria-label="Retirer ${esc(i.t)}">✕</button>`}
     </div>`;
@@ -130,7 +130,7 @@ VIEWS.courses = function () {
   </div>`;
   out += `<h2 class="cx-list-h" id="cxList">🛒 Liste de courses${total ? `<span>${nLeft ? nLeft + " à prendre" : "tout est pris"}${done.length ? " · " + done.length + " dans le caddie" : ""}</span>` : ""}</h2>`;
   if (!total) out += `<div class="empty" style="margin-top:16px"><strong>La liste est vide.</strong>${sel.length ? "Envoyez des repas de ces jours aux courses depuis Repas, ou ajoutez des articles ci-dessus." : "Choisissez ci-dessus les jours pour lesquels vous faites les courses."}</div>`;
-  if (todo.length + todoX.length) out += `<div class="btns" style="margin-top:14px;justify-content:space-between"><span class="muted small" style="align-self:center">Rangée par rayon · touchez un article pour changer son rayon</span><button class="linkbtn small" data-act="cxOrder">Ordre des rayons</button></div>`;
+  if (todo.length + todoX.length) out += `<div class="btns" style="margin-top:14px;justify-content:space-between"><span class="muted small" style="align-self:center">Rangée par rayon · appui court : rayon · appui long : modifier le nom</span><button class="linkbtn small" data-act="cxOrder">Ordre des rayons</button></div>`;
   for (const ry of cxOrder(D.order)) {
     const l = todo.filter(i => i.r === ry).sort((a, b) => a.n.localeCompare(b.n, "fr")), lx = todoX.filter(x => x.r === ry).sort((a, b) => a.t.localeCompare(b.t, "fr"));
     if (!l.length && !lx.length) continue;
@@ -179,6 +179,89 @@ function cxDaySheet(d, fresh) {
       ${x.inList ? `<button class="btn ghost" data-act="cxDsRemove">Retirer ce jour des courses</button>` : ""}</div>`);
   if (!fresh) $("#sheet").scrollTop = sc;
 }
+
+/* Renommage du mode magasin : appui long, sans toucher aux identifiants
+   d'achats, coches, quantités ou ingrédients des recettes. */
+let cxRenameState=null,cxHoldTimer=null,cxHoldStart=null,cxHoldUsed=null;
+function cxRenameOpen(button){
+  if(!CK.ready||view!=="courses")return;
+  const ref=String(button?.dataset?.ref||""),D=cxData();
+  const item=ref.startsWith("k:")?D.items.find(i=>"k:"+i.key===ref):
+    ref.startsWith("x:")?D.extras[Number(ref.slice(2))]:null;
+  if(!item)return;
+  const name=String(item.n||item.t||"").trim();
+  const rayon=ref.startsWith("k:")?(D.learn[name.toLowerCase()]||item.r||"Divers"):cxGuess(name,D.learn);
+  cxRenameState={ref,name,rayon};
+  openSheet("Modifier l’article",
+    '<p class="muted small">Seul le nom de la liste sera modifié. Le rayon et la coche sont conservés.</p>'+
+    '<form data-form="cxRename" autocomplete="off"><label class="field">'+
+    '<span class="label">Nom de l’article</span><input class="input cx-rename-input" name="name" required maxlength="120" enterkeyhint="done" value="'+esc(name)+'"></label>'+
+    '<div class="btns"><button type="submit" class="btn primary">Enregistrer</button>'+
+    '<button type="button" class="btn" data-act="closeSheet">Annuler</button></div></form>');
+  const input=document.querySelector('#sheet form[data-form="cxRename"] input[name="name"]');
+  if(input)try{input.focus({preventScroll:true});input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
+}
+function cxHoldClear(){if(cxHoldTimer!==null)clearTimeout(cxHoldTimer);cxHoldTimer=null;cxHoldStart=null}
+const cxHoldName=e=>e.target?.closest?.(".mz-shop-store:not(.mz-shop-offline) .cx-name[data-ref]")||null;
+document.addEventListener("pointerdown",e=>{
+  if(view!=="courses"||!CK.ready||e.button!==0||e.isPrimary===false)return;
+  const b=cxHoldName(e);if(!b)return;
+  cxHoldClear();cxHoldStart={button:b,pointer:e.pointerId,x:e.clientX,y:e.clientY};
+  cxHoldTimer=setTimeout(()=>{
+    const p=cxHoldStart;if(!p||!p.button.isConnected)return;
+    cxHoldUsed={button:p.button,until:Date.now()+1300};cxHoldClear();
+    try{navigator.vibrate?.(12)}catch(_){}
+    cxRenameOpen(p.button);
+  },600);
+},{passive:true});
+document.addEventListener("pointermove",e=>{
+  if(cxHoldStart&&cxHoldStart.pointer===e.pointerId&&Math.hypot(e.clientX-cxHoldStart.x,e.clientY-cxHoldStart.y)>12)cxHoldClear();
+},{passive:true});
+document.addEventListener("pointerup",e=>{if(cxHoldStart?.pointer===e.pointerId)cxHoldClear()},{passive:true});
+document.addEventListener("pointercancel",cxHoldClear,{passive:true});
+document.addEventListener("scroll",cxHoldClear,{capture:true,passive:true});
+document.addEventListener("contextmenu",e=>{
+  const b=cxHoldName(e);if(!b)return;e.preventDefault();
+  if(!cxHoldUsed||cxHoldUsed.button!==b||Date.now()>cxHoldUsed.until){
+    cxHoldUsed={button:b,until:Date.now()+1300};cxHoldClear();cxRenameOpen(b);
+  }
+},true);
+document.addEventListener("click",e=>{
+  const b=cxHoldName(e);
+  if(!b||!cxHoldUsed||cxHoldUsed.button!==b||Date.now()>cxHoldUsed.until)return;
+  cxHoldUsed=null;e.preventDefault();e.stopImmediatePropagation();
+},true);
+document.addEventListener("submit",e=>{
+  const form=e.target.closest?.('form[data-form="cxRename"]');if(!form)return;
+  e.preventDefault();e.stopImmediatePropagation();
+  if(!cxRenameState||!CK.ready)return;
+  const {ref,name:expected,rayon}=cxRenameState;
+  const name=String(new FormData(form).get("name")||"").replace(/\s+/g," ").trim().slice(0,120);
+  if(!name){toast("Le nom ne peut pas être vide.");return}
+  if(name===expected){cxRenameState=null;closeSheet();return}
+  let result;
+  try{
+    result=cev("(()=>{const ref="+JSON.stringify(ref)+",next="+JSON.stringify(name)+
+      ",expected="+JSON.stringify(expected)+",rayon="+JSON.stringify(rayon)+";"+
+      "const learn=()=>{if(!rayon)return;menu.rayonLearn=Object.assign({},menu.rayonLearn);"+
+      "const k=next.trim().toLowerCase();if(!menu.rayonLearn[k])menu.rayonLearn[k]=rayon;};"+
+      "if(ref.startsWith('k:')){const key=ref.slice(2);const found=shopping().find(i=>String(i.key)===key);"+
+      "if(!found)return {ok:false};const shown=(menu.shopNameOverrides||{})[key]||found.n;"+
+      "if(shown!==expected)return {ok:false};menu.shopNameOverrides=Object.assign({},menu.shopNameOverrides);"+
+      "if(next===found.n)delete menu.shopNameOverrides[key];else menu.shopNameOverrides[key]=next;"+
+      "learn();saveMenu();return {ok:true};}"+
+      "if(ref.startsWith('x:')){const index=Number(ref.slice(2));const item=menu.extras?.[index];"+
+      "if(!item||item.t!==expected)return {ok:false};"+
+      "menu.extras=menu.extras.slice();menu.extras[index]={...item,t:next};"+
+      "learn();saveMenu();return {ok:true};}return {ok:false};})()");
+  }catch(err){toast("Modification impossible : "+(err?.message||"erreur inconnue"));return}
+  if(!result?.ok){toast("Cet article a changé. Réessaie sur son nouveau nom.");return}
+  cxRenameState=null;closeSheet();
+  const y=window.scrollY;render();requestAnimationFrame(()=>window.scrollTo(0,y));
+  toast("Nom modifié dans la liste de courses.");
+},true);
+document.querySelector("#sheet")?.addEventListener("close",()=>{cxRenameState=null});
+
 const CX_ACTS = ["cxEmojiEdit", "cxAddFocus", "cxMealActions", "cxActionRecipe", "cxActionMeal", "cxActionChange", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
