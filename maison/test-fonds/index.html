@@ -5,7 +5,7 @@
 <meta name="robots" content="noindex">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Maisonnée — TEST fonds météo réelle V4</title>
+<title>Maisonnée — TEST vidéos météo par heure V6</title>
 <meta name="description" content="Les tâches, l'agenda et les repas de la maison, partagés entre vous.">
 <meta name="theme-color" content="#F1F4F9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121926" media="(prefers-color-scheme: dark)">
@@ -18,7 +18,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="stylesheet" href="maison.css?v=20261105-trajets-prod-v1">
 <link rel="stylesheet" href="trajets-v2.css?v=20261105-trajets-v2-prod-1">
-<link rel="stylesheet" href="test-fonds/fonds-bibliotheque.css?v=20261105-fonds-meteo-v5">
+<link rel="stylesheet" href="test-fonds/fonds-bibliotheque.css?v=20261106-videos-journee-v6">
 
 </head>
 <body>
@@ -133,7 +133,7 @@
 </script>
 <script src="bandeau-jour.js"></script>
 <script src="test-fonds/accueil.js?v=20261105-fonds-meteo-v5"></script>
-<script src="test-fonds/fonds-bibliotheque.js?v=20261105-fonds-meteo-v5"></script>
+<script src="test-fonds/fonds-bibliotheque.js?v=20261106-videos-journee-v6"></script>
 <script defer src="../navigation-retour.js"></script>
 
 <script>document.addEventListener('click',function(e){const b=e.target.closest('[data-ing-emoji-name]');if(!b)return;e.preventDefault();e.stopPropagation();IngredientEmoji.pick(b.dataset.ingEmojiName,()=>{const k=document.querySelector('#sheet [data-act="rIng"]')?.dataset.v;if(k&&typeof mealSlotSheet==='function')mealSlotSheet(k);else if(typeof softRender==='function')softRender()})},true);</script>
