@@ -294,7 +294,13 @@
       if(frame.dataset.mnBgItem!==item.id||!video.isConnected)return;
       if(!url){video.dispatchEvent(new Event('error'));return}
       video.src=url;
-      if(moving&&!document.hidden)video.play().catch(()=>{video.poster=imageFallback});
+      if(moving&&!document.hidden)video.play().catch(()=>{
+        if(!video.isConnected)return;
+        const still=document.createElement('div');
+        still.className='mn-bg-photo';
+        still.style.backgroundImage='url("'+imageFallback+'")';
+        video.replaceWith(still);
+      });
       else video.pause();
     }else{
       const still=document.createElement('div');
@@ -434,11 +440,19 @@
     });
     host.querySelectorAll('[data-mn-bg-preview-video]').forEach(async element=>{
       const item=find(element.dataset.mnBgPreviewVideo);
+      const still=()=>{
+        if(!element.isConnected)return;
+        const image=document.createElement('div');
+        image.className='mn-bg-preview-photo';
+        image.style.backgroundImage='url("'+(photos[item?.period]||photos[modalPeriod])+'")';
+        element.replaceWith(image);
+      };
+      element.addEventListener('error',still,{once:true});
       if(!item||!effectiveMotion()){element.pause();return;}
       const src=await mediaSrc(item);
-      if(!element.isConnected||!src)return;
+      if(!element.isConnected||!src){still();return;}
       if(!element.src)element.src=src;
-      element.play().catch(()=>{});
+      element.play().catch(still);
     });
     host.querySelectorAll('[data-mn-bg-thumb]').forEach(async element=>{
       const item=find(element.dataset.mnBgThumb),src=await mediaSrc(item);
