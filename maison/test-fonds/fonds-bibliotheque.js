@@ -330,9 +330,7 @@
     }
   }
   function tile(item){
-    const wanted=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
-      (prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod)):
-      currentItem(modalPeriod,prefs.mode==='weather'?modalWeather:undefined).id;
+    const wanted=currentItem(modalPeriod,prefs.mode==='weather'?modalWeather:undefined).id;
     const chosen=wanted===item.id;
     const selected=chosen?' is-selected':'';
     let visual;
@@ -418,11 +416,12 @@
         '<button type="button" data-mn-bg-act="period" data-v="'+id+'" aria-pressed="'+(id===modalPeriod)+'">'+name+'</button>').join('')+'</div>'+
       '<p class="mn-bg-help">'+(prefs.mode==='weather'?
         'Le temps actuel choisit automatiquement les effets ; cette sélection règle le fond pour la condition et l’heure affichées.':
-        prefs.mode==='auto'?(prefs.type==='photo-animee'?'Une vidéo réelle est choisie automatiquement selon l’heure. Pour choisir chaque vidéo, passez en mode personnalisé.':
+        prefs.mode==='auto'?(prefs.type==='video'?'Une véritable vidéo est choisie automatiquement selon l’heure. Pour choisir chaque vidéo, passez en mode personnalisé.':
+          prefs.type==='photo-animee'?'Une photo à mouvement doux est choisie selon l’heure.':
           'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.'):
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
       currentPreview()+
-      (kind==='photo-animee'?
+      (kind==='video'?
         '<div class="mn-bg-video-groups">'+
           PERIODS.map(([period,label])=>{
             const group=all.filter(x=>x.period===period);
@@ -435,14 +434,17 @@
       '<label class="mn-bg-motion-label"><input type="checkbox" data-mn-bg-motion '+(prefs.motion?'checked':'')+'> Autoriser les animations (si l’appareil le permet)</label>'+
       '<details class="mn-bg-add" '+(addOpen?'open':'')+'><summary>＋ Ajouter à la bibliothèque « '+esc(typelabel)+' »</summary>'+
       '<form data-mn-bg-url-form><label class="field"><span class="label">Nom du fond</span><input class="input" required maxlength="70" name="name" placeholder="Ex. Ciel d’été"></label>'+
-      '<label class="field"><span class="label">Adresse directe du fichier (https)</span><input class="input" type="url" required name="url" placeholder="'+(kind==='photo-animee'?'https://…/video.mp4':'https://…/image.webp')+'"></label>'+
+      '<label class="field"><span class="label">Adresse directe du fichier (https)</span><input class="input" type="url" required name="url" placeholder="'+(kind==='video'?'https://…/video.mp4':'https://…/image.webp')+'"></label>'+
       '<button type="submit" class="btn primary block">Ajouter cette adresse</button></form>'+
       '<div class="mn-bg-separator">ou depuis cet appareil</div>'+
-      '<label class="mn-bg-upload btn">Importer un fichier '+(kind==='photo-animee'?'MP4, WebM, GIF ou photo':'image (JPG, PNG, WebP, GIF)')+
-        '<input type="file" data-mn-bg-file accept="'+(kind==='photo-animee'?'image/*,video/mp4,video/webm':'image/png,image/jpeg,image/webp,image/gif,image/avif')+'"></label>'+
+      '<label class="mn-bg-upload btn">Importer un fichier '+(kind==='video'?'MP4 ou WebM':kind==='photo-animee'?'image pour mouvement doux':'image (JPG, PNG, WebP, GIF)')+
+        '<input type="file" data-mn-bg-file accept="'+(kind==='video'?'video/mp4,video/webm':'image/png,image/jpeg,image/webp,image/gif,image/avif')+'"></label>'+
       '<p class="muted small">Fichiers importés : disponibles hors ligne sur cet appareil. Les liens Web et les réglages se synchronisent avec ton compte ; les fichiers personnels restent locaux.</p></details>'+
-      '<p class="muted small mn-bg-foot">Bibliothèque · '+catalog().filter(x=>x.type==='photo-animee'&&x.media==='video').length+
-        ' vidéos réelles avec auteurs et licences · Lecture sans son · Seule la vidéo choisie est chargée.</p>'+
+      '<p class="muted small mn-bg-foot">'+
+        (kind==='video'?'Bibliothèque · '+catalog().filter(x=>x.type==='video').length+
+          ' vidéos réelles · Lecture sans son · Une vidéo chargée à la fois.':
+          kind==='photo-animee'?'Photos avec mouvement doux · pas de lecture vidéo.':
+          'Médias organisés par type et par moment de la journée.')+'</p>'+
       '<button type="button" class="btn primary block" data-mn-bg-act="done">Terminé</button></div>';
   }
   function draw(){
@@ -509,7 +511,8 @@
     const video=/^video\/(mp4|webm)$/.test(file.type);
     const image=/^image\/(jpeg|png|webp|gif|avif)$/.test(file.type);
     if(!video&&!image)throw new Error('Fichier non compatible : utilisez JPG, PNG, WebP, GIF, MP4 ou WebM.');
-    if(video&&modalType!=='photo-animee')throw new Error('Les vidéos sont à ajouter dans Photos animées.');
+    if(video&&modalType!=='video')throw new Error('Les vidéos MP4 et WebM vont dans la catégorie Vidéos.');
+    if(!video&&modalType==='video')throw new Error('Dans Vidéos, importez uniquement un fichier MP4 ou WebM.');
     if(file.size>(video?20:8)*1024*1024)throw new Error(video?'Vidéo trop lourde (20 Mo maximum).':'Image trop lourde (8 Mo maximum).');
     const item={id:makeId(),name:file.name.replace(/\.[^.]+$/,'').slice(0,60)||'Mon fond',type:modalType,
       media:video?'video':modalType==='photo-animee'?'image-motion':'image',src:'',local:true,period:modalPeriod};
@@ -572,7 +575,8 @@
     const media=video?'video':modalType==='photo-animee'?'image-motion':'image';
     try{
       if(!name)throw new Error('Donne un nom au fond.');
-      if(video&&modalType!=='photo-animee')throw new Error('Vidéo à ajouter dans Photos animées.');
+      if(video&&modalType!=='video')throw new Error('Ajoutez les vidéos dans la catégorie Vidéos.');
+      if(!video&&modalType==='video')throw new Error('Dans Vidéos, utilisez un lien direct MP4 ou WebM.');
       const url=safeUrl(raw,video?'video':'image');
       if(!url)throw new Error('Ajoute un lien direct HTTPS vers JPG, PNG, WebP, GIF, MP4 ou WebM.');
       addItem({id:makeId(),name,type:modalType,media,src:url,period:modalPeriod});
