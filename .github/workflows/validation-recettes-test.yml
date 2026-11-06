@@ -1,0 +1,53 @@
+name: Vérifications Recettes (branche test seulement)
+
+on:
+  push:
+    branches:
+      - test
+    paths:
+      - "index.html"
+      - "carnet-*.js"
+      - "carnet.css"
+      - "maison/tests/**"
+      - ".github/workflows/validation-recettes-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-recettes-test
+  cancel-in-progress: true
+
+jobs:
+  controles:
+    if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer uniquement la branche test
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configurer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Vérifier la syntaxe JavaScript
+        run: |
+          node --check carnet-base.js
+          node --check carnet-semaine.js
+          node --check carnet-partage.js
+          node --check carnet-repas.js
+          node --check carnet-courses.js
+          node --check carnet-cloud.js
+      - name: Tester la nouvelle interface Recettes sans données personnelles
+        run: node maison/tests/recettes-interface.test.mjs
+      - name: Non-régression des calculs de Recettes et Courses
+        run: node maison/tests/carnet.test.mjs
+      - name: Non-régression des dates et rappels
+        run: node maison/tests/cal.test.mjs
+      - name: Non-régression des Présences
+        run: node maison/tests/presences.test.js
+      - name: Non-régression des importations de recettes
+        run: node maison/tests/robot.test.mjs
