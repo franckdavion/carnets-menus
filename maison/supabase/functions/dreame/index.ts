@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 
-const FN_REV = "20261101c";
+const FN_REV = "20261106a";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -497,6 +497,42 @@ function roomsFromSegInf(segInf: unknown): DreameMapRoom[] {
   return out;
 }
 
+function collectRoomIds(value: unknown, into: number[]) {
+  if (typeof value === "number" && value > 0 && value < 100) into.push(value);
+  else if (typeof value === "string" && /^\d+$/.test(value.trim())) into.push(Number(value));
+  else if (typeof value === "string" && /^\d+(?:\s*,\s*\d+)+$/.test(value.trim())) {
+    for (const p of value.split(",")) collectRoomIds(Number(p.trim()), into);
+  } else if (Array.isArray(value)) {
+    if (value.length && typeof value[0] === "number") collectRoomIds(value[0], into);
+    else value.forEach(v => collectRoomIds(v, into));
+  }
+}
+
+function currentRoomIdsFromValue(value: unknown): number[] {
+  const ids: number[] = [];
+  const json = tryParseJson(value);
+  if (!json) {
+    collectRoomIds(value, ids);
+    return [...new Set(ids)];
+  }
+  for (const key of ["cur_seg", "current_seg", "curr_seg", "cur_room", "current_room", "room_id", "seg_id", "curSeg"]) {
+    collectRoomIds(json[key], ids);
+  }
+  for (const key of ["cur_segids", "segment_ids", "room_ids", "areas", "seg_ids"]) {
+    collectRoomIds(json[key], ids);
+  }
+  for (const nest of ["map_extend", "data", "value", "result"]) {
+    const nested = tryParseJson(json[nest]);
+    if (nested) ids.push(...currentRoomIdsFromValue(nested));
+  }
+  return [...new Set(ids.filter(n => n > 0 && n < 100))];
+}
+
+function namesForRoomIds(ids: number[], rooms: DreameMapRoom[]): string[] {
+  const byId = new Map(rooms.map(r => [r.id, r.name]));
+  return ids.map(id => byId.get(id) || `Pièce ${id}`);
+}
+
 function parseMapRoomsFromPropValue(value: unknown): DreameMapRoom[] {
   const json = tryParseJson(value);
   if (json?.seg_inf) return roomsFromSegInf(json.seg_inf);
@@ -554,7 +590,9 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
     SUCTION_LEVEL,
     WATER_VOLUME,
     CLEANING_MODE,
-    MOP_PADS_STATE
+    MOP_PADS_STATE,
+    CLEANING_PROPERTIES,
+    MAP_EXTEND_DATA
   ]);
   let status: number | null = null;
   let battery: number | null = null;
@@ -562,6 +600,7 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
   let water: number | null = null;
   let cleaning_mode: number | null = null;
   let cleaning_mode_raw: number | null = null;
+  const current_room_ids: number[] = [];
   for (const row of rows) {
     if (row.siid === 2 && row.piid === 1 && typeof row.value === "number") status = row.value;
     if (row.siid === 3 && row.piid === 1 && typeof row.value === "number") battery = row.value;
@@ -572,8 +611,14 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
       cleaning_mode = decoded.mode;
       cleaning_mode_raw = decoded.raw;
     }
+    if ((row.siid === 4 && row.piid === 10) || (row.siid === 6 && row.piid === 4)) {
+      current_room_ids.push(...currentRoomIdsFromValue(row.value));
+    }
   }
-  return { status, battery, suction, water, cleaning_mode, cleaning_mode_raw };
+  return {
+    status, battery, suction, water, cleaning_mode, cleaning_mode_raw,
+    current_room_ids: [...new Set(current_room_ids)]
+  };
 }
 
 async function dreameFetchMapRooms(cred: DreameCred, did: string): Promise<{ rooms: DreameMapRoom[]; hint: string | null; live_ok: boolean }> {
@@ -718,6 +763,7 @@ async function readState(cred: DreameCred) {
   let water: number | null = null;
   let cleaning_mode: number | null = null;
   let live_ok = false;
+  let current_room_ids: number[] = [];
   try {
     const live = await dreameReadSettings(cred, did);
     if (live.status != null) status = live.status;
@@ -725,6 +771,7 @@ async function readState(cred: DreameCred) {
     suction = live.suction;
     water = live.water;
     cleaning_mode = live.cleaning_mode;
+    current_room_ids = live.current_room_ids || [];
     live_ok = live.status != null || live.battery != null || live.cleaning_mode != null || live.suction != null || live.water != null;
   } catch (e) {
     live_ok = false;
@@ -736,7 +783,10 @@ async function readState(cred: DreameCred) {
   const charge = battery != null ? `${battery} %` : null;
   const reachable = live_ok || dev.online;
   const stateBit = statusLabel(status, reachable);
-  const label = charge ? `${stateBit} · ${charge}` : stateBit;
+  const mapRooms = Array.isArray(cred.map_rooms) ? cred.map_rooms as DreameMapRoom[] : [];
+  const current_rooms = namesForRoomIds(current_room_ids, mapRooms);
+  const where = current_rooms.length ? ` · ${current_rooms.join(", ")}` : "";
+  const label = (charge ? `${stateBit} · ${charge}` : stateBit) + where;
   return {
     connected: true,
     device_id: did,
@@ -748,6 +798,8 @@ async function readState(cred: DreameCred) {
     battery,
     status,
     label,
+    current_room_ids,
+    current_rooms,
     ...prefs
   };
 }

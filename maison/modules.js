@@ -906,11 +906,23 @@ function domDreameTransportBtns() {
       <button type="button" class="${lit("dock")}" data-dom-dreame-cmd="dock">🏠 Retour base</button>
     </div>`;
 }
+function domDreameWhereLine() {
+  const st = domDreameState || {};
+  const named = Array.isArray(st.current_rooms) ? st.current_rooms.filter(Boolean) : [];
+  if (named.length) return named.join(", ");
+  const ids = Array.isArray(st.current_room_ids) ? st.current_room_ids.map(Number) : [];
+  const byId = new Map((domDreameRooms || []).map(r => [Number(r.id), r.name]));
+  const fromIds = ids.map(id => byId.get(id)).filter(Boolean);
+  if (fromIds.length) return fromIds.join(", ");
+  if ([1, 7, 12].includes(Number(st.status)) && domDreamePickedNames().length) return "Demandé : " + domDreamePickedNames().join(", ");
+  return "";
+}
 function domDreameStatusHtml() {
   const st = domDreameState || {};
   const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
   const mode = domDreamePrefNum("cleaning_mode", 2);
-  return `<strong>${esc(line)}</strong>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}</span>` : ""}`;
+  const where = domDreameWhereLine();
+  return `<strong>${esc(line)}</strong>${where ? `<br><span class="muted small">Pièce : ${esc(where)}</span>` : ""}${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}</span>` : ""}`;
 }
 function domDreamePrefsHtml() {
   const mode = domDreamePrefNum("cleaning_mode", 2);
@@ -1890,7 +1902,8 @@ function domDreameEqCard() {
   }
   const st = domDreameState || {};
   // Afficher le dernier état connu pendant les actualisations en arrière-plan.
-  const line = st.label || "État en attente…";
+  const where = typeof domDreameWhereLine === "function" ? domDreameWhereLine() : "";
+  const line = (st.label || "État en attente…") + (where ? " · " + where : "");
   const hasDev = !!(domDreameStatus.device_id || (S.hh && S.hh.dreame_device_id));
   const busyStart = domDreameBusy === "start";
   const busyDock = domDreameBusy === "dock";

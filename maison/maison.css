@@ -2526,11 +2526,18 @@ dialog.sheet .dom-tv-panel .dom-tv-step{display:inline-flex!important;visibility
 @media(max-width:390px){.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="suction"]) .dom-dreame-choice{font-size:11px;padding:7px 2px}.dom-dreame-panel .dom-dreame-hero{gap:8px}}
 
 /* Pictogrammes des choix Dreame : uniquement les boutons de réglage. */
-.dom-dreame-setting .dom-dreame-choice{display:inline-flex;align-items:center;justify-content:center;gap:6px}
-.dom-dreame-setting .dom-dreame-symbols{display:inline-flex;align-items:center;justify-content:center;flex:none;gap:1px}
-.dom-dreame-setting .dom-dreame-icon{width:23px;height:23px;flex:none}
-.dom-dreame-setting [data-dom-dreame-pref="water"] .dom-dreame-icon{width:17px;height:22px}
-@media(max-width:390px){.dom-dreame-setting .dom-dreame-choice{gap:3px}.dom-dreame-setting .dom-dreame-icon{width:18px;height:18px}.dom-dreame-setting [data-dom-dreame-pref="water"] .dom-dreame-icon{width:13px;height:18px}}
+.dom-dreame-setting .dom-dreame-choice{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;min-width:0;box-sizing:border-box;text-align:center}
+.dom-dreame-setting .dom-dreame-choice>span:last-child{min-width:0;max-width:100%;line-height:1.2}
+.dom-dreame-setting .dom-dreame-symbols{display:inline-flex;align-items:center;justify-content:center;flex:none;gap:1px;max-width:100%}
+.dom-dreame-setting .dom-dreame-icon{width:22px;height:22px;flex:none}
+.dom-dreame-setting [data-dom-dreame-pref="water"] .dom-dreame-icon{width:14px;height:18px}
+.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="suction"]) .dom-dreame-choices{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(min-width:480px){.dom-dreame-panel .dom-dreame-setting:has([data-dom-dreame-pref="suction"]) .dom-dreame-choices{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:430px){
+  .dom-dreame-panel .dom-dreame-hero{flex-direction:column;align-items:flex-start}
+  .dom-dreame-panel .dom-dreame-hero img{width:min(168px,58vw)}
+  .dom-dreame-panel .dom-dreame-setting .dom-dreame-choice{padding:8px 4px;font-size:12px}
+}
 
 /* Dreame : onglets et grille de pièces, limités à sa fiche. */
 .dom-dreame-panel .dom-dreame-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 14px}
