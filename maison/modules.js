@@ -140,8 +140,11 @@ const SHELLY_ENDPOINT = SB_URL + "/functions/v1/shelly-cloud";
 const MELCLOUD_ENDPOINT = SB_URL + "/functions/v1/melcloud";
 const DREAME_ENDPOINT = SB_URL + "/functions/v1/dreame";
 const SMARTTHINGS_ENDPOINT = SB_URL + "/functions/v1/smartthings";
+const HOMEASSISTANT_ENDPOINT = SB_URL + "/functions/v1/homeassistant";
 // Lecture alternative isolée : version de test uniquement, sans modifier la commande officielle.
 const SMARTTHINGS_TV_TEST_ENDPOINT = SB_URL + "/functions/v1/smartthings-tv-test";
+let domHaStatus = { connected: false, device_id: null, device_name: null };
+let domHaStatusAt = 0, domHaChain = Promise.resolve();
 let domZone = "", domTab = "board", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domStateInflight = null, domFormLoading = false;
 let domMelStatus = { connected: false, device_id: null, device_name: null };
 let domMelState = null, domMelStateAt = 0, domMelStateInflight = null, domMelDevices = [], domMelBusy = "";
@@ -420,6 +423,43 @@ async function domPoeleToggle() {
   }
 }
 
+function domHaLinked() { return !!domHaStatus.connected; }
+function tvReady() { return domHaLinked() || domStLinked(); }
+function tvUsesHa() { return domHaLinked(); }
+async function haServer(action, body) {
+  const run = async () => {
+    if (!sb) await loadSb();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error("Connexion Maisonnée requise");
+    const res = await fetch(HOMEASSISTANT_ENDPOINT + "/" + action, {
+      method: body ? "POST" : "GET",
+      headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(String(out.error || "Erreur Home Assistant"));
+    return out;
+  };
+  const p = domHaChain.then(run, run);
+  domHaChain = p.catch(() => {});
+  return p;
+}
+async function domHaRefreshStatus() {
+  if (mode !== "cloud" || !S.hh) return;
+  if (Date.now() - domHaStatusAt < 60000 && domHaStatus.connected) return;
+  try {
+    const r = await haServer("status");
+    domHaStatus = { connected: !!r.connected, device_id: r.device_id ?? null, device_name: r.device_name || null };
+    if (r.device_name) domStStatus.device_name = r.device_name;
+    domHaStatusAt = Date.now();
+  } catch (_) {}
+}
+function tvCommand(body) {
+  return tvUsesHa() ? haServer("command", body) : smartthingsServer("command", body);
+}
+function tvReadState() {
+  return tvUsesHa() ? haServer("state") : domStTestReadState();
+}
 function domStLinked() { return !!domStStatus.connected; }
 function domStOauthStart() {
   toast("Ouverture du compte Samsung…");
@@ -445,8 +485,9 @@ function domStOauthStart() {
   else toast("Connexion Samsung impossible. Vérifiez l’app SmartThings (Client ID / Secret).");
 })();
 function domStSummary() {
-  if (!domStLinked()) return "Non connecté";
-  if (!domStStatus.device_id && !(S.hh && S.hh.smartthings_device_id)) return "Choisissez un appareil";
+  if (!tvReady()) return "Non connecté";
+  if (tvUsesHa() && !domHaStatus.device_id) return "Choisissez un appareil";
+  if (!tvUsesHa() && !domStStatus.device_id && !(S.hh && S.hh.smartthings_device_id)) return "Choisissez un appareil";
   if (!domStState) return "Chargement…";
   return domStState.label || "En ligne";
 }
@@ -515,11 +556,11 @@ async function domStTestReadState() {
   }
 }
 async function domStRefreshState(force) {
-  if (!domStLinked() || mode !== "cloud") return false;
+  if (!tvReady() || mode !== "cloud") return false;
   const now = Date.now();
   if (!force && now - domStStateAt < DOM_ST_STATE_MIN_MS) return false;
   if (domStStateInflight) return domStStateInflight;
-  domStStateInflight = domStTestReadState().then(r => {
+  domStStateInflight = tvReadState().then(r => {
     domStState = r;
     domStStateAt = Date.now();
     if (r.device_name) domStStatus.device_name = r.device_name;
@@ -537,8 +578,8 @@ async function domStRefreshState(force) {
 }
 function domStPollOnView() {
   if (view !== "domotique") return;
-  const force = domStLinked() && !domStStateAt;
-  domStRefreshStatus().then(() => domStRefreshState(force)).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
+  const force = tvReady() && !domStStateAt;
+  Promise.all([domHaRefreshStatus(), domStRefreshStatus()]).then(() => domStRefreshState(force)).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
 }
 async function domRunStCommand(fn) {
   const now = Date.now();
@@ -1439,6 +1480,7 @@ function domSettingsLegacy(zone) {
     domMelRefreshStatus().catch(() => {});
     domDreameRefreshStatus().catch(() => {});
     domStRefreshStatus().catch(() => {});
+    domHaRefreshStatus().catch(() => {});
   }
 }
 let mzDomRoomMoving=false;
@@ -1554,7 +1596,7 @@ function mzDsetServices(){
     ["shelly","⚡","Shelly Cloud","Volets et éclairages",domConnected()],
     ["mel","♨️","MELCloud","Chauffage Mitsubishi",domMelLinked()],
     ["dreame","🤖","Dreame Home","Aspirateur D20 Ultra",domDreameLinked()],
-    ["tv","📺","SmartThings","Télévision Samsung",domStLinked()]
+    ["tv","📺","Télévision","Home Assistant · Samsung",tvReady()]
   ];
   return `<div class="mz-dset-content">
     <div class="mz-dset-lead"><div><h3>Connexions</h3><p>Gérer les services de la maison</p></div></div>
@@ -1614,12 +1656,15 @@ function mzDomServiceSettingsSheet(key){
       <button class="btn ghost" type="button" data-dom-dreame-devices>Choisir un aspirateur ›</button>`
       :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-dreame-connect>Relier Dreame Home</button>`;
   }else if(key==="tv"){
-    name="SmartThings · Samsung TV";
-    body=domStLinked()?`<p class="muted">${domStStatus.auth==="oauth"?"Compte Samsung relié":"Jeton de test"}${domStStatus.device_name?" · "+esc(domStStatus.device_name):""}. ${domStStatus.auth==="oauth"?"Les accès se renouvellent tout seuls.":"Les jetons personnels expirent en 24 h."}</p>
-      <button class="btn primary" type="button" data-dom-st-oauth>${domStStatus.auth==="oauth"?"Reconnecter Samsung":"Relier le compte Samsung"}</button>
-      <button class="btn" type="button" data-dom-st-devices>Choisir un téléviseur ›</button>
-      <button class="btn ghost" type="button" data-dom-st-connect>Jeton de test 24 h</button>`
-      :`<p class="muted">Connectez le compte Samsung de la maison. Un jeton personnel n’est plus nécessaire au quotidien.</p><button class="btn primary" type="button" data-dom-st-oauth>Relier le compte Samsung</button><button class="btn ghost" type="button" data-dom-st-connect>Jeton de test 24 h</button>`;
+    name="Télévision Samsung";
+    body=domHaLinked()?`<p class="muted">Home Assistant relié${domHaStatus.device_name?" · "+esc(domHaStatus.device_name):""}. Commandes via votre box, sans API Samsung payante.</p>
+      <button class="btn" type="button" data-dom-ha-devices>Choisir le téléviseur ›</button>
+      <button class="btn ghost danger" type="button" data-dom-ha-disconnect>Délier Home Assistant</button>`
+      :`<p class="muted">Reliez Home Assistant (URL Nabu Casa + jeton longue durée). C’est la voie gratuite.</p>
+      <button class="btn primary" type="button" data-dom-ha-connect>Relier Home Assistant</button>
+      <p class="muted small">SmartThings cloud reste possible, mais Samsung le facture ou impose un jeton 24 h.</p>
+      <button class="btn ghost" type="button" data-dom-st-oauth>Compte Samsung (payant)</button>
+      <button class="btn ghost" type="button" data-dom-st-connect>Jeton de test 24 h</button>`;
   }else return;
   openSheet(name,`<div class="mz-dom-service-settings">${mzDomSettingsBack()}${body}</div>`);
 }
@@ -1629,6 +1674,7 @@ function mzDomAdvancedSettingsSheet(){
     domConnected()?'<button type="button" class="btn ghost danger" data-dom-disconnect>Délier Shelly Cloud</button>':"",
     domMelLinked()?'<button type="button" class="btn ghost danger" data-dom-mel-disconnect>Délier MELCloud</button>':"",
     domDreameLinked()?'<button type="button" class="btn ghost danger" data-dom-dreame-disconnect>Délier Dreame Home</button>':"",
+    domHaLinked()?'<button type="button" class="btn ghost danger" data-dom-ha-disconnect>Délier Home Assistant</button>':"",
     domStLinked()?'<button type="button" class="btn ghost danger" data-dom-st-disconnect>Délier SmartThings</button>':""
   ].join("");
   openSheet("Réglages avancés",`<div class="mz-dom-settings-hub">${mzDomSettingsBack()}
@@ -1711,7 +1757,7 @@ function domRoomOf(x) { return domRoomIdOf(x); }
 // Intégrations (TV, chauffage, aspirateur) rattachées aux pièces via assign
 const DOM_INTEGRATIONS = [
   { key: "_st", t: "TV Samsung", ico: "📺", defaultRoom: "salon",
-    linked: () => domStLinked(), summary: domStSummary, open: "data-dom-st-open", card: () => domStEqCard() },
+    linked: () => tvReady(), summary: domStSummary, open: "data-dom-st-open", card: () => domStEqCard() },
   { key: "_mel", t: "Chauffage", ico: "♨️", defaultRoom: null,
     linked: () => domMelLinked(), summary: domMelSummary, open: "data-dom-mel-open", card: () => domMelEqCard() },
   { key: "_dreame", t: "Aspirateur", ico: "🤖", defaultRoom: null,
@@ -2026,7 +2072,7 @@ function domDreameDevicePickerSheet() {
   }).catch(err => toast(err.message));
 }
 function domStEqCard() {
-  if (!domStLinked()) {
+  if (!tvReady()) {
     return `<article class="dom-eq-card dom-eq-tv is-pending"><button type="button" class="dom-eq-open" data-dom-st-open>${domEqCardTop("📺", "Samsung TV")}<small>Non connecté</small></button></article>`;
   }
   const st = domStState || {};
@@ -2082,7 +2128,7 @@ function domTvPanelHtml() {
       <div class="mz-tv-side"><strong>Chaîne</strong>${btn("channel_up","+","mz-tv-lg")}${btn("channel_down","−","mz-tv-lg")}${preview("Guide")}</div>
     </div>
     <div class="mz-tv-bottomkeys">${preview("⏮")}${preview("▶❚❚")}${preview("⏭")}</div>
-    <p class="mz-tv-note">Les commandes lumineuses Volume, Chaîne et Marche/arrêt utilisent SmartThings. Le pavé, la lecture et Accueil seront activés après validation de leur connexion.</p>
+    <p class="mz-tv-note">Volume, chaîne et marche/arrêt passent par ${tvUsesHa() ? "Home Assistant" : "SmartThings"}.</p>
     <div class="mz-tv-section-head"><strong>Applications favorites</strong><button type="button" data-dom-tv-tab="apps">Tout voir ›</button></div>
     <div class="mz-tv-apps mz-tv-favorites">${appNames.slice(0,5).map((app,i)=>`<button type="button" class="mz-tv-app" disabled title="Raccourci à activer"><span class="mz-tv-app-mark mz-tv-app-${i}">${esc(app==="Netflix"?"N":app==="YouTube"?"▶":app==="Prime Video"?"prime":app==="Disney+"?"D+":"C+")}</span><span>${esc(app)}</span></button>`).join("")}</div>`;
   } else if (domTvTab === "apps") {
@@ -2107,15 +2153,15 @@ function domTvPanelHtml() {
   return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":st.label || "État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
     <nav class="mz-tv-tabs" aria-label="Fonctions téléviseur">${tabs.map(([id,ico,label])=>`<button type="button" data-dom-tv-tab="${id}" class="${domTvTab===id?"is-active":""}" aria-current="${domTvTab===id?"page":"false"}"><b aria-hidden="true">${ico}</b><span>${label}</span></button>`).join("")}</nav>
     <p class="dom-tv-status mz-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
-    ${st.access_issue ? `<div class="mz-tv-info"><span>${esc(domStAccessHelp(st))}</span>${st.access_issue === "health" ? "" : '<button type="button" class="btn primary" data-dom-st-oauth>Reconnecter Samsung</button>'}</div>` : ""}
+    ${st.access_issue && !tvUsesHa() ? `<div class="mz-tv-info"><span>${esc(domStAccessHelp(st))}</span>${st.access_issue === "health" ? "" : '<button type="button" class="btn primary" data-dom-ha-connect>Relier Home Assistant</button>'}</div>` : ""}
     ${!st.access_issue && st.power == null && st.label && st.label !== "Chargement…" ? '<div class="mz-tv-info"><span>' + (st.health === "OFFLINE" ? "Samsung signale la télévision hors ligne. Elle est peut-être éteinte, mais une coupure réseau donnerait le même résultat." : "SmartThings ne confirme pas l’état d’alimentation. Vous pouvez réessayer la lecture.") + '</span><button type="button" class="btn ghost" data-dom-st-retry>↻ Réessayer de lire l’état</button></div>' : ""}
     <div class="dom-tv-controls mz-tv-content" data-dom-tv-controls>${page}</div>
     <button type="button" class="btn ghost mz-tv-close" data-act="closeSheet">Fermer</button>`;
 }
 
 function domTvSheet(fromRefresh) {
-  if (!domStLinked()) {
-    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">SmartThings non relié</p><p>Connectez le compte Samsung de la maison pour piloter la TV, sans jeton à recoller toutes les 24 h.</p><button type="button" class="btn primary" data-dom-st-oauth>Relier le compte Samsung</button><button type="button" class="btn ghost" data-dom-st-connect>Jeton de test 24 h</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
+  if (!tvReady()) {
+    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">Télévision non reliée</p><p>Le chemin gratuit : Home Assistant (la TV est déjà dans HA). Il faut l’URL Nabu Casa et un jeton longue durée.</p><button type="button" class="btn primary" data-dom-ha-connect>Relier Home Assistant</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
     return;
   }
   if (fromRefresh && document.querySelector(".dom-tv-panel")) { domTvFillPanel(); return; }
@@ -2153,13 +2199,37 @@ function installMzTvTestHandlers() {
     if (!s || !document.querySelector(".dom-tv-panel.mz-tv") || s.disabled) return;
     e.preventDefault();
     const value = s.dataset.domTvSource;
-    domRunStCommand(() => smartthingsServer("command",{action:"set_input",value}))
+    domRunStCommand(() => tvCommand({action:"set_input",value}))
       .then(r => { if (!r) return; domStState=r; domStStateAt=Date.now(); domTvFillPanel(); toast("Source demandée : "+value); })
       .catch(err=>toast(err.message));
   });
 }
 installMzTvTestHandlers();
 let domStReturnAfterRenewal = "";
+function domHaConnectSheet() {
+  openSheet("Relier Home Assistant", `<form id="dom-ha-connect" class="dom-form">
+    <p class="muted">Dans Home Assistant : profil (en bas à gauche) → <strong>Jetons d’accès longue durée</strong> → créer un jeton. L’URL doit être publique, en général <code>https://….ui.nabu.casa</code> (Home Assistant Cloud). Une adresse 192.168 ne marchera pas depuis internet.</p>
+    <label>URL Home Assistant<input name="url" required maxlength="200" placeholder="https://xxxxxxxx.ui.nabu.casa" autocomplete="off"></label>
+    <label>Jeton longue durée<textarea name="token" required minlength="20" maxlength="800" rows="3" autocomplete="off"></textarea></label>
+    <button class="btn primary" type="submit">Tester et enregistrer</button>
+  </form>`);
+}
+function domHaDevicePickerSheet() {
+  openSheet("TV Home Assistant", `<p class="muted">Chargement…</p>`);
+  haServer("devices").then(r => {
+    const devices = r.devices || [];
+    if (!devices.length) {
+      openSheet("TV Home Assistant", `<p class="muted">Aucun media_player trouvé. Ajoutez l’intégration Samsung TV dans Home Assistant, puis réessayez.</p>`);
+      return;
+    }
+    const cur = domHaStatus.device_id;
+    const rows = devices.map(d => {
+      const mark = cur === d.id ? "✓" : "Choisir ›";
+      return `<button type="button" class="btn dom-settings-row" data-dom-ha-pick="${esc(d.id)}"><span>${esc(d.name)}${d.tv ? " <small class=\"muted\">· TV</small>" : ""}</span><span>${mark}</span></button>`;
+    }).join("");
+    openSheet("TV Home Assistant", `<div class="dom-settings"><p class="muted">Choisissez le téléviseur exposé par Home Assistant.</p><div class="dom-settings-list">${rows}</div></div>`);
+  }).catch(err => toast(err.message));
+}
 function domStConnectSheet() {
   // Garder le contexte exact de navigation lors du renouvellement.
   domStReturnAfterRenewal = document.querySelector(".dom-tv-panel.mz-tv") ? "tv"
@@ -2261,7 +2331,7 @@ function mzDomAccordions(){
       <div class="mz-dom-items ${zone==="exterieur"?"mz-dom-items-ext":""}">
         ${rows.length?rows.map(mzDomCompactDevice).join(""):'<p class="muted small">Aucun appareil Shelly associé.</p>'}
       </div>
-      ${zone==="rdc"&&domStLinked()?`<button class="mz-dom-linked" type="button" data-dom-st-open><span aria-hidden="true">📺</span><span><strong>TV Samsung</strong><small>${esc(domStSummary())}</small></span><span aria-hidden="true">›</span></button>`:""}
+      ${zone==="rdc"&&tvReady()?`<button class="mz-dom-linked" type="button" data-dom-st-open><span aria-hidden="true">📺</span><span><strong>TV Samsung</strong><small>${esc(domStSummary())}</small></span><span aria-hidden="true">›</span></button>`:""}
     </div>`:"";
     return `<section class="mz-dom-zone${open?" is-open":""}">
       <button type="button" class="mz-dom-zone-toggle" data-mz-dom-toggle="${zone}"
@@ -2314,7 +2384,7 @@ function domBoard() {
   const pending = mode === "demo" ? "Mode démo — ouvrez le vrai foyer" : "Non connecté";
   eq.push(domMelLinked() ? domMelEqCard() : domPlaceholderCard("mitsu", "Chauffage Mitsubishi", "♨️", pending));
   eq.push(domDreameLinked() ? domDreameEqCard() : domPlaceholderCard("dreame", "Dreame D20 Ultra", "🤖", pending));
-  eq.push(domStLinked() ? domStEqCard() : domPlaceholderCard("tv", "Samsung TV", "📺", pending));
+  eq.push(tvReady() ? domStEqCard() : domPlaceholderCard("tv", "Samsung TV", "📺", pending));
   return `<article class="dom-hero">
     <button type="button" class="dom-hero-media" data-dom-tab="house" aria-label="Ouvrir la vue maison">
       <span class="dom-hero-photo" aria-hidden="true"></span>
@@ -2384,7 +2454,7 @@ function domPlaceholderSheet(kind) {
   const copy = {
     mitsu: ["Chauffage Mitsubishi", "<p>MELCloud n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-mel-connect>Relier MELCloud</button>"],
     dreame: ["Dreame D20 Ultra", "<p>Dreame Home n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-dreame-connect>Relier Dreame Home</button>"],
-    tv: ["Samsung TV", "<p>SmartThings n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-st-oauth>Relier le compte Samsung</button>"]
+    tv: ["Samsung TV", "<p>Reliez Home Assistant pour piloter la TV sans API Samsung payante.</p><button type=\"button\" class=\"btn primary\" data-dom-ha-connect>Relier Home Assistant</button>"]
   }[kind] || ["Équipement", "<p>Intégration à réaliser.</p>"];
   openSheet(copy[0], `<div class="dom-pending"><p class="muted">Non connecté</p>${copy[1]}<button type="button" class="btn" data-act="closeSheet">Fermer</button></div>`);
 }
@@ -2914,6 +2984,28 @@ document.addEventListener("click", e => {
     return;
   }
   if (e.target.closest("[data-dom-st-open]")) { domTvSheet(); return; }
+  if (e.target.closest("[data-dom-ha-connect]")) { domHaConnectSheet(); return; }
+  if (e.target.closest("[data-dom-ha-devices]")) { domHaDevicePickerSheet(); return; }
+  if (e.target.closest("[data-dom-ha-disconnect]")) {
+    if (!confirm("Délier Home Assistant de ce foyer ?")) return;
+    haServer("disconnect", {}).then(() => {
+      domHaStatus = { connected: false, device_id: null, device_name: null };
+      if (!domStLinked()) { domStState = null; domStStateAt = 0; }
+      closeSheet(); render(); toast("Home Assistant délié.");
+    }).catch(err => toast(err.message));
+    return;
+  }
+  const haPick = e.target.closest("[data-dom-ha-pick]");
+  if (haPick) {
+    haServer("pick_device", { device_id: haPick.dataset.domHaPick }).then(r => {
+      domHaStatus.device_id = r.device_id;
+      domHaStatus.device_name = r.device_name;
+      domStStatus.device_name = r.device_name;
+      closeSheet(); render(); toast("Téléviseur Home Assistant : " + (r.device_name || r.device_id));
+      domStRefreshState(true).then(() => render()).catch(() => {});
+    }).catch(err => toast(err.message));
+    return;
+  }
   if (e.target.closest("[data-dom-st-oauth]")) { domStOauthStart(); return; }
   if (e.target.closest("[data-dom-st-connect]")) { domStConnectSheet(); return; }
   if (e.target.closest("[data-dom-st-devices]")) { domStDevicePickerSheet(); return; }
@@ -2946,7 +3038,7 @@ document.addEventListener("click", e => {
     if (!action || stCmd.disabled) return;
     domStBusy = action;
     if (view !== "home") render();
-    domRunStCommand(() => smartthingsServer("command", { action })).then(r => {
+    domRunStCommand(() => tvCommand({ action })).then(r => {
       if (!r) return;
       domStState = r;
       domStStateAt = Date.now();
@@ -3149,6 +3241,22 @@ document.addEventListener("submit", e => {
       toast(r.device_name ? "Dreame relié · " + r.device_name : "Dreame Home relié.");
       domDreameRefreshState(true).then(changed => { if (changed) domSoftRender(); }).catch(() => {});
       if ((domDreameDevices.length || 0) > 1) setTimeout(domDreameDevicePickerSheet, 400);
+    }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
+    return;
+  }
+  if (e.target.id === "dom-ha-connect") {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const btn = e.target.querySelector("button[type=submit]");
+    if (btn) btn.disabled = true;
+    toast("Connexion à Home Assistant…");
+    haServer("connect", { url: fd.get("url"), token: fd.get("token") }).then(r => {
+      domHaStatus = { connected: true, device_id: r.device_id ?? null, device_name: r.device_name || null };
+      if (r.device_name) domStStatus.device_name = r.device_name;
+      closeSheet(); render();
+      toast(r.device_name ? "Home Assistant relié · " + r.device_name : "Home Assistant relié.");
+      domStRefreshState(true).then(() => render()).catch(() => {});
+      if ((r.devices || []).length > 1) setTimeout(domHaDevicePickerSheet, 400);
     }).catch(err => toast(err.message)).finally(() => { if (btn) btn.disabled = false; });
     return;
   }
