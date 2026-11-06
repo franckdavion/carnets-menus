@@ -53,3 +53,33 @@ jobs:
         run: node maison/tests/robot.test.mjs
       - name: Vérifier le pont entre Carnet de menus et Maisonnée
         run: node maison/tests/pont.test.mjs
+
+  navigateur:
+    if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Récupérer la branche test sans accès en écriture
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configurer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installer Chromium pour tests isolés
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Simuler l'utilisation sur iPhone et ordinateur
+        run: node maison/tests/recettes-browser.test.mjs
+      - name: Conserver les captures d'écran (aucune donnée réelle)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recettes-apercus-test
+          path: test-results/*.png
+          if-no-files-found: ignore
+          retention-days: 7
