@@ -171,12 +171,18 @@
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
   const defaultId=(type,period)=>type==='video'?recommendedVideo(period):
-    (({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period);
+    type==='photo-animee'?recommendedMotion(period):
+    (({photo:'p-',illustration:'a-'}[type]||'p-')+period);
   // Courtes vidéos de référence pour le mode automatique : une par période.
   const AUTO_VIDEO={matin:'wm-aube-plage',aprem:'wm-midi-nuages',soir:'wm-soir-dore',nuit:'wm-nuit-filante'};
   function recommendedVideo(period,weather){
     const exact=LANDSCAPE_VIDEOS.find(v=>v.period===period&&v.weather===weather);
-    return exact?.id||AUTO_VIDEO[period]||'m-'+period;
+    return exact?.id||AUTO_VIDEO[period]||'v-flower';
+  }
+  const AUTO_MOTION={matin:'im-aube-soleil',aprem:'im-aprem-nuages',soir:'im-soir-soleil',nuit:'im-nuit-etoiles'};
+  function recommendedMotion(period,weather){
+    const exact=LANDSCAPE_MOTION.find(v=>v.period===period&&v.weather===weather);
+    return exact?.id||AUTO_MOTION[period]||'m-'+period;
   }
   const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||'matin';
   function conditionNow(){
@@ -193,7 +199,8 @@
       const entry=prefs.weatherChoices[cat+':'+period];
       const chosen=find(entry);
       wanted=chosen?.type===prefs.type?chosen.id:prefs.type==='video'?
-        recommendedVideo(period,cat):defaultId(prefs.type,period);
+        recommendedVideo(period,cat):prefs.type==='photo-animee'?
+        recommendedMotion(period,cat):defaultId(prefs.type,period);
     }else if(prefs.mode==='fixed'){
       const fixed=find(prefs.fixed);
       wanted=fixed?.type===prefs.type?fixed.id:defaultId(prefs.type,period);
