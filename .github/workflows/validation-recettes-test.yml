@@ -57,6 +57,8 @@ jobs:
         run: node maison/tests/trajets-selection.test.mjs
       - name: Tester le moteur Trajets (exclusions, doublons, lieux)
         run: node maison/tests/trajets-core.test.mjs
+      - name: Vérifier les contrats de l'Agenda et des tâches
+        run: node maison/tests/agenda-contrats.test.mjs
 
   navigateur:
     if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
