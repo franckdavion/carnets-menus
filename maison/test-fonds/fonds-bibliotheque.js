@@ -152,6 +152,13 @@
       if(ids.has(x.weatherChoices?.[key]))p.weatherChoices[key]=x.weatherChoices[key];
     }
     if(!ids.has(p.fixed))p.fixed='p-matin';
+    // Ancien « fond fixe » vidéo : réaffecter la vidéo à son horaire au lieu
+    // de la diffuser pendant toute la journée. Les autres plages restent auto.
+    if(p.type==='video'&&p.mode==='fixed'){
+      const fixedItem=items.find(item=>item.id===p.fixed&&item.type==='video');
+      if(fixedItem)p.chosen[fixedItem.period]=fixedItem.id;
+      p.mode='custom';
+    }
     return p;
   };
   const localRead=()=>{try{return JSON.parse(localStorage.getItem(storageKey())||'null')}catch(_){return null}};
@@ -184,7 +191,11 @@
     const exact=LANDSCAPE_MOTION.find(v=>v.period===period&&v.weather===weather);
     return exact?.id||AUTO_MOTION[period]||'m-'+period;
   }
-  const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||'matin';
+  const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||window.mnJour?.at?.(new Date())?.id||'matin';
+  // Verrouillage : une vidéo ne peut être diffusée que dans sa propre plage
+  // horaire (matin 5-11, après-midi 11-18, soir 18-22, nuit 22-5).
+  const isAllowedAt=(item,period)=>!!item&&(item.type!=='video'||item.period===period);
+  const validChoice=(item,period)=>isAllowedAt(item,period)&&item.type===prefs.type;
   function conditionNow(){
     const home=typeof window.maisonneeHomeWeather==='function'?window.maisonneeHomeWeather():{};
     const usingGPS=prefs.weatherSource==='gps'&&gps.code!==null&&Date.now()-gps.at<35*60000;
@@ -198,17 +209,21 @@
       const cat=isCondition(condition)?condition:conditionNow().category;
       const entry=prefs.weatherChoices[cat+':'+period];
       const chosen=find(entry);
-      wanted=chosen?.type===prefs.type?chosen.id:prefs.type==='video'?
+      wanted=validChoice(chosen,period)?chosen.id:prefs.type==='video'?
         recommendedVideo(period,cat):prefs.type==='photo-animee'?
         recommendedMotion(period,cat):defaultId(prefs.type,period);
     }else if(prefs.mode==='fixed'){
       const fixed=find(prefs.fixed);
-      wanted=fixed?.type===prefs.type?fixed.id:defaultId(prefs.type,period);
+      wanted=validChoice(fixed,period)?fixed.id:defaultId(prefs.type,period);
     }else if(prefs.mode==='custom'){
       const chosen=find(prefs.chosen[period]);
-      wanted=chosen?.type===prefs.type?chosen.id:defaultId(prefs.type,period);
+      wanted=validChoice(chosen,period)?chosen.id:defaultId(prefs.type,period);
     }else wanted=defaultId(prefs.type,period);
-    return find(wanted)||find(defaultId('photo',period));
+    // Dernière barrière de sécurité contre une ancienne sélection incorrecte.
+    const candidate=find(wanted);
+    if(isAllowedAt(candidate,period))return candidate;
+    const fallback=find(prefs.type==='video'?recommendedVideo(period):defaultId(prefs.type,period));
+    return isAllowedAt(fallback,period)?fallback:find('p-'+period);
   }
   async function refreshGPS(force=false){
     if(prefs.mode!=='weather'||prefs.weatherSource!=='gps'||document.hidden)return;
@@ -446,7 +461,8 @@
         '<button type="button" role="tab" aria-selected="'+(id===kind)+'" data-mn-bg-act="type" data-v="'+id+'">'+name+'</button>').join('')+'</div>'+
       '<div class="mn-bg-mode"><label class="field"><span class="label">Affichage</span><select class="input" data-mn-bg-mode>'+
         [['auto','Automatique selon l’heure'],['weather','Météo réelle (heure + conditions)'],['custom','Choisir chaque période'],['fixed','Un seul fond toute la journée']].map(([k,v])=>
-          '<option value="'+k+'"'+(prefs.mode===k?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
+          '<option value="'+k+'"'+(prefs.mode===k?' selected':'')+(k==='fixed'&&kind==='video'?' disabled':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
+      (kind==='video'?'<p class="mn-bg-lock-help">Vidéos verrouillées par horaire : matin 5–11 h, après-midi 11–18 h, soir 18–22 h, nuit 22–5 h. Une vidéo choisie dans une autre période lui sera réservée.</p>':'')+
       (prefs.mode==='weather'?
         '<div class="mn-bg-weather-settings"><label class="field"><span class="label">Météo de référence</span>'+
         '<select class="input" data-mn-bg-source>'+
@@ -548,9 +564,10 @@
     if(!checked)throw new Error('Format ou adresse non valide.');
     prefs.custom=[...prefs.custom,checked].slice(-60);
     prefs.type=checked.type;
-    if(prefs.mode==='weather')prefs.weatherChoices[modalWeather+':'+modalPeriod]=checked.id;
+    if(checked.type==='video'&&prefs.mode==='fixed')prefs.mode='custom';
+    if(prefs.mode==='weather')prefs.weatherChoices[modalWeather+':'+checked.period]=checked.id;
     else if(prefs.mode==='fixed')prefs.fixed=checked.id;
-    else {prefs.mode='custom';prefs.chosen[modalPeriod]=checked.id;}
+    else {prefs.mode='custom';prefs.chosen[checked.type==='video'?checked.period:modalPeriod]=checked.id;}
     persist();draw();
   }
   async function addFile(file){
@@ -571,13 +588,21 @@
     const action=btn.dataset.mnBgAct,v=btn.dataset.v||'',id=btn.dataset.id||'';
     if(action==='open'){open();return}
     if(action==='done'){closeSheet();previewPeriod(null);return}
-    if(action==='type'&&isType(v)){modalType=v;prefs.type=v;persist();draw();return}
+    if(action==='type'&&isType(v)){
+      modalType=v;prefs.type=v;
+      if(v==='video'&&prefs.mode==='fixed')prefs.mode='auto';
+      persist();draw();return
+    }
     if(action==='period'&&isPeriod(v)){modalPeriod=v;previewPeriod(v);draw();return}
     if(action==='condition'&&isCondition(v)){modalWeather=v;draw();return}
     if(action==='refreshWeather'){gps.lastAttempt=0;void refreshGPS(true);draw();return}
     if(action==='choose'){
-      const item=find(id);if(!item)return;
+      const item=find(id);if(!item||item.type!==modalType)return;
+      // Cliquer sur une vidéo du matin pendant l'aperçu « Nuit » règle
+      // automatiquement le matin, jamais la nuit.
+      if(item.type==='video'&&item.period!==modalPeriod)modalPeriod=item.period;
       previewPeriod(modalPeriod);
+      if(item.type==='video'&&prefs.mode==='fixed')prefs.mode='custom';
       if(prefs.mode==='fixed')prefs.fixed=item.id;
       else if(prefs.mode==='weather')prefs.weatherChoices[modalWeather+':'+modalPeriod]=item.id;
       else {prefs.mode='custom';prefs.chosen[modalPeriod]=item.id}
@@ -596,7 +621,9 @@
   document.addEventListener('change',async e=>{
     const el=e.target;
     if(el.matches('[data-mn-bg-mode]')){
-      prefs.mode=['auto','weather','custom','fixed'].includes(el.value)?el.value:'auto';
+      const mode=['auto','weather','custom','fixed'].includes(el.value)?el.value:'auto';
+      // « Toute la journée » est impossible avec une vraie vidéo.
+      prefs.mode=modalType==='video'&&mode==='fixed'?'auto':mode;
       persist();if(prefs.mode==='weather'&&prefs.weatherSource==='gps')void refreshGPS();
       draw();return;
     }
