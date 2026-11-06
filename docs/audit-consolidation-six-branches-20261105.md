@@ -40,3 +40,48 @@ Ce document est déposé **uniquement sur `test`** pour que les vérifications r
 - Préserver les fonctions existantes (repas, courses hors ligne, agenda, Shelly, Dreame, Mitsubishi, SmartThings).
 - Ne supprimer aucune branche divergente uniquement sur un pourcentage de lignes similaires : exiger un contrôle métier, une conservation des modifications utiles et des tests.
 - L'option de suppression automatique GitHub après fusion ne vaut pas autorisation d'une nouvelle fusion vers `main`.
+
+
+---
+
+## Contrôles de non-régression du 6 novembre 2026
+
+### Isolation de la branche `test`
+
+`main` a reçu 85 commits supplémentaires avant la synchronisation de `test`. Les fichiers concernés étaient les données `agenda.json` / `carnet.json` et certains fichiers de Maisonnée (courses, accueil, fonds visuels, service worker). Aucune modification des trois fichiers Recettes repris sur `test` n'a été détectée dans cette période.
+
+Une fusion **effectuée seulement sur `test`**, avec `main` comme deuxième parent, a reconstruit son contenu à partir de l'arbre de `main` puis appliqué uniquement les trois fichiers Recettes et ce rapport. GitHub a confirmé **0 commit de retard** de `test` par rapport au `main` examiné et quatre fichiers différents seulement :
+`index.html`, `carnet.css`, `carnet-partage.js`, et le présent rapport.
+
+### Recettes : contrôles exécutés
+
+- Syntaxe du code `carnet-partage.js` et des scripts `carnet-base.js`, `carnet-semaine.js`, `carnet-courses.js`, `carnet-cloud.js`, `carnet-repas.js` : **OK**.
+- Scripts JavaScript intégrés à `index.html` : syntaxe **OK**.
+- Identifiants du nouvel écran : `recList`, `recActions`, `recWebPanel`, `findForm`, `q`, `favQuick`, `filtBtn` : chacun trouvé **une seule fois** ; aucun ID HTML dupliqué détecté.
+- Boutons liés à leurs actions : `recLayout`, `recAll`, `recActionsClose`, `newRecipe`, `goFind`, `impOpen`, `impPaste`, `openReview`, `kindFav`, `openFilt` : **OK**.
+- Sélecteurs CSS galerie/photos/menu Ajouter présents.
+- Le rendu de la liste reconstruit le contenu du conteneur `#recList` sans en remplacer le nœud, ce qui permet de conserver la classe `rec-gallery`.
+- Simulation isolée de `applyRecLayout()` : liste initiale, galerie, retour à la liste, persistance de l'option et attributs `aria-pressed` : **4 contrôles réussis**.
+
+### Trajets : contrôles exécutés sur le code actuel de `main`
+
+Les fonctions de sélection mensuelle ont été extraites du code officiel et exécutées avec des événements simulés, sans accès à Supabase ou Google :
+
+- Seuls les déplacements déjà passés sont sélectionnables.
+- La sélection multiple ne lance pas d'enregistrement.
+- La validation par lot prépare seulement les trajets cochés.
+- Chaque trajet traité est retiré de la sélection.
+- En fin de lot, le reste du mois n'est pas comptabilisé.
+- Changer de mois efface les sélections périmées et déclenche le rafraîchissement prévu.
+- Une valeur de mois invalide est ignorée.
+- Le filtre par enfant est appliqué.
+- L'annulation de sélection remet le lot à zéro.
+
+**Résultat : 11 assertions vérifiées, aucune erreur.** Cela ne prouve pas le fonctionnement du flux réel Google Agenda/Supabase.
+
+### Limites et décisions
+
+- Aucune navigation iPhone/Mac réelle n'a été exécutée et aucune opération de création/enregistrement sur les données du foyer n'a été testée.
+- La branche Recettes historique n'est pas supprimée : la refonte de `test` doit encore être validée visuellement, notamment sur iPhone.
+- Les branches Trajets, Agenda et Design restent intactes jusqu'aux validations correspondantes.
+- **Aucune fusion vers `main`, aucun déploiement, aucune modification Supabase.**
