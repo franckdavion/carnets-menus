@@ -7,7 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const BASE = "http://127.0.0.1:8765";
@@ -112,7 +112,10 @@ try {
   await checkScenario("iphone", { viewport: { width: 390, height: 844 }, mobile: true });
   await checkScenario("tablette", { viewport: { width: 820, height: 1180 }, mobile: true });
   await checkScenario("mac", { viewport: { width: 1280, height: 800 }, mobile: false });
-  console.log("Tests navigateur Recettes réussis. Captures dans test-results/");
+  await browser.close();
+  browser = await webkit.launch({ headless: true });
+  await checkScenario("safari-iphone", { viewport: { width: 390, height: 844 }, mobile: true });
+  console.log("Tests Chromium et WebKit (Safari) Recettes réussis. Captures dans test-results/");
 } finally {
   if (browser) await browser.close();
   server.kill("SIGTERM");
