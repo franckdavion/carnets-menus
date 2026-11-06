@@ -2339,6 +2339,8 @@ document.addEventListener("click", async e => {
     case "pushDisable": await disablePush(); break;
     case "go": if (v === "recettes") { window.location.assign(CARNET_URL); break; } // the Recettes tile opens the Carnet de menus
       if (v === "presences" && typeof PR !== "undefined") { const d = today(); PR.y = +d.slice(0,4); PR.m = +d.slice(5,7); PR.wk = mondayOf(d); PR.tab = "cal"; prScrollState = null; }
+      document.documentElement.classList.remove("mz-scrolling");
+      if (v === "home" && typeof window.mzResetHomePaint === "function") window.mzResetHomePaint();
       view = v; LS.set("mz_view", v); render(); window.scrollTo(0, 0); break;
     case "who": who = v || null; render(); break;
     case "done": {

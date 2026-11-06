@@ -3256,3 +3256,16 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
   -webkit-touch-callout:none;
 }
 .cx-rename-input{font-size:16px;max-width:100%}
+
+/* Centrer la barre du bas sans transform : sur iPhone le translateX(-50%)
+   mange parfois le premier appui (il faut tapoter Accueil deux fois). */
+html body .pill,
+html body:has(main.view-home) .pill{
+  left:12px!important;
+  right:12px!important;
+  width:auto!important;
+  max-width:420px!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+  transform:none!important;
+}

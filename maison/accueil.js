@@ -489,8 +489,9 @@ let lastHomePaint='';
 function render(){
  const main=document.querySelector('main.view-home');if(!main)return;
  mzSyncHomeLite();
- if(document.documentElement.classList.contains('mz-scrolling'))return;
- let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
+ let el=main.querySelector('#ultimate-dashboard');
+ if(document.documentElement.classList.contains('mz-scrolling')&&el&&el.querySelector('.mn-house-grid'))return;
+ if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
  el.className='';
  const w=meteo?.current,d=meteo?.daily,now=new Date();
  const weather=w?`<div class="ultimate-big">${Math.round(w.temperature_2m)}°C</div><div class="ultimate-line">${codes(w.weather_code)}</div><div class="ultimate-secondary">Ressenti ${Math.round(w.apparent_temperature)}° · Vent ${Math.round(w.wind_speed_10m)} km/h${directionVent(w.wind_direction_10m)?` · ${directionVent(w.wind_direction_10m)}`:''}</div><div class="ultimate-secondary">Pluie ${d?.precipitation_probability_max?.[0]??'—'} %</div>${meteoEnAttente?`<div class="ultimate-secondary">Dernières prévisions conservées (${new Date(meteoDernierSucces).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}) · actualisation en attente</div>`:''}`:'<div class="ultimate-secondary">Prévisions momentanément indisponibles · nouvel essai automatique.</div>';
@@ -561,6 +562,7 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  if(window.maisonneeModuleGrid?.editing?.())window.maisonneeModuleGrid.mount(main);
 }
 window.maisonneeHomePaint=render;
+window.mzResetHomePaint=()=>{lastHomePaint='';document.documentElement.classList.remove('mz-scrolling')};
 (()=>{let pause;window.addEventListener('scroll',()=>{
   if(!document.querySelector('main.view-home'))return;
   const frame=document.querySelector('main.view-home .mn-dayframe');
