@@ -2983,8 +2983,14 @@ document.addEventListener("click", e => {
   if (cmd) {
     const id = cmd.dataset.domCmd, action = cmd.dataset.domAction;
     if (!id || !action || cmd.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const fromHome = view === "home";
     domBusy = id + action;
-    render();
+    // Accueil : ne pas reconstruire toute la page (barre du haut + cartes),
+    // sinon Piéton / Voiture donnent l’impression que l’écran se recharge.
+    if (fromHome) cmd.setAttribute("aria-busy", "true");
+    else render();
     const row = domRead().find(x => x.id === id);
     domRunCommand(() => shellyServer("command", { id, action })).then(r => {
       if (!r) return;
@@ -2992,7 +2998,11 @@ document.addEventListener("click", e => {
       if (row && row.type === "volet") domScheduleStateAfterCmd();
     }).catch(err => { if (err) toast(err.message); }).finally(() => {
       domBusy = "";
-      render();
+      if (fromHome && view === "home") {
+        document.querySelectorAll(".mn-gate-btn[aria-busy]").forEach(b => b.removeAttribute("aria-busy"));
+      } else {
+        render();
+      }
     });
   }
 });
