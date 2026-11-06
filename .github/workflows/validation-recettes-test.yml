@@ -69,11 +69,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Installer Chromium pour tests isolés
+      - name: Installer Chromium et WebKit (durée limitée)
+        timeout-minutes: 8
         run: |
-          npm install --no-save --ignore-scripts playwright@1.56.1
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright@1.56.1
           npx playwright install --with-deps chromium webkit
       - name: Simuler l'utilisation sur iPhone et ordinateur
+        timeout-minutes: 5
         run: node maison/tests/recettes-browser.test.mjs
       - name: Conserver les captures d'écran (aucune donnée réelle)
         if: always()
