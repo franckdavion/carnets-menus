@@ -3257,14 +3257,14 @@ dialog.sheet .mz-dom-service-settings>.btn,dialog.sheet .mz-dom-advanced-actions
 }
 .cx-rename-input{font-size:16px;max-width:100%}
 
-/* Centrer la barre du bas sans transform : sur iPhone le translateX(-50%)
-   mange parfois le premier appui (il faut tapoter Accueil deux fois). */
+/* Capsule étroite, centrée : left+right à 12px l’étirait sur tout l’écran.
+   Sans transform, pour que le premier appui Accueil parte tout de suite. */
 html body .pill,
 html body:has(main.view-home) .pill{
-  left:12px!important;
-  right:12px!important;
-  width:auto!important;
-  max-width:420px!important;
+  left:0!important;
+  right:0!important;
+  width:max-content!important;
+  max-width:calc(100vw - 24px)!important;
   margin-left:auto!important;
   margin-right:auto!important;
   transform:none!important;
