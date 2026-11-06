@@ -44,7 +44,7 @@ async function acctSubmit(){const mail=$("#ac-mail").value.trim(),pass=$("#ac-pa
     else{const{data,error}=await sb.auth.signInWithPassword({email:mail,password:pass});if(error)throw error;await cloudSession(data.session);}
     cloud.msg="";sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT")cloudSession(null);});}
   catch(e){m.textContent=/Invalid login/i.test(e.message||"")?"E-mail ou mot de passe incorrect.":/confirm/i.test(e.message||"")?"Confirmez d'abord votre e-mail (lien reçu par mail).":/registered|exists/i.test(e.message||"")?"Ce compte existe déjà : connectez-vous.":"Échec : "+(e.message||"réseau ?");}}
-async function cloudSignOut(){cm96StopRealtime();try{await cloud.sb.auth.signOut();}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
+async function cloudSignOut(){cm96StopRealtime();try{await cloud.sb.auth.signOut({scope:'local'});}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
 async function savePseudo(){const v=$("#ac-pseudo2").value.trim();if(v.length<2)return;const{error}=await cloud.sb.from("profiles").update({pseudo:v}).eq("id",cloud.user.id);if(error){toast("Pseudo non enregistré");return;}cloud.profile.pseudo=v;setAcctLine();toast("Pseudo enregistré");}
 // what of a recipe is shared (in the common book) and what stays private (favourite, ratings, own photo…)
 const sharedOf=r=>{const o={};SHARED_F.forEach(k=>{if(r[k]!==undefined)o[k]=r[k];});return o;};
