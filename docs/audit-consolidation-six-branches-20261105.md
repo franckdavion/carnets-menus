@@ -85,3 +85,36 @@ Les fonctions de sélection mensuelle ont été extraites du code officiel et ex
 - La branche Recettes historique n'est pas supprimée : la refonte de `test` doit encore être validée visuellement, notamment sur iPhone.
 - Les branches Trajets, Agenda et Design restent intactes jusqu'aux validations correspondantes.
 - **Aucune fusion vers `main`, aucun déploiement, aucune modification Supabase.**
+
+
+---
+
+## Validation navigateur Recettes — 6 novembre 2026
+
+**Portée de la validation :** branche `test` uniquement ; 50 cartes de recettes de démonstration rendues dans un navigateur isolé, sans accès à Supabase ni aux données personnelles.
+
+### Tests GitHub Actions
+
+- Workflow dédié `.github/workflows/validation-recettes-test.yml` : seulement sur la branche `test`.
+- Tests Node : syntaxe JavaScript, interface, calculs Recettes et Courses, dates, Présences, importation de recettes et pont entre Carnet de menus et Maisonnée : **tous réussis**.
+- Tests interactifs Playwright : navigation Recettes, liste/galerie, mémorisation, favoris, recherche, bouton Toutes, menu Ajouter, import depuis Internet, formulaire de création, absence d'erreurs JavaScript : **tous réussis**.
+- Contrôle du débordement horizontal : aucun, aux largeurs **320, 390, 820 et 1280 pixels**.
+- Tests WebKit supplémentaires à 390 pixels pour approcher Safari sur iPhone : **réussis**.
+
+| Moteur simulé | Taille | Résultat |
+| --- | --- | --- |
+| Chromium iPhone compact | 320 × 667 | OK |
+| Chromium iPhone standard | 390 × 844 | OK |
+| Chromium tablette | 820 × 1180 | OK |
+| Chromium ordinateur | 1280 × 800 | OK |
+| WebKit (proche Safari) iPhone | 390 × 844 | OK |
+
+La dernière exécution complète est disponible à :
+https://github.com/franckdavion/carnets-menus/actions/runs/42204804421
+
+Captures des **cinq** scénarios (artefact GitHub à durée limitée) :
+https://github.com/franckdavion/carnets-menus/actions/runs/42204804421/artifacts/13495987685
+
+**Limites** : les navigateurs sont automatisés et n'utilisent pas de vrais comptes. Ils ne remplacent pas un contrôle tactile sur iPhone physique ni les tests de synchronisation avec les données du foyer.
+
+**Garantie de non-publication :** aucun changement fonctionnel n'a été porté dans `main`. Le dernier rattrapage de `main` vers `test` a intégré uniquement des mises à jour de `agenda.json` et `carnet.json` déjà présentes sur `main`, en préservant la refonte Recettes sur `test` uniquement. Aucun appel à Supabase et aucune suppression de branche ancienne n'ont été effectués.
