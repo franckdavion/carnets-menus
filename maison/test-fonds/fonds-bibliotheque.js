@@ -2,7 +2,7 @@
    Catalogue typé, média par période, photos, illustrations animées et photos animées.
    Les médias importés sont stockés uniquement dans IndexedDB sur cet appareil. */
 (()=>{'use strict';
-  const VERSION=1, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
+  const VERSION=2, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
   const PERIODS=[['matin','Matin'],['aprem','Après-midi'],['soir','Soir'],['nuit','Nuit']];
   const TYPES=[['photo','Photos'],['illustration','Animations'],['photo-animee','Photos animées'],['video','Vidéos']];
   const CONDITIONS=[['clear','Soleil'],['clouds','Nuageux'],['rain','Pluie'],['storm','Orage'],['snow','Neige'],['fog','Brouillard']];
@@ -104,7 +104,7 @@
     const items=[...builtins,...p.custom];
     const ids=new Set(items.map(a=>a.id));
     // Migration des réglages existants sans supprimer les sélections ni les fichiers.
-    if(x.type==='photo-animee'){
+    if(Number(x.version||1)<2&&x.type==='photo-animee'){
       const selected=[x.fixed,...Object.values(x.chosen||{}),...Object.values(x.weatherChoices||{})];
       const hasVideo=selected.some(id=>items.some(item=>item.id===id&&item.media==='video'));
       const hasMotion=selected.some(id=>items.some(item=>item.id===id&&item.media==='image-motion'));
