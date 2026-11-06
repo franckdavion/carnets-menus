@@ -22,12 +22,43 @@
     return {category:'unknown',intensity:'normal'};
   }
   const photos={matin:'assets/fonds/matin.png',aprem:'assets/fonds/apres-midi.png',soir:'assets/fonds/soir.png',nuit:'assets/fonds/nuit.png'};
+  // Vidéos paysagères libres choisies par moment de la journée.
+  // Wikimedia Commons : URL de redirection vers le fichier originel, crédits et licence conservés.
+  // Aucun média n'est téléchargé tant qu'il n'est pas sélectionné.
+  function commonsVideo(id,name,file,period,weather,author,license){
+    const filename=file.replace(/ /g,'_');
+    const source='https://commons.wikimedia.org/wiki/File:'+encodeURIComponent(filename);
+    return {id,name,type:'photo-animee',media:'video',period,weather,builtin:true,
+      src:'https://commons.wikimedia.org/wiki/Special:Redirect/file/'+encodeURIComponent(filename),
+      source,author,license};
+  }
+  const LANDSCAPE_VIDEOS=[
+    commonsVideo('wm-aube-plage','Lever de soleil sur la plage','Sunrise timelapse.webm','matin','clear','James West','CC BY-SA 2.0'),
+    commonsVideo('wm-aube-lumiere','Premières lueurs du jour','Sunrise time lapse.webm','matin','clear','Aravind Samala','CC BY 2.0'),
+    commonsVideo('wm-matin-nuages','Nuages du matin · montagne','Machu Picchu Timelapse—Cloudy Morning 02.webm','matin','clouds','Subhashish Panigrahi','CC BY-SA 4.0'),
+    commonsVideo('wm-matin-brume','Brume sur les montagnes','Fog covering mountain time lapse.webm','matin','fog','Athulvis','CC BY-SA 4.0'),
+    commonsVideo('wm-midi-nuages','Ciel nuageux du Doubs','Clouds Time Lapse.webm','aprem','clouds','madlag','CC BY-SA 2.0'),
+    commonsVideo('wm-midi-ciel','Nuages qui défilent','Clouds (time lapse).webm','aprem','clouds','Editor','CC BY 3.0'),
+    commonsVideo('wm-midi-pluie','Pluie et nuages','Rain and cloud.webm','aprem','rain','FAYAZ SHUJA','CC BY-SA 4.0'),
+    commonsVideo('wm-midi-averse','Grosse averse','Rainfall.webm','aprem','rain','Swantata','CC BY-SA 4.0'),
+    commonsVideo('wm-soir-nuages','Nuages au coucher du soleil','Clouds at sunset (time lapse).webm','soir','clouds','Editor','CC BY 3.0'),
+    commonsVideo('wm-soir-horizon','Crépuscule orangé','Time Lapse Sunset (HD 720p).webm','soir','clear','mockmoon2000','CC BY 3.0'),
+    commonsVideo('wm-soir-dore','Coucher de soleil doré','Free HD Stock Video - Time lapse sunset (see description for HQ download).webm','soir','clear','Johann Mynhardt','CC BY 3.0'),
+    commonsVideo('wm-nuit-etoiles','Nuit étoilée','Star Timelapse.webm','nuit','clear','John Fowler','CC BY 2.0'),
+    commonsVideo('wm-nuit-filante','Étoile filante','Short Time-lapse Video of Stars including a Shooting Star.webm','nuit','clear','Kai Bader','CC BY 3.0'),
+    commonsVideo('wm-nuit-polaire','Étoile polaire','Starry sky with North Star circled.webm','nuit','clear','Thomas Bresson','CC BY 3.0')
+  ];
+  const licenseUrl=code=>{
+    const m=String(code||'').match(/^CC BY(-SA)? ([\d.]+)$/);
+    return m?'https://creativecommons.org/licenses/by'+(m[1]?'-sa':'')+'/'+m[2]+'/':'';
+  };
   const builtins=[...PERIODS.flatMap(([p,label])=>[
     {id:'p-'+p,name:'Photo '+label,type:'photo',media:'image',src:photos[p],period:p,builtin:true},
     {id:'a-'+p,name:'Animation '+label,type:'illustration',media:'svg-native',src:'',period:p,builtin:true},
     {id:'m-'+p,name:'Photo en mouvement '+label,type:'photo-animee',media:'image-motion',src:photos[p],period:p,builtin:true}
   ]),{id:'v-flower',name:'Fleur qui éclot · vidéo',type:'photo-animee',media:'video',
-    src:'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',period:'aprem',builtin:true}];
+    src:'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',period:'aprem',builtin:true,weather:'clear',author:'MDN',license:'CC0'} ,
+  ...LANDSCAPE_VIDEOS];
   const defaultPrefs=()=>({version:VERSION,mode:'auto',type:'photo',period:'matin',fixed:'p-matin',
     chosen:{},weatherSource:'city',weatherChoices:{},motion:true,custom:[]});
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -279,13 +310,23 @@
     }else if(item.local){
       visual='<div class="mn-bg-mini-art mn-bg-mini-local" data-mn-bg-thumb="'+esc(item.id)+'">▧</div>';
     }else if(item.media==='video'){
-      visual='<div class="mn-bg-mini-art mn-bg-mini-video">▶</div>';
+      // Miniature locale : aucune vidéo n'est chargée dans les grilles.
+      visual='<div class="mn-bg-mini-art mn-bg-mini-video" style="background-image:url(&quot;'+
+        esc(photos[item.period]||photos.aprem)+'&quot;)"><span>▶</span></div>';
     }else{
       visual='<img loading="lazy" alt="" src="'+esc(item.src)+'">';
     }
     return '<div class="mn-bg-tile'+selected+'"><button type="button" class="mn-bg-tile-pick" data-mn-bg-act="choose" data-id="'+esc(item.id)+'">'+
       '<span class="mn-bg-tile-preview">'+visual+'</span><span class="mn-bg-tile-name">'+esc(item.name)+'</span>'+
-      '<span class="mn-bg-tile-type">'+(chosen?'✓ Sélectionné':item.media==='video'?'Vidéo':item.media==='image-motion'?'Mouvement doux':item.media==='svg-native'?'Illustration SVG':'Photographie')+'</span></button>'+
+      '<span class="mn-bg-tile-type">'+(chosen?'✓ Sélectionné · ':'')+
+      (item.media==='video'?'Vidéo · '+(PERIODS.find(x=>x[0]===item.period)?.[1]||''):
+       item.media==='image-motion'?'Mouvement doux':item.media==='svg-native'?'Illustration SVG':'Photographie')+
+      (item.weather?' · '+(CONDITIONS.find(x=>x[0]===item.weather)?.[1]||''):'')+'</span></button>'+
+      (item.source&&item.author?
+        '<span class="mn-bg-video-credit">'+esc(item.author)+' · '+
+        '<a target="_blank" rel="noopener noreferrer" href="'+esc(item.source)+'">Source</a>'+
+        (licenseUrl(item.license)?' · <a target="_blank" rel="noopener noreferrer" href="'+esc(licenseUrl(item.license))+'">'+esc(item.license)+'</a>':'')+
+        '</span>':'')+
       (!item.builtin?'<button type="button" class="mn-bg-delete" data-mn-bg-act="remove" data-id="'+esc(item.id)+'" aria-label="Supprimer '+esc(item.name)+'">×</button>':'')+
       '</div>';
   }
@@ -349,7 +390,16 @@
         prefs.mode==='auto'?'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
       currentPreview()+
-      '<div class="mn-bg-gallery" role="group" aria-label="'+esc(typelabel)+'">'+all.map(tile).join('')+'</div>'+
+      (kind==='photo-animee'?
+        '<div class="mn-bg-video-groups">'+
+          PERIODS.map(([period,label])=>{
+            const group=all.filter(x=>x.period===period);
+            return '<section class="mn-bg-video-group" aria-label="'+esc(label)+'">'+
+              '<h3>'+esc(label)+' <small>'+group.length+' choix</small></h3>'+
+              '<div class="mn-bg-gallery" role="group">'+group.map(tile).join('')+'</div>'+
+            '</section>';
+          }).join('')+'</div>':
+        '<div class="mn-bg-gallery" role="group" aria-label="'+esc(typelabel)+'">'+all.map(tile).join('')+'</div>')+
       '<label class="mn-bg-motion-label"><input type="checkbox" data-mn-bg-motion '+(prefs.motion?'checked':'')+'> Autoriser les animations (si l’appareil le permet)</label>'+
       '<details class="mn-bg-add" '+(addOpen?'open':'')+'><summary>＋ Ajouter à la bibliothèque « '+esc(typelabel)+' »</summary>'+
       '<form data-mn-bg-url-form><label class="field"><span class="label">Nom du fond</span><input class="input" required maxlength="70" name="name" placeholder="Ex. Ciel d’été"></label>'+
@@ -359,7 +409,8 @@
       '<label class="mn-bg-upload btn">Importer un fichier '+(kind==='photo-animee'?'MP4, WebM, GIF ou photo':'image (JPG, PNG, WebP, GIF)')+
         '<input type="file" data-mn-bg-file accept="'+(kind==='photo-animee'?'image/*,video/mp4,video/webm':'image/png,image/jpeg,image/webp,image/gif,image/avif')+'"></label>'+
       '<p class="muted small">Fichiers importés : disponibles hors ligne sur cet appareil. Les liens Web et les réglages se synchronisent avec ton compte ; les fichiers personnels restent locaux.</p></details>'+
-      '<p class="muted small mn-bg-foot">Bibliothèque V1 · 4 fonds par catégorie, plus une vidéo libre de démonstration · JPG, PNG, WebP, GIF, MP4 et WebM.</p>'+
+      '<p class="muted small mn-bg-foot">Bibliothèque · '+catalog().filter(x=>x.type==='photo-animee'&&x.media==='video').length+
+        ' vidéos réelles avec auteurs et licences · Lecture sans son · Seule la vidéo choisie est chargée.</p>'+
       '<button type="button" class="btn primary block" data-mn-bg-act="done">Terminé</button></div>';
   }
   function draw(){
