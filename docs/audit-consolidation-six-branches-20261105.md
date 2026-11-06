@@ -189,3 +189,29 @@ Les validations supplémentaires sont enregistrées dans :
 - [GitHub Actions : nettoyage avec simulation préalable](https://github.com/franckdavion/carnets-menus/actions/runs/42230873560)
 
 Les cinq branches divergentes ne peuvent pas être déclarées inutiles uniquement sur des tests statiques ; aucune suppression supplémentaire n'est autorisée par ce rapport. Les scénarios intégrés à Google Agenda et Supabase n'ont pas été exécutés sur les données du foyer. **Aucune opération sur `main` ou Supabase n'a été faite lors de cette phase.**
+
+
+---
+
+## Archivage réversible des deux anciennes branches de présentation — 6 novembre 2026
+
+La branche `design-c-ultra-premium-accueil-explorer` et la branche `online-preview-maisonnee-agenda-20261104` ne sont plus des branches actives. **Leur historique n'a pas été perdu** : avant de supprimer chaque référence de branche, une étiquette Git légère a été créée et vérifiée sur le SHA du commit historique.
+
+| Ancienne branche | Étiquette Git conservée | Commit historique exact |
+| --- | --- | --- |
+| `design-c-ultra-premium-accueil-explorer` | `archive/2026-11-06/design-c-ultra-premium-accueil-explorer` | `581933e071b2fbbf4084317fafe4964492eb5dd6` |
+| `online-preview-maisonnee-agenda-20261104` | `archive/2026-11-06/online-preview-maisonnee-agenda-20261104` | `27f6bb2ce3bcef2b3303cd5dcf6d7ed24fda263e` |
+
+**Exécution vérifiée :** [GitHub Actions n° 42232203587](https://github.com/franckdavion/carnets-menus/actions/runs/42232203587), trois étapes réussies : simulation en lecture seule, création et relecture des deux tags, puis suppression des deux branches après seconde vérification des SHA et des PR ouvertes.
+
+Le script ponctuel et son workflow ont été retirés de `test` après leur exécution. Les deux tags restent en place et permettent de consulter ou de restaurer **l'intégralité de chacune des versions historiques** si nécessaire. Il ne faut pas supprimer ces tags sans nouvel audit.
+
+Les trois branches historiques qui continuent à contenir des développements susceptibles d'être réutilisés restent des branches normales :
+
+- `test-agenda-plus-google-style-20261104`
+- `test-presences-trajets-exclusions-20261105`
+- `test-selection-mensuelle-trajets-20261105`
+
+La branche `sauvegarde-main-avant-recettes-20261106` demeure elle aussi intacte.
+
+**Bilan :** 6 branches actives (incluant `main` et `test`), deux archives Git supplémentaires, aucun changement de `main`, de l'application en ligne ou de la base Supabase pendant cet archivage.
