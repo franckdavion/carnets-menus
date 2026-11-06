@@ -120,6 +120,7 @@
   let walletAutoInFlight = false;
   async function walletAutoCloud() {
     if (navigator.onLine === false || cloud.busy || walletAutoInFlight) return;
+    if (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred()) return;
     walletAutoInFlight = true;
     try {
       const context = await walletContext();
@@ -479,7 +480,8 @@
   }
   VIEWS.fidelite = function () {
     // Réessayer après l'authentification si le portefeuille s'ouvre depuis l'application.
-    if (!cloud.initialized && navigator.onLine !== false) {
+    if (!cloud.initialized && navigator.onLine !== false &&
+        !(typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred())) {
       cloud.initialized = true;
       setTimeout(() => walletAutoCloud(), 250);
     }

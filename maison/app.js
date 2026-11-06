@@ -269,7 +269,7 @@ function loadSb() {
 /* Pont dédié au portefeuille familial. Les identifiants sont vérifiés côté
    Supabase avant toute lecture ou écriture ; aucun service_role côté iPhone. */
 window.maisonneeLoyaltyCloudSession = async function () {
-  if (navigator.onLine === false) return { offline: true };
+  if (navigator.onLine === false || (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred())) return { offline: true };
   const client = await loadSb();
   const auth = await client.auth.getUser();
   // Une panne de réseau ne signifie pas que la session a disparu.
@@ -505,6 +505,16 @@ async function loadRecipes() {
 /* Démarrage PWA : une panne réseau ne prouve jamais que le foyer a disparu.
    Ne jamais effacer la session ni présenter la création de foyer par défaut.
    L'accès local conserve la vue et les données du foyer quand elles existent. */
+/* Magasin / Wi‑Fi captive : iPhone peut dire « en ligne » sans joindre Supabase.
+   Dans ce cas on garde l'app, la liste magasin et les cartes locales. */
+function mzStoreLocalPreferred() {
+  if (navigator.onLine === false) return true;
+  if (mzAuthNeedsLogin) return true;
+  if (mode === "cloud" && !user && (LS.get("mz_hh", null) || (LS.get("mz_cache", null) || {}).hh)) return true;
+  return false;
+}
+window.mzStoreLocalPreferred = mzStoreLocalPreferred;
+
 function mzOfflineStartup(reason, notify = true) {
   const snapshot = LS.get("mz_cache", null);
   if (snapshot && snapshot.hh) {
@@ -512,9 +522,13 @@ function mzOfflineStartup(reason, notify = true) {
     screen = "app";
     render();
   } else {
-    // Les captures des cartes sont dans IndexedDB, séparément du cache du foyer.
-    S = { ...blank(), hh: { id: "portefeuille-local", name: "Mes cartes hors ligne" } };
-    view = "fidelite";
+    // Cartes en IndexedDB, liste magasin éventuellement déjà photographiée.
+    const hid = LS.get("mz_hh", null);
+    S = { ...blank(), hh: hid ? { id: hid, name: "Foyer (hors ligne)" } : { id: "portefeuille-local", name: "Mes cartes hors ligne" } };
+    if (view !== "courses" && view !== "fidelite") {
+      const last = LS.get("mz_view", "home");
+      view = ["home", "courses", "fidelite", "explore"].includes(last) ? last : "home";
+    }
     screen = "app";
     render();
   }
@@ -555,11 +569,13 @@ async function init() {
       if (error) throw error;
       user = data?.session?.user || null;
     })();
-    await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
+    const waitMs = cache && cache.hh ? 6000 : 28000;
+    await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), waitMs))]);
   } catch (e) {
     // Une erreur CDN / réseau / session ne signifie ni déconnexion volontaire
     // ni disparition du foyer : ne pas effacer mz_mode ou mz_hh.
-    mzOfflineStartup("Connexion indisponible : données locales, synchronisation en attente.");
+    if (mode === "cloud" || LS.get("mz_hh", null) || (cache && cache.hh)) mzAuthNeedsLogin = true;
+    mzOfflineStartup("Sans réseau stable : liste de courses et cartes restent sur cet iPhone.");
     return;
   }
   if (!user) {
@@ -1312,7 +1328,7 @@ function render() {
     : `<span class="inline" style="gap:6px;min-width:0"><button class="icon-btn plain back" data-act="go" data-v="${view === "explore" ? "home" : mod && homePins().includes(view) ? "home" : "explore"}" aria-label="Retour">${I.left}</button>${mod ? mi(view, "sm") : ""}<h1 class="title">${esc(mod ? mod.t : view === "explore" ? "Explorer" : "")}</h1></span>${view === "explore" ? "" : `${avatars}${mzBellHtml()}`}`;
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
-    <main class="wrap view-${view}" id="main">${mzAuthNeedsLogin && navigator.onLine !== false ? `<div class="card" role="status" style="margin-top:12px"><div class="inline" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>Connexion à renouveler sur cet iPhone. Tes données locales restent disponibles.</span><button class="btn" type="button" data-act="auth" data-v="login">Se reconnecter</button></div></div>` : ""}${VIEWS[view]()}</main>
+    <main class="wrap view-${view}" id="main">${mzAuthNeedsLogin && navigator.onLine !== false ? `<div class="card" role="status" style="margin-top:12px"><div class="inline" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>Sans réseau fiable : tes courses et tes cartes restent disponibles. Tu pourras te reconnecter en sortant du magasin.</span><button class="btn" type="button" data-act="auth" data-v="login">Se reconnecter</button></div></div>` : ""}${VIEWS[view]()}</main>
     ${view === "agenda" || (view === "docs" && S.v3) ? `<div class="cal-create" id="calCreate">
       <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : "Choisir le type de création"}" hidden>
         ${view === "docs" ? `

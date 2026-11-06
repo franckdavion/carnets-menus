@@ -4,7 +4,7 @@
    ses réglages et le carnet commun du foyer sont utilisés tels quels. Toute modification passe par lui,
    il l'enregistre dans le carnet commun et le pont (pont.js) la reporte dans Maisonnée (repas et courses). */
 
-const CK = { frame: null, ready: false, err: "", busy: false, waiters: [] };
+const CK = { frame: null, ready: false, err: "", busy: false, waiters: [], startedAt: 0 };
 const cev = code => CK.frame.contentWindow.eval(code);          // lire / appeler dans le Carnet
 const cj = code => JSON.parse(cev(`JSON.stringify(${code})`));  // copie simple de ses données
 let rWeek = mondayOf(today()), rPick = null;                     // semaine affichée, recherche de recette
@@ -14,6 +14,8 @@ Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && 
 function carnetBoot() {
   carnetLive();
   if (CK.frame || mode !== "cloud") return;
+  if (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred()) return;
+  CK.startedAt = Date.now();
   const f = document.createElement("iframe");
   f.src = CARNET_URL + "?arriere-plan=maisonnee";
   f.title = "Carnet de menus (arrière-plan)";

@@ -4677,12 +4677,19 @@ document.addEventListener("DOMContentLoaded", function () {
     if (typeof oldAfterRender === "function") oldAfterRender();
     filterOffline();
   };
+  function preferLocalShop() {
+    if (state.manualOffline || entries().length) return true;
+    if (!canNetwork()) return true;
+    if (typeof mzStoreLocalPreferred === "function" && mzStoreLocalPreferred()) return true;
+    if (state.record && CK && CK.err) return true;
+    if (state.record && CK && !CK.ready && CK.startedAt && Date.now() - CK.startedAt > 2500) return true;
+    return false;
+  }
   VIEWS.courses = function () {
     if (house() && house() !== state.household && !state.loading) loadForHouse();
     if (mode === "demo") return previousCourses();
-    // Ne jamais risquer de perdre les coches en attente avec une liste réseau
-    // qui n'aurait pas encore intégré les modifications de cet iPhone.
-    if (!canNetwork() || state.manualOffline || entries().length) return offlineView();
+    // Magasin, Avion, session KO ou Carnet injoignable : copie locale, pas d'attente réseau.
+    if (preferLocalShop()) return offlineView();
     const html = previousCourses();
     if (mode === "cloud" && CK.ready && isLinked()) scheduleCapture();
     const confirmed = state.record && state.record.householdId === liveHouse() &&
