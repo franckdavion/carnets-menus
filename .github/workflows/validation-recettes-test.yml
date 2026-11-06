@@ -51,3 +51,5 @@ jobs:
         run: node maison/tests/presences.test.js
       - name: Non-régression des importations de recettes
         run: node maison/tests/robot.test.mjs
+      - name: Vérifier le pont entre Carnet de menus et Maisonnée
+        run: node maison/tests/pont.test.mjs
