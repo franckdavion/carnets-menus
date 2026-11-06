@@ -908,12 +908,14 @@ function domDreameTransportBtns() {
 }
 function domDreameWhereLine() {
   const st = domDreameState || {};
+  const docked = [5, 6, 8, 9, 10, 13, 17, 18, 20, 22, 28, 30].includes(Number(st.status));
+  const suffix = docked ? " (station)" : "";
   const named = Array.isArray(st.current_rooms) ? st.current_rooms.filter(Boolean) : [];
-  if (named.length) return named.join(", ");
+  if (named.length) return named.join(", ") + suffix;
   const ids = Array.isArray(st.current_room_ids) ? st.current_room_ids.map(Number) : [];
   const byId = new Map((domDreameRooms || []).map(r => [Number(r.id), r.name]));
   const fromIds = ids.map(id => byId.get(id)).filter(Boolean);
-  if (fromIds.length) return fromIds.join(", ");
+  if (fromIds.length) return fromIds.join(", ") + suffix;
   if ([1, 7, 12].includes(Number(st.status)) && domDreamePickedNames().length) return "Demandé : " + domDreamePickedNames().join(", ");
   return "";
 }

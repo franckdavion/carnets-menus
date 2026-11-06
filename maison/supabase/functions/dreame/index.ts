@@ -2,8 +2,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
+import pako from "https://esm.sh/pako@2.1.0";
 
-const FN_REV = "20261106a";
+const FN_REV = "20261106b";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -49,7 +50,9 @@ const SUCTION_LEVEL = { siid: 4, piid: 4 };
 const WATER_VOLUME = { siid: 4, piid: 5 };
 const CLEANING_MODE = { siid: 4, piid: 23 };
 const MAP_EXTEND_DATA = { siid: 6, piid: 4 };
+const MAP_DATA = { siid: 6, piid: 1 };
 const CLEANING_PROPERTIES = { siid: 4, piid: 10 };
+const DOCK_STATUSES = new Set([5, 6, 8, 9, 10, 13, 17, 18, 20, 22, 28, 30]);
 const ACT_START = { siid: 2, aiid: 1 };
 const ACT_PAUSE = { siid: 2, aiid: 2 };
 const ACT_STOP = { siid: 4, aiid: 2 };
@@ -133,6 +136,7 @@ type DreameCred = {
   device_model: string | null;
   map_rooms?: { id: number; name: string }[] | null;
   clean_programs?: DreameProgram[] | null;
+  dock_room_id?: number | null;
 };
 
 type DreameProgram = {
@@ -515,10 +519,10 @@ function currentRoomIdsFromValue(value: unknown): number[] {
     collectRoomIds(value, ids);
     return [...new Set(ids)];
   }
-  for (const key of ["cur_seg", "current_seg", "curr_seg", "cur_room", "current_room", "room_id", "seg_id", "curSeg"]) {
+  for (const key of ["cur_seg", "current_seg", "curr_seg", "cur_room", "current_room", "room_id", "seg_id", "curSeg", "curid"]) {
     collectRoomIds(json[key], ids);
   }
-  for (const key of ["cur_segids", "segment_ids", "room_ids", "areas", "seg_ids"]) {
+  for (const key of ["cur_segids", "segment_ids", "room_ids", "areas", "seg_ids", "sa"]) {
     collectRoomIds(json[key], ids);
   }
   for (const nest of ["map_extend", "data", "value", "result"]) {
@@ -531,6 +535,123 @@ function currentRoomIdsFromValue(value: unknown): number[] {
 function namesForRoomIds(ids: number[], rooms: DreameMapRoom[]): string[] {
   const byId = new Map(rooms.map(r => [r.id, r.name]));
   return ids.map(id => byId.get(id) || `Pièce ${id}`);
+}
+
+function decodeB64Bytes(s: string): Uint8Array | null {
+  try {
+    const part = (s.includes(",") ? s.split(",")[0] : s).trim();
+    const b64 = part.replace(/_/g, "/").replace(/-/g, "+");
+    const bin = atob(b64.replace(/\s/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.length ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+function inflateMapBytes(bytes: Uint8Array): Uint8Array | null {
+  try {
+    return pako.inflate(bytes) as Uint8Array;
+  } catch {
+    return bytes.length > 27 ? bytes : null;
+  }
+}
+
+function readI16(dv: DataView, offset: number) {
+  return dv.getInt16(offset, true);
+}
+
+function segmentFromPixel(pixel: number): number {
+  if (!pixel) return 0;
+  const low = pixel & 0x3f;
+  if (low > 0 && low < 60) return low;
+  const shifted = pixel >> 2;
+  if (shifted > 0 && shifted < 60) return shifted;
+  return 0;
+}
+
+function jsonObjectFromBytes(bytes: Uint8Array, from: number): Record<string, unknown> | null {
+  const brace = bytes.indexOf(0x7b, Math.max(0, from));
+  if (brace < 0) return null;
+  const text = new TextDecoder().decode(bytes.subarray(brace));
+  const end = text.lastIndexOf("}");
+  if (end < 0) return null;
+  return tryParseJson(text.slice(0, end + 1));
+}
+
+function segmentAtPixel(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  left: number,
+  top: number,
+  grid: number,
+  x: number,
+  y: number
+): number {
+  if (grid <= 0 || width <= 0 || height <= 0) return 0;
+  const px = Math.round((x - left) / grid);
+  const py = Math.round((y - top) / grid);
+  if (px < 0 || py < 0 || px >= width || py >= height) return 0;
+  return segmentFromPixel(pixels[py * width + px]);
+}
+
+function locationFromMapBlob(value: unknown): { ids: number[]; charger: number | null; robot: number | null } {
+  const out = { ids: [] as number[], charger: null as number | null, robot: null as number | null };
+  const raw = typeof value === "string" ? value : (value && typeof value === "object" && typeof (value as Record<string, unknown>).value === "string"
+    ? String((value as Record<string, unknown>).value)
+    : "");
+  if (!raw || raw.length < 40) return out;
+  const compressed = decodeB64Bytes(raw);
+  if (!compressed) return out;
+  const inflated = inflateMapBytes(compressed);
+  if (!inflated || inflated.length < 27) return out;
+  const dv = new DataView(inflated.buffer, inflated.byteOffset, inflated.byteLength);
+  const robotX = readI16(dv, 5);
+  const robotY = readI16(dv, 7);
+  const robotA = readI16(dv, 9);
+  const chargerX = readI16(dv, 11);
+  const chargerY = readI16(dv, 13);
+  const chargerA = readI16(dv, 15);
+  const grid = readI16(dv, 17);
+  const width = readI16(dv, 19);
+  const height = readI16(dv, 21);
+  const left = readI16(dv, 23);
+  const top = readI16(dv, 25);
+  const pixLen = width > 0 && height > 0 && width < 2000 && height < 2000 ? width * height : 0;
+  const pixels = pixLen && 27 + pixLen <= inflated.length ? inflated.subarray(27, 27 + pixLen) : null;
+  const json = jsonObjectFromBytes(inflated, 27 + pixLen);
+  if (json) out.ids.push(...currentRoomIdsFromValue(json));
+  if (pixels && robotA !== 32767) {
+    out.robot = segmentAtPixel(pixels, width, height, left, top, grid, robotX, robotY) || null;
+  }
+  if (pixels && chargerA !== 32767) {
+    out.charger = segmentAtPixel(pixels, width, height, left, top, grid, chargerX, chargerY) || null;
+  }
+  if (out.robot) out.ids.push(out.robot);
+  if (out.charger) out.ids.push(out.charger);
+  out.ids = [...new Set(out.ids.filter(n => n > 0 && n < 100))];
+  return out;
+}
+
+function locationFromPropValue(value: unknown): { ids: number[]; charger: number | null } {
+  const ids = currentRoomIdsFromValue(value);
+  const blob = locationFromMapBlob(value);
+  ids.push(...blob.ids);
+  const json = tryParseJson(value);
+  if (json) {
+    for (const nest of ["rism", "map", "map_extend"]) {
+      const nested = json[nest];
+      if (typeof nested === "string") {
+        const inner = locationFromMapBlob(nested);
+        ids.push(...inner.ids);
+        if (inner.charger) blob.charger = inner.charger;
+        if (inner.robot) ids.push(inner.robot);
+      }
+    }
+  }
+  return { ids: [...new Set(ids.filter(n => n > 0 && n < 100))], charger: blob.charger };
 }
 
 function parseMapRoomsFromPropValue(value: unknown): DreameMapRoom[] {
@@ -592,7 +713,8 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
     CLEANING_MODE,
     MOP_PADS_STATE,
     CLEANING_PROPERTIES,
-    MAP_EXTEND_DATA
+    MAP_EXTEND_DATA,
+    MAP_DATA
   ]);
   let status: number | null = null;
   let battery: number | null = null;
@@ -601,6 +723,7 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
   let cleaning_mode: number | null = null;
   let cleaning_mode_raw: number | null = null;
   const current_room_ids: number[] = [];
+  let charger_room_id: number | null = null;
   for (const row of rows) {
     if (row.siid === 2 && row.piid === 1 && typeof row.value === "number") status = row.value;
     if (row.siid === 3 && row.piid === 1 && typeof row.value === "number") battery = row.value;
@@ -611,13 +734,16 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
       cleaning_mode = decoded.mode;
       cleaning_mode_raw = decoded.raw;
     }
-    if ((row.siid === 4 && row.piid === 10) || (row.siid === 6 && row.piid === 4)) {
-      current_room_ids.push(...currentRoomIdsFromValue(row.value));
+    if ((row.siid === 4 && row.piid === 10) || (row.siid === 6 && (row.piid === 4 || row.piid === 1))) {
+      const loc = locationFromPropValue(row.value);
+      current_room_ids.push(...loc.ids);
+      if (loc.charger) charger_room_id = loc.charger;
     }
   }
   return {
     status, battery, suction, water, cleaning_mode, cleaning_mode_raw,
-    current_room_ids: [...new Set(current_room_ids)]
+    current_room_ids: [...new Set(current_room_ids)],
+    charger_room_id
   };
 }
 
@@ -764,6 +890,7 @@ async function readState(cred: DreameCred) {
   let cleaning_mode: number | null = null;
   let live_ok = false;
   let current_room_ids: number[] = [];
+  let charger_room_id: number | null = cred.dock_room_id ?? null;
   try {
     const live = await dreameReadSettings(cred, did);
     if (live.status != null) status = live.status;
@@ -772,6 +899,7 @@ async function readState(cred: DreameCred) {
     water = live.water;
     cleaning_mode = live.cleaning_mode;
     current_room_ids = live.current_room_ids || [];
+    if (live.charger_room_id) charger_room_id = live.charger_room_id;
     live_ok = live.status != null || live.battery != null || live.cleaning_mode != null || live.suction != null || live.water != null;
   } catch (e) {
     live_ok = false;
@@ -779,13 +907,23 @@ async function readState(cred: DreameCred) {
       /* keep listV2 values */
     }
   }
+  if (charger_room_id && charger_room_id !== cred.dock_room_id) {
+    await admin.from("household_dreame").update({
+      dock_room_id: charger_room_id,
+      updated_at: new Date().toISOString()
+    }).eq("household_id", cred.household_id);
+  }
+  if ((!current_room_ids.length || DOCK_STATUSES.has(status ?? -1)) && charger_room_id) {
+    current_room_ids = [charger_room_id];
+  }
   const prefs = settingsLabels({ suction, water, cleaning_mode });
   const charge = battery != null ? `${battery} %` : null;
   const reachable = live_ok || dev.online;
   const stateBit = statusLabel(status, reachable);
   const mapRooms = Array.isArray(cred.map_rooms) ? cred.map_rooms as DreameMapRoom[] : [];
   const current_rooms = namesForRoomIds(current_room_ids, mapRooms);
-  const where = current_rooms.length ? ` · ${current_rooms.join(", ")}` : "";
+  const dockedHere = DOCK_STATUSES.has(status ?? -1) && current_rooms.length;
+  const where = current_rooms.length ? ` · ${current_rooms.join(", ")}${dockedHere ? " (station)" : ""}` : "";
   const label = (charge ? `${stateBit} · ${charge}` : stateBit) + where;
   return {
     connected: true,
