@@ -67,21 +67,43 @@ Deno.serve(async (req: Request) => {
       .eq("user_id", data.user.id).limit(1);
     if (membershipError || !membership?.[0]) return reply(req, { error: "Accès au foyer refusé" }, 403);
     const { data: cred, error: credError } = await admin
-      .from("household_smartthings").select("pat, device_id, device_name")
+      .from("household_smartthings").select("pat, access_token, refresh_token, token_expires_at, device_id, device_name")
       .eq("household_id", membership[0].household_id).maybeSingle();
     if (credError) return reply(req, { error: "Lecture SmartThings impossible" }, 500);
     if (!cred) return reply(req, { connected: false, label: "SmartThings non relié", power: null });
     const id = cred.device_id;
     if (!id) return reply(req, { connected: true, label: "Choisissez un téléviseur", power: null });
     const encoded = encodeURIComponent(String(id));
+    let token = cred.access_token || cred.pat;
+    const exp = cred.token_expires_at ? Date.parse(cred.token_expires_at) : 0;
+    const stClientId = Deno.env.get("SMARTTHINGS_CLIENT_ID") || "";
+    const stClientSecret = Deno.env.get("SMARTTHINGS_CLIENT_SECRET") || "";
+    if (cred.refresh_token && stClientId && stClientSecret && (!cred.access_token || exp < Date.now() + 120000)) {
+      const basic = btoa(stClientId + ":" + stClientSecret);
+      const tokRes = await fetch("https://api.smartthings.com/v1/oauth/token", {
+        method: "POST",
+        headers: { Authorization: "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: cred.refresh_token, client_id: stClientId })
+      });
+      const tok = await tokRes.json().catch(() => ({}));
+      if (tokRes.ok && tok.access_token) {
+        token = tok.access_token;
+        await admin.from("household_smartthings").update({
+          access_token: tok.access_token,
+          refresh_token: tok.refresh_token || cred.refresh_token,
+          token_expires_at: new Date(Date.now() + (tok.expires_in || 86000) * 1000).toISOString()
+        }).eq("household_id", membership[0].household_id);
+      }
+    }
+    if (!token) return reply(req, { connected: true, label: "Compte SmartThings à reconnecter", power: null, access_issue: "token" });
 
     // Sources indépendantes : capteurs de la TV et état de connexion SmartThings.
     const [status, health] = await Promise.all([
-      smartThingsRead(cred.pat, "devices/" + encoded + "/status"),
-      smartThingsRead(cred.pat, "devices/" + encoded + "/health")
+      smartThingsRead(token, "devices/" + encoded + "/status"),
+      smartThingsRead(token, "devices/" + encoded + "/health")
     ]);
     // L'état détaillé d'un téléviseur éteint peut échouer : essayer la fiche d'appareil.
-    const detail = status.ok ? null : await smartThingsRead(cred.pat, "devices/" + encoded + "?includeStatus=true&includeHealth=true");
+    const detail = status.ok ? null : await smartThingsRead(token, "devices/" + encoded + "?includeStatus=true&includeHealth=true");
     const raw = status.ok ? status.body : detail?.body?.status || null;
     const healthValue = cleanString(health.ok ? health.body?.state : detail?.body?.healthState?.state)?.toUpperCase() || null;
     const sw = cap(raw, "switch", "switch");

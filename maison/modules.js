@@ -421,6 +421,29 @@ async function domPoeleToggle() {
 }
 
 function domStLinked() { return !!domStStatus.connected; }
+function domStOauthStart() {
+  toast("Ouverture du compte Samsung…");
+  smartthingsServer("oauth-start", {}).then(r => {
+    if (r && r.url) location.href = r.url;
+    else toast("Lien Samsung introuvable.");
+  }).catch(err => toast(err.message));
+}
+(function domStOauthReturn() {
+  const url = new URL(location.href);
+  const result = url.searchParams.get("smartthings");
+  if (!result) return;
+  url.searchParams.delete("smartthings");
+  history.replaceState(null, "", url.pathname + url.search + url.hash);
+  if (result === "connected") {
+    toast("Samsung SmartThings relié.");
+    domStRefreshStatus().then(() => {
+      render();
+      return domStRefreshState(true);
+    }).then(() => render()).catch(() => {});
+  } else if (result === "cancelled") toast("Connexion Samsung annulée.");
+  else if (result === "missing_refresh") toast("Samsung n’a pas renvoyé de jeton durable. Réessayez en autorisant l’accès.");
+  else toast("Connexion Samsung impossible. Vérifiez l’app SmartThings (Client ID / Secret).");
+})();
 function domStSummary() {
   if (!domStLinked()) return "Non connecté";
   if (!domStStatus.device_id && !(S.hh && S.hh.smartthings_device_id)) return "Choisissez un appareil";
@@ -464,7 +487,7 @@ async function domStRefreshStatus() {
   if (now - domStStatusAt < 60000 && domStStatus.connected) return;
   try {
     const r = await smartthingsServer("status");
-    domStStatus = { connected: !!r.connected, device_id: r.device_id ?? null, device_name: r.device_name || null };
+    domStStatus = { connected: !!r.connected, device_id: r.device_id ?? null, device_name: r.device_name || null, auth: r.auth || null, oauth_ready: !!r.oauth_ready };
     if (S.hh && r.device_id != null) S.hh.smartthings_device_id = r.device_id;
     domStStatusAt = Date.now();
   } catch (_) {}
@@ -1408,8 +1431,8 @@ function domSettingsLegacy(zone) {
     : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">Dreame Home</h4><p class="muted">Reliez le compte Dreame Home (e-mail + mot de passe de l'app, région EU).</p><button class="btn primary" data-dom-dreame-connect>Relier Dreame Home</button>`)
     : "";
   const stv = !zone && cloud ? (domStLinked()
-    ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">Jeton enregistré${domStStatus.device_name ? " · " + esc(domStStatus.device_name) : ""}. Samsung limite les nouveaux jetons personnels à 24 h.</p><div class="btns"><button class="btn primary" data-dom-st-connect>Renouveler le jeton</button><button class="btn" data-dom-st-devices>Choisir un appareil</button><button class="btn ghost danger" data-dom-st-disconnect>Délier SmartThings</button></div>`
-    : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">Reliez un token SmartThings (PAT) pour piloter votre TV Samsung.</p><button class="btn primary" data-dom-st-connect>Relier SmartThings</button>`)
+    ? `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">${domStStatus.auth === "oauth" ? "Compte Samsung relié" : "Jeton de test"}${domStStatus.device_name ? " · " + esc(domStStatus.device_name) : ""}. ${domStStatus.auth === "oauth" ? "Les accès se renouvellent tout seuls." : "Les jetons personnels expirent en 24 h."}</p><div class="btns"><button class="btn primary" data-dom-st-oauth>${domStStatus.auth === "oauth" ? "Reconnecter Samsung" : "Relier le compte Samsung"}</button><button class="btn" data-dom-st-devices>Choisir un appareil</button><button class="btn ghost" data-dom-st-connect>Jeton de test 24 h</button><button class="btn ghost danger" data-dom-st-disconnect>Délier SmartThings</button></div>`
+    : `<hr class="dom-settings-split"><h4 class="dom-settings-sub">SmartThings · Samsung TV</h4><p class="muted">Connectez-vous avec votre compte Samsung (recommandé) : plus besoin de recoller un jeton toutes les 24 h.</p><button class="btn primary" data-dom-st-oauth>Relier le compte Samsung</button><button class="btn ghost" data-dom-st-connect>Jeton de test 24 h</button>`)
     : "";
   openSheet("Réglages · " + heading, `<div class="dom-settings">${connect}${mel}${dre}${stv}<p class="muted small">Version domotique · build 20261101e02</p><p class="muted">Gérez les équipements de ${zone ? "cette zone" : "vos trois zones Shelly"}.</p>${!zone ? '<button type="button" class="btn" data-mz-dom-favs-config>Personnaliser mes 3 accès rapides ›</button><button type="button" class="btn" data-dom-rooms-manage>Gérer les pièces ›</button>' : ""}<div class="dom-settings-list">${rows.map(x => `<button type="button" class="btn dom-settings-row" data-dom-edit="${esc(x.id)}"><span>${esc(x.name)} <small class="muted">· ${DOM_ZONES[x.zone]}</small></span><span>Modifier ›</span></button>`).join("") || '<p class="muted">Aucun équipement configuré.</p>'}</div><button class="btn primary" data-dom-add="${zone || "exterieur"}">＋ Ajouter un appareil</button></div>`);
   if (!zone && cloud) {
@@ -1592,10 +1615,11 @@ function mzDomServiceSettingsSheet(key){
       :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-dreame-connect>Relier Dreame Home</button>`;
   }else if(key==="tv"){
     name="SmartThings · Samsung TV";
-    body=domStLinked()?`<p class="muted">Jeton enregistré${domStStatus.device_name?" · "+esc(domStStatus.device_name):""}. La validité est vérifiée lors des lectures Samsung.</p>
-      <button class="btn primary" type="button" data-dom-st-connect>Renouveler le jeton SmartThings</button>
-      <button class="btn" type="button" data-dom-st-devices>Choisir un téléviseur ›</button>`
-      :`<p class="muted">Compte non relié.</p><button class="btn primary" type="button" data-dom-st-connect>Relier SmartThings</button>`;
+    body=domStLinked()?`<p class="muted">${domStStatus.auth==="oauth"?"Compte Samsung relié":"Jeton de test"}${domStStatus.device_name?" · "+esc(domStStatus.device_name):""}. ${domStStatus.auth==="oauth"?"Les accès se renouvellent tout seuls.":"Les jetons personnels expirent en 24 h."}</p>
+      <button class="btn primary" type="button" data-dom-st-oauth>${domStStatus.auth==="oauth"?"Reconnecter Samsung":"Relier le compte Samsung"}</button>
+      <button class="btn" type="button" data-dom-st-devices>Choisir un téléviseur ›</button>
+      <button class="btn ghost" type="button" data-dom-st-connect>Jeton de test 24 h</button>`
+      :`<p class="muted">Connectez le compte Samsung de la maison. Un jeton personnel n’est plus nécessaire au quotidien.</p><button class="btn primary" type="button" data-dom-st-oauth>Relier le compte Samsung</button><button class="btn ghost" type="button" data-dom-st-connect>Jeton de test 24 h</button>`;
   }else return;
   openSheet(name,`<div class="mz-dom-service-settings">${mzDomSettingsBack()}${body}</div>`);
 }
@@ -2017,8 +2041,8 @@ function domStEqCard() {
 }
 // Navigation de la télécommande Samsung — initialisation indispensable à l’ouverture.
 function domStAccessHelp(st) {
-  if (st.access_issue === "token") return "Samsung refuse le jeton actuel. Les jetons personnels récents expirent après 24 heures. Remplacez-le sans délier votre TV.";
-  if (st.access_issue === "permissions") return "Samsung refuse l'accès aux données de la TV. Créez un jeton autorisant la lecture et les commandes des appareils.";
+  if (st.access_issue === "token") return "Samsung refuse l’accès actuel. Reconnectez le compte Samsung (OAuth) : plus besoin d’un jeton 24 h.";
+  if (st.access_issue === "permissions") return "Samsung refuse l'accès aux données de la TV. Reconnectez le compte en autorisant lecture et commandes des appareils.";
   if (st.access_issue === "health") return "Samsung refuse seulement la lecture de disponibilité du téléviseur. Cela ne prouve pas que la TV est éteinte.";
   return "";
 }
@@ -2083,7 +2107,7 @@ function domTvPanelHtml() {
   return `<div class="mz-tv-hero"><div class="mz-tv-screen">▣</div><div class="mz-tv-hero-text"><strong>${info(st.device_name || domStStatus.device_name,"65\" OLED")}</strong><span><i class="mz-tv-dot${on?" is-on":""}"></i>${on?"TV allumée":off?"TV éteinte":st.label || "État en cours de lecture"} · Salon</span></div>${btn("power_toggle","⏻","mz-tv-hero-power")}</div>
     <nav class="mz-tv-tabs" aria-label="Fonctions téléviseur">${tabs.map(([id,ico,label])=>`<button type="button" data-dom-tv-tab="${id}" class="${domTvTab===id?"is-active":""}" aria-current="${domTvTab===id?"page":"false"}"><b aria-hidden="true">${ico}</b><span>${label}</span></button>`).join("")}</nav>
     <p class="dom-tv-status mz-tv-status" data-dom-tv-status aria-live="polite">${domTvStatusHtml()}</p>
-    ${st.access_issue ? `<div class="mz-tv-info"><span>${esc(domStAccessHelp(st))}</span>${st.access_issue === "health" ? "" : '<button type="button" class="btn primary" data-dom-st-connect>Renouveler le jeton</button>'}</div>` : ""}
+    ${st.access_issue ? `<div class="mz-tv-info"><span>${esc(domStAccessHelp(st))}</span>${st.access_issue === "health" ? "" : '<button type="button" class="btn primary" data-dom-st-oauth>Reconnecter Samsung</button>'}</div>` : ""}
     ${!st.access_issue && st.power == null && st.label && st.label !== "Chargement…" ? '<div class="mz-tv-info"><span>' + (st.health === "OFFLINE" ? "Samsung signale la télévision hors ligne. Elle est peut-être éteinte, mais une coupure réseau donnerait le même résultat." : "SmartThings ne confirme pas l’état d’alimentation. Vous pouvez réessayer la lecture.") + '</span><button type="button" class="btn ghost" data-dom-st-retry>↻ Réessayer de lire l’état</button></div>' : ""}
     <div class="dom-tv-controls mz-tv-content" data-dom-tv-controls>${page}</div>
     <button type="button" class="btn ghost mz-tv-close" data-act="closeSheet">Fermer</button>`;
@@ -2091,7 +2115,7 @@ function domTvPanelHtml() {
 
 function domTvSheet(fromRefresh) {
   if (!domStLinked()) {
-    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">SmartThings non relié</p><p>Reliez votre compte SmartThings pour piloter votre TV Samsung depuis Maisonnée.</p><button type="button" class="btn primary" data-dom-st-connect>Relier SmartThings</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
+    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">SmartThings non relié</p><p>Connectez le compte Samsung de la maison pour piloter la TV, sans jeton à recoller toutes les 24 h.</p><button type="button" class="btn primary" data-dom-st-oauth>Relier le compte Samsung</button><button type="button" class="btn ghost" data-dom-st-connect>Jeton de test 24 h</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
     return;
   }
   if (fromRefresh && document.querySelector(".dom-tv-panel")) { domTvFillPanel(); return; }
@@ -2140,12 +2164,10 @@ function domStConnectSheet() {
   // Garder le contexte exact de navigation lors du renouvellement.
   domStReturnAfterRenewal = document.querySelector(".dom-tv-panel.mz-tv") ? "tv"
     : document.querySelector(".mz-dom-service-settings") ? "settings" : "";
-  const renewal = domStLinked();
-  openSheet(renewal ? "Renouveler le jeton SmartThings" : "Relier SmartThings", `<form id="dom-st-connect" class="dom-form">
-    <p class="muted">Les nouveaux jetons personnels Samsung expirent après 24 heures. Créez un jeton sur <a href="https://account.smartthings.com/tokens" target="_blank" rel="noopener">account.smartthings.com/tokens</a> avec les droits de lecture et de commande des appareils.</p>
-    ${renewal ? '<p class="muted">Le remplacement conserve le téléviseur actuellement sélectionné si Samsung y donne encore accès. Aucun autre équipement n’est modifié.</p>' : ""}
-    <label>Nouveau jeton SmartThings (PAT)<input name="pat" type="password" required minlength="20" maxlength="400" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
-    <button class="btn primary" type="submit">${renewal ? "Vérifier et remplacer le jeton" : "Tester et enregistrer"}</button>
+  openSheet("Jeton de test SmartThings", `<form id="dom-st-connect" class="dom-form">
+    <p class="muted">À utiliser seulement pour un essai. Les PAT Samsung durent 24 h. Le quotidien, c’est <strong>Relier le compte Samsung</strong>.</p>
+    <label>Jeton personnel (PAT)<input name="pat" type="password" required minlength="20" maxlength="400" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+    <button class="btn" type="submit">Tester et enregistrer</button>
   </form>`);
 }
 function domStDevicePickerSheet() {
@@ -2362,7 +2384,7 @@ function domPlaceholderSheet(kind) {
   const copy = {
     mitsu: ["Chauffage Mitsubishi", "<p>MELCloud n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-mel-connect>Relier MELCloud</button>"],
     dreame: ["Dreame D20 Ultra", "<p>Dreame Home n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-dreame-connect>Relier Dreame Home</button>"],
-    tv: ["Samsung TV", "<p>SmartThings n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-st-connect>Relier SmartThings</button>"]
+    tv: ["Samsung TV", "<p>SmartThings n'est pas connecté à Maisonnée.</p><button type=\"button\" class=\"btn primary\" data-dom-st-oauth>Relier le compte Samsung</button>"]
   }[kind] || ["Équipement", "<p>Intégration à réaliser.</p>"];
   openSheet(copy[0], `<div class="dom-pending"><p class="muted">Non connecté</p>${copy[1]}<button type="button" class="btn" data-act="closeSheet">Fermer</button></div>`);
 }
@@ -2892,6 +2914,7 @@ document.addEventListener("click", e => {
     return;
   }
   if (e.target.closest("[data-dom-st-open]")) { domTvSheet(); return; }
+  if (e.target.closest("[data-dom-st-oauth]")) { domStOauthStart(); return; }
   if (e.target.closest("[data-dom-st-connect]")) { domStConnectSheet(); return; }
   if (e.target.closest("[data-dom-st-devices]")) { domStDevicePickerSheet(); return; }
   if (e.target.closest("[data-dom-st-disconnect]")) {

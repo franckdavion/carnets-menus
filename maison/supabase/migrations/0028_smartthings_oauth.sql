@@ -1,0 +1,10 @@
+alter table public.household_smartthings drop constraint if exists household_smartthings_pat_check;
+alter table public.household_smartthings alter column pat drop not null;
+alter table public.household_smartthings add column if not exists access_token text;
+alter table public.household_smartthings add column if not exists refresh_token text;
+alter table public.household_smartthings add column if not exists token_expires_at timestamptz;
+alter table public.household_smartthings add column if not exists installed_app_id text;
+alter table public.household_smartthings drop constraint if exists household_smartthings_pat_check;
+alter table public.household_smartthings add constraint household_smartthings_pat_check check (pat is null or char_length(pat) between 20 and 400);
+alter table public.household_smartthings drop constraint if exists household_smartthings_has_secret;
+alter table public.household_smartthings add constraint household_smartthings_has_secret check (pat is not null or refresh_token is not null);

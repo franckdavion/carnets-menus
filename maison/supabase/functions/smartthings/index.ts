@@ -1,11 +1,17 @@
-// Maisonnée — SmartThings (Samsung TV). Token PAT uniquement côté serveur.
+// Maisonnée — SmartThings (Samsung TV). OAuth + PAT côté serveur.
+// Déployer SANS vérification JWT : le callback Samsung arrive sans session.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
 const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const stClientId = Deno.env.get("SMARTTHINGS_CLIENT_ID") || "";
+const stClientSecret = Deno.env.get("SMARTTHINGS_CLIENT_SECRET") || "";
 const admin = createClient(sbUrl, service, { auth: { persistSession: false } });
 const ST_BASE = "https://api.smartthings.com/v1";
+const HOME = "https://franckdavion.github.io/carnets-menus/maison/";
+const CALLBACK = `${sbUrl}/functions/v1/smartthings/callback`;
+const ST_SCOPES = "r:devices:* x:devices:* r:locations:*";
 const ALLOWED = new Set([
   "https://franckdavion.github.io",
   "http://192.168.0.146:8765",
@@ -27,6 +33,13 @@ function cors(req: Request) {
 const json = (req: Request, v: unknown, status = 200) =>
   new Response(JSON.stringify(v), { status, headers: { ...cors(req), "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
+const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const ub64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4)), c => c.charCodeAt(0));
+const hmacKeyPromise = crypto.subtle.importKey("raw", new TextEncoder().encode(stClientSecret || service), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+async function signState(payload: string) {
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKeyPromise, new TextEncoder().encode(payload))));
+}
+
 async function userFrom(req: Request) {
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!token) return null;
@@ -43,18 +56,45 @@ async function householdOf(uid: string) {
 
 type StCred = {
   household_id: string;
-  pat: string;
+  pat: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  installed_app_id: string | null;
   device_id: string | null;
   device_name: string | null;
 };
 
-// ── SmartThings API helpers ─────────────────────────────────────────
+function oauthConfigured() {
+  return !!(stClientId && stClientSecret);
+}
 
-async function stFetch(pat: string, path: string, init?: RequestInit) {
+async function stToken(body: URLSearchParams) {
+  const basic = btoa(`${stClientId}:${stClientSecret}`);
+  const r = await fetch(`${ST_BASE}/oauth/token`, {
+    method: "POST",
+    headers: {
+      Authorization: "Basic " + basic,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json"
+    },
+    body
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(String(data.error_description || data.error || "Échange OAuth SmartThings refusé"));
+  return data as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    installed_app_id?: string;
+  };
+}
+
+async function stFetch(token: string, path: string, init?: RequestInit) {
   const r = await fetch(`${ST_BASE}/${path.replace(/^\//, "")}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${pat}`,
+      Authorization: `Bearer ${token}`,
       Accept: "application/json",
       ...(init?.headers as Record<string, string> || {})
     }
@@ -66,19 +106,28 @@ async function stFetch(pat: string, path: string, init?: RequestInit) {
 }
 
 function stError(status: number, fallback: string): Error {
-  if (status === 401) return new Error("Jeton SmartThings expiré ou invalide. Renouvelez-le dans les réglages SmartThings.");
-  if (status === 403) return new Error("Accès SmartThings refusé : autorisations insuffisantes. Vérifiez les droits de lecture et de commande des appareils.");
+  if (status === 401) return new Error("Compte SmartThings à reconnecter. Reliez à nouveau Samsung depuis les réglages.");
+  if (status === 403) return new Error("Accès SmartThings refusé : autorisations insuffisantes.");
   return new Error(fallback);
 }
 
 interface StDevice { id: string; name: string; label: string; type: string }
 
-async function stListDevices(pat: string): Promise<StDevice[]> {
-  const r = await stFetch(pat, "devices");
+function mapDevices(items: Record<string, unknown>[]): StDevice[] {
+  return items.map(d => ({
+    id: String(d.deviceId),
+    name: String(d.name || ""),
+    label: String(d.label || d.name || ""),
+    type: String(d.type || "")
+  }));
+}
+
+async function stListDevices(token: string): Promise<StDevice[]> {
+  const r = await stFetch(token, "devices");
   if (!r.ok) throw stError(r.status, "Impossible de lister les appareils SmartThings");
   const root = r.body as Record<string, unknown>;
-  const items = Array.isArray(root?.items) ? root.items : [];
-  return (items as Record<string, unknown>[])
+  const items = Array.isArray(root?.items) ? root.items as Record<string, unknown>[] : [];
+  return items
     .filter(d => {
       const cats = d.components ? (d.components as Record<string, unknown>[]).flatMap(c => {
         const cats2 = (c as Record<string, unknown>).categories;
@@ -96,21 +145,16 @@ async function stListDevices(pat: string): Promise<StDevice[]> {
     }));
 }
 
-async function stAllDevices(pat: string): Promise<StDevice[]> {
-  const r = await stFetch(pat, "devices");
+async function stAllDevices(token: string): Promise<StDevice[]> {
+  const r = await stFetch(token, "devices");
   if (!r.ok) throw stError(r.status, "Impossible de lister les appareils SmartThings");
   const root = r.body as Record<string, unknown>;
-  const items = Array.isArray(root?.items) ? root.items : [];
-  return (items as Record<string, unknown>[]).map(d => ({
-    id: String(d.deviceId),
-    name: String(d.name || ""),
-    label: String(d.label || d.name || ""),
-    type: String(d.type || "")
-  }));
+  const items = Array.isArray(root?.items) ? root.items as Record<string, unknown>[] : [];
+  return mapDevices(items);
 }
 
-async function stDeviceStatus(pat: string, deviceId: string) {
-  const r = await stFetch(pat, `devices/${deviceId}/status`);
+async function stDeviceStatus(token: string, deviceId: string) {
+  const r = await stFetch(token, `devices/${deviceId}/status`);
   if (!r.ok) throw stError(r.status, "État SmartThings indisponible");
   return r.body as Record<string, unknown>;
 }
@@ -120,34 +164,23 @@ function parseStatus(raw: Record<string, unknown>) {
   if (!components) return { power: null, volume: null, mute: null, channel: null, input: null, label: "Données indisponibles" };
   const main = components.main as Record<string, unknown> | undefined;
   if (!main) return { power: null, volume: null, mute: null, channel: null, input: null, label: "Données indisponibles" };
-
-  // switch / power
   const sw = main.switch as Record<string, unknown> | undefined;
   const swVal = sw?.switch as Record<string, unknown> | undefined;
   const power = swVal?.value === "on" ? true : swVal?.value === "off" ? false : null;
-
-  // volume
   const audioVol = main.audioVolume as Record<string, unknown> | undefined;
   const volVal = audioVol?.volume as Record<string, unknown> | undefined;
   const volume = typeof volVal?.value === "number" ? volVal.value as number : null;
-
-  // mute
   const audioMute = main.audioMute as Record<string, unknown> | undefined;
   const muteVal = audioMute?.mute as Record<string, unknown> | undefined;
   const mute = muteVal?.value === "muted" ? true : muteVal?.value === "unmuted" ? false : null;
-
-  // channel (tvChannel capability)
   const tvChan = main.tvChannel as Record<string, unknown> | undefined;
   const chanVal = tvChan?.tvChannel as Record<string, unknown> | undefined;
   const channel = chanVal?.value != null ? String(chanVal.value) : null;
   const chanName = tvChan?.tvChannelName as Record<string, unknown> | undefined;
   const channelName = chanName?.value != null ? String(chanName.value) : null;
-
-  // input source (mediaInputSource)
   const mediaSrc = main.mediaInputSource as Record<string, unknown> | undefined;
   const inputVal = mediaSrc?.inputSource as Record<string, unknown> | undefined;
   const input = inputVal?.value != null ? String(inputVal.value) : null;
-
   const parts: string[] = [];
   if (power === false) parts.push("Éteinte");
   else if (power === true) {
@@ -155,13 +188,11 @@ function parseStatus(raw: Record<string, unknown>) {
     if (volume != null) parts.push("Vol. " + volume);
     if (input) parts.push(input);
   }
-  const label = parts.length ? parts.join(" · ") : "En ligne";
-
-  return { power, volume, mute, channel, channelName, input, label };
+  return { power, volume, mute, channel, channelName, input, label: parts.length ? parts.join(" · ") : "En ligne" };
 }
 
-async function stCommand(pat: string, deviceId: string, capability: string, command: string, args: unknown[] = []) {
-  const r = await stFetch(pat, `devices/${deviceId}/commands`, {
+async function stCommand(token: string, deviceId: string, capability: string, command: string, args: unknown[] = []) {
+  const r = await stFetch(token, `devices/${deviceId}/commands`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -175,33 +206,8 @@ async function stCommand(pat: string, deviceId: string, capability: string, comm
   return r.body;
 }
 
-// ── State cache ─────────────────────────────────────────────────────
 const stateCache = new Map();
 const CACHE_TTL = 9000;
-
-async function readState(cred: StCred) {
-  const deviceId = cred.device_id;
-  if (!deviceId) return { connected: true, device_id: null, device_name: null, label: "Choisissez un appareil SmartThings" };
-
-  const now = Date.now();
-  const cached = stateCache.get(deviceId);
-  let raw: Record<string, unknown>;
-  if (cached && now - cached.at < CACHE_TTL) {
-    raw = cached.data;
-  } else {
-    raw = await stDeviceStatus(cred.pat, deviceId);
-    stateCache.set(deviceId, { at: now, data: raw });
-  }
-  const parsed = parseStatus(raw);
-  return {
-    connected: true,
-    device_id: deviceId,
-    device_name: cred.device_name || "Samsung TV",
-    ...parsed
-  };
-}
-
-// ── DB helpers ──────────────────────────────────────────────────────
 
 async function getCred(hid: string): Promise<StCred | null> {
   const { data, error } = await admin.from("household_smartthings").select("*").eq("household_id", hid).maybeSingle();
@@ -209,63 +215,199 @@ async function getCred(hid: string): Promise<StCred | null> {
   return data as StCred | null;
 }
 
-// ── Deno handler ────────────────────────────────────────────────────
+async function bearerOf(cred: StCred): Promise<string> {
+  if (cred.refresh_token && oauthConfigured()) {
+    const exp = cred.token_expires_at ? Date.parse(cred.token_expires_at) : 0;
+    if (cred.access_token && exp > Date.now() + 120_000) return cred.access_token;
+    const t = await stToken(new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: cred.refresh_token,
+      client_id: stClientId
+    }));
+    const access = t.access_token;
+    const refresh = t.refresh_token || cred.refresh_token;
+    const expires_at = new Date(Date.now() + (t.expires_in || 86000) * 1000).toISOString();
+    await admin.from("household_smartthings").update({
+      access_token: access,
+      refresh_token: refresh,
+      token_expires_at: expires_at,
+      updated_at: new Date().toISOString()
+    }).eq("household_id", cred.household_id);
+    cred.access_token = access;
+    cred.refresh_token = refresh;
+    cred.token_expires_at = expires_at;
+    return access;
+  }
+  if (cred.pat) return cred.pat;
+  throw new Error("Compte SmartThings à reconnecter.");
+}
+
+async function readState(cred: StCred) {
+  const deviceId = cred.device_id;
+  if (!deviceId) return { connected: true, device_id: null, device_name: null, label: "Choisissez un appareil SmartThings" };
+  const token = await bearerOf(cred);
+  const now = Date.now();
+  const cached = stateCache.get(deviceId);
+  let raw: Record<string, unknown>;
+  if (cached && now - cached.at < CACHE_TTL) {
+    raw = cached.data;
+  } else {
+    raw = await stDeviceStatus(token, deviceId);
+    stateCache.set(deviceId, { at: now, data: raw });
+  }
+  const parsed = parseStatus(raw);
+  return {
+    connected: true,
+    device_id: deviceId,
+    device_name: cred.device_name || "Samsung TV",
+    auth: cred.refresh_token ? "oauth" : "pat",
+    ...parsed
+  };
+}
+
+async function pickDefaultTv(token: string, previousId?: string | null) {
+  const tvs = await stListDevices(token);
+  const all = await stAllDevices(token);
+  const device = (previousId ? all.find(d => d.id === previousId) : null) || tvs[0] || null;
+  return { tvs, all, device };
+}
 
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(req) });
+  const url = new URL(req.url);
+  const action = url.pathname.split("/").filter(Boolean).pop() || "";
   try {
+    if (req.method === "POST" && (action === "smartthings" || action === "webhook")) {
+      const hook = await req.json().catch(() => ({})) as Record<string, unknown>;
+      if (hook.messageType === "CONFIRMATION") {
+        const data = hook.confirmationData as { confirmationUrl?: string } | undefined;
+        const confirmUrl = String(data?.confirmationUrl || "");
+        if (confirmUrl.startsWith("https://api.smartthings.com/")) await fetch(confirmUrl);
+      }
+      return json(req, { ok: true });
+    }
+
+    if (action === "callback") {
+      const home = HOME;
+      const state = url.searchParams.get("state") || "";
+      const [payload, mac] = state.split(".");
+      if (!payload || !mac || !(await crypto.subtle.verify("HMAC", await hmacKeyPromise, ub64url(mac), new TextEncoder().encode(payload)))) {
+        return Response.redirect(home + "?smartthings=error", 302);
+      }
+      const s = JSON.parse(new TextDecoder().decode(ub64url(payload))) as { uid?: string; hid?: string; exp?: number };
+      if (!s.uid || !s.hid || !s.exp || s.exp < Date.now() || s.exp > Date.now() + 12 * 60e3) {
+        return Response.redirect(home + "?smartthings=error", 302);
+      }
+      if (url.searchParams.has("error")) return Response.redirect(home + "?smartthings=cancelled", 302);
+      const code = url.searchParams.get("code");
+      if (!code || !oauthConfigured()) return Response.redirect(home + "?smartthings=error", 302);
+      let t;
+      try {
+        t = await stToken(new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          client_id: stClientId,
+          redirect_uri: CALLBACK
+        }));
+      } catch (e) {
+        console.error(e);
+        return Response.redirect(home + "?smartthings=error", 302);
+      }
+      if (!t.refresh_token || !t.access_token) return Response.redirect(home + "?smartthings=missing_refresh", 302);
+      const previous = await getCred(s.hid);
+      const expires_at = new Date(Date.now() + (t.expires_in || 86000) * 1000).toISOString();
+      let deviceId = previous?.device_id || null;
+      let deviceName = previous?.device_name || null;
+      try {
+        const picked = await pickDefaultTv(t.access_token, deviceId);
+        if (picked.device) {
+          deviceId = picked.device.id;
+          deviceName = picked.device.label || picked.device.name;
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+      const { error } = await admin.from("household_smartthings").upsert({
+        household_id: s.hid,
+        pat: null,
+        access_token: t.access_token,
+        refresh_token: t.refresh_token,
+        token_expires_at: expires_at,
+        installed_app_id: t.installed_app_id || null,
+        device_id: deviceId,
+        device_name: deviceName,
+        updated_at: new Date().toISOString(),
+        updated_by: s.uid
+      });
+      if (error) {
+        console.error(error);
+        return Response.redirect(home + "?smartthings=error", 302);
+      }
+      if (deviceId) await admin.from("households").update({ smartthings_device_id: deviceId }).eq("id", s.hid);
+      return Response.redirect(home + "?smartthings=connected", 302);
+    }
+
     const user = await userFrom(req);
     if (!user) return json(req, { error: "Connexion Maisonnée requise" }, 401);
     const member = await householdOf(user.id);
     if (!member) return json(req, { error: "Vous n'êtes dans aucun foyer" }, 403);
     const hid = member.household_id;
-    const url = new URL(req.url);
-    const action = url.pathname.split("/").pop();
     const payload = req.method === "POST" ? await req.json().catch(() => ({})) as Record<string, unknown> : {};
 
-    // ── status ──────────────────────────────────────────────────────
     if (action === "status") {
       const cred = await getCred(hid);
       const { data: hh } = await admin.from("households").select("smartthings_device_id").eq("id", hid).maybeSingle();
       return json(req, {
-        connected: !!cred,
+        connected: !!(cred && (cred.refresh_token || cred.pat)),
+        auth: cred?.refresh_token ? "oauth" : cred?.pat ? "pat" : null,
+        oauth_ready: oauthConfigured(),
         device_id: hh?.smartthings_device_id ?? cred?.device_id ?? null,
         device_name: cred?.device_name || null
       });
     }
 
-    // ── connect ─────────────────────────────────────────────────────
+    if (action === "oauth-start" && req.method === "POST") {
+      if (!oauthConfigured()) {
+        return json(req, {
+          error: "OAuth SmartThings pas encore configuré : ajoutez SMARTTHINGS_CLIENT_ID et SMARTTHINGS_CLIENT_SECRET aux secrets de la fonction, et l’URL de retour " + CALLBACK
+        }, 400);
+      }
+      const raw = b64url(new TextEncoder().encode(JSON.stringify({ uid: user.id, hid, exp: Date.now() + 10 * 60e3, nonce: crypto.randomUUID() })));
+      const state = raw + "." + await signState(raw);
+      const params = new URLSearchParams({
+        client_id: stClientId,
+        scope: ST_SCOPES,
+        response_type: "code",
+        redirect_uri: CALLBACK,
+        state
+      });
+      return json(req, { url: `${ST_BASE}/oauth/authorize?` + params });
+    }
+
     if (action === "connect" && req.method === "POST") {
       const pat = String(payload.pat || "").trim();
       if (!pat || pat.length < 20) return json(req, { error: "Token SmartThings invalide" }, 400);
-
-      // Verify token works
       const testR = await stFetch(pat, "devices?capability=switch");
       if (!testR.ok) return json(req, { error: stError(testR.status, "Jeton SmartThings refusé par Samsung. Vérifiez qu'il est actif.").message }, 400);
-
-      // Conserver le téléviseur choisi lors du remplacement du jeton.
-      // La nouvelle clé est enregistrée uniquement après sa validation.
       const previous = await getCred(hid);
-      const tvs = await stListDevices(pat);
-      const all = await stAllDevices(pat);
-      const device = (previous?.device_id ? all.find(d => d.id === previous.device_id) : null) || tvs[0] || null;
-
+      const picked = await pickDefaultTv(pat, previous?.device_id);
       const { error } = await admin.from("household_smartthings").upsert({
         household_id: hid,
         pat,
-        device_id: device?.id || null,
-        device_name: device?.label || device?.name || null,
+        access_token: null,
+        refresh_token: null,
+        token_expires_at: null,
+        installed_app_id: null,
+        device_id: picked.device?.id || null,
+        device_name: picked.device?.label || picked.device?.name || null,
         updated_at: new Date().toISOString(),
         updated_by: user.id
       });
       if (error) throw error;
-      if (device) {
-        await admin.from("households").update({ smartthings_device_id: device.id }).eq("id", hid);
-      }
-      return json(req, { connected: true, device_id: device?.id || null, device_name: device?.label || null, devices: tvs });
+      if (picked.device) await admin.from("households").update({ smartthings_device_id: picked.device.id }).eq("id", hid);
+      return json(req, { connected: true, device_id: picked.device?.id || null, device_name: picked.device?.label || null, devices: picked.tvs });
     }
 
-    // ── disconnect ──────────────────────────────────────────────────
     if (action === "disconnect" && req.method === "POST") {
       await admin.from("household_smartthings").delete().eq("household_id", hid);
       await admin.from("households").update({ smartthings_device_id: null }).eq("id", hid);
@@ -274,77 +416,68 @@ Deno.serve(async req => {
 
     const cred = await getCred(hid);
     if (!cred) return json(req, { error: "SmartThings n'est pas relié" }, 400);
+    const token = await bearerOf(cred);
 
-    // ── devices ─────────────────────────────────────────────────────
     if (action === "devices") {
-      const tvs = await stListDevices(cred.pat);
-      const all = await stAllDevices(cred.pat);
+      const tvs = await stListDevices(token);
+      const all = await stAllDevices(token);
       return json(req, { devices: tvs.length ? tvs : all });
     }
 
-    // ── state ───────────────────────────────────────────────────────
     if (action === "state") {
       const st = await readState(cred);
       return json(req, st);
     }
 
-    // ── command ─────────────────────────────────────────────────────
     if (action === "command" && req.method === "POST") {
       const deviceId = cred.device_id;
       if (!deviceId) return json(req, { error: "Aucun appareil SmartThings sélectionné" }, 400);
       const act = String(payload.action || "");
-
       if (act === "power_on") {
-        await stCommand(cred.pat, deviceId, "switch", "on");
+        await stCommand(token, deviceId, "switch", "on");
       } else if (act === "power_off") {
-        await stCommand(cred.pat, deviceId, "switch", "off");
+        await stCommand(token, deviceId, "switch", "off");
       } else if (act === "power_toggle") {
-        // Read current, then toggle
-        const raw = await stDeviceStatus(cred.pat, deviceId);
+        const raw = await stDeviceStatus(token, deviceId);
         const cur = parseStatus(raw);
-        await stCommand(cred.pat, deviceId, "switch", cur.power === true ? "off" : "on");
+        await stCommand(token, deviceId, "switch", cur.power === true ? "off" : "on");
       } else if (act === "volume_up") {
-        await stCommand(cred.pat, deviceId, "audioVolume", "volumeUp");
+        await stCommand(token, deviceId, "audioVolume", "volumeUp");
       } else if (act === "volume_down") {
-        await stCommand(cred.pat, deviceId, "audioVolume", "volumeDown");
+        await stCommand(token, deviceId, "audioVolume", "volumeDown");
       } else if (act === "set_volume") {
         const v = Number(payload.value);
         if (!Number.isFinite(v) || v < 0 || v > 100) return json(req, { error: "Volume invalide (0–100)" }, 400);
-        await stCommand(cred.pat, deviceId, "audioVolume", "setVolume", [v]);
+        await stCommand(token, deviceId, "audioVolume", "setVolume", [v]);
       } else if (act === "mute") {
-        await stCommand(cred.pat, deviceId, "audioMute", "mute");
+        await stCommand(token, deviceId, "audioMute", "mute");
       } else if (act === "unmute") {
-        await stCommand(cred.pat, deviceId, "audioMute", "unmute");
+        await stCommand(token, deviceId, "audioMute", "unmute");
       } else if (act === "mute_toggle") {
-        const raw = await stDeviceStatus(cred.pat, deviceId);
+        const raw = await stDeviceStatus(token, deviceId);
         const cur = parseStatus(raw);
-        await stCommand(cred.pat, deviceId, "audioMute", cur.mute ? "unmute" : "mute");
+        await stCommand(token, deviceId, "audioMute", cur.mute ? "unmute" : "mute");
       } else if (act === "set_input") {
         const src = String(payload.value || "");
         if (!src) return json(req, { error: "Source requise" }, 400);
-        await stCommand(cred.pat, deviceId, "mediaInputSource", "setInputSource", [src]);
+        await stCommand(token, deviceId, "mediaInputSource", "setInputSource", [src]);
       } else if (act === "set_channel") {
         const ch = String(payload.value || "");
         if (!ch) return json(req, { error: "Chaîne requise" }, 400);
-        await stCommand(cred.pat, deviceId, "tvChannel", "setTvChannel", [ch]);
+        await stCommand(token, deviceId, "tvChannel", "setTvChannel", [ch]);
       } else if (act === "channel_up") {
-        await stCommand(cred.pat, deviceId, "tvChannel", "channelUp");
+        await stCommand(token, deviceId, "tvChannel", "channelUp");
       } else if (act === "channel_down") {
-        await stCommand(cred.pat, deviceId, "tvChannel", "channelDown");
+        await stCommand(token, deviceId, "tvChannel", "channelDown");
       } else {
         return json(req, { error: "Commande inconnue" }, 400);
       }
-
-      // Invalidate cache & return fresh state
       stateCache.delete(deviceId);
-      // Small delay for TV to process command
       await new Promise(r => setTimeout(r, 600));
       try {
         const st = await readState(cred);
         return json(req, { ok: true, ...st });
       } catch (e) {
-        // Une commande acceptée ne doit pas être considérée comme ratée si
-        // seule sa relecture échoue : on conserve un état inconnu, jamais "éteint".
         console.warn("Commande envoyée, relecture impossible :", e instanceof Error ? e.message : "erreur");
         return json(req, {
           ok: true, connected: true, device_id: deviceId,
@@ -355,11 +488,10 @@ Deno.serve(async req => {
       }
     }
 
-    // ── pick_device ─────────────────────────────────────────────────
     if (action === "pick_device" && req.method === "POST") {
       const deviceId = String(payload.device_id || "");
       if (!deviceId) return json(req, { error: "ID appareil requis" }, 400);
-      const all = await stAllDevices(cred.pat);
+      const all = await stAllDevices(token);
       const device = all.find(d => d.id === deviceId);
       if (!device) return json(req, { error: "Appareil introuvable" }, 404);
       await admin.from("household_smartthings").update({
