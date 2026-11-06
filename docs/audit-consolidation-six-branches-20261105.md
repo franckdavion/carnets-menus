@@ -118,3 +118,53 @@ https://github.com/franckdavion/carnets-menus/actions/runs/42204804421/artifacts
 **Limites** : les navigateurs sont automatisés et n'utilisent pas de vrais comptes. Ils ne remplacent pas un contrôle tactile sur iPhone physique ni les tests de synchronisation avec les données du foyer.
 
 **Garantie de non-publication :** aucun changement fonctionnel n'a été porté dans `main`. Le dernier rattrapage de `main` vers `test` a intégré uniquement des mises à jour de `agenda.json` et `carnet.json` déjà présentes sur `main`, en préservant la refonte Recettes sur `test` uniquement. Aucun appel à Supabase et aucune suppression de branche ancienne n'ont été effectués.
+
+
+---
+
+## Clôture technique du 6 novembre 2026 — vérifications complémentaires
+
+Les tests et recherches suivantes ont été conduits **sans modifier les données familiales**.
+
+### GitHub et publication Recettes
+
+- La refonte Recettes a été publiée sur `main` par la PR n° 11, et le déploiement GitHub Pages a réussi (run `42227327838`).
+- `test` a été resynchronisée sur ce commit de production ; seuls des **fichiers d'audit, de tests et le workflow de tests** la distinguent de `main`.
+- La sauvegarde `sauvegarde-main-avant-recettes-20261106` reste disponible comme point de référence historique ; la restaurer ne doit pas écraser des données plus récentes.
+
+### Vérification du schéma Supabase en lecture seule
+
+Sur le projet de Maisonnée utilisé par `maison/app.js`, les colonnes suivantes sont **effectivement présentes** dans `public.tasks` :
+- `next_due date not null`
+- `due_time time without time zone nullable`
+- `deadline_on date nullable`
+
+Les tables `child_trips`, `child_trip_event_marks`, `child_trip_ignore_rules` et `child_trip_places` existent avec leurs colonnes de référence. La vérification a interrogé uniquement `information_schema.columns`, sans lire les lignes ni écrire les données.
+
+Le fichier `maison/supabase/migrations/0028_tasks_schedule.sql` n'est **pas présent dans `main`**, bien que les deux colonnes de tâches correspondantes existent dans la base réelle. Cela signale une **lacune de traçabilité de migration**, pas une panne du schéma. Ne pas exécuter l'ancienne migration sans audit de son contenu.
+
+### Tests Trajets renforcés
+
+- `maison/tests/trajets-selection.test.mjs` : 15 contrôles isolés sur la sélection mensuelle et la validation par lot.
+- `maison/tests/trajets-core.test.mjs` : 17 scénarios fictifs couvrant les reconnaissances des enfants, les doublons intercalendriers, les événements déjà validés, les trajets partagés, les communes Google et les adresses ambiguës, les regroupements et les segments kilométriques.
+- Aucun événement Google ni aucune ligne Supabase n'est créée ou modifiée.
+
+### Agenda / tâches
+
+- Vérification des champs facultatifs dans l'interface : heure prévue et date limite.
+- Vérification du chemin de saisie : les données de formulaire vont vers `due_time` et `deadline_on`, avec un refus si la date limite est antérieure à la date prévue.
+- `maison/tests/agenda-contrats.test.mjs` garantit la présence de ces contrats, ainsi que le menu « + » et le choix de destination Maisonnée / Google Tasks.
+- Il reste à vérifier un parcours complet connecté dans un environnement **de démonstration**, sans toucher aux événements de la famille.
+
+### Branches historiques — conclusion de conservation
+
+| Branche | Comparaison au `main` publié | Statut |
+| --- | --- | --- |
+| `test-refonte-recettes-photos-20261105` | Les **trois fichiers modifiés sont strictement identiques (SHA Git blob)** à ceux publiés dans `main` : `index.html`, `carnet.css`, `carnet-partage.js` | Redondante pour le code ; ne supprimer qu'avec contrôle de SHA et PR ouverte |
+| `test-selection-mensuelle-trajets-20261105` | `presences-trajets-core.js` identique, mais `presences-trajets.js` et `maison.css` plus anciens/différents | À conserver jusqu'aux tests réels |
+| `test-presences-trajets-exclusions-20261105` | Migrations `0016` et `0019` identiques, JS différent | À conserver pour diagnostic |
+| `test-agenda-plus-google-style-20261104` | Interface et fonction Google différentes ; ancienne migration absente de `main`, mais colonnes déjà présentes dans Supabase | À conserver |
+| `online-preview-maisonnee-agenda-20261104` | Quatre fichiers de prévisualisation différents | À conserver jusqu'à comparaison des interactions |
+| `design-c-ultra-premium-accueil-explorer` | CSS ancien différent | À conserver tant que l'ancienne proposition n'a pas été écartée visuellement |
+
+Les suppressions de branches historiques **ne sont pas nécessaires au fonctionnement de l'application**. En cas de doute, préférer les conserver plutôt que faire disparaître un développement divergent.
