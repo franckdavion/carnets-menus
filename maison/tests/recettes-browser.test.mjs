@@ -52,6 +52,13 @@ async function checkScenario(name, config) {
     assert.ok(await page.locator("#recList").evaluate(x => x.classList.contains("rec-gallery")), "Galerie non activée");
     assert.equal(await page.locator('[data-act="recLayout"][data-v="gallery"]').getAttribute("aria-pressed"), "true");
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("cm_rec_layout"))), "gallery");
+    // Une carte ne doit jamais forcer un défilement horizontal sur l'écran.
+    const pageWidth = await page.evaluate(() => ({
+      full: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
+      viewport: innerWidth,
+    }));
+    assert.ok(pageWidth.full <= pageWidth.viewport + 2,
+      "Débordement horizontal sur " + name + " : " + JSON.stringify(pageWidth));
     await page.screenshot({ path: path.join(OUT, "recettes-" + name + "-galerie.png"), fullPage: true });
 
     // Favori sur un jeu de démonstration local, sans synchronisation vers l'extérieur.
@@ -101,7 +108,9 @@ try {
   await fs.mkdir(OUT, { recursive: true });
   await ready();
   browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
+  await checkScenario("iphone-compact", { viewport: { width: 320, height: 667 }, mobile: true });
   await checkScenario("iphone", { viewport: { width: 390, height: 844 }, mobile: true });
+  await checkScenario("tablette", { viewport: { width: 820, height: 1180 }, mobile: true });
   await checkScenario("mac", { viewport: { width: 1280, height: 800 }, mobile: false });
   console.log("Tests navigateur Recettes réussis. Captures dans test-results/");
 } finally {
