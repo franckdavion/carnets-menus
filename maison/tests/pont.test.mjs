@@ -99,6 +99,23 @@ if (loadFn && resumeFn) {
   ok("session rétablie : récupération du foyer sans mot de passe",
     entered === 1 && resumeEnv.inspect().user?.id === "utilisateur-fictif" &&
     !resumeEnv.inspect().mzAuthNeedsLogin);
+
+  // Une déconnexion explicite pendant un rafraîchissement ne doit pas
+  // réactiver l'ancien compte lorsque la requête se termine.
+  let started, finish;
+  const begun = new Promise(resolve => { started = resolve; });
+  resumeEnv.sb.auth.getSession = () => {
+    started();
+    return new Promise(resolve => { finish = resolve; });
+  };
+  resumeEnv.user = null;
+  const pending = resumeEnv.resume();
+  await begun;
+  resumeEnv.mode = null;
+  finish({ data: { session: { user: { id: "ancien-compte" } } }, error: null });
+  await pending;
+  ok("déconnexion volontaire préservée lors d'une réponse tardive",
+    resumeEnv.inspect().user === null && entered === 1);
 }
 
 if (fail) { console.log(fail + " échec(s)"); process.exit(1); }
