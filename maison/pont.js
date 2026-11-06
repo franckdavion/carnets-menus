@@ -36,7 +36,7 @@
   }
   const uuidToKey = u => (P.map && P.map.u2k[u]) || "c-" + u;
   const keyToUuid = k => (P.map && P.map.k2u[k]) || (k.startsWith("c-") ? k.slice(2) : null);
-  const AISLES = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
+  const AISLES = window.MAISON_SHOP_AISLES ? Array.from(window.MAISON_SHOP_AISLES) : ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
   const aisleOf = r => AISLES.includes(r) ? r : "Divers";
 
   /* ---------- the sync ---------- */

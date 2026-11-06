@@ -40,7 +40,7 @@ const hm = t => t ? String(t).slice(0, 5).replace(":", " h ").replace(/ h 00$/, 
 
 const COLORS = ["#E0533D", "#2F8FA6", "#E8A33B", "#7A4E9C", "#3FA27A", "#D46A92", "#5B6B7F", "#A0662F"];
 const ROOMS = ["Cuisine", "Ménage", "Linge", "Salle de bain", "Courses", "Extérieur", "Animaux", "Papiers", "Divers"];
-const AISLES = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
+const AISLES = [...(window.MAISON_SHOP_AISLES || ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"])];
 const EFFORT = [[1, "Rapide"], [2, "Moyen"], [3, "Long"]];
 const FREQS = [["once", "Une fois"], ["daily", "Chaque jour"], ["weekly", "Chaque semaine"], ["every", "Tous les … jours"], ["monthly", "Chaque mois"]];
 const REPEATS = [["none", "Non"], ["weekly", "Chaque semaine"], ["monthly", "Chaque mois"], ["yearly", "Chaque année"], ["custom", "Personnaliser"]];

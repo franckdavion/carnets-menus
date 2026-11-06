@@ -5,7 +5,7 @@ const CACHE = "maisonnee-essai-cartes-v10";
 const SHELL = [
   "./", "./index.html", "./manifest.json",
   "../maison.css", "../essai.css", "../essai-app.js", "../essai-modules.js", "../essai-cartes.js",
-  "../espace.js", "../push-config.js", "../supabase/functions/_shared/cal.js",
+  "../espace.js", "../push-config.js", "../shared-constants.js", "../supabase/functions/_shared/cal.js",
   "../repas.js", "../courses.js", "../gtaches.js", "../catalogue.js",
   "../presences-core.js", "../presences.js", "../presences-export.js",
   "../natif.js", "../bandeau-jour.js", "../accueil.js",

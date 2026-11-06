@@ -29,7 +29,7 @@ function cxData() {
 /* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
    An item typed by hand finds its aisle by its name; moved once by hand, it stays there next time (menu.rayonLearn,
    shared with the household like the rest of the carnet). The order of the aisles is menu.rayonOrder. */
-const CX_RAYONS = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
+const CX_RAYONS = [...(window.MAISON_SHOP_AISLES || ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"])];
 const CX_GUESS = [
   [/(?:^|[^a-zà-ÿœ])(?:pile|ampoule|lessive|adoucissant|liquide vaisselle|pastille|éponge|eponge|essuie|sopalin|papier toilette|pq|mouchoir|sac poubelle|sacs poubelle|javel|nettoyant|détergent|detergent|savon|gel douche|shampo|dentifrice|brosse à dents|rasoir|déodorant|deodorant|coton|couche|lingette|serviette|tampon|aluminium|film|allumette|bougie|insecticide|croquette|litière|litiere)/i, "Hygiène & maison"],
   [/(?:^|[^a-zà-ÿœ])(?:eau|jus|soda|coca|limonade|sirop|bière|biere|vin|champagne|cidre|café|cafe|thé|the |tisane|infusion|lait d'avoine|lait de soja)/i, "Boissons"],
