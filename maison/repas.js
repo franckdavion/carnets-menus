@@ -34,26 +34,28 @@ function carnetBoot(force) {
   CK.startedAt = Date.now();
   CK.err = "";
   CK.ready = false;
-  carnetSeedAuth().finally(() => {
+  const startFrame = () => {
     if (CK.frame || mode !== "cloud") return;
     const f = document.createElement("iframe");
-    f.src = CARNET_URL + "?arriere-plan=maisonnee&t=" + Date.now();
+    f.src = CARNET_URL + "?arriere-plan=maisonnee" + (force ? "&t=" + Date.now() : "");
     f.title = "Carnet de menus (arrière-plan)";
-    f.setAttribute("aria-hidden", "true"); f.tabIndex = -1;
+    f.setAttribute("aria-hidden", "true");
+    f.loading = "eager";
+    f.tabIndex = -1;
     f.style.cssText = "position:absolute;left:-9999px;top:0;width:390px;height:700px;border:0;opacity:0;pointer-events:none";
     document.body.appendChild(f); CK.frame = f;
     const t0 = Date.now();
     let ticking = false;
     const tick = async () => {
-      if (ticking) return;
+      if (ticking || CK.ready) return;
       ticking = true;
       let ok = false;
-      try { ok = cev("typeof planWeek==='function' && typeof cloudOn==='function' && cloudOn() && !!recipes && Object.keys(recipes).length>0"); } catch (_) {}
+      try { ok = cev("typeof planWeek==='function' && !!recipes && Object.keys(recipes).length>0"); } catch (_) {}
       if (ok) {
-        try { await cev("cloudSync()"); } catch (_) {}
         CK.ready = true; CK.err = ""; CK.waiters.splice(0).forEach(w => w());
         if (view === "repas" || view === "courses") softRender();
         ticking = false;
+        try { cev("typeof cloudSync==='function'&&cloudSync()"); } catch (_) {}
         return;
       }
       if (Date.now() - t0 > 20000) {
@@ -68,12 +70,14 @@ function carnetBoot(force) {
         return;
       }
       ticking = false;
-      setTimeout(tick, 500);
+      setTimeout(tick, 200);
     };
-    f.addEventListener("load", () => { CK.ready = false; setTimeout(tick, 300); });
-    // iOS n’envoie pas toujours `load` sur une iframe hors écran.
-    setTimeout(tick, 800);
-  });
+    f.addEventListener("load", () => { if (!CK.ready) setTimeout(tick, 50); });
+    setTimeout(tick, 150);
+  };
+  const hasAuth = (() => { try { return !!localStorage.getItem("cm_sb_auth"); } catch (_) { return false; } })();
+  if (hasAuth) { startFrame(); carnetSeedAuth(); }
+  else carnetSeedAuth().finally(startFrame);
 }
 window.carnetBoot = carnetBoot;
 // the others' changes arrive in the hidden Carnet (checked every 15 s): Repas and Courses are redrawn when its data changed
@@ -101,7 +105,7 @@ function carnetLive() {
     .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
   ckLive = { owner, ch };
 }
-function carnetSave(msg, kind) { cev("saveMenu()"); render(); if (msg) toast(msg, null, null, null, kind); }
+function carnetSave(msg, kind) { cev("saveMenu()"); softRender(); if (msg) toast(msg, null, null, null, kind); }
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {
   cev(`(()=>{const all=shopDates(),cur=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
@@ -1005,7 +1009,8 @@ document.addEventListener("submit", e => {
 });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && view === "repas") carnetRefresh(); });
 // start loading the carnet early, so Repas opens quickly
-setTimeout(() => { if (mode === "cloud" && screen === "app") carnetBoot(); }, 2500);
+if (mode === "cloud" && screen === "app") carnetBoot();
+else setTimeout(() => { if (mode === "cloud" && screen === "app") carnetBoot(); }, 400);
 if (view === "repas") render();
 
 // Sélecteur compact des portions : même donnée et même calcul que les anciens boutons.

@@ -309,7 +309,7 @@ var fromMz=false;
 // hidden copy inside Maisonnée: no password field, so the iPhone never offers to save a password for it
 if(new URLSearchParams(location.search).get("arriere-plan")){const strip=()=>document.querySelectorAll('input[type=password]').forEach(i=>{i.type="text";i.autocomplete="off";i.value="";});
   strip();new MutationObserver(strip).observe(document.body,{childList:true,subtree:true});}
-setTimeout(cloudInit,800);applyRoleUi();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudOn())cloudSync();});
+setTimeout(cloudInit,new URLSearchParams(location.search).get("arriere-plan")?0:400);applyRoleUi();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudOn())cloudSync();});
 /* ---------- boot ---------- */
 {const v=$("#v-wine"),inn=$("#winesIn");while(inn.firstChild)v.appendChild(inn.firstChild);const h=v.querySelector(".row");if(h){h.querySelector("[data-act=closeWines]")?.remove();}
   const b=document.createElement("p");b.className="muted";b.style.cssText="margin:0;font-size:13px";b.textContent="Vos bouteilles : ajoutez-les avec leur appellation, type, millésime et quantité ; touchez − / + quand vous en ouvrez ou en achetez. Liez un vin à une recette ou à un repas prévu dans sa fiche.";h&&h.after(b);}

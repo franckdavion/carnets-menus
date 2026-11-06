@@ -186,7 +186,7 @@
   /* ---------- when to sync: after the Carnet's own cloud sync, after each change, every minute ---------- */
   if (typeof saveMenu === "function") {
     const orig = saveMenu;
-    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(3000); } return r; };
+    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(600); } return r; };
   }
   if (typeof cloudSync === "function") {
     const orig = cloudSync;
@@ -198,5 +198,5 @@
   window.pontSync = pontSync;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addBackButton); else addBackButton();
-  setTimeout(pontSync, 4000);
+  setTimeout(pontSync, 600);
 })();
