@@ -125,6 +125,12 @@
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
   const defaultId=(type,period)=>({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period;
+  // Courtes vidéos de référence pour le mode automatique : une par période.
+  const AUTO_VIDEO={matin:'wm-aube-plage',aprem:'wm-midi-nuages',soir:'wm-soir-dore',nuit:'wm-nuit-filante'};
+  function recommendedVideo(period,weather){
+    const exact=LANDSCAPE_VIDEOS.find(v=>v.period===period&&v.weather===weather);
+    return exact?.id||AUTO_VIDEO[period]||'m-'+period;
+  }
   const currentPeriod=()=>document.querySelector('.mn-dayframe')?.dataset.mnBand||'matin';
   function conditionNow(){
     const home=typeof window.maisonneeHomeWeather==='function'?window.maisonneeHomeWeather():{};
@@ -139,9 +145,11 @@
       const cat=isCondition(condition)?condition:conditionNow().category;
       const entry=prefs.weatherChoices[cat+':'+period];
       const chosen=find(entry);
-      wanted=chosen?.type===prefs.type?chosen.id:defaultId(prefs.type,period);
-    }else wanted=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
-      (prefs.chosen[period]||defaultId(prefs.type,period)):defaultId(prefs.type,period);
+      wanted=chosen?.type===prefs.type?chosen.id:prefs.type==='photo-animee'?
+        recommendedVideo(period,cat):defaultId(prefs.type,period);
+    }else if(prefs.mode==='fixed')wanted=prefs.fixed;
+    else if(prefs.mode==='custom')wanted=prefs.chosen[period]||defaultId(prefs.type,period);
+    else wanted=prefs.type==='photo-animee'?recommendedVideo(period):defaultId(prefs.type,period);
     return find(wanted)||find(defaultId('photo',period));
   }
   async function refreshGPS(force=false){
@@ -299,9 +307,9 @@
     }
   }
   function tile(item){
-    const wanted=prefs.mode==='weather'?
-      (prefs.weatherChoices[modalWeather+':'+modalPeriod]||defaultId(prefs.type,modalPeriod)):
-      (prefs.mode==='fixed'?prefs.fixed:prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod));
+    const wanted=prefs.mode==='fixed'?prefs.fixed:prefs.mode==='custom'?
+      (prefs.chosen[modalPeriod]||defaultId(prefs.type,modalPeriod)):
+      currentItem(modalPeriod,prefs.mode==='weather'?modalWeather:undefined).id;
     const chosen=wanted===item.id;
     const selected=chosen?' is-selected':'';
     let visual;
@@ -387,7 +395,8 @@
         '<button type="button" data-mn-bg-act="period" data-v="'+id+'" aria-pressed="'+(id===modalPeriod)+'">'+name+'</button>').join('')+'</div>'+
       '<p class="mn-bg-help">'+(prefs.mode==='weather'?
         'Le temps actuel choisit automatiquement les effets ; cette sélection règle le fond pour la condition et l’heure affichées.':
-        prefs.mode==='auto'?'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.':
+        prefs.mode==='auto'?(prefs.type==='photo-animee'?'Une vidéo réelle est choisie automatiquement selon l’heure. Pour choisir chaque vidéo, passez en mode personnalisé.':
+          'Le fond suit automatiquement le moment de la journée. Choisis un fond pour personnaliser cette période.'):
         prefs.mode==='fixed'?'Le fond choisi sera utilisé toute la journée.':'Sélectionne un fond différent pour chaque période.')+'</p>'+
       currentPreview()+
       (kind==='photo-animee'?
