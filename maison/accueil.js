@@ -474,9 +474,21 @@ function restoreHeader(){
  while(parked.firstChild)source.appendChild(parked.firstChild);
  header.classList.remove('ultimate-header-moved');
 }
+function mzHomeLite(){
+ try{
+  const touch=(navigator.maxTouchPoints||0)>=1;
+  const compact=Math.min(screen.width||9999,screen.height||9999)<=1366;
+  return (touch&&compact)||matchMedia('(pointer: coarse)').matches||matchMedia('(hover: none)').matches;
+ }catch(e){return false}
+}
+function mzSyncHomeLite(){
+ document.documentElement.classList.toggle('mz-home-lite',!!document.querySelector('main.view-home')&&mzHomeLite());
+}
 let lastHomePaint='';
 function render(){
  const main=document.querySelector('main.view-home');if(!main)return;
+ mzSyncHomeLite();
+ if(document.documentElement.classList.contains('mz-scrolling'))return;
  let el=main.querySelector('#ultimate-dashboard');if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
  el.className='';
  const w=meteo?.current,d=meteo?.daily,now=new Date();
@@ -548,15 +560,16 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
 }
 window.maisonneeHomePaint=render;
 (()=>{let pause;window.addEventListener('scroll',()=>{
+  if(!document.querySelector('main.view-home'))return;
   const frame=document.querySelector('main.view-home .mn-dayframe');
-  if(!frame)return;
-  frame.classList.add('is-paused');
+  frame?.classList.add('is-paused');
   document.documentElement.classList.add('mz-scrolling');
+  document.querySelectorAll('.mn-bg-video').forEach(v=>{try{v.pause()}catch(e){}});
   clearTimeout(pause);
   pause=setTimeout(()=>{
-    frame.classList.remove('is-paused');
+    frame?.classList.remove('is-paused');
     document.documentElement.classList.remove('mz-scrolling');
-  },200);
+  },280);
 },{passive:true});})();
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act="homeCal"],[data-act="homeCalPick"],[data-act="homeRecette"],[data-act="homeRepas"]');if(!b)return;

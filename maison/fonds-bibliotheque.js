@@ -3,9 +3,15 @@
    Les médias personnels importés restent dans IndexedDB de cet appareil. */
 (()=>{'use strict';
   const VERSION=2, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
-  // Mode allégé uniquement dans l'iframe Pixar : aucune préférence n'est modifiée.
-  // Maisonnée ouverte seule sur iPhone, Mac ou tablette garde tous ses fonds animés.
+  // Mode allégé : kiosque Pixar, et tablette / tactile (Ken Burns + vidéo font ramer le scroll).
   const PIXAR_KIOSK_LITE=window.self!==window.top&&new URLSearchParams(location.search).get('pixar_kiosk')==='1';
+  function deviceLite(){
+    try{
+      const touch=(navigator.maxTouchPoints||0)>=1;
+      const compact=Math.min(screen.width||9999,screen.height||9999)<=1366;
+      return PIXAR_KIOSK_LITE||(touch&&compact)||matchMedia('(pointer: coarse)').matches||matchMedia('(hover: none)').matches;
+    }catch(_){return PIXAR_KIOSK_LITE}
+  }
   const PERIODS=[['matin','Matin'],['aprem','Après-midi'],['soir','Soir'],['nuit','Nuit']];
   const TYPES=[['photo','Photos'],['illustration','Animations'],['photo-animee','Photos animées'],['video','Vidéos']];
   const CONDITIONS=[['clear','Soleil'],['clouds','Nuageux'],['rain','Pluie'],['storm','Orage'],['snow','Neige'],['fog','Brouillard']];
@@ -318,7 +324,7 @@
       const url=URL.createObjectURL(blob);objectUrls.set(item.id,url);return url;
     }catch(_){return ''}
   }
-  function effectiveMotion(){return !PIXAR_KIOSK_LITE&&prefs.motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches}
+  function effectiveMotion(){return !deviceLite()&&prefs.motion&&!matchMedia('(prefers-reduced-motion: reduce)').matches}
   function layer(frame){
     let el=frame.querySelector(':scope > .mn-bg-layer');
     if(!el){el=document.createElement('div');el.className='mn-bg-layer';el.setAttribute('aria-hidden','true');frame.prepend(el)}
@@ -342,13 +348,13 @@
     frame.classList.toggle('mn-bg-motion-off',!moving);
     // Effets dans le bandeau, toujours derrière le texte (et sans clic capturé).
     const hero=frame.querySelector('.ultimate-hero');
-    if(hero&&!PIXAR_KIOSK_LITE&&!hero.querySelector(':scope > .mn-bg-sky-fx')){
+    if(hero&&!deviceLite()&&!hero.querySelector(':scope > .mn-bg-sky-fx')){
       const fx=document.createElement('div');fx.className='mn-bg-sky-fx';fx.setAttribute('aria-hidden','true');
       hero.insertBefore(fx,hero.querySelector('.mn-band-copy'));
     }
     const l=layer(frame);
     l.replaceChildren();
-    if(!PIXAR_KIOSK_LITE&&category!=='none'&&category!=='unknown'){
+    if(!deviceLite()&&category!=='none'&&category!=='unknown'){
       const atmosphere=document.createElement('div');atmosphere.className='mn-bg-weather-fx';
       atmosphere.setAttribute('aria-hidden','true');l.appendChild(atmosphere);
     }

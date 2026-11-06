@@ -10,6 +10,12 @@ body:has(main.view-home) .mn-dayframe .mn-bg-layer{position:absolute;inset:0;z-i
 body:has(main.view-home) .mn-dayframe .mn-bg-photo,
 body:has(main.view-home) .mn-dayframe .mn-bg-video{position:absolute;inset:-2%;width:104%;height:104%;object-fit:cover;object-position:center;background-repeat:no-repeat;background-position:center;background-size:cover;transform:translateZ(0);}
 body:has(main.view-home) .mn-dayframe .mn-bg-kenburns{animation:mn-bg-zoom 42s ease-in-out infinite alternate;will-change:transform;}
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-kenburns{animation:none!important;will-change:auto!important}
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-photo{filter:none!important}
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::before,
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-sky-fx::after,
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::before,
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-weather-fx::after{animation:none!important}
 @keyframes mn-bg-zoom{0%{transform:scale(1) translate3d(-1.5%,0,0)}100%{transform:scale(1.13) translate3d(1%,.5%,0)}}
 body:has(main.view-home) .mn-dayframe .mn-bg-layer::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(4,14,34,.39),rgba(6,19,47,.23) 38%,rgba(3,15,36,.60)),linear-gradient(180deg,rgba(3,16,33,.21),rgba(4,12,30,.37));}
 body:has(main.view-home) .mn-dayframe .ultimate-hero,

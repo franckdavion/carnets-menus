@@ -901,10 +901,25 @@ body:has(main.view-home) .top{background:rgba(7,19,38,.90);backdrop-filter:blur(
 html.mz-scrolling .mn-bg-kenburns{animation-play-state:paused!important;will-change:auto!important}
 html.mz-scrolling .mn-bg-sky-fx::before,html.mz-scrolling .mn-bg-sky-fx::after,
 html.mz-scrolling .mn-bg-weather-fx::before,html.mz-scrolling .mn-bg-weather-fx::after{animation:none!important}
-@media (pointer:coarse) and (min-width:700px){
-  body:has(main.view-home) .top{backdrop-filter:none;-webkit-backdrop-filter:none}
+body:has(main.view-home) .mn-dayframe{contain:paint;isolation:isolate}
+body:has(main.view-home) .mn-house-item{content-visibility:auto;contain-intrinsic-size:auto 140px}
+html.mz-home-lite body:has(main.view-home){background-attachment:scroll!important;background-image:none!important;background-color:#061329!important}
+html.mz-home-lite body:has(main.view-home)::before{background-image:none!important;background:#061329!important}
+html.mz-home-lite body:has(main.view-home) .top,
+html.mz-home-lite body:has(main.view-home) .ultimate-today,
+html.mz-home-lite body:has(main.view-home) .pill{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-kenburns{animation:none!important;will-change:auto!important}
+html.mz-home-lite body:has(main.view-home) .mn-dayframe .mn-bg-photo{filter:none!important}
+html.mz-home-lite body:has(main.view-home) .ultimate-hero:before{display:none}
+html.mz-home-lite body:has(main.view-home) .mn-card::after{display:none}
+@media (hover:none),(pointer:coarse){
+  body:has(main.view-home){background-attachment:scroll!important;background-image:none!important;background-color:#061329!important}
+  body:has(main.view-home)::before{background-image:none!important;background:#061329!important}
+  body:has(main.view-home) .top,body:has(main.view-home) .ultimate-today,body:has(main.view-home) .pill{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
   body:has(main.view-home) .mn-dayframe .mn-bg-kenburns{animation:none!important;will-change:auto!important}
-  body:has(main.view-home) .mn-dayframe .mn-bg-photo{filter:none}
+  body:has(main.view-home) .mn-dayframe .mn-bg-photo{filter:none!important}
+  body:has(main.view-home) .ultimate-hero:before{display:none}
+  body:has(main.view-home) .mn-card::after{display:none}
 }
 body:has(main.view-home) .top .hh-name{color:#eaf7ff;}
 body:has(main.view-home) .top .icon-btn{color:#eaf7ff;}
