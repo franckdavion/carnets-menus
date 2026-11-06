@@ -168,3 +168,24 @@ Le fichier `maison/supabase/migrations/0028_tasks_schedule.sql` n'est **pas pré
 | `design-c-ultra-premium-accueil-explorer` | CSS ancien différent | À conserver tant que l'ancienne proposition n'a pas été écartée visuellement |
 
 Les suppressions de branches historiques **ne sont pas nécessaires au fonctionnement de l'application**. En cas de doute, préférer les conserver plutôt que faire disparaître un développement divergent.
+
+
+---
+
+## Nettoyage effectif et conclusion de l'audit — 6 novembre 2026
+
+L'ancienne branche `test-refonte-recettes-photos-20261105` a finalement été **supprimée**, après confirmation que les trois fichiers modifiés étaient rigoureusement identiques (mêmes empreintes Git) à ceux déjà publiés sur `main`. Un workflow temporaire créé **uniquement sur `test`** a effectué une simulation en lecture seule, puis a répété les vérifications de commit, de contenu, d'absence de Pull Request et d'identité du dépôt avant la suppression. Les deux jobs ont réussi : [run GitHub Actions 42230873560](https://github.com/franckdavion/carnets-menus/actions/runs/42230873560).
+
+Le workflow et son script temporaires ont été retirés de `test` après usage. Aucun fichier du site officiel n'a été modifié.
+
+**État final de la revue des branches :**
+- `main` : production, inchangée pendant cet audit ;
+- `test` : même code applicatif que `main`, avec uniquement les tests, leur workflow et ce dossier d'audit ;
+- `sauvegarde-main-avant-recettes-20261106` : référence de sécurité à conserver ;
+- cinq branches divergentes à conserver (`design-c-ultra-premium-accueil-explorer`, `online-preview-maisonnee-agenda-20261104`, `test-agenda-plus-google-style-20261104`, `test-presences-trajets-exclusions-20261105`, `test-selection-mensuelle-trajets-20261105`).
+
+Les validations supplémentaires sont enregistrées dans :
+- [GitHub Actions : tests de logique et navigateur complets](https://github.com/franckdavion/carnets-menus/actions/runs/42230425546)
+- [GitHub Actions : nettoyage avec simulation préalable](https://github.com/franckdavion/carnets-menus/actions/runs/42230873560)
+
+Les cinq branches divergentes ne peuvent pas être déclarées inutiles uniquement sur des tests statiques ; aucune suppression supplémentaire n'est autorisée par ce rapport. Les scénarios intégrés à Google Agenda et Supabase n'ont pas été exécutés sur les données du foyer. **Aucune opération sur `main` ou Supabase n'a été faite lors de cette phase.**
