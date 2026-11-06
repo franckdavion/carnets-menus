@@ -519,9 +519,10 @@ function render(){
     const gates=typeof window.domHomeGates==='function'?window.domHomeGates():{};
     if(typeof window.domScheduleState==='function'){
       const now=Date.now();
-      if(!window._domHomePollAt||now-window._domHomePollAt>45000){
+      if(!window._domHomePollAt||now-window._domHomePollAt>20000){
+        const first=!window._domHomePollAt;
         window._domHomePollAt=now;
-        window.domScheduleState(false,changed=>{if(changed&&document.querySelector('main.view-home'))render()});
+        window.domScheduleState(!!first,changed=>{if(changed&&document.querySelector('main.view-home'))render()});
       }
     }
     const btn=(g,lab)=>g?`<button type="button" class="btn mn-gate-btn" data-dom-cmd="${esc(g.id)}" data-dom-action="Ouvrir" ${g.ready?'':'disabled'}>${lab}</button>`:'';

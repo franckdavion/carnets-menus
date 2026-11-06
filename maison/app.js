@@ -359,15 +359,19 @@ async function mzRestoreAuthTokens() {
 
 async function mzReadSession(tries) {
   await loadSb();
-  let session = null;
-  for (let i = 0; i < (tries || 4); i++) {
-    const { data, error } = await sb.auth.getSession();
-    if (error) throw error;
-    session = data?.session || null;
-    if (session?.user) { mzRememberAuth(session); return session; }
-    await new Promise(ok => setTimeout(ok, 400 * (i + 1)));
+  const { data, error } = await sb.auth.getSession();
+  if (error) throw error;
+  if (data?.session?.user) { mzRememberAuth(data.session); return data.session; }
+  const restored = await mzRestoreAuthTokens();
+  if (restored?.user) return restored;
+  const n = Math.max(1, (tries || 2) - 1);
+  for (let i = 0; i < n; i++) {
+    await new Promise(ok => setTimeout(ok, 250 * (i + 1)));
+    const again = await sb.auth.getSession();
+    if (again.error) throw again.error;
+    if (again.data?.session?.user) { mzRememberAuth(again.data.session); return again.data.session; }
   }
-  return (await mzRestoreAuthTokens()) || session;
+  return null;
 }
 
 function mzWakeDomotique() {
@@ -431,9 +435,23 @@ async function refreshCarnetPlan() {
 
 async function loadCloud(hid) {
   const since = addDays(today(), -60);
-  const [hh, mm, tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
+  // Foyer + Shelly d’abord : la domotique n’attend pas photos / messages.
+  const [hh, mm, shly] = await Promise.all([
     sb.from("households").select("*").eq("id", hid).single(),
     sb.from("household_members").select("*").eq("household_id", hid),
+    sb.from("shelly_devices").select("*").eq("household_id", hid).order("position")
+  ]);
+  if (hh.error) throw hh.error;
+  if (mm.error) throw mm.error;
+  S.hh = hh.data;
+  S.members = mm.data || [];
+  S.me = (S.members.find(m => m.user_id === user.id) || {}).id || S.me;
+  S.v5 = "carnet_user" in hh.data;
+  S.vShelly = !shly.error;
+  S.shelly = S.vShelly ? (shly.data || []) : (S.shelly || []);
+  saveLocal();
+  mzWakeDomotique();
+  const [tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
     sb.from("tasks").select("*").eq("household_id", hid).eq("archived", false),
     sb.from("task_log").select("*").eq("household_id", hid).gte("done_on", since),
     sb.from("events").select("*").eq("household_id", hid),
@@ -442,25 +460,26 @@ async function loadCloud(hid) {
     sb.from("messages").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(300),
     sb.from("member_locations").select("*").eq("household_id", hid)
   ]);
-  // anniversaires, budget, documents, emploi du temps: third script
   const [bd, ex, dc, sc] = await Promise.all(["birthdays", "expenses", "documents", "schedule"].map(t => sb.from(t).select("*").eq("household_id", hid)));
   const v3 = ![bd, ex, dc, sc].some(r => r.error);
-  const ph = await sb.from("photos").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(2000);
-  const v4 = !ph.error;
-  const bad = [hh, mm, tk, lg, ev, ml, sh].find(r => r.error);
+  const bad = [tk, lg, ev, ml, sh].find(r => r.error);
   if (bad) throw bad.error;
-  // messages and positions need the second script; the rest of the app works without it
   const v2 = !ms.error && !lc.error;
   const recipes = S.recipes, favs = S.favs;
   const carnetPlan = S.carnetPlan && S.carnetPlan.owner === hh.data.carnet_user ? S.carnetPlan : null;
-  S = { v5: "carnet_user" in hh.data, favs, hh: hh.data, me: (mm.data.find(m => m.user_id === user.id) || {}).id || null, members: mm.data, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
-    msgs: v2 ? ms.data.reverse() : [], locs: v2 ? lc.data : [], v2,
-    bdays: v3 ? bd.data : [], exp: v3 ? ex.data : [], docs: v3 ? dc.data : [], sched: v3 ? sc.data : [], v3, photos: v4 ? ph.data : [], v4, recipes, carnetPlan, shelly: [], vShelly: false };
-  const shly = await sb.from("shelly_devices").select("*").eq("household_id", hid).order("position");
-  S.vShelly = !shly.error;
-  S.shelly = S.vShelly ? (shly.data || []) : [];
-  await refreshCarnetPlan();
+  Object.assign(S, {
+    favs, tasks: tk.data, log: lg.data, events: ev.data, meals: ml.data, shop: sh.data,
+    msgs: v2 ? ms.data.reverse() : (S.msgs || []), locs: v2 ? lc.data : (S.locs || []), v2,
+    bdays: v3 ? bd.data : (S.bdays || []), exp: v3 ? ex.data : (S.exp || []),
+    docs: v3 ? dc.data : (S.docs || []), sched: v3 ? sc.data : (S.sched || []), v3,
+    recipes, carnetPlan
+  });
   saveLocal();
+  refreshCarnetPlan();
+  sb.from("photos").select("*").eq("household_id", hid).order("created_at", { ascending: false }).limit(2000)
+    .then(ph => {
+      if (!ph.error && S.hh && S.hh.id === hid) { S.photos = ph.data || []; S.v4 = true; }
+    }).catch(() => {});
 }
 
 /* V9.8 — centre de notifications local à cet appareil (aucune table Supabase ajoutée). */
@@ -721,6 +740,7 @@ async function init() {
     mode = null; screen = "welcome"; return render();
   }
   mzAuthNeedsLogin = false;
+  mzWakeDomotique();
   try {
     await enterCloud();
   } catch (e) {
@@ -781,6 +801,7 @@ async function mzEnterCloudBody() {
   }
   const hid = ids.includes(LS.get("mz_hh", "")) ? LS.get("mz_hh") : ids[0];
   LS.set("mz_hh", hid); mode = "cloud"; LS.set("mz_mode", "cloud");
+  mzWakeDomotique();
   try { await loadCloud(hid); } catch (e) { console.warn(e); toast("Synchro en attente (réseau ?)"); }
   listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll(); mzLoadNoticePrefs();
   mzWakeDomotique();

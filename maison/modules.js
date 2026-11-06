@@ -212,13 +212,20 @@ const DOM_DREAME_CMD_DEBOUNCE_MS = 2500;
 let domHeroLive = null;
 let domSoftTimer = 0;
 window.domWakeAfterAuth = function () {
+  if (mode !== "cloud" || !S.hh) return;
   domMelStatusAt = 0; domDreameStatusAt = 0; domStStatusAt = 0; domStateAt = 0; domViewStateAt = 0;
+  const paint = () => {
+    if (view === "home" && typeof maisonneeHomePaint === "function") maisonneeHomePaint();
+    else if (view === "domotique") domSoftRender();
+  };
+  paint();
   if (view === "domotique" || view === "home") {
-    domScheduleState(true);
-    void domMelRefreshStatus().then(() => domMelRefreshState(true)).then(changed => { if (changed) domSoftRender(); });
-    if (typeof domDreamePollOnView === "function") setTimeout(domDreamePollOnView, 0);
-    if (typeof domStPollOnView === "function") setTimeout(domStPollOnView, 0);
-    if (typeof maisonneeHomePaint === "function" && view === "home") maisonneeHomePaint();
+    domScheduleState(true, () => paint());
+    void Promise.all([
+      domMelRefreshStatus().then(() => domMelRefreshState(true)),
+      typeof domDreameRefreshState === "function" ? domDreameRefreshState(true) : null,
+      typeof domStRefreshState === "function" ? domStRefreshState(true) : null
+    ]).then(() => paint());
   }
 };
 function domSoftRender() {
