@@ -1,0 +1,48 @@
+name: Nettoyage unique d'une ancienne branche Recettes (depuis test)
+
+on:
+  push:
+    branches: [test]
+    paths:
+      - ".github/workflows/nettoyage-ancienne-refonte-recettes-test.yml"
+
+concurrency:
+  group: nettoyage-ancienne-refonte-recettes-test
+  cancel-in-progress: false
+
+jobs:
+  simulation:
+    if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Récupérer le script en lecture seule
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Vérifier la branche et l'identité des fichiers sans suppression
+        run: node scripts/nettoyage-ancienne-refonte-recettes-test.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_MODE: simulation
+
+  suppression:
+    needs: simulation
+    if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 5
+    steps:
+      - name: Récupérer le script sans credentials persistants
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Revérifier puis supprimer seulement l'ancienne branche Recettes
+        run: node scripts/nettoyage-ancienne-refonte-recettes-test.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLEANUP_MODE: suppression
+          CLEANUP_CONFIRMATION: UNE-BRANCHE-RECETTES-VERIFIEE
