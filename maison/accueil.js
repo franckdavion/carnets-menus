@@ -476,9 +476,10 @@ function restoreHeader(){
 }
 function mzHomeLite(){
  try{
-  const touch=(navigator.maxTouchPoints||0)>=1;
-  const compact=Math.min(screen.width||9999,screen.height||9999)<=1366;
-  return (touch&&compact)||matchMedia('(pointer: coarse)').matches||matchMedia('(hover: none)').matches;
+  const touch=(navigator.maxTouchPoints||0)>=1||matchMedia('(pointer: coarse)').matches;
+  const short=Math.min(window.innerWidth||0,window.innerHeight||0,screen.width||0,screen.height||0);
+  // Tablette seulement : l’iPhone (côté court < 600) garde fonds, flous et Ken Burns.
+  return touch&&short>=600&&short<=1366;
  }catch(e){return false}
 }
 function mzSyncHomeLite(){

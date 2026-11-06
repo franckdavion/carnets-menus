@@ -3,13 +3,13 @@
    Les médias personnels importés restent dans IndexedDB de cet appareil. */
 (()=>{'use strict';
   const VERSION=2, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
-  // Mode allégé : kiosque Pixar, et tablette / tactile (Ken Burns + vidéo font ramer le scroll).
+  // Mode allégé : kiosque Pixar, et tablette. L’iPhone garde l’accueil animé.
   const PIXAR_KIOSK_LITE=window.self!==window.top&&new URLSearchParams(location.search).get('pixar_kiosk')==='1';
   function deviceLite(){
     try{
-      const touch=(navigator.maxTouchPoints||0)>=1;
-      const compact=Math.min(screen.width||9999,screen.height||9999)<=1366;
-      return PIXAR_KIOSK_LITE||(touch&&compact)||matchMedia('(pointer: coarse)').matches||matchMedia('(hover: none)').matches;
+      const touch=(navigator.maxTouchPoints||0)>=1||matchMedia('(pointer: coarse)').matches;
+      const short=Math.min(window.innerWidth||0,window.innerHeight||0,screen.width||0,screen.height||0);
+      return PIXAR_KIOSK_LITE||(touch&&short>=600&&short<=1366);
     }catch(_){return PIXAR_KIOSK_LITE}
   }
   const PERIODS=[['matin','Matin'],['aprem','Après-midi'],['soir','Soir'],['nuit','Nuit']];
