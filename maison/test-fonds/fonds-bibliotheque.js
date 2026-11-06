@@ -4,7 +4,7 @@
 (()=>{'use strict';
   const VERSION=1, KEY='mn_bg_library_v1', DB='mn-background-media-v1', STORE='files';
   const PERIODS=[['matin','Matin'],['aprem','Après-midi'],['soir','Soir'],['nuit','Nuit']];
-  const TYPES=[['photo','Photos'],['illustration','Animations'],['photo-animee','Photos animées']];
+  const TYPES=[['photo','Photos'],['illustration','Animations'],['photo-animee','Photos animées'],['video','Vidéos']];
   const CONDITIONS=[['clear','Soleil'],['clouds','Nuageux'],['rain','Pluie'],['storm','Orage'],['snow','Neige'],['fog','Brouillard']];
   const isCondition=c=>CONDITIONS.some(x=>x[0]===c);
   // Codes WMO utilisés par Open-Meteo : même convention que la météo d'accueil.
@@ -28,7 +28,7 @@
   function commonsVideo(id,name,file,period,weather,author,license){
     const filename=file.replace(/ /g,'_');
     const source='https://commons.wikimedia.org/wiki/File:'+encodeURIComponent(filename);
-    return {id,name,type:'photo-animee',media:'video',period,weather,builtin:true,
+    return {id,name,type:'video',media:'video',period,weather,builtin:true,
       src:'https://commons.wikimedia.org/wiki/Special:Redirect/file/'+encodeURIComponent(filename),
       source,author,license};
   }
@@ -56,7 +56,7 @@
     {id:'p-'+p,name:'Photo '+label,type:'photo',media:'image',src:photos[p],period:p,builtin:true},
     {id:'a-'+p,name:'Animation '+label,type:'illustration',media:'svg-native',src:'',period:p,builtin:true},
     {id:'m-'+p,name:'Photo en mouvement '+label,type:'photo-animee',media:'image-motion',src:photos[p],period:p,builtin:true}
-  ]),{id:'v-flower',name:'Fleur qui éclot · vidéo',type:'photo-animee',media:'video',
+  ]),{id:'v-flower',name:'Fleur qui éclot · vidéo',type:'video',media:'video',
     src:'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',period:'aprem',builtin:true,weather:'clear',author:'MDN',license:'CC0'} ,
   ...LANDSCAPE_VIDEOS];
   const defaultPrefs=()=>({version:VERSION,mode:'auto',type:'photo',period:'matin',fixed:'p-matin',
@@ -79,14 +79,18 @@
     }catch(_){return '';}
   };
   const validateItem=item=>{
-    if(!item||!safeId(item.id)||!isType(item.type)||!item.name||item.name.length>70)return null;
+    // Les anciennes vidéos enregistrées dans « Photos animées » deviennent des « Vidéos ».
+    const type=item?.media==='video'&&item?.type==='photo-animee'?'video':item?.type;
+    if(!item||!safeId(item.id)||!isType(type)||!item.name||item.name.length>70)return null;
     if(!['image','image-motion','video','svg-native'].includes(item.media))return null;
     if(item.media==='svg-native')return null; // seules les 4 illustrations intégrées sont autorisées
+    if((item.media==='video')!==(type==='video'))return null;
+    if(type==='photo-animee'&&item.media!=='image-motion')return null;
     const local=!!item.local;
     if(local&&!/^user_[a-z0-9_-]+$/.test(item.id))return null;
     const src=local?'':safeUrl(item.src,item.media==='video'?'video':'image');
     if(!src&&!local)return null;
-    return {id:item.id,name:String(item.name).slice(0,70),type:item.type,media:item.media,src,period:isPeriod(item.period)?item.period:'matin',local,builtin:false};
+    return {id:item.id,name:String(item.name).slice(0,70),type,media:item.media,src,period:isPeriod(item.period)?item.period:'matin',local,builtin:false};
   };
   const normalize=x=>{
     const p=defaultPrefs();if(!x||typeof x!=='object')return p;
@@ -97,7 +101,15 @@
     p.motion=x.motion!==false;
     p.weatherSource=x.weatherSource==='gps'?'gps':'city';
     p.custom=Array.isArray(x.custom)?x.custom.map(validateItem).filter(Boolean).slice(0,60):[];
-    const ids=new Set([...builtins,...p.custom].map(a=>a.id));
+    const items=[...builtins,...p.custom];
+    const ids=new Set(items.map(a=>a.id));
+    // Migration des réglages existants sans supprimer les sélections ni les fichiers.
+    if(x.type==='photo-animee'){
+      const selected=[x.fixed,...Object.values(x.chosen||{}),...Object.values(x.weatherChoices||{})];
+      const hasVideo=selected.some(id=>items.some(item=>item.id===id&&item.media==='video'));
+      const hasMotion=selected.some(id=>items.some(item=>item.id===id&&item.media==='image-motion'));
+      if(((p.mode==='auto'||p.mode==='weather')&&!hasMotion)||hasVideo)p.type='video';
+    }
     p.chosen={};
     for(const [period] of PERIODS)if(ids.has(x.chosen?.[period]))p.chosen[period]=x.chosen[period];
     p.weatherChoices={};
@@ -124,7 +136,8 @@
   const gps={code:null,at:0,lastAttempt:0,pending:false,error:''};
   const catalog=()=>[...builtins,...prefs.custom];
   const find=id=>catalog().find(x=>x.id===id);
-  const defaultId=(type,period)=>({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period;
+  const defaultId=(type,period)=>type==='video'?recommendedVideo(period):
+    (({photo:'p-',illustration:'a-','photo-animee':'m-'}[type]||'p-')+period);
   // Courtes vidéos de référence pour le mode automatique : une par période.
   const AUTO_VIDEO={matin:'wm-aube-plage',aprem:'wm-midi-nuages',soir:'wm-soir-dore',nuit:'wm-nuit-filante'};
   function recommendedVideo(period,weather){
@@ -145,11 +158,15 @@
       const cat=isCondition(condition)?condition:conditionNow().category;
       const entry=prefs.weatherChoices[cat+':'+period];
       const chosen=find(entry);
-      wanted=chosen?.type===prefs.type?chosen.id:prefs.type==='photo-animee'?
+      wanted=chosen?.type===prefs.type?chosen.id:prefs.type==='video'?
         recommendedVideo(period,cat):defaultId(prefs.type,period);
-    }else if(prefs.mode==='fixed')wanted=prefs.fixed;
-    else if(prefs.mode==='custom')wanted=prefs.chosen[period]||defaultId(prefs.type,period);
-    else wanted=prefs.type==='photo-animee'?recommendedVideo(period):defaultId(prefs.type,period);
+    }else if(prefs.mode==='fixed'){
+      const fixed=find(prefs.fixed);
+      wanted=fixed?.type===prefs.type?fixed.id:defaultId(prefs.type,period);
+    }else if(prefs.mode==='custom'){
+      const chosen=find(prefs.chosen[period]);
+      wanted=chosen?.type===prefs.type?chosen.id:defaultId(prefs.type,period);
+    }else wanted=defaultId(prefs.type,period);
     return find(wanted)||find(defaultId('photo',period));
   }
   async function refreshGPS(force=false){
