@@ -55,6 +55,8 @@ jobs:
         run: node maison/tests/pont.test.mjs
       - name: Tester la sélection mensuelle Trajets sans données réelles
         run: node maison/tests/trajets-selection.test.mjs
+      - name: Tester le moteur Trajets (exclusions, doublons, lieux)
+        run: node maison/tests/trajets-core.test.mjs
 
   navigateur:
     if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
