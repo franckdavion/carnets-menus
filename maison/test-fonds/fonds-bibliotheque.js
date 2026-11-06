@@ -46,7 +46,41 @@
     commonsVideo('wm-soir-dore','Coucher de soleil doré','Free HD Stock Video - Time lapse sunset (see description for HQ download).webm','soir','clear','Johann Mynhardt','CC BY 3.0'),
     commonsVideo('wm-nuit-etoiles','Nuit étoilée','Star Timelapse.webm','nuit','clear','John Fowler','CC BY 2.0'),
     commonsVideo('wm-nuit-filante','Étoile filante','Short Time-lapse Video of Stars including a Shooting Star.webm','nuit','clear','Kai Bader','CC BY 3.0'),
-    commonsVideo('wm-nuit-polaire','Étoile polaire','Starry sky with North Star circled.webm','nuit','clear','Thomas Bresson','CC BY 3.0')
+    commonsVideo('wm-nuit-polaire','Étoile polaire','Starry sky with North Star circled.webm','nuit','clear','Thomas Bresson','CC BY 3.0'),
+    // Sélection additionnelle : fichiers identifiés sur Wikimedia Commons.
+    commonsVideo('wm2-aube-fog','Aube brumeuse en ville','Rotunda-And-Lawn-Foggy-Sunrise-Timelapse.webm','matin','fog','JuxtaposedJacob','CC0'),
+    commonsVideo('wm2-matin-fog-park','Brume dans un parc','Fog in a park in London.webm','matin','fog','David Holt','CC BY-SA 2.0'),
+    commonsVideo('wm2-matin-fog-mountain','Brume des montagnes','Montoj apud Maĉupikĉuo.webm','matin','fog','RG72','CC BY-SA 4.0'),
+    commonsVideo('wm2-aprem-snow','Tempête de neige','Snowstorm2021.webm','aprem','snow','WarDestroyer88','CC BY-SA 4.0'),
+    commonsVideo('wm2-aprem-thunder','Orage sur Versailles','Orage 2014 06 08.webm','aprem','storm','totoz','CC BY 3.0'),
+    commonsVideo('wm2-soir-stormclouds','Nuages avant l’orage','Cloudy sunset on the edge of small town. HD 1080p Timelapse (video).webm','soir','storm','Sparkus Design','CC BY 2.0'),
+    commonsVideo('wm2-nuit-lightning','Éclairs dans la nuit','Lightnings 2016 05 21 - Massy.webm','nuit','storm','François Varas-Genestier','CC BY 3.0'),
+    commonsVideo('wm2-nuit-snow','Neige nocturne','Heavy snow in Xinyang at night.webm','nuit','snow','Fumikas Sagisavas','CC BY 4.0')
+  ];
+  // Photographies réelles : CSS Ken Burns + effets de météo existants.
+  // Les liens en largeur 1280/320 limitent la bande passante sur iPhone.
+  function commonsMotion(id,name,file,period,weather,author,license){
+    const filename=file.replace(/ /g,'_');
+    const fileUrl='https://commons.wikimedia.org/wiki/Special:Redirect/file/'+encodeURIComponent(filename);
+    return {id,name,type:'photo-animee',media:'image-motion',period,weather,builtin:true,
+      src:fileUrl+'?width=1280',thumb:fileUrl+'?width=320',
+      source:'https://commons.wikimedia.org/wiki/File:'+encodeURIComponent(filename),author,license};
+  }
+  const LANDSCAPE_MOTION=[
+    commonsMotion('im-aube-soleil','Soleil dans la forêt','Sunrise at forest.jpg','matin','clear','YoshiniSivakumar 123','CC BY-SA 4.0'),
+    commonsMotion('im-matin-brume','Forêt au petit matin','Foggy Forest (29705040580).jpg','matin','fog','Daniel Walker','CC BY-SA 2.0'),
+    commonsMotion('im-matin-nuages','Nuages et premiers rayons','A Cloudy sky.jpg','matin','clouds','Priscilleluc','CC BY-SA 4.0'),
+    commonsMotion('im-matin-pluie','Gouttes du matin','Rainy window.jpg','matin','rain','Minesshubham','CC BY-SA 4.0'),
+    commonsMotion('im-aprem-nuages','Grand ciel bleu nuageux','Blue Cloudy Sky.jpg','aprem','clouds','Akthakur255','CC BY-SA 4.0'),
+    commonsMotion('im-aprem-orage','Éclair dans le ciel','Lightning Illuminated Storm.jpg','aprem','storm','Stefan Klein','CC BY-SA 4.0'),
+    commonsMotion('im-aprem-neige','Chemin forestier enneigé','Snowy Forest Track.jpg','aprem','snow','Sudzie','CC BY-SA 4.0'),
+    commonsMotion('im-aprem-pluie','Gouttes sur la vitre','Rain Water Drops.jpg','aprem','rain','Lawanga Ranwala','CC BY-SA 4.0'),
+    commonsMotion('im-soir-soleil','Coucher de soleil orangé','Orange Sunset & Clouds.jpg','soir','clear','Aryan Patidar','CC BY 4.0'),
+    commonsMotion('im-soir-nuages','Nuages du crépuscule','Orange sunset Clouds.jpg','soir','clouds','Noah Wulf','CC BY-SA 4.0'),
+    commonsMotion('im-soir-pluie','Pluie en fin de journée','Rain Droplets.jpg','soir','rain','Tony5875','CC BY-SA 4.0'),
+    commonsMotion('im-nuit-etoiles','Ciel étoilé et constellation','Starry night 2025.jpg','nuit','clear','Talesofaviewfinder','CC BY-SA 4.0'),
+    commonsMotion('im-nuit-pluie','Reflets de pluie en ville','Late night Rain City.jpg','nuit','rain','MunixShadow','CC BY 4.0'),
+    commonsMotion('im-nuit-brouillard','Forêt brumeuse nocturne','Cold and foggy forest.jpg','nuit','fog','Allancarvlho','CC BY-SA 4.0')
   ];
   const licenseUrl=code=>{
     const m=String(code||'').match(/^CC BY(-SA)? ([\d.]+)$/);
@@ -58,7 +92,7 @@
     {id:'m-'+p,name:'Photo en mouvement '+label,type:'photo-animee',media:'image-motion',src:photos[p],period:p,builtin:true}
   ]),{id:'v-flower',name:'Fleur qui éclot · vidéo',type:'video',media:'video',
     src:'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',period:'aprem',builtin:true,weather:'clear',author:'MDN',license:'CC0'} ,
-  ...LANDSCAPE_VIDEOS];
+  ...LANDSCAPE_VIDEOS,...LANDSCAPE_MOTION];
   const defaultPrefs=()=>({version:VERSION,mode:'auto',type:'photo',period:'matin',fixed:'p-matin',
     chosen:{},weatherSource:'city',weatherChoices:{},motion:true,custom:[]});
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
