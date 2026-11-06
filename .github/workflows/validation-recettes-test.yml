@@ -53,6 +53,8 @@ jobs:
         run: node maison/tests/robot.test.mjs
       - name: Vérifier le pont entre Carnet de menus et Maisonnée
         run: node maison/tests/pont.test.mjs
+      - name: Tester la sélection mensuelle Trajets sans données réelles
+        run: node maison/tests/trajets-selection.test.mjs
 
   navigateur:
     if: github.repository == 'franckdavion/carnets-menus' && github.ref == 'refs/heads/test'
