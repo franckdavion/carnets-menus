@@ -255,9 +255,21 @@ $("#dailyForm").addEventListener("submit",e=>{e.preventDefault();const v=$("#dai
 let tt=null;
 function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,2600);}
 
+function applyRecLayout(){
+  const gallery=LS.get("cm_rec_layout","list")==="gallery",list=$("#recList");
+  if(list)list.classList.toggle("rec-gallery",gallery);
+  document.querySelectorAll('#v-rec [data-act="recLayout"]').forEach(b=>{
+    b.setAttribute("aria-pressed",String((b.dataset.v==="gallery")===gallery));
+  });
+}
+applyRecLayout();
 document.addEventListener("click",e=>{
+  const addMenu=$("#recActions");
+  if(addMenu&&addMenu.open&&!addMenu.contains(e.target))addMenu.open=false;
   const b=e.target.closest("[data-act]"); if(!b)return;
   const a=b.dataset.act, id=b.dataset.id;
+  if(a==="recActionsClose"){if(addMenu)addMenu.open=false;return;}
+  if(b.closest("#recActions"))$("#recActions").open=false;
   if(a==="check"||a==="checkX")return; // handled on change
   if(a==="closeSet"||(a==="tab"&&b.dataset.v==="set"&&view==="set")){view=LS.get("cm_prevview","menu");if(view==="set")view="menu";LS.set("cm_view",view);render();window.scrollTo(0,0);return;} // back to the page we came from
   if(a==="tab"&&b.dataset.v==="set"&&view!=="set")LS.set("cm_prevview",view);
@@ -434,6 +446,8 @@ document.addEventListener("click",e=>{
   else if(a==="kindLight"){filter.light=!filter.light;recLimit=50;renderRecipes();}
   else if(a==="kindTheme"){filter.theme=filter.theme===b.dataset.v?"":b.dataset.v;recLimit=50;renderRecipes();}
   else if(a==="pkindTheme"){pickTheme=pickTheme===b.dataset.v?"":b.dataset.v;renderPick();}
+  else if(a==="recAll"){Object.assign(filter,{cat:"Toutes",cats:[],kinds:[],kind:"",quick:false,light:false,theme:"",fav:false,q:""});$("#q").value="";recLimit=50;renderRecipes();}
+  else if(a==="recLayout"){LS.set("cm_rec_layout",b.dataset.v==="gallery"?"gallery":"list");applyRecLayout();}
   else if(a==="kindFav"){filter.fav=!filter.fav;recLimit=50;renderRecipes();}
   else if(a==="pkind"){pickKind=b.dataset.v;renderPick();}
   else if(a==="pkindQuick"){pickQuick=!pickQuick;renderPick();}
@@ -661,7 +675,7 @@ document.addEventListener("click",e=>{
   else if(a==="syncNow")runSync();
   else if(a==="syncOff"){sync=null;["cm_sync","cm_base"].forEach(k=>{try{localStorage.removeItem(k);}catch(x){}});clearTimeout(syncTimer);setStatus("off");$("#syncSheet").hidden=true;toast("Ce téléphone n'est plus synchronisé. Vos données restent ici.");}
   else if(a==="newRecipe")openSheet();
-  else if(a==="goFind"){$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
+  else if(a==="goFind"){const panel=$("#recWebPanel");if(panel)panel.open=true;$("#findForm").scrollIntoView({block:"start",behavior:"smooth"});}
   else if(a==="closeSheet"){$("#sheet").hidden=true;editId=null;} // the window it came from reopens by itself
   else if(a==="rphotoRm"){removeRecipePhoto(id);}
   else if(a==="autoNext"){const r=recipes[id],l=autoList(id).filter(x=>!rejected(r).has(x.u));if(r&&l.length>1){const cur=l.findIndex(x=>x.u===r.autoPick),ni=((cur>=0?cur:Number(r.autoIdx)||0)+1)%l.length;saveRecipe(id,Object.assign({},r,{autoIdx:ni,autoPick:l[ni].u}));}else toast("Pas d'autre photo trouvée pour ce plat");}
