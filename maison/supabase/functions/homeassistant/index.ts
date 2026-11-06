@@ -53,10 +53,17 @@ function normalizeUrl(raw: string) {
   try { parsed = new URL(u); } catch { throw new Error("Adresse Home Assistant invalide."); }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("L’adresse doit commencer par https://");
   const host = parsed.hostname.toLowerCase();
-  if (host === "localhost" || host.endsWith(".local") || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) {
-    throw new Error("Cette adresse est locale : Supabase ne peut pas joindre 192.168. Utilisez l’URL Nabu Casa (Home Assistant Cloud) ou une URL publique HTTPS.");
+  const tailscaleName = host.endsWith(".ts.net");
+  if (/^100\./.test(host)) {
+    throw new Error("Les adresses Tailscale 100.x ne sont pas joignables depuis internet. Utilisez le nom MagicDNS (https://votre-machine.xxx.ts.net) avec Tailscale Funnel.");
   }
-  return parsed.origin;
+  if (host === "localhost" || host.endsWith(".local") || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) {
+    throw new Error("Cette adresse est locale. Avec Tailscale : activez Funnel et utilisez https://votre-machine.xxx.ts.net (pas 192.168).");
+  }
+  if (!tailscaleName && parsed.protocol !== "https:") {
+    throw new Error("L’adresse Home Assistant doit être en https://");
+  }
+  return parsed.origin + (parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.replace(/\/+$/, "") : "");
 }
 
 async function haFetch(cred: HaCred, path: string, init?: RequestInit) {
@@ -78,7 +85,7 @@ async function haFetch(cred: HaCred, path: string, init?: RequestInit) {
     return { ok: r.ok, status: r.status, body };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") throw new Error("Home Assistant ne répond pas assez vite.");
-    throw new Error("Impossible de joindre Home Assistant. Vérifiez l’URL publique (Nabu Casa).");
+    throw new Error("Impossible de joindre Home Assistant. Avec Tailscale, Funnel doit être activé (URL https://….ts.net visible hors du VPN).");
   } finally {
     clearTimeout(timer);
   }

@@ -1660,7 +1660,7 @@ function mzDomServiceSettingsSheet(key){
     body=domHaLinked()?`<p class="muted">Home Assistant relié${domHaStatus.device_name?" · "+esc(domHaStatus.device_name):""}. Commandes via votre box, sans API Samsung payante.</p>
       <button class="btn" type="button" data-dom-ha-devices>Choisir le téléviseur ›</button>
       <button class="btn ghost danger" type="button" data-dom-ha-disconnect>Délier Home Assistant</button>`
-      :`<p class="muted">Reliez Home Assistant (URL Nabu Casa + jeton longue durée). C’est la voie gratuite.</p>
+      :`<p class="muted">Reliez Home Assistant via Tailscale Funnel (URL https://….ts.net) et un jeton longue durée.</p>
       <button class="btn primary" type="button" data-dom-ha-connect>Relier Home Assistant</button>
       <p class="muted small">SmartThings cloud reste possible, mais Samsung le facture ou impose un jeton 24 h.</p>
       <button class="btn ghost" type="button" data-dom-st-oauth>Compte Samsung (payant)</button>
@@ -2161,7 +2161,7 @@ function domTvPanelHtml() {
 
 function domTvSheet(fromRefresh) {
   if (!tvReady()) {
-    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">Télévision non reliée</p><p>Le chemin gratuit : Home Assistant (la TV est déjà dans HA). Il faut l’URL Nabu Casa et un jeton longue durée.</p><button type="button" class="btn primary" data-dom-ha-connect>Relier Home Assistant</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
+    openSheet("Samsung TV", `<div class="dom-pending"><p class="muted">Télévision non reliée</p><p>Chemin gratuit : Home Assistant + Tailscale Funnel (URL https://….ts.net) et un jeton longue durée.</p><button type="button" class="btn primary" data-dom-ha-connect>Relier Home Assistant</button><button type="button" class="btn ghost" data-act="closeSheet">Fermer</button></div>`);
     return;
   }
   if (fromRefresh && document.querySelector(".dom-tv-panel")) { domTvFillPanel(); return; }
@@ -2208,8 +2208,8 @@ installMzTvTestHandlers();
 let domStReturnAfterRenewal = "";
 function domHaConnectSheet() {
   openSheet("Relier Home Assistant", `<form id="dom-ha-connect" class="dom-form">
-    <p class="muted">Dans Home Assistant : profil (en bas à gauche) → <strong>Jetons d’accès longue durée</strong> → créer un jeton. L’URL doit être publique, en général <code>https://….ui.nabu.casa</code> (Home Assistant Cloud). Une adresse 192.168 ne marchera pas depuis internet.</p>
-    <label>URL Home Assistant<input name="url" required maxlength="200" placeholder="https://xxxxxxxx.ui.nabu.casa" autocomplete="off"></label>
+    <p class="muted">Tu es sur Tailscale, pas Nabu Casa. MagicDNS tout seul (100.x ou .ts.net sans Funnel) n’est visible que dans le VPN : nos serveurs n’y accèdent pas. Sur la machine HA : <strong>Tailscale Funnel</strong>, puis l’URL HTTPS du type <code>https://ha.xxx.ts.net</code>. Jeton : profil HA → Jetons d’accès longue durée.</p>
+    <label>URL Tailscale Funnel<input name="url" required maxlength="200" placeholder="https://ha.xxxxx.ts.net" autocomplete="off"></label>
     <label>Jeton longue durée<textarea name="token" required minlength="20" maxlength="800" rows="3" autocomplete="off"></textarea></label>
     <button class="btn primary" type="submit">Tester et enregistrer</button>
   </form>`);
