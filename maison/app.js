@@ -508,9 +508,10 @@ async function loadRecipes() {
 /* Magasin / Wi‑Fi captive : iPhone peut dire « en ligne » sans joindre Supabase.
    Dans ce cas on garde l'app, la liste magasin et les cartes locales. */
 function mzStoreLocalPreferred() {
+  if (user) return false;
   if (navigator.onLine === false) return true;
   if (mzAuthNeedsLogin) return true;
-  if (mode === "cloud" && !user && (LS.get("mz_hh", null) || (LS.get("mz_cache", null) || {}).hh)) return true;
+  if (mode === "cloud" && (LS.get("mz_hh", null) || (LS.get("mz_cache", null) || {}).hh)) return true;
   return false;
 }
 window.mzStoreLocalPreferred = mzStoreLocalPreferred;
@@ -569,13 +570,12 @@ async function init() {
       if (error) throw error;
       user = data?.session?.user || null;
     })();
-    const waitMs = cache && cache.hh ? 6000 : 28000;
-    await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), waitMs))]);
+    await Promise.race([boot, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 28000))]);
   } catch (e) {
     // Une erreur CDN / réseau / session ne signifie ni déconnexion volontaire
     // ni disparition du foyer : ne pas effacer mz_mode ou mz_hh.
-    if (mode === "cloud" || LS.get("mz_hh", null) || (cache && cache.hh)) mzAuthNeedsLogin = true;
     mzOfflineStartup("Sans réseau stable : liste de courses et cartes restent sur cet iPhone.");
+    mzResumeCloudSession();
     return;
   }
   if (!user) {
@@ -600,8 +600,9 @@ async function init() {
 // Après un retour de réseau ou une réouverture de l'iPhone, retenter sans
 // ouvrir de formulaire, sans effacer le cache et sans créer de nouveau foyer.
 async function mzResumeCloudSession() {
-  if (navigator.onLine === false || mode !== "cloud" || user ||
+  if (navigator.onLine === false || mode !== "cloud" ||
       screen === "auth" || screen === "welcome" || screen === "setup") return;
+  if (user && rt) return;
   if (mzAuthResumeRunning) return mzAuthResumeRunning;
   mzAuthResumeRunning = (async () => {
     try {
