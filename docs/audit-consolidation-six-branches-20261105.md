@@ -215,3 +215,28 @@ Les trois branches historiques qui continuent à contenir des développements su
 La branche `sauvegarde-main-avant-recettes-20261106` demeure elle aussi intacte.
 
 **Bilan :** 6 branches actives (incluant `main` et `test`), deux archives Git supplémentaires, aucun changement de `main`, de l'application en ligne ou de la base Supabase pendant cet archivage.
+
+
+---
+
+## Clôture du nettoyage des trois branches Agenda / Trajets — 6 novembre 2026
+
+**Exécution vérifiée :** [GitHub Actions n° 42233453285](https://github.com/franckdavion/carnets-menus/actions/runs/42233453285), trois jobs tous réussis : `simulation`, `archivage`, `rangement`.
+
+La simulation a exécuté avec succès les **32 tests Trajets** (15 sur la sélection mensuelle et 17 sur le moteur) et les **10 contrats Agenda**. Les scénarios n'accèdent à aucun compte familial, calendrier réel ou base Supabase.
+
+Chaque ancien commit a été **archivé par un tag Git léger et vérifié avant suppression**, avec contrôle répété de l'identité du dépôt, du SHA exact de la branche, de l'absence de Pull Request ouverte, de la présence de l'archive et de la stabilité du SHA de `main`.
+
+| Ancienne branche retirée des branches actives | Tag de conservation | SHA conservé |
+| --- | --- | --- |
+| `test-agenda-plus-google-style-20261104` | `archive/2026-11-06/test-agenda-plus-google-style-20261104` | `3986607192a2da4c5e6ec5422b84fbc5dfbba361` |
+| `test-presences-trajets-exclusions-20261105` | `archive/2026-11-06/test-presences-trajets-exclusions-20261105` | `79388ac3bec25881a53cd74a34cc0c10a5b3a512` |
+| `test-selection-mensuelle-trajets-20261105` | `archive/2026-11-06/test-selection-mensuelle-trajets-20261105` | `6eb18be2ca3dae1ffe48b977d411e09b943af812` |
+
+Ces trois tags préservent l'intégralité des anciens fichiers et commits accessibles depuis leurs anciennes branches. Ils s'ajoutent aux deux archives Design C / prévisualisation déjà existantes. Les différences de code n'ont **pas** été fusionnées dans `main` ; seules les références des branches historiques ont été retirées après sauvegarde.
+
+**État vérifié après nettoyage :** trois branches actives : `main`, `test` et `sauvegarde-main-avant-recettes-20261106`. La sauvegarde n'a pas été supprimée. Les deux outils temporaires de cet archivage (script et workflow GitHub Actions) ont ensuite été retirés de `test`.
+
+**Limites des vérifications :** les tests restent simulés. Aucun parcours connecté sur les données réelles Google Agenda / Google Tasks / Supabase n'a été effectué ; il demeure nécessaire pour garantir le comportement effectif en situation. Le fichier historique `0028_tasks_schedule.sql` est conservé dans le tag Agenda, tandis que ses colonnes cibles sont déjà présentes dans Supabase d'après le précédent contrôle en lecture seule. Ne pas relancer cette migration sans audit.
+
+**Intégrité de production :** `main` reste au commit `3f11f57eed0529bf488402b783f0666e7796e2df`. Pas de modification de Supabase ni des fichiers de l'application officielle pendant ce rangement.
