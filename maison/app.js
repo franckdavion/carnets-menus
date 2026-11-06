@@ -164,9 +164,35 @@ const initial = n => (String(n || "?").trim()[0] || "?");
 const av = (m, cls = "") => m ? `<span class="av ${cls}" style="--c:${esc(m.color)}" aria-hidden="true">${esc(initial(m.name))}</span>` : `<span class="av any ${cls}" aria-hidden="true">?</span>`;
 
 /* ---------- persistence ---------- */
+function mzCoreSnapshot() {
+  return {
+    hh: S.hh, me: S.me, members: S.members || [], shelly: S.shelly || [],
+    vShelly: !!S.vShelly, shop: S.shop || [], tasks: S.tasks || [],
+    events: S.events || [], meals: S.meals || [], at: Date.now()
+  };
+}
+function mzReadLocalFoyer() {
+  return LS.get("mz_cache", null) || LS.get("mz_core", null);
+}
 function saveLocal() {
-  if (mode === "demo") LS.set("mz_demo", S);
-  else if (mode === "cloud" && S.hh) LS.set("mz_cache", { ...S, recipes: null, at: Date.now() });
+  if (mode === "demo") { LS.set("mz_demo", S); return; }
+  if (mode !== "cloud" || !S.hh) return;
+  const core = mzCoreSnapshot();
+  try { localStorage.setItem("mz_core", JSON.stringify(core)); } catch (e) {}
+  // Ne jamais coller les photos (jusqu’à 2000) dans localStorage : sur iPhone
+  // ça sature le quota, la session Auth n’est plus écrite, et au prochain
+  // lancement le foyer / la famille / la domotique disparaissent.
+  try {
+    const slim = {
+      ...core, log: (S.log || []).slice(-80), msgs: (S.msgs || []).slice(-40),
+      locs: S.locs || [], bdays: S.bdays || [], exp: S.exp || [], docs: [],
+      sched: S.sched || [], photos: [], recipes: null, carnetPlan: S.carnetPlan || null,
+      v2: S.v2, v3: S.v3, v4: S.v4, favs: S.favs || null
+    };
+    localStorage.setItem("mz_cache", JSON.stringify(slim));
+  } catch (e) {
+    try { localStorage.setItem("mz_cache", JSON.stringify(core)); } catch (_) {}
+  }
 }
 
 async function add(key, row) {
@@ -283,11 +309,23 @@ function loadSb() {
   return sbLoading;
 }
 
+function mzRememberAuth(session) {
+  const access = session?.access_token, refresh = session?.refresh_token;
+  if (!access || !refresh) return;
+  try {
+    localStorage.setItem("mz_auth_tokens", JSON.stringify({ access_token: access, refresh_token: refresh, at: Date.now() }));
+  } catch (e) {}
+}
+function mzForgetAuth() {
+  try { localStorage.removeItem("mz_auth_tokens"); } catch (e) {}
+}
 function mzHookAuth(client) {
   if (mzAuthHooked || !client?.auth?.onAuthStateChange) return;
   mzAuthHooked = true;
   client.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") return;
     if (!session?.user) return;
+    mzRememberAuth(session);
     if (mode !== "cloud" && !LS.get("mz_hh", null) && !LS.get("mz_mode", null)) return;
     user = session.user;
     mzAuthNeedsLogin = false;
@@ -297,6 +335,28 @@ function mzHookAuth(client) {
   });
 }
 
+async function mzRestoreAuthTokens() {
+  const t = LS.get("mz_auth_tokens", null);
+  if (!t?.refresh_token || !sb) return null;
+  try {
+    if (t.access_token) {
+      const put = await sb.auth.setSession({ access_token: t.access_token, refresh_token: t.refresh_token });
+      if (!put.error && put.data?.session?.user) {
+        mzRememberAuth(put.data.session);
+        return put.data.session;
+      }
+    }
+    const ref = await sb.auth.refreshSession({ refresh_token: t.refresh_token });
+    if (!ref.error && ref.data?.session?.user) {
+      mzRememberAuth(ref.data.session);
+      return ref.data.session;
+    }
+  } catch (e) {
+    console.warn("Session : jeton local inutilisable", e);
+  }
+  return null;
+}
+
 async function mzReadSession(tries) {
   await loadSb();
   let session = null;
@@ -304,10 +364,10 @@ async function mzReadSession(tries) {
     const { data, error } = await sb.auth.getSession();
     if (error) throw error;
     session = data?.session || null;
-    if (session?.user) return session;
+    if (session?.user) { mzRememberAuth(session); return session; }
     await new Promise(ok => setTimeout(ok, 400 * (i + 1)));
   }
-  return session;
+  return (await mzRestoreAuthTokens()) || session;
 }
 
 function mzWakeDomotique() {
@@ -573,7 +633,7 @@ function mzStoreLocalPreferred() {
 window.mzStoreLocalPreferred = mzStoreLocalPreferred;
 
 function mzOfflineStartup(reason, notify = true) {
-  const snapshot = LS.get("mz_cache", null);
+  const snapshot = mzReadLocalFoyer();
   if (snapshot && snapshot.hh) {
     if (!S.hh || S.hh.id !== snapshot.hh.id) S = { ...blank(), ...snapshot, recipes: null };
     screen = "app";
@@ -592,7 +652,26 @@ function mzOfflineStartup(reason, notify = true) {
   if (notify) toast(reason || "Connexion indisponible : données locales uniquement.");
 }
 /* ---------- startup ---------- */
+function mzMigrateCacheQuota() {
+  try {
+    const raw = localStorage.getItem("mz_cache");
+    if (!raw || raw.length < 350000) return;
+    const s = JSON.parse(raw);
+    const slim = {
+      hh: s.hh, me: s.me, members: s.members || [], shelly: s.shelly || [],
+      vShelly: !!s.vShelly, shop: s.shop || [], tasks: s.tasks || [],
+      events: s.events || [], meals: s.meals || [], at: Date.now()
+    };
+    localStorage.removeItem("mz_cache");
+    localStorage.setItem("mz_core", JSON.stringify(slim));
+    localStorage.setItem("mz_cache", JSON.stringify({ ...slim, photos: [], docs: [], recipes: null }));
+  } catch (e) {
+    try { localStorage.removeItem("mz_cache"); } catch (_) {}
+  }
+}
+
 async function init() {
+  mzMigrateCacheQuota();
   const url = new URL(location.href), code = url.searchParams.get("code");
   // opened from a notification (e.g. a new message): go straight to that page
   const goTo = url.searchParams.get("v");
@@ -606,7 +685,7 @@ async function init() {
   // Afficher immédiatement le dernier état local du foyer authentifié.
   // Sans cet état, ne JAMAIS afficher le formulaire de connexion en mode avion :
   // il est inutilisable sans réseau et cache les cartes sauvegardées dans IndexedDB.
-  const cache = LS.get("mz_cache", null);
+  const cache = mzReadLocalFoyer();
   if (mode === "cloud" && cache && cache.hh) {
     S = { ...blank(), ...cache, recipes: null };
     screen = "app"; render();
@@ -694,7 +773,7 @@ async function mzEnterCloudBody() {
   if (!ids.length) {
     // Un identifiant de foyer préexistant rend ce résultat suspect :
     // ne surtout pas inviter à recréer/rejoindre le foyer en mode avion.
-    if (LS.get("mz_hh", null) || LS.get("mz_cache", null)?.hh) {
+    if (LS.get("mz_hh", null) || mzReadLocalFoyer()?.hh) {
       mzOfflineStartup("Foyer non confirmé : réessaye en ligne, sans créer de nouveau foyer.");
       return;
     }
@@ -2302,9 +2381,9 @@ document.addEventListener("click", async e => {
       if (!confirm(`Quitter « ${S.hh.name} » ? Vous n'y aurez plus accès, sauf avec une nouvelle invitation.`)) break;
       const { error } = await sb.rpc("leave_household", { hid: S.hh.id });
       if (error) { fail(error); break; }
-      LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "setup"; render(); break;
+      LS.del("mz_cache"); LS.del("mz_core"); LS.del("mz_hh"); S = blank(); screen = "setup"; render(); break;
     }
-    case "logout": if (sb) await sb.auth.signOut({ scope: "local" }); user = null; mode = null; LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
+    case "logout": if (sb) await sb.auth.signOut({ scope: "local" }); user = null; mode = null; mzForgetAuth(); LS.del("mz_mode"); LS.del("mz_cache"); LS.del("mz_core"); LS.del("mz_hh"); S = blank(); screen = "welcome"; render(); break;
     case "auth": authMode = v; authErr = ""; screen = "auth"; render(); break;
     case "back": screen = mode === "cloud" && S.hh ? "app" : "welcome"; render(); break;
     case "demo": $("#toast").hidden = true; mode = "demo"; LS.set("mz_mode", "demo"); S = demoUpgrade(LS.get("mz_demo", null)) || demoData(); saveLocal(); screen = "app"; view = "home"; render(); geoTick(); break;
