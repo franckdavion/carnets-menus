@@ -327,10 +327,7 @@ document.addEventListener("click",e=>{
   else if(a==="openPrefs")openPrefs();
   else if(a==="look")setLook(b.dataset.k,b.dataset.v);
   else if(a==="pickImport"){const k=pickKey,role=pickRole,w=curWeek;
-    sendImport($("#pwLinks").value,t=>{$("#pwMsg").textContent=t;},{w,k,role}).then(ok=>{if(ok){$("#pwLinks").value="";
-      const t0=Date.now();$("#pwMsg").textContent="⏳ Le robot lit la recette… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";
-      const tick=setInterval(()=>{const m=$("#pwMsg");if(!m.textContent.startsWith("⏳")||$("#pickSheet").hidden){clearInterval(tick);return;}
-        m.textContent="⏳ Le robot lit la recette ("+Math.round((Date.now()-t0)/1000)+" s)… elle sera placée sur "+slotLabel(k)+". Vous pouvez fermer cette fenêtre.";},1000);}});}
+    sendImport($("#pwLinks").value,t=>{$("#pwMsg").textContent=t;},{w,k,role}).then(ok=>{if(ok)$("#pwLinks").value="";});}
   else if(a==="mealPortion"||a==="mealPortionCustom"){
     const k=b.dataset.k,sl=W()[k];if(!sl)return;
     let v=Number(b.dataset.v);
@@ -1639,63 +1636,77 @@ function importMsg(t){$("#importStatus").textContent=t;const f=$("#frWebMsg");if
 async function sendImport(text,msg,assign){
   const urls=[...new Set((text.match(/https?:\/\/[^\s<>"'«»]+/g)||[]).map(u=>u.replace(/[).,;]+$/,"")))].slice(0,15);
   if(!urls.length){msg("Collez au moins un lien de recette (il commence par https://).");return false;}
-  if(!sync){msg("L'import passe par le robot de votre dépôt GitHub : activez d'abord « Partage entre téléphones » dans Réglages.");return false;}
-  const id="i"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  msg("Envoi au robot…");
+  msg("Lecture de la recette…");
   try{
-    const p=await gh("PUT",{message:"Demande d'import",content:b64e(J({id,type:"import",urls,at:new Date().toISOString()}))},sync.repo,"inbox/"+id+".json");
-    if(!p.ok)throw{status:p.status};
-  }catch(err){msg(err&&err.status?"Envoi impossible ("+err.status+") : vérifiez la synchro.":"Pas de connexion : réessayez quand le réseau revient.");return false;}
-  imports.push(Object.assign({id,n:urls.length,at:Date.now()},assign&&assign.fr?{fr:true}:assign&&assign.replace?{replace:assign.replace}:assign?{assign}:{}));LS.set("cm_imports",imports);
-  msg(`Le robot lit ${urls.length} recette${urls.length>1?"s":""}… environ une minute. Vous pouvez continuer à utiliser l'app.`);
-  startImportPolling();return true;
+    const sb=await sbc();
+    const{data:{session}}=await sb.auth.getSession();
+    const r=await fetch(SB_URL+"/functions/v1/import-recipe",{
+      method:"POST",
+      headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+(session&&session.access_token||SB_KEY)},
+      body:JSON.stringify({urls})
+    });
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){msg(d.error==="origine refusée"?"Import refusé depuis cette adresse.":(d.error||"Import impossible ("+r.status+")."));return false;}
+    applyImported(d,assign&&assign.fr?{fr:true}:assign&&assign.replace?{replace:assign.replace}:assign?{assign}:{},msg);
+    return true;
+  }catch(err){msg("Pas de connexion : réessayez quand le réseau revient.");return false;}
+}
+function applyImported(d,job,msg){
+  let added=0, firstId=null;
+  for(const r of d.recipes||[]){
+    if(!r||!r.name||!Array.isArray(r.ing))continue;
+    if(job.replace&&recipes[job.replace]&&!added){const old=recipes[job.replace],n=Object.assign({},old,{name:String(r.name),time:Number(r.time)||old.time||0,serves:Number(r.serves)||4,
+        ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),steps:String(r.steps||""),source:String(r.source||""),updatedAt:new Date().toISOString()});
+      if(typeof r.image==="string"&&/^https:\/\//.test(r.image)){n.image=r.image;delete n.pick;delete n.photo;saveRPhoto(job.replace,null);}
+      recipes[job.replace]=n;added++;firstId=job.replace;
+      if(!$("#sheet").hidden&&editId===job.replace){openSheet(job.replace);$("#webMsg").textContent="✓ Recette remplacée : relisez puis « Enregistrer ».";}
+      setTimeout(()=>toast("✓ « "+n.name+" » remplacée par la recette du web"),300);continue;}
+    const same=Object.keys(recipes).find(k=>recipes[k].source&&recipes[k].source===r.source);
+    const rid=same||((norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6));
+    recipes[rid]={name:String(r.name),cat:CATS.includes(r.cat)?r.cat:"Plat",time:Number(r.time)||0,serves:Number(r.serves)||4,
+      ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),
+      steps:String(r.steps||""),source:String(r.source||""),createdAt:new Date().toISOString()};
+    if(typeof r.image==="string"&&/^https:\/\//.test(r.image))recipes[rid].image=r.image;
+    added++; if(!firstId)firstId=rid;
+  }
+  if(firstId&&job.assign){const{w,k,role}=job.assign;menu.weeks=menu.weeks||{};const wk=menu.weeks[w]=menu.weeks[w]||{};
+    if(role==="main"||!role)wk[k]=Object.assign({},wk[k]||{},{id:firstId,n:wk[k]&&wk[k].n||menu.people});else if(wk[k])wk[k][role]=firstId;
+    if(role==="entree"&&!["Entrée","Soupe"].includes(recipes[firstId].cat))recipes[firstId].cat="Entrée";
+    if(role==="dessert")recipes[firstId].cat="Dessert";
+    saveMenu();
+    if(!$("#pickSheet").hidden&&pickKey===k&&curWeek===w){$("#pickSheet").hidden=true;$("#pwMsg").textContent="";}
+    if(curWeek===w)flashSlot(k);
+    setTimeout(()=>toast("✓ "+recipes[firstId].name+" placée sur "+slotLabel(k)),300);}
+  LS.set("cm_recipes",recipes);render();scheduleSync();cloudSoon();
+  const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
+  const line=(added?`${added} recette${added>1?"s":""} ajoutée${added>1?"s":""} au carnet.`:"Aucune recette ajoutée.")+(errs.length?" Non importées : "+errs.join(" · "):"");
+  if(typeof msg==="function")msg(line);else importMsg(line);
+  if(added)toast(`${added} recette${added>1?"s":""} importée${added>1?"s":""}`);
+  if(added&&job.fr&&$("#frIn")&&$("#frIn").value.trim()){const m=$("#frWebMsg")&&$("#frWebMsg").textContent;runFridge();if($("#frWebMsg"))$("#frWebMsg").innerHTML=esc(m)+` <button type="button" class="link" data-act="viewRec" data-id="${esc(firstId)}">Voir « ${esc(recipes[firstId].name)} »</button>`;}
+  if(job.replace&&!added){$("#webMsg").textContent="✗ Cette page n'a pas pu être lue"+(errs.length?" ("+errs.join(" · ")+")":"")+".";}
+  if(job.assign&&!added){$("#pwMsg").textContent="✗ Cette page n'a pas pu être lue"+(errs.length?" ("+errs.join(" · ")+")":"")+". Essayez un autre lien.";}
 }
 $("#findForm").addEventListener("submit",async e=>{
   e.preventDefault();
   if(await sendImport($("#linksIn").value,importMsg))$("#linksIn").value="";
 });
+// API pour Maisonnée (iframe) : import web + placement sur un créneau
+window.cmImportUrls=async(text,assign)=>{
+  let message="";
+  const ok=await sendImport(text,t=>{message=t;},assign);
+  return{ok,msg:message};
+};
 function startImportPolling(){if(!importTimer&&imports.length)importTimer=setInterval(pollImports,8000);}
 async function pollImports(){
   if(!sync||!imports.length){clearInterval(importTimer);importTimer=null;return;}
   for(const job of[...imports]){
     if(Date.now()-job.at>8*60e3){imports=imports.filter(x=>x!==job);
-      importMsg("Le robot n'a pas répondu. Vérifiez qu'il est installé dans le dépôt des données (fichier .github/workflows/recettes.yml).");if(job.assign)$("#pwMsg").textContent="✗ Le robot n'a pas répondu à temps. Réessayez un peu plus tard.";continue;}
+      importMsg("L'ancien import GitHub n'a pas abouti. Recollez le lien : l'import passe maintenant par le carnet en ligne.");if(job.assign)$("#pwMsg").textContent="✗ Import trop long. Recollez le lien.";continue;}
     let g;try{g=await gh("GET",null,sync.repo,"results/"+job.id+".json");}catch(x){return;}
     if(g.status!==200)continue;
     let d;try{d=JSON.parse(b64d((await g.json()).content));}catch(x){continue;}
     imports=imports.filter(x=>x!==job);
-    let added=0, firstId=null;
-    for(const r of d.recipes||[]){
-      if(!r||!r.name||!Array.isArray(r.ing))continue;
-      if(job.replace&&recipes[job.replace]&&!added){const old=recipes[job.replace],n=Object.assign({},old,{name:String(r.name),time:Number(r.time)||old.time||0,serves:Number(r.serves)||4,
-          ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),steps:String(r.steps||""),source:String(r.source||""),updatedAt:new Date().toISOString()});
-        if(typeof r.image==="string"&&/^https:\/\//.test(r.image)){n.image=r.image;delete n.pick;delete n.photo;saveRPhoto(job.replace,null);}
-        recipes[job.replace]=n;added++;firstId=job.replace;
-        if(!$("#sheet").hidden&&editId===job.replace){openSheet(job.replace);$("#webMsg").textContent="✓ Recette remplacée : relisez puis « Enregistrer ».";}
-        setTimeout(()=>toast("✓ « "+n.name+" » remplacée par la recette du web"),300);continue;}
-      const same=Object.keys(recipes).find(k=>recipes[k].source&&recipes[k].source===r.source);
-      const rid=same||((norm(r.name).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)||"recette")+"-"+Math.random().toString(36).slice(2,6));
-      recipes[rid]={name:String(r.name),cat:CATS.includes(r.cat)?r.cat:"Plat",time:Number(r.time)||0,serves:Number(r.serves)||4,
-        ing:r.ing.map(i=>({q:Number(i.q)||0,u:UNITS.includes(i.u)?i.u:"pièce",n:String(i.n),r:RAYONS.includes(i.r)?i.r:"Divers"})),
-        steps:String(r.steps||""),source:String(r.source||""),createdAt:new Date().toISOString()};
-      if(typeof r.image==="string"&&/^https:\/\//.test(r.image))recipes[rid].image=r.image; // the site's own photo of the dish
-      added++; if(!firstId)firstId=rid;
-    }
-    if(firstId&&job.assign){const{w,k,role}=job.assign;menu.weeks=menu.weeks||{};const wk=menu.weeks[w]=menu.weeks[w]||{};
-      if(role==="main"||!role)wk[k]=Object.assign({},wk[k]||{},{id:firstId,n:wk[k]&&wk[k].n||menu.people});else if(wk[k])wk[k][role]=firstId;
-      if(role==="entree"&&!["Entrée","Soupe"].includes(recipes[firstId].cat))recipes[firstId].cat="Entrée";
-      if(role==="dessert")recipes[firstId].cat="Dessert";
-      saveMenu();
-      if(!$("#pickSheet").hidden&&pickKey===k&&curWeek===w){$("#pickSheet").hidden=true;$("#pwMsg").textContent="";}
-      if(curWeek===w)flashSlot(k);
-      setTimeout(()=>toast("✓ "+recipes[firstId].name+" placée sur "+slotLabel(k)),300);}
-    LS.set("cm_recipes",recipes);render();scheduleSync();
-    const errs=(d.errors||[]).map(x=>{try{return new URL(x.url).hostname.replace(/^www\./,"")+" : "+x.msg;}catch(y){return x.msg;}});
-    importMsg((added?`${added} recette${added>1?"s":""} ajoutée${added>1?"s":""} au carnet.`:"Aucune recette ajoutée.")+(errs.length?" Non importées : "+errs.join(" · "):""));
-    if(added)toast(`${added} recette${added>1?"s":""} importée${added>1?"s":""}`);
-    if(added&&job.fr&&$("#frIn").value.trim()){const m=$("#frWebMsg")&&$("#frWebMsg").textContent;runFridge();if($("#frWebMsg"))$("#frWebMsg").innerHTML=esc(m)+` <button type="button" class="link" data-act="viewRec" data-id="${esc(firstId)}">Voir « ${esc(recipes[firstId].name)} »</button>`;}
-    if(job.replace&&!added){$("#webMsg").textContent="✗ Le robot n'a pas réussi à lire cette page"+(errs.length?" ("+errs.join(" · ")+")":"")+".";}
-    if(job.assign&&!added){$("#pwMsg").textContent="✗ Le robot n'a pas réussi à lire cette page"+(errs.length?" ("+errs.join(" · ")+")":"")+". Essayez un autre lien.";}
+    applyImported(d,job,importMsg);
   }
   LS.set("cm_imports",imports);
   if(!imports.length){clearInterval(importTimer);importTimer=null;}

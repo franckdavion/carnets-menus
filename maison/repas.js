@@ -642,8 +642,36 @@ function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
   openSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
     ${p.role === "main" ? `<div class="btns" style="margin-top:4px"><button class="btn primary" data-act="rReroll" data-v="${esc(p.k)}">✨ Laisser le Carnet choisir</button><button class="btn" data-act="rLeft" data-v="${esc(p.k)}">🥡 Restes</button><button class="btn" data-act="rNote" data-v="${esc(p.k)}">✏️ Noter un repas</button></div>` : ""}
+    <details class="card" style="margin-top:14px;padding:10px 12px" open><summary style="font-weight:700;cursor:pointer">Importer depuis Internet</summary>
+      <p class="muted small" style="margin:8px 0 0">Sur Marmiton ou 750g : Partager → Copier le lien, puis collez-le ici. Le repas sera rempli automatiquement.</p>
+      <textarea id="rPickLinks" class="input" rows="2" placeholder="https://…" style="margin-top:8px;width:100%;box-sizing:border-box"></textarea>
+      <div class="btns" style="margin-top:8px"><button type="button" class="btn primary" data-act="rPickImport" data-v="${esc(p.k)}">Importer et placer ici</button></div>
+      <p class="muted small" id="rPickImportMsg" style="margin:6px 0 0;min-height:1.2em"></p></details>
     <input class="input" id="rPickQ" type="search" placeholder="Chercher une recette" autocomplete="off" style="margin-top:12px">
     <div class="list" id="rPickList" style="margin-top:10px">${rPickList("")}</div>`);
+}
+async function rPickImport(k) {
+  if (!rPick || rPick.k !== k || !CK.ready) { toast("Le Carnet charge encore les recettes…"); return; }
+  const links = ($("#rPickLinks") && $("#rPickLinks").value) || "";
+  const { role } = rPick;
+  const msgEl = $("#rPickImportMsg");
+  if (msgEl) msgEl.textContent = "Lecture de la recette…";
+  try {
+    cev(`curWeek=${JSON.stringify(rWeek)};window.__cmMzImport=null;window.cmImportUrls(${JSON.stringify(links)},${JSON.stringify({ w: rWeek, k, role })}).then(r=>{window.__cmMzImport=r;})`);
+    let result = null;
+    for (let i = 0; i < 120; i++) {
+      try { result = cj(`__cmMzImport`); } catch (_) {}
+      if (result) break;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    if (!result) { if (msgEl) msgEl.textContent = "Délai dépassé. Réessayez."; return; }
+    if (!result.ok) { if (msgEl) msgEl.textContent = result.msg || "Import impossible."; return; }
+    closeSheet();
+    carnetSave();
+    mealSlotSheet(k);
+  } catch (e) {
+    if (msgEl) msgEl.textContent = "Le Carnet n'a pas répondu.";
+  }
 }
 function rPickList(q) {
   const role = rPick.role;
@@ -819,6 +847,7 @@ document.addEventListener("click", async e => {
       carnetSave(); mealSlotSheet(v); break;
     }
     case "rChoose": rPick = { k: v, role: b.dataset.r, q: "" }; rPickSheet(); break;
+    case "rPickImport": await rPickImport(v); break;
     case "rPut": {
       const { k, role } = rPick;
       if (role === "main") cev(`(()=>{const k=${JSON.stringify(k)},s=W()[k];W()[k]=Object.assign({},s||{},{id:${JSON.stringify(v)},n:s&&s.n?s.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}})()`);
