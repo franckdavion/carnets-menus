@@ -39,7 +39,7 @@ function nextEmptySlot(){
 }
 function normMenu(m){
   m=Object.assign({people:4,weeks:{},checked:{},extras:[],shopExtra:{}},m||{});
-  m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:"",lightEve:false},m.prefs||{});
+  m.prefs=Object.assign({veg:3,fish:2,skip:[],avoid:"",lightEve:false,varyMeat:false},m.prefs||{});
   m.weeks=Object.assign({},m.weeks);
   if(m.slots){ // older versions kept a single week
     const wk=m.weekStart||ymd(mondayOf(new Date()));
@@ -223,7 +223,7 @@ function saveMenu(){
   try{localStorage.setItem("cm_menu",JSON.stringify(menu));}
   catch(e){ // phone storage full: drop what can be rebuilt, then try again
     try{["cm_base","cm_rph_orig"].forEach(k=>localStorage.removeItem(k));localStorage.setItem("cm_menu",JSON.stringify(menu));}
-    catch(x){toast("Mémoire du téléphone pleine : la semaine n'est pas enregistrée sur ce téléphone");}}LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();}
+    catch(x){toast("Mémoire du téléphone pleine : la semaine n'est pas enregistrée sur ce téléphone");}}LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();if(typeof scheduleGoogleMeals==="function")scheduleGoogleMeals();}
 function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();cloudSoon();}
 function removeRecipe(id){cloudDeleted(id);for(const wk of Object.values(menu.weeks||{}))for(const[k,sl]of Object.entries(wk||{})){if(!sl)continue;if(sl.id===id)delete wk[k];else{if(sl.entree===id)delete sl.entree;if(sl.dessert===id)delete sl.dessert;}}saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
 

@@ -387,6 +387,7 @@ document.addEventListener("click",e=>{
   else if(a==="closePrefs")$("#prefSheet").hidden=true;
   else if(a==="prefStep"){const f=b.dataset.f;prefDraft[f]=Math.max(0,Math.min(14,prefDraft[f]+Number(b.dataset.d)));$("#p-"+f).textContent=prefDraft[f];}
   else if(a==="prefLight"){prefDraft.lightEve=b.dataset.v==="1";$("#pl-on").setAttribute("aria-pressed",prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);}
+  else if(a==="prefVaryMeat"){prefDraft.varyMeat=b.dataset.v==="1";$("#pv-on").setAttribute("aria-pressed",!!prefDraft.varyMeat);$("#pv-off").setAttribute("aria-pressed",!prefDraft.varyMeat);}
   else if(a==="prefSkip"){const d=b.dataset.d,i=prefDraft.skip.indexOf(d);if(i<0)prefDraft.skip.push(d);else prefDraft.skip.splice(i,1);b.setAttribute("aria-pressed",i<0);}
   else if(a==="pick")openPick(b.dataset.k,b.dataset.role||"main");
   else if(a==="todayPick"){const cw=ymd(mondayOf(new Date()));if(curWeek!==cw){curWeek=cw;LS.set("cm_week",cw);render();}openPick(b.dataset.k,"main");}
@@ -394,7 +395,7 @@ document.addEventListener("click",e=>{
   else if(a==="goFridge"){const f=$("#frForm");f.scrollIntoView({behavior:"smooth",block:"start"});setTimeout(()=>$("#frIn").focus({preventScroll:true}),350);}
   else if(a==="pickSet")setPicked(id);
   else if(a==="pickRandom"){
-    if(pickRole==="main"){const cur=W()[pickKey];const id=bestFor(pickKey,cur?[cur.id]:[]);if(id)setPicked(id);else toast("Pas d'autre recette disponible");}
+    if(pickRole==="main"){const out=nextIdea(pickKey);if(out.id){setPicked(out.id);if(out.cycled)toast("Toutes les recettes compatibles ont été proposées : nouveau cycle.");}else toast("Pas d'autre recette disponible");}
     else{const from=pickPool();if(from.length)setPicked(from[Math.floor(Math.random()*from.length)]);}}
   else if(a==="pickClear"){if(pickRole==="main")detachRemovedMealPurchases(curWeek,pickKey);if(pickRole==="main")delete W()[pickKey];else if(W()[pickKey])delete W()[pickKey][pickRole];$("#pickSheet").hidden=true;render();saveMenu();flashSlot(pickKey);}
   else if(a==="rmCourse"){removePart(b.dataset.k,b.dataset.role);}
@@ -894,7 +895,7 @@ const deacc=t=>norm(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/
 const FAMILY=[[/^(favoris?|favorites?|prefere(e|es|s)?)$/,r=>!!r.fav],[/^(leger|legers|legere|legeres|light)$/,r=>isLight(r)],[/^(poissons?|fruits? de mer|mer)$/,r=>kindOf(r)==="poisson"],[/^viandes?$/,r=>["rouge","volaille","porc"].includes(kindOf(r))],
   [/^(vege|vegetariens?|vegetariennes?|sans viande)$/,r=>kindOf(r)==="vege"],[/^(volailles?)$/,r=>kindOf(r)==="volaille"],
   [/^(viande rouge|boeuf)$/,r=>kindOf(r)==="rouge"],[/^(rapides?|express)$/,r=>r.cat==="Rapide"||(r.time||0)&&r.time<=30]];
-const LIGHT_RE=/salade|papillote|vapeur|velout|bouillon|soupe|carpaccio|tartare|gaspacho|omelette|po(?:ê|e)l(?:é|e)e de l(?:é|e)gumes|wok de l(?:é|e)gumes|bowl|ceviche|gravlax|rouleaux de printemps/i;
+const LIGHT_RE=/salade|papillote|vapeur|velout|bouillon|soupe|carpaccio|tartare|gaspacho|omelette|quiche|tartine|bruschetta|po(?:ê|e)l(?:é|e)e|wok|bowl|ceviche|gravlax|rouleaux de printemps|ratatouille|tian|l(?:é|e)gumes/i;
 const HEAVY_RE=/gratin|tartiflette|raclette|fondue|lasagnes|cassoulet|choucroute|croziflette|aligot|truffade|mont-d'or|baeckeoffe|potée|pot-au-feu|burger|frites|carbonade|confit|cordon bleu|macaroni|pizza|flammekueche|welsh/i;
 function isLight(r){if(!r)return false;if(r.light)return true;if(HEAVY_RE.test(r.name))return false;return r.cat==="Soupe"||LIGHT_RE.test(r.name);}
 function isHeavy(r){return !!r&&!r.light&&(HEAVY_RE.test(r.name)||(r.time||0)>=90);}
@@ -951,6 +952,21 @@ function kindOf(r){
   const k=(KIND_RE.find(([,re])=>re.test(names))||["vege"])[0];
   kindCache.set(key,k);return k;
 }
+const MEAT_RE=[["poulet",/poulet|coquelet|chapon/i],["dinde",/dinde|dindon/i],["canard",/canard|magret|pintade|caille|oie\b/i],
+  ["agneau",/agneau|mouton|gigot/i],["veau",/veau/i],["boeuf",/b(?:œ|oe)uf|steaks? hach|entrecôte|tournedos|bourguignon|bavette|kefta|merguez/i],
+  ["porc",/porc|lardon|jambon|saucisse|chorizo|bacon|chipolata|r(?:ô|o)ti de porc/i],["gibier",/chevreuil|sanglier|biche|lapin/i],
+  ["poisson",KIND_RE[0][1]],["oeuf",/omelette|œufs?|oeufs?/i]];
+MEAT_RE.forEach(x=>{if(x[0]!=="poisson")x[1]=new RegExp("(?:^|[^a-zà-ÿœ])(?:"+x[1].source+")","i");});
+const meatCache=new Map();
+function meatFamily(r){
+  if(!r)return "vege";
+  const key=r.name+"|"+(r.ing||[]).map(i=>i.n).join(",");
+  if(meatCache.has(key))return meatCache.get(key);
+  const names=(r.ing||[]).map(i=>i.n).filter(n=>!/bouillon|fond de/i.test(n)).join(" ")+" "+r.name;
+  const k=(MEAT_RE.find(([,re])=>re.test(names))||["vege"])[0];
+  meatCache.set(key,k);return k;
+}
+const MEAT_ONCE=["poulet","dinde","canard","agneau","veau","boeuf","porc","gibier"];
 const isWeekday=k=>DAYS.indexOf(k.split("|")[0])<5;
 const skipped=k=>k.endsWith("|midi")&&menu.prefs.skip.includes(k.split("|")[0]);
 function avoidList(){return menu.prefs.avoid.split(",").map(norm).filter(Boolean);}
@@ -976,15 +992,21 @@ const STYLE_OK={
 };
 function scoreFor(id,k,week){
   const r=recipes[id], kd=kindOf(r), t=r.time||0, midi=k.endsWith("midi"), wd=isWeekday(k);
-  let sc=Math.random()*1.5;
-  {const rt=ratingOf(r);if(rt)sc+=(rt.avg-3)*0.8;} // well-rated dishes come back more often
+  let sc=Math.random()*2.4;
+  {const rt=ratingOf(r);if(rt)sc+=(rt.avg-3)*0.45;}
   if(midi&&wd){if(r.cat==="Rapide"||t<=30)sc+=2;else if(t>45)sc-=2.5;}
   if(t>=75)sc+=wd?-3:1.5;
   if(r.cat==="Soupe")sc+=midi?-1.5:0.8;
-  if(r.fav)sc+=1;
+  if(r.fav)sc+=0.55;
   const st=(menu.prefs.days||{})[k.split("|")[0]];
   if(st&&STYLE_OK[st])sc+=STYLE_OK[st](r)?6:-2;
-  if(!midi&&menu.prefs.lightEve){sc+=isLight(r)?3.5:-1.5;if(isHeavy(r))sc-=3;}
+  if(!midi&&menu.prefs.lightEve){
+    sc+=isLight(r)?3.2:-1.5;if(isHeavy(r))sc-=3;
+    if(kd==="poisson"&&!isHeavy(r))sc+=1.1;
+    const mo=new Date().getMonth();
+    if(mo>=9||mo<=2){if(r.cat==="Soupe"||/soupe|velout/i.test(r.name))sc+=0.7;}
+    else if(/salade/i.test(r.name))sc+=0.7;
+  }
   const idx=SLOT_ORDER.indexOf(k), near=[-2,-1,1,2].map(o=>week[SLOT_ORDER[idx+o]]).map(x=>x&&recipes[x]);
   [near[1],near[2]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=3;});
   [near[0],near[3]].forEach(n=>{if(n&&kindOf(n)===kd&&kd!=="vege")sc-=1;});
@@ -995,19 +1017,57 @@ function scoreFor(id,k,week){
   const left=SLOT_ORDER.filter(x=>!week[x]&&!skipped(x)).length||1;
   if(kd==="vege"){const need=menu.prefs.veg-count("vege");sc+=need>0?1+need/left*4:-0.3;}
   if(kd==="poisson"){const need=menu.prefs.fish-count("poisson");sc+=need>0?1+need/left*4:-2;}
+  if(menu.prefs.varyMeat){
+    const mf=meatFamily(r);
+    const meats=used.map(u=>recipes[u]&&meatFamily(recipes[u])).filter(Boolean);
+    const n=meats.filter(x=>x===mf).length;
+    if(MEAT_ONCE.includes(mf)&&n>0)sc-=7;
+    else if(mf==="poisson"||mf==="oeuf"||mf==="vege")sc+=n?0:0.9;
+  }
   const near1=[...weekIds(ymd(addDays(parseYmd(curWeek),-7))),...weekIds(ymd(addDays(parseYmd(curWeek),7)))];
   const near2=[...weekIds(ymd(addDays(parseYmd(curWeek),-14))),...weekIds(ymd(addDays(parseYmd(curWeek),14)))];
-  if(rerollAvoid.includes(id))sc-=4;   // a new proposal should really change the week
+  if(rerollAvoid.includes(id))sc-=4;
   const h=[near1,near2,weekIds(ymd(addDays(parseYmd(curWeek),-21)))];
   if((h[0]||[]).includes(id))sc-=3.5; else if((h[1]||[]).includes(id))sc-=1; else if((h[2]||[]).includes(id))sc-=0.5;
   return sc;
 }
 function weekMap(){const w={};for(const k of SLOT_ORDER){const s=W()[k];if(s&&recipes[s.id])w[k]=s.id;}return w;}
+function pickWeighted(cands,k,week){
+  if(!cands.length)return null;
+  const scored=cands.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1]);
+  const top=scored.slice(0,Math.min(18,scored.length));
+  const max=top[0][1];
+  const weights=top.map(([,s])=>Math.exp((s-max)/1.15));
+  let x=Math.random()*weights.reduce((a,b)=>a+b,0);
+  for(let i=0;i<top.length;i++){x-=weights[i];if(x<=0)return top[i][0];}
+  return top[0][0];
+}
 function bestFor(k,exclude){
   const week=weekMap();delete week[k];
-  const c=eligible().filter(id=>!exclude.includes(id));
+  const skip=new Set(exclude||[]);
+  const c=eligible().filter(id=>!skip.has(id));
   if(!c.length)return null;
-  return c.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
+  return pickWeighted(c,k,week);
+}
+let slotRerollSeen={};
+function nextIdea(k){
+  const s=W()[k], cur=s&&s.id, key=curWeek+"#"+k;
+  const seen=slotRerollSeen[key]||[];
+  const skip=seen.slice();
+  if(cur&&!skip.includes(cur))skip.push(cur);
+  let id=bestFor(k,skip), cycled=false;
+  if(!id){
+    cycled=true;
+    slotRerollSeen[key]=[];
+    id=bestFor(k,cur?[cur]:[]);
+  }
+  if(id){
+    const keep=new Set(slotRerollSeen[key]||[]);
+    if(cur)keep.add(cur);
+    keep.add(id);
+    slotRerollSeen[key]=[...keep];
+  }
+  return {id:id||"",cycled};
 }
 function planWeek(replaceAll,days,meals){
   const inDays=k=>(!days||days.includes(k.split("|")[0]))&&(!meals||meals.includes(k.split("|")[1]));
@@ -1019,9 +1079,12 @@ function planWeek(replaceAll,days,meals){
   targets.forEach(k=>delete week[k]);
   if(replaceAll)SLOT_ORDER.forEach(k=>{if(inDays(k)&&!isPast(k)&&skipped(k)&&W()[k]&&!W()[k].lock&&!W()[k].keep){delete W()[k];delete week[k];}});
   for(const k of targets){
-    const best=pool.map(id=>[id,scoreFor(id,k,week)]).sort((a,b)=>b[1]-a[1])[0][0];
+    const taken=new Set(Object.values(week).filter(Boolean));
+    const best=pickWeighted(pool.filter(id=>!taken.has(id)),k,week)||pickWeighted(pool,k,week);
+    if(!best)continue;
     week[k]=best; const old=W()[k];
     W()[k]=Object.assign({},old||{},{id:best,n:old?old.n:menu.people});
+    delete slotRerollSeen[curWeek+"#"+k];
   }
   menu.checked={};
   render();saveMenu();
@@ -1070,7 +1133,9 @@ function openPrefs(){
   document.querySelectorAll("#prefForm [data-sec]").forEach(el=>{el.hidden=false;});$("#prefTitle").textContent="Préférences de la semaine";
   prefDraft=JSON.parse(JSON.stringify(menu.prefs));
   $("#p-veg").textContent=prefDraft.veg; $("#p-fish").textContent=prefDraft.fish; $("#p-avoid").value=prefDraft.avoid;
-  $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pd-on").setAttribute("aria-pressed",!!prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
+  $("#pl-on").setAttribute("aria-pressed",!!prefDraft.lightEve);$("#pl-off").setAttribute("aria-pressed",!prefDraft.lightEve);
+  $("#pv-on").setAttribute("aria-pressed",!!prefDraft.varyMeat);$("#pv-off").setAttribute("aria-pressed",!prefDraft.varyMeat);
+  $("#pd-on").setAttribute("aria-pressed",!!prefDraft.dissoc);$("#pd-off").setAttribute("aria-pressed",!prefDraft.dissoc);
   prefDraft.days=Object.assign({},prefDraft.days);
   $("#p-days").innerHTML=DAYS.map(d=>`<span>${d}</span><select data-day="${d}" aria-label="Style du ${d}">${DAY_STYLES.map(([v,l])=>`<option value="${v}"${(prefDraft.days[d]||"")===v?" selected":""}>${l}</option>`).join("")}</select>`).join("");
   $("#p-skip").innerHTML=DAYS.map(d=>`<button type="button" class="chip" data-act="prefSkip" data-d="${d}" aria-pressed="${prefDraft.skip.includes(d)}">${d}</button>`).join("");
@@ -1424,7 +1489,7 @@ function renderSugg(){
   const cur=W()[pickKey], main=pickRole==="main", curId=cur&&(main?cur.id:cur[pickRole]);
   const base=main?eligible():pickPool(), skip=new Set([...(curId?[curId]:[]),...suggSeen]);
   let cands=base.filter(id=>!skip.has(id));
-  if(cands.length<4){suggSeen=[];cands=base.filter(id=>id!==curId);}
+  if(!cands.length){suggSeen=[];cands=base.filter(id=>id!==curId);}
   const score=id=>main?scoreFor(id,pickKey,week):roleScore(id);
   const ranked=cands.map(id=>[id,score(id)]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
   const kinds=new Set(); suggNow=[];
@@ -1638,11 +1703,10 @@ async function sendImport(text,msg,assign){
   if(!urls.length){msg("Collez au moins un lien de recette (il commence par https://).");return false;}
   msg("Lecture de la recette…");
   try{
-    const sb=await sbc();
-    const{data:{session}}=await sb.auth.getSession();
-    const r=await fetch(SB_URL+"/functions/v1/import-recipe",{
+    const prefix=location.pathname.startsWith("/carnets-menus")?"/carnets-menus":"";
+    const r=await fetch(prefix+"/api/import-recipe",{
       method:"POST",
-      headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+(session&&session.access_token||SB_KEY)},
+      headers:{"Content-Type":"application/json"},
       body:JSON.stringify({urls})
     });
     const d=await r.json().catch(()=>({}));
@@ -1685,6 +1749,7 @@ function applyImported(d,job,msg){
   if(added&&job.fr&&$("#frIn")&&$("#frIn").value.trim()){const m=$("#frWebMsg")&&$("#frWebMsg").textContent;runFridge();if($("#frWebMsg"))$("#frWebMsg").innerHTML=esc(m)+` <button type="button" class="link" data-act="viewRec" data-id="${esc(firstId)}">Voir « ${esc(recipes[firstId].name)} »</button>`;}
   if(job.replace&&!added){$("#webMsg").textContent="✗ Cette page n'a pas pu être lue"+(errs.length?" ("+errs.join(" · ")+")":"")+".";}
   if(job.assign&&!added){$("#pwMsg").textContent="✗ Cette page n'a pas pu être lue"+(errs.length?" ("+errs.join(" · ")+")":"")+". Essayez un autre lien.";}
+  if(added&&firstId&&!job.replace&&!new URLSearchParams(location.search).get("arriere-plan"))openRecSheet(firstId);
 }
 $("#findForm").addEventListener("submit",async e=>{
   e.preventDefault();

@@ -56,6 +56,7 @@ function carnetBoot(force) {
         if (view === "repas" || view === "courses") softRender();
         ticking = false;
         try { cev("typeof cloudSync==='function'&&cloudSync()"); } catch (_) {}
+        rScheduleGoogleMeals();
         return;
       }
       if (Date.now() - t0 > 20000) {
@@ -105,7 +106,103 @@ function carnetLive() {
     .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
   ckLive = { owner, ch };
 }
-function carnetSave(msg, kind) { cev("saveMenu()"); softRender(); if (msg) toast(msg, null, null, null, kind); }
+function carnetSave(msg, kind) { cev("saveMenu()"); softRender(); if (msg) toast(msg, null, null, null, kind); rScheduleGoogleMeals(); }
+let rGMealT = null, rGMealBusy = false;
+function rScheduleGoogleMeals() {
+  clearTimeout(rGMealT);
+  rGMealT = setTimeout(() => { rPushGoogleMeals(false).catch(() => {}); }, 2000);
+}
+function rRepasGoogleCal() {
+  const n = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr").trim();
+  const hits = (G.list || []).filter(c => n(c.name) === "repas" || n(c.name).startsWith("repas ") || n(c.name).includes("repas"));
+  return hits.find(c => c.accessRole === "owner" || c.accessRole === "writer") || hits[0] || null;
+}
+async function rPushGoogleMeals(verbose) {
+  if (rGMealBusy) return;
+  if (!CK.ready) { if (verbose) toast("Le Carnet charge encore les repas…"); return; }
+  if (typeof gEnsure !== "function" || !(await gEnsure())) {
+    if (verbose) toast("Connectez Google Agenda dans Ma famille pour mettre à jour l'agenda Repas.");
+    return;
+  }
+  if (!(G.list && G.list.length)) await gFetch();
+  const cal = rRepasGoogleCal();
+  if (!cal) {
+    const names = (G.list || []).map(c => c.name).filter(Boolean).slice(0, 8).join(", ");
+    if (verbose) toast(names ? "Aucun agenda nommé « Repas » parmi : " + names : "Aucun agenda Google trouvé. Reconnectez Google dans Ma famille.");
+    return;
+  }
+  if (cal.accessRole !== "owner" && cal.accessRole !== "writer") {
+    if (verbose) toast("L'agenda « " + cal.name + " » est en lecture seule. Dans Google Agenda, partagez-le avec ce compte (droit Modifier les événements).");
+    return;
+  }
+  rGMealBusy = true;
+  try {
+    const calMap = cj(`(()=>{const today=ymd(new Date()),cal={};
+      for(const[wk,slots]of Object.entries(menu.weeks||{})){const ws=parseYmd(wk);
+        DAYS.forEach((d,i)=>{const date=ymd(addDays(ws,i));
+          MEALS.forEach(([meal])=>{const sl=slots[slotKey(d,meal)],r=sl&&recipes[sl.id],key=date+"|"+meal;
+            const extra=sl?["entree","dessert"].map(c=>sl[c]&&recipes[sl[c]]&&recipes[sl[c]].name).filter(Boolean):[];
+            const title=r&&r.name?r.name+(extra.length?" (+ "+extra.join(", ")+")":""):sl&&sl.note?String(sl.note).trim():sl&&sl.left?"Restes : "+String(sl.left).trim():"";
+            if(title)cal[key]=sl&&sl.extra&&sl.extra.length?{t:title,d:"En plus : "+sl.extra.join(", ")}:title;
+            else if(date>=today)delete cal[key];});});}
+      return cal;})()`);
+    const times = { midi: ["12:00", "13:30"], soir: ["19:30", "21:00"] };
+    const desired = {};
+    for (const [k, item] of Object.entries(calMap || {})) {
+      const name = typeof item === "string" ? item : item && item.t; if (!name) continue;
+      const extra = typeof item === "object" && item && item.d ? String(item.d) : "";
+      const [date, meal] = k.split("|"), t = times[meal] || times.soir;
+      desired["carnet" + date.replace(/-/g, "") + meal] = {
+        summary: (meal === "midi" ? "Midi : " : "Soir : ") + name,
+        start: { dateTime: date + "T" + t[0] + ":00", timeZone: "Europe/Paris" },
+        end: { dateTime: date + "T" + t[1] + ":00", timeZone: "Europe/Paris" },
+        transparency: "transparent",
+        description: "Ajouté par le Carnet de menus" + (extra ? "\n" + extra : ""),
+        status: "confirmed"
+      };
+    }
+    const H = { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" };
+    const base = "https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(cal.id) + "/events";
+    const call = async (method, url, body) => {
+      const r = await fetch(url, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+      if (!r.ok && !(method === "DELETE" && (r.status === 404 || r.status === 410))) {
+        const detail = await r.text().catch(() => "");
+        throw new Error("Google " + r.status + (detail ? " · " + detail.slice(0, 160) : ""));
+      }
+      return r.status === 204 ? {} : r.json().catch(() => ({}));
+    };
+    const day0 = today();
+    const from = new Date(Date.now() - 70 * 864e5).toISOString(), to = new Date(Date.now() + 120 * 864e5).toISOString();
+    const existing = {}; let page = "";
+    do {
+      const j = await call("GET", base + "?showDeleted=true&singleEvents=true&maxResults=2500&timeMin=" + encodeURIComponent(from) + "&timeMax=" + encodeURIComponent(to) + (page ? "&pageToken=" + page : ""));
+      for (const e of j.items || []) if (String(e.id).startsWith("carnet")) existing[e.id] = e;
+      page = j.nextPageToken || "";
+    } while (page);
+    let n = 0;
+    for (const [id, ev] of Object.entries(desired)) {
+      const ex = existing[id];
+      const same = ex && ex.status !== "cancelled" && ex.summary === ev.summary &&
+        String(ex.start && ex.start.dateTime || "").slice(0, 16) === ev.start.dateTime.slice(0, 16);
+      if (same) continue;
+      if (!ex) {
+        const r = await fetch(base, { method: "POST", headers: H, body: JSON.stringify({ id, ...ev }) });
+        if (r.status === 409) await call("PUT", base + "/" + id, ev);
+        else if (!r.ok) throw new Error("Google " + r.status);
+      } else await call("PUT", base + "/" + id, ev);
+      n++;
+    }
+    for (const [id, ex] of Object.entries(existing)) {
+      if (desired[id] || ex.status === "cancelled") continue;
+      const day = String(ex.start && (ex.start.dateTime || ex.start.date) || "").slice(0, 10);
+      if (day && day < day0) continue;
+      await call("DELETE", base + "/" + id); n++;
+    }
+    if (verbose) toast(n ? "Agenda Google « " + cal.name + " » mis à jour (" + n + " changement" + (n > 1 ? "s" : "") + ")." : "Agenda Google « " + cal.name + " » déjà à jour.");
+  } catch (e) {
+    toast("Agenda Repas Google : " + (e.message || "mise à jour impossible"));
+  } finally { rGMealBusy = false; }
+}
 // validated meals go to the shopping list: their days are added to the Carnet's « courses pour » days
 function shopIncludeWeek() {
   cev(`(()=>{const all=shopDates(),cur=Array.isArray(menu.shopDays)?menu.shopDays:defaultShopKeys(all);
@@ -282,7 +379,7 @@ VIEWS.repas = function () {
 /* ---------- sheets ---------- */
 function rProposeSheet() {
   openSheet("Proposer ma semaine", `
-    <p class="muted small" style="margin-top:6px">Le Carnet choisit selon vos réglages : favoris, nombre de repas végé et poisson, soirs légers, sans répéter les recettes des dernières semaines.</p>
+    <p class="muted small" style="margin-top:6px">Le Carnet choisit selon vos réglages : favoris, végé et poisson, viandes de la semaine, soirs légers, sans répéter les recettes des dernières semaines.</p>
     <form data-form="rPropose">
       <div class="field"><span class="label">1. Quels repas remplir ?</span>${chipsHtml("rfill", [["empty", "Seulement les cases vides"], ["all", "Tout refaire"]], "empty")}
         <p class="muted small" style="margin:6px 2px 0">« Tout refaire » ne touche jamais aux repas <b>✓ Gardés</b> ni à ceux déjà <b>🛒 dans les courses</b>.</p></div>
@@ -298,7 +395,8 @@ function rPrefsSheet() {
     <form data-form="rPrefs">
       <div class="inline" style="justify-content:space-between;margin-top:10px"><span>Repas végétariens par semaine</span><span class="inline"><button type="button" class="icon-btn" data-act="rNum" data-v="veg:-1">−</button><strong id="rp-veg" style="min-width:2ch;text-align:center">${p.veg}</strong><button type="button" class="icon-btn" data-act="rNum" data-v="veg:1">+</button></span></div>
       <div class="inline" style="justify-content:space-between;margin-top:10px"><span>Repas poisson par semaine</span><span class="inline"><button type="button" class="icon-btn" data-act="rNum" data-v="fish:-1">−</button><strong id="rp-fish" style="min-width:2ch;text-align:center">${p.fish}</strong><button type="button" class="icon-btn" data-act="rNum" data-v="fish:1">+</button></span></div>
-      <label class="switch"><span><strong>Soirs plus légers</strong></span><input type="checkbox" name="lightEve" ${p.lightEve ? "checked" : ""}></label>
+      <label class="switch"><span><strong>Privilégier les repas légers le soir</strong></span><input type="checkbox" name="lightEve" ${p.lightEve ? "checked" : ""}></label>
+      <label class="switch"><span><strong>Varier les viandes sur la semaine</strong></span><input type="checkbox" name="varyMeat" ${p.varyMeat ? "checked" : ""}></label>
       <div class="field"><span class="label">Pas de repas le midi</span>${chipsHtml("rskip", RDAYS.map(d => [d, d.slice(0, 3) + "."]), p.skip || [], true)}</div>
       <div class="field"><span class="label">Style de chaque jour</span>${RDAYS.map(d => `<label class="inline" style="justify-content:space-between;margin-top:6px"><span class="small">${d}</span><select class="input" name="st-${d}" style="max-width:170px">${styles.map(([v, l]) => `<option value="${v}" ${((p.days || {})[d] || "") === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>`).join("")}</div>
       <label class="field"><span class="label">À éviter (séparés par des virgules)</span><input class="input" name="avoid" value="${esc(p.avoid || "")}" placeholder="Ex. champignons, céleri"></label>
@@ -638,16 +736,39 @@ function rRecipeOpen(k, id) {
   view = "repas"; LS.set("mz_view", "repas"); if (r.week) rWeek = r.week;
   if (r.slot) CK.waiters.push(() => setTimeout(() => { if (view === "repas") mealSlotSheet(r.slot); }, 50));
 })();
+function rPickWebHrefs(q) {
+  const e = encodeURIComponent(String(q || "").trim());
+  return {
+    m: e ? `https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}` : "https://www.marmiton.org",
+    g: e ? `https://www.750g.com/recherche?q=${e}` : "https://www.750g.com",
+    j: e ? `https://www.google.com/search?q=${e}+site%3Ajow.fr` : "https://jow.fr"
+  };
+}
+function rPickWebLinks() {
+  const h = rPickWebHrefs($("#rPickQ") && $("#rPickQ").value);
+  const m = $("#rPick-m"), g = $("#rPick-7"), j = $("#rPick-j");
+  if (m) m.href = h.m;
+  if (g) g.href = h.g;
+  if (j) j.href = h.j;
+}
 function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
+  const h = rPickWebHrefs("");
   openSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
     ${p.role === "main" ? `<div class="btns" style="margin-top:4px"><button class="btn primary" data-act="rReroll" data-v="${esc(p.k)}">✨ Laisser le Carnet choisir</button><button class="btn" data-act="rLeft" data-v="${esc(p.k)}">🥡 Restes</button><button class="btn" data-act="rNote" data-v="${esc(p.k)}">✏️ Noter un repas</button></div>` : ""}
     <details class="card" style="margin-top:14px;padding:10px 12px" open><summary style="font-weight:700;cursor:pointer">Importer depuis Internet</summary>
-      <p class="muted small" style="margin:8px 0 0">Sur Marmiton ou 750g : Partager → Copier le lien, puis collez-le ici. Le repas sera rempli automatiquement.</p>
+      <p class="muted small" style="margin:8px 0 0">Tapez un plat, ouvrez Marmiton, 750g ou Jow, puis copiez le lien de la recette.</p>
+      <input class="input" id="rPickQ" type="search" placeholder="Ex. gratin courgettes" autocomplete="off" style="margin-top:8px">
+      <div class="btns" style="margin-top:8px">
+        <a class="btn" id="rPick-m" href="${esc(h.m)}" target="_blank" rel="noopener">Marmiton ↗</a>
+        <a class="btn" id="rPick-7" href="${esc(h.g)}" target="_blank" rel="noopener">750g ↗</a>
+        <a class="btn" id="rPick-j" href="${esc(h.j)}" target="_blank" rel="noopener">Jow ↗</a>
+      </div>
+      <p class="muted small" style="margin:8px 0 0">Sur la recette : Partager → Copier le lien, puis collez-le ici.</p>
       <textarea id="rPickLinks" class="input" rows="2" placeholder="https://…" style="margin-top:8px;width:100%;box-sizing:border-box"></textarea>
       <div class="btns" style="margin-top:8px"><button type="button" class="btn primary" data-act="rPickImport" data-v="${esc(p.k)}">Importer et placer ici</button></div>
       <p class="muted small" id="rPickImportMsg" style="margin:6px 0 0;min-height:1.2em"></p></details>
-    <input class="input" id="rPickQ" type="search" placeholder="Chercher une recette" autocomplete="off" style="margin-top:12px">
+    <p class="muted small" style="margin:12px 0 0">Ou choisir dans le carnet</p>
     <div class="list" id="rPickList" style="margin-top:10px">${rPickList("")}</div>`);
 }
 async function rPickImport(k) {
@@ -842,9 +963,11 @@ document.addEventListener("click", async e => {
       carnetSave(`${n} repas validé${n > 1 ? "s" : ""} : les ingrédients partent dans les courses.`, "courses"); break;
     }
     case "rReroll": {
-      const id = cev(`(()=>{const k=${JSON.stringify(v)},s=W()[k];const nb=bestFor(k,s&&s.id?[s.id]:[]);if(!nb)return "";W()[k]=Object.assign({},s||{},{id:nb,n:s&&s.n?s.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}return nb;})()`);
-      closeSheet(); if (!id) { toast("Pas d'autre recette possible avec ces réglages."); break; }
-      carnetSave(); mealSlotSheet(v); break;
+      const out = cj(`(()=>{const k=${JSON.stringify(v)},s=W()[k];const r=typeof nextIdea==="function"?nextIdea(k):{id:bestFor(k,s&&s.id?[s.id]:[])||"",cycled:false};if(!r.id)return r;W()[k]=Object.assign({},s||{},{id:r.id,n:s&&s.n?s.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}return r;})()`);
+      closeSheet(); if (!out || !out.id) { toast("Pas d'autre recette possible avec ces réglages."); break; }
+      carnetSave(); mealSlotSheet(v);
+      if (out.cycled) toast("Toutes les recettes compatibles ont été proposées : nouveau cycle.");
+      break;
     }
     case "rChoose": rPick = { k: v, role: b.dataset.r, q: "" }; rPickSheet(); break;
     case "rPickImport": await rPickImport(v); break;
@@ -1012,7 +1135,12 @@ document.addEventListener("submit",async e => {
   }catch(err){console.error(err);alert("Enregistrement non confirmé : "+(err.message||err));}
 });
 
-document.addEventListener("input", e => { if (e.target.id === "rPickQ" && rPick) $("#rPickList").innerHTML = rPickList(e.target.value); });
+document.addEventListener("input", e => {
+  if (e.target.id === "rPickQ" && rPick) {
+    $("#rPickList").innerHTML = rPickList(e.target.value);
+    rPickWebLinks();
+  }
+});
 document.addEventListener("submit", e => {
   const f = e.target.closest("form[data-form]"); if (!f || !["rPropose", "rPrefs"].includes(f.dataset.form)) return;
   e.preventDefault();
@@ -1031,7 +1159,7 @@ document.addEventListener("submit", e => {
   } else {
     const fd = Object.fromEntries(new FormData(f).entries()), days = {};
     for (const d of RDAYS) if (fd["st-" + d]) days[d] = fd["st-" + d];
-    const p = { veg: sheetCtx.veg, fish: sheetCtx.fish, lightEve: !!fd.lightEve, skip: chipVals(f, "rskip"), avoid: (fd.avoid || "").trim(), days };
+    const p = { veg: sheetCtx.veg, fish: sheetCtx.fish, lightEve: !!fd.lightEve, varyMeat: !!fd.varyMeat, skip: chipVals(f, "rskip"), avoid: (fd.avoid || "").trim(), days };
     cev(`Object.assign(menu.prefs, ${JSON.stringify(p)})`);
     closeSheet(); carnetSave("Réglages enregistrés.");
   }
