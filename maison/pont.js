@@ -9,7 +9,7 @@
   const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, userEdit: false, me: null, meFor: "", map: null, mapAt: 0, hid: null };
   // only after this copy has received the shared carnet once: a copy still showing what it had in memory
   // (phone just reopened, new device) must not send its old week to Maisonnée
-  const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
+  const ready = () => location.hostname !== "franckdavion.github.io" && typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
 
   /* ---------- button back to Maisonnée ---------- */
   function addBackButton() {
