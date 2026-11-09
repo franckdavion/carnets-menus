@@ -1,4 +1,7 @@
 /* ---------- sync through a private GitHub repository ---------- */
+// Mise en pause temporaire des écritures GitHub après incident du 9 novembre 2026.
+// Le Carnet et Maisonnée continuent sur Vercel/Supabase.
+const GITHUB_SYNC_PAUSED = true;
 let sync=LS.get("cm_sync",null);
 let syncBusy=false, syncAgain=false, syncTimer=null, lastOk=null;
 const J=x=>JSON.stringify(x);
@@ -8,6 +11,7 @@ function setState(s){recipes=s.recipes||{};menu=normMenu(s.menu);LS.set("cm_reci
 const b64e=s=>{const by=new TextEncoder().encode(s);let bin="";for(let i=0;i<by.length;i+=0x8000)bin+=String.fromCharCode.apply(null,by.subarray(i,i+0x8000));return btoa(bin);};
 const b64d=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g,"")),c=>c.charCodeAt(0)));
 function gh(method,body,repo,path){
+  if(GITHUB_SYNC_PAUSED && method !== "GET")return Promise.resolve({ok:false,status:423});
   const[o,r]=(repo||sync.repo).split("/");
   return fetch(`https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/${path||"carnet.json"}`,{
     method,cache:"no-store",
@@ -30,9 +34,10 @@ function setStatus(k,e){
      :"Hors ligne : les modifications sont gardées ici et partiront plus tard.";}
   chip.textContent=t; chip.dataset.state=k; if(line)line.textContent=t;
 }
-function scheduleSync(ms=800){if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
+function scheduleSync(ms=800){if(GITHUB_SYNC_PAUSED)return;if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
 function cloudCarnet(){try{return !!((typeof cloud!=="undefined"&&cloud.owner)||LS.get("cm_state_owner",""));}catch(e){return false;}}
 async function runSync(){
+  if(GITHUB_SYNC_PAUSED){setStatus("off");return;}
   if(!sync)return;
   if(syncBusy){syncAgain=true;return;}
   syncBusy=true; clearTimeout(syncTimer); setStatus("busy");
