@@ -120,7 +120,10 @@ async function syncTasks(today: string) {
       const g = async (method: string, path: string, body?: unknown) => {
         const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
         if (method === "POST" && r.status === 409) return { conflict: true }; // this event id exists already (perhaps deleted)
-        if (!r.ok && !(method === "DELETE" && [404, 410].includes(r.status))) throw new Error("Google " + r.status);
+        if (!r.ok && !(method === "DELETE" && [404, 410].includes(r.status))) {
+          const detail = await r.text().catch(() => "");
+          throw new Error("Google " + r.status + (detail ? " · " + detail.slice(0, 220) : ""));
+        }
         return method === "DELETE" ? null : r.json();
       };
       const from = addDays(today, -7), to = addDays(today, 14);

@@ -50,7 +50,7 @@ const MODS = [
   { k: "docs", t: "Documents", g: "Organisation", sub() { const soon = S.docs.filter(d => d.expires_on && diffDays(today(), d.expires_on) <= 30).length; return soon ? `${plural(soon, "document expire", "documents expirent")} bientôt` : S.docs.length ? plural(S.docs.length, "document", "documents") : "Papiers importants"; } },
   { k: "edt", t: "Emploi du temps", g: "Organisation", sub() { const now = nowSlots(); return now.length ? `${(member(now[0].member_id) || {}).name || ""} : ${now[0].title}` : S.sched.length ? "La semaine de chacun" : "Plannings de chacun"; } },
   { k: "carte", t: "Localisation", g: "Organisation", sub() { const n = S.locs.length; return n ? plural(n, "position partagée", "positions partagées") : "Où sont-ils ?"; } },
-  { k: "fidelite", t: "Cartes de fidélité", g: "Organisation", sub() { const n = window.maisonneeCartesCount?.() || 0; return n ? plural(n, "carte enregistrée", "cartes enregistrées") + " · hors ligne" : "Mes cartes hors ligne"; } }
+  { k: "fidelite", t: "Cartes de fidélité", g: "Organisation", sub() { const n = window.maisonneeCartesCount?.() || 0; const fam = window.maisonneeCartesFamily?.(); if (!n) return fam ? "Cartes du foyer" : "Ajouter une carte"; return plural(n, "carte enregistrée", "cartes enregistrées") + (fam ? " · foyer" : ""); } }
 ];
 const modOf = k => MODS.find(m => m.k === k);
 const homePins = () => {
@@ -146,6 +146,7 @@ const SMARTTHINGS_TV_TEST_ENDPOINT = SB_URL + "/functions/v1/smartthings-tv-test
 let domHaStatus = { connected: false, device_id: null, device_name: null };
 let domHaStatusAt = 0, domHaChain = Promise.resolve();
 let domZone = "", domTab = "board", domEdit = "", domCloud = [], domBusy = "", domState = {}, domStateAt = 0, domStateLoading = false, domStateInflight = null, domFormLoading = false;
+let domotiquePollArmed = false;
 let domMelStatus = { connected: false, device_id: null, device_name: null };
 let domMelState = null, domMelStateAt = 0, domMelStateInflight = null, domMelDevices = [], domMelBusy = "";
 let domMelChain = Promise.resolve();
@@ -156,6 +157,36 @@ let domDreameState = null, domDreameStateAt = 0, domDreameStateInflight = null, 
 // détaillées ne répondent pas de façon fiable. Lecture rapide par défaut.
 // La lecture diagnostique détaillée reste accessible via son bouton dédié.
 let domDreameQuickStateOnly = true, domDreameQuickStateDid = null;
+const DOM_DREAME_STATE_LS = "maisonnee_dreame_last_state_v1";
+function domDreameRememberState(st) {
+  if (!st || !st.label) return;
+  try {
+    localStorage.setItem(DOM_DREAME_STATE_LS, JSON.stringify({
+      device_name: st.device_name || null,
+      label: st.label,
+      battery: st.battery ?? null,
+      status: st.status ?? null,
+      online: st.online,
+      live_ok: st.live_ok,
+      current_rooms: st.current_rooms || [],
+      current_room_ids: st.current_room_ids || [],
+      cleaning_mode: st.cleaning_mode ?? null,
+      suction: st.suction ?? null,
+      water: st.water ?? null,
+      cleaning_mode_raw: st.cleaning_mode_raw ?? null,
+      cleaning_mode_label: st.cleaning_mode_label || null,
+      suction_label: st.suction_label || null,
+      water_label: st.water_label || null
+    }));
+  } catch (_) {}
+}
+function domDreameRestoreState() {
+  if (domDreameState) return;
+  try {
+    const raw = JSON.parse(localStorage.getItem(DOM_DREAME_STATE_LS) || "null");
+    if (raw && raw.label) domDreameState = raw;
+  } catch (_) {}
+}
 let domDreamePrefAt = 0;
 // Les choix successifs sont regroupés avant le moindre appel Dreame.
 // Pendant un envoi, le dernier changement par paramètre remplace les précédents.
@@ -197,6 +228,17 @@ let domDreameProgEdit = "";
 let domDreameProgDraft = null;
 let domDreameSelectedProgramId = null;
 let domDreamePickRooms = [];
+const DOM_DREAME_LAST_JOB_KEY = "maisonnee_dreame_last_job_rooms_v1";
+function domDreameRememberJobNames(names) {
+  const list = (names || []).map(n => String(n || "").trim()).filter(Boolean);
+  try { localStorage.setItem(DOM_DREAME_LAST_JOB_KEY, JSON.stringify(list)); } catch (_) {}
+}
+function domDreameLastJobNames() {
+  try {
+    const v = JSON.parse(localStorage.getItem(DOM_DREAME_LAST_JOB_KEY) || "[]");
+    return Array.isArray(v) ? v.map(n => String(n || "").trim()).filter(Boolean) : [];
+  } catch (_) { return []; }
+}
 let domDreameActiveTab = "cleaning";
 // Les commandes restent sérialisées pour éviter les collisions de réglages.
 // Statut, batterie et carte : lectures indépendantes et parallèles.
@@ -643,6 +685,12 @@ function domDreameMergeState(next) {
   for (const k of keys) {
     if (!(k in next) && prev[k] != null) out[k] = prev[k];
   }
+  const docked = [5, 6, 8, 9, 10, 13, 16, 17, 18, 19, 20, 21, 22, 24, 28, 29, 30, 31, 32, 33, 34, 35, 36, 105, 106, 116, 117, 118, 121, 122].includes(Number(out.status));
+  const incomingRooms = Array.isArray(next.current_rooms) ? next.current_rooms.filter(Boolean) : null;
+  if (!docked && incomingRooms && !incomingRooms.length && Array.isArray(prev.current_rooms) && prev.current_rooms.filter(Boolean).length) {
+    out.current_rooms = prev.current_rooms;
+    if (Array.isArray(prev.current_room_ids) && prev.current_room_ids.length) out.current_room_ids = prev.current_room_ids;
+  }
   // Keep device-reported state separate from pending UI choices.
   domDreameState = out;
   return out;
@@ -678,60 +726,44 @@ function domDreameScheduleSettings() {
   if (domDreamePrefTimer != null) clearTimeout(domDreamePrefTimer);
   domDreamePrefTimer = setTimeout(() => {
     domDreamePrefTimer = null;
-    domDreameFlushSettings().catch(() => {}); // erreur déjà affichée par la file
-  }, DOM_DREAME_PREF_BATCH_MS);
+    void domDreameFlushSettings();
+  }, 80);
 }
 async function domDreameFlushSettings() {
   if (domDreamePrefTimer != null) {
     clearTimeout(domDreamePrefTimer);
     domDreamePrefTimer = null;
   }
-  if (domDreamePrefInflight) {
-    // Ne jamais envoyer un vieux choix en parallèle de celui déjà parti.
-    await domDreamePrefInflight;
-    return domDreameFlushSettings();
+  const batch = {};
+  for (const key of ["cleaning_mode", "suction", "water", "cleaning_route"]) {
+    if (domDreamePrefDraft[key] !== undefined) batch[key] = domDreamePrefDraft[key];
   }
-  if (!Object.keys(domDreamePrefDraft).length) return;
-  const batch = domDreamePrefDraft;
-  domDreamePrefDraft = {};
-  const sentAt = Date.now();
-  const task = dreameServer("command", { action: "set_prefs", ...batch }).then(r => {
-    // Diagnostic non bloquant : mesure réseau Maisonnée↔Supabase et durée
-    // côté Dreame si la fonction les fournit, sans relire le robot.
-    console.info("[Maisonnée Dreame] réglages", {
-      total_ms: Date.now() - sentAt,
-      cloud_ms: r?.timings_ms?.dreame_cloud ?? null,
-      batch: Object.keys(batch),
-      fallback: r?.fast_batch === false
+  delete domDreamePrefDraft.cleaning_mode;
+  delete domDreamePrefDraft.suction;
+  delete domDreamePrefDraft.water;
+  delete domDreamePrefDraft.wash_method;
+  delete domDreamePrefDraft.cleaning_route;
+  if (!Object.keys(batch).length) return;
+  try {
+    const raw = Number((domDreameState || {}).cleaning_mode_raw);
+    const out = await dreameServer("command", {
+      action: "set_prefs",
+      ...batch,
+      ...(Number.isFinite(raw) ? { cleaning_mode_raw: raw } : {}),
+      _prefs: 1
     });
-    if (!r || r.ok !== true) throw new Error("L'envoi des réglages Dreame n'a pas été accepté.");
-    // Réponse cloud ≠ lecture réelle ; les choix restent signalés comme non confirmés.
-    if (r.wash_restore_error) toast("Mode transmis, mais Par zone non rétabli : vérifiez Dreame Home.");
-    else if (r.send_warning) toast("Réglage transmis ; réponse Dreame partielle, état réel non confirmé.");
-    // Ne considérer Par zone comme tenté que lorsque l'étape de restauration
-    // a été envoyée sans erreur. Cela n'affirme pas son état réel sur le robot.
-    if (r.wash_reapply_sent === true && !r.wash_restore_error) {
-      domDreameZoneInitDevice = String(domDreamePendingId() || "default");
+    if (out && out.cleaning_mode_raw != null) {
+      domDreameMergeState({ cleaning_mode_raw: out.cleaning_mode_raw });
+      domDreameRememberState(domDreameState);
     }
-    domDreameStateAt = 0;
-    return r;
-  }).catch(err => {
-    // Ne pas effacer le choix local : le robot a pu recevoir l'écriture malgré l'erreur.
-    toast("Réglage Dreame non confirmé : " + err.message);
-    throw err;
-  }).finally(() => {
-    domDreamePrefInflight = null;
-    domDreameFillHosts();
-    if (Object.keys(domDreamePrefDraft).length && domDreamePrefTimer == null) domDreameScheduleSettings();
-  });
-  domDreamePrefInflight = task;
-  domDreameFillHosts();
-  return task;
+  } catch (_) {
+    /* L'écran a déjà le choix. Dreame Home peut mettre quelques secondes. */
+  }
 }
 async function dreameServer(action, body) {
   const run = async () => {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), 28000) : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), /quick=/.test(String(action)) ? 10000 : (body && body._prefs ? 12000 : 18000)) : null;
     try {
       if (!sb) await loadSb();
       const { data: { session } } = await sb.auth.getSession();
@@ -760,7 +792,7 @@ async function dreameServer(action, body) {
   };
   // Ne jamais bloquer une lecture de batterie derrière la lecture des pièces.
   // Garder l'ordre strict pour les commandes envoyées au robot.
-  if (action !== "command") return run();
+  if (action !== "command" || (body && body._prefs)) return run();
   const p = domDreameCmdChain.then(run, run);
   domDreameCmdChain = p.catch(() => {});
   return p;
@@ -797,9 +829,12 @@ async function domDreameRefreshState(force) {
     domDreameQuickStateOnly = true;
   }
   const quick = domDreameQuickStateOnly;
-  domDreameStateInflight = dreameServer(quick ? "state?quick=1" : "state").then(r => {
-    if (!quick) domDreameQuickStateOnly = r.settings_readable !== true;
+  const req = dreameServer(quick ? "state?quick=1" : "state").then(r => {
+    const cheap = r.quick === true;
+    if (!cheap) domDreameQuickStateOnly = r.settings_readable !== true;
+    else domDreameQuickStateOnly = false;
     domDreameMergeState(r);
+    domDreameRememberState(domDreameState);
     domDreameWashLive = ["area", "time", "room", "intelligent"].includes(r.wash_method) ? r.wash_method : null;
     // Only a readable, matching device value can confirm a pending choice.
     if (r.live_ok === true) {
@@ -812,19 +847,26 @@ async function domDreameRefreshState(force) {
     }
     domDreameStateAt = Date.now();
     if (r.device_name) domDreameStatus.device_name = r.device_name;
-    return true;
-  }).catch(() => false).finally(() => { domDreameStateInflight = null; });
-  return domDreameStateInflight;
+    return { ok: true, cheap };
+  }).catch(() => null).finally(() => { domDreameStateInflight = null; });
+  domDreameStateInflight = req;
+  req.then(res => {
+    if (!res || !res.cheap) return;
+    return domDreameRefreshState(true).then(changed => { if (changed) domSoftRender(); });
+  }).catch(() => {});
+  return req.then(res => !!(res && res.ok));
 }
 function domDreamePollOnView() {
   if (view !== "domotique") return;
-  const force = domDreameLinked() && !domDreameStateAt;
+  try { domDreameRestoreState(); } catch (_) {}
+  const force = !domDreameStateAt;
   const loadState = () => domDreameRefreshState(force)
     .then(changed => { if (changed) domSoftRender(); }).catch(() => {});
   if (domDreameLinked()) {
     // Batterie/état et identification de l'appareil ne dépendent pas l'un de l'autre.
     domDreameRefreshStatus().catch(() => {});
     loadState();
+    domDreamePullWhere().then(ok => { if (ok) { domDreameFillHosts(); domSoftRender(); } }).catch(() => {});
   } else {
     domDreameRefreshStatus().then(loadState).catch(() => {});
   }
@@ -972,34 +1014,50 @@ function domDreameTransportBtns() {
 }
 function domDreameWhereLine() {
   const st = domDreameState || {};
-  const docked = [5, 6, 8, 9, 10, 13, 17, 18, 20, 22, 28, 30].includes(Number(st.status));
+  const docked = [5, 6, 8, 9, 10, 13, 16, 17, 18, 19, 20, 21, 22, 24, 28, 29, 30, 31, 32, 33, 34, 35, 36, 105, 106, 116, 117, 118, 121, 122].includes(Number(st.status));
   const suffix = docked ? " (station)" : "";
   const named = Array.isArray(st.current_rooms) ? st.current_rooms.filter(Boolean) : [];
-  if (named.length) return named.join(", ") + suffix;
   const ids = Array.isArray(st.current_room_ids) ? st.current_room_ids.map(Number) : [];
   const byId = new Map((domDreameRooms || []).map(r => [Number(r.id), r.name]));
   const fromIds = ids.map(id => byId.get(id)).filter(Boolean);
-  if (fromIds.length) return fromIds.join(", ") + suffix;
-  if ([1, 7, 12].includes(Number(st.status)) && domDreamePickedNames().length) return "Demandé : " + domDreamePickedNames().join(", ");
-  return "";
+  const live = named.length ? named : fromIds;
+  if (live.length) return live.join(", ") + suffix;
+  const demanded = domDreamePickedNames().length ? domDreamePickedNames() : domDreameLastJobNames();
+  if (demanded.length) return "Demandé : " + demanded.join(", ");
+  if ([1, 7, 12].includes(Number(st.status))) return "Nettoyage en cours";
+  return "Position en lecture…";
+}
+function domDreameStatusBit() {
+  const st = domDreameState || {};
+  const line = String(st.label || (st.online === false ? "Hors ligne" : "État en attente…"));
+  const where = domDreameWhereLine();
+  const core = where.replace(/ \(station\)$/, "");
+  if (core && core !== "Position en lecture…" && !core.startsWith("Demandé")) {
+    const cut = line.indexOf(" · " + core);
+    if (cut > 0) return line.slice(0, cut);
+  }
+  return line;
 }
 function domDreameStatusHtml() {
   const st = domDreameState || {};
-  const line = st.label || (st.online === false ? "Hors ligne" : "État en attente…");
   const mode = domDreamePrefNum("cleaning_mode", 2);
   const where = domDreameWhereLine();
-  return `<strong>${esc(line)}</strong>${where ? `<br><span class="muted small">Pièce : ${esc(where)}</span>` : ""}${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}</span>` : ""}`;
+  return `<strong>${esc(domDreameStatusBit())}</strong><span class="dom-dreame-where">Robot : ${esc(where)}</span>${st.battery != null && st.live_ok === false ? `<br><span class="muted small">Batterie ${esc(String(st.battery))} % (cloud)</span>` : ""}${st.cleaning_mode_label ? `<br><span class="muted small">${esc(st.cleaning_mode_label)}${st.suction_label && mode !== 1 ? " · " + esc(st.suction_label) : ""}</span>` : ""}`;
 }
 function domDreamePrefsHtml() {
+  const st = domDreameState || {};
   const mode = domDreamePrefNum("cleaning_mode", 2);
   const suction = domDreamePrefNum("suction", null);
   const water = domDreamePrefNum("water", null);
   const pending = Object.keys(domDreameWanted).filter(k => domDreameWantedNum(k) != null);
-  const note = pending.length ? '<p class="muted small">Réglage affiché selon votre dernier choix · confirmation du robot en attente.</p>' :
-    (suction == null ? '<p class="muted small">Certains réglages ne sont pas disponibles depuis Dreame : aucune valeur sélectionnée par défaut.</p>' : '');
-  const sending = !!domDreamePrefInflight;
-  const queued = Object.keys(domDreamePrefDraft).length > 0;
-  return (sending || queued ? '<p class="muted small">Choix pris en compte · ' + (sending ? 'transmission au cloud en cours' : 'envoi groupé imminent') + '…</p>' : "") + note + domDreameChipGroup("Mode de nettoyage", "cleaning_mode", domDreameModeOpts(), mode)
+  const note = pending.length
+    ? '<p class="muted small">Choix Maisonnée, pas encore relu sur le robot. Dreame Home peut suivre avec un peu de retard.</p>'
+    : (st.settings_readable
+      ? '<p class="muted small">Mode, aspiration et itinéraire lus depuis le robot. Un appui met à jour Dreame Home.</p>'
+      : (suction == null
+        ? '<p class="muted small">Lecture des réglages robot… Mode et aspiration s’afficheront s’ils sont disponibles.</p>'
+        : '<p class="muted small">Derniers réglages connus. Une lecture robot est tentée à l’ouverture.</p>'));
+  return note + domDreameChipGroup("Mode de nettoyage", "cleaning_mode", domDreameModeOpts(), mode)
     + (mode !== 1 ? domDreameChipGroup("Aspiration", "suction", domDreameSuctionOpts(), suction) : "")
     ;
 }
@@ -1037,21 +1095,21 @@ function domDreameAutoWashHtml() {
   ).join("");
   return `<section class="dom-dreame-setting"><h4>Rinçage supplémentaire automatique</h4>
     <p class="muted small">Pendant le lavage du sol uniquement, par durée (pas par m²). Conserve le rinçage natif du Dreame.</p>
-    <p class="muted small">${esc(status)}${enabled ? " · demandes cette tâche : " + (Number(a.count) || 0) : ""}</p>
+    <p class="muted small">${esc(status)}${enabled ? " · rinçages demandés : " + (Number(a.count) || 0) : ""}</p>
     <label class="field"><span class="label">Délai entre deux rinçages supplémentaires</span><select class="input" data-dom-dreame-auto-minutes ${domDreameAutoSaving ? "disabled" : ""}>${items}</select></label>
     <button type="button" class="btn${enabled ? " ghost" : " primary"}" data-dom-dreame-auto-toggle="${enabled ? "off" : "on"}" ${domDreameAutoSaving ? "disabled" : ""}>${enabled ? "Désactiver le rinçage automatique" : "Activer le rinçage automatique"}</button>
-    <p class="muted small">Fonctionne avec Maisonnée fermée après installation de la tâche planifiée Supabase. Évite les doubles rinçages rapprochés ; aucune mesure de surface n'est supposée.</p>
+    <p class="muted small">Tourne même si Maisonnée est fermée. Seulement pendant un lavage du sol, pas à la base.</p>
     ${a.last_error ? `<p class="muted small">Dernier contrôle : ${esc(String(a.last_error).slice(0, 120))}</p>` : ""}
   </section>`;
 }
 function domDreameSaveAutoWash(enabled, minutes) {
   if (domDreameAutoSaving || !domDreameCommandable()) return;
-  if (enabled && !domDreameAutoWash.enabled && !confirm("Activer des rinçages supplémentaires toutes les " + minutes + " minutes de lavage ? La planification Supabase doit être installée.")) return;
+  if (enabled && !domDreameAutoWash.enabled && !confirm("Activer un rinçage supplémentaire toutes les " + minutes + " minutes pendant le lavage du sol ?")) return;
   domDreameAutoSaving = true;
   domDreameFillHosts();
   dreameServer("auto_wash_config", { enabled, interval_minutes: minutes }).then(r => {
     if (r?.auto_wash) domDreameAutoWash = r.auto_wash;
-    toast(enabled ? "Rinçage supplémentaire configuré ; vérifiez la planification Supabase." : "Rinçage automatique désactivé.");
+    toast(enabled ? "Rinçage supplémentaire activé (pendant le lavage du sol)." : "Rinçage automatique désactivé.");
   }).catch(err => toast("Rinçage automatique non configuré : " + err.message))
     .finally(() => { domDreameAutoSaving = false; domDreameFillHosts(); });
 }
@@ -1060,23 +1118,26 @@ function domDreameAdvancedPreviewHtml() {
   // Toujours présenter Par zone, sans afficher un éventuel état cloud incomplet comme confirmé.
   const chip = (key, val, title, active) => `<button type="button" class="btn dom-dreame-choice${active ? " primary" : ""}" data-dom-dreame-advanced="${key}" data-value="${val}" aria-pressed="${active}">${esc(title)}</button>`;
   const mode = domDreamePrefNum("cleaning_mode", 2);
-  const routes = [["fast", "Rapide"], ["standard", "Standard"], ["intensive", "Lavage du sol intensif"], ["deep", "En profondeur"]]
-    .filter(([route]) => domDreameRouteAllowed(mode, route));
   return `<div class="dom-dreame-advanced-preview">
     ${mode === 0 ? "" : `<section class="dom-dreame-setting"><h4>Lavage des serpillières · Par zone</h4>
       <div class="dom-dreame-choices">${chip("wash", "area", "Renvoyer Par zone", true)}</div>
       <label class="muted small">Surface souhaitée : ${d.area} m²
         <input type="range" data-dom-dreame-advanced-range="area" min="5" max="15" step="1" value="${d.area}"></label>
-      <p class="muted small">Mode Par zone envoyé automatiquement après chaque changement de nettoyage. La valeur en m² reste à confirmer dans Dreame Home.</p>
+      <p class="muted small">Par zone est la préférence Maisonnée. Elle partira avec Lecture, pas à chaque appui.</p>
       <details ${domDreameWashDiagnostic ? "open" : ""}><summary>Diagnostic du rinçage automatique</summary>
         <button type="button" class="btn ghost" data-dom-dreame-wash-probe>Vérifier la surface réelle (lecture seule)</button>
         ${domDreameWashDiagnostic ? `<p class="muted small">${esc(domDreameWashDiagnostic)}</p>` : ""}
       </details>
     </section>`}
     ${domDreameAutoWashHtml()}
-    <section class="dom-dreame-setting"><h4>Itinéraire</h4><div class="dom-dreame-choices" role="group" aria-label="Itinéraire">
-      ${routes.map(([v, t]) => chip("route", v, t, d.route === v)).join("")}</div></section>
-    <p class="muted small">La sélection du mode et de l’itinéraire est envoyée au robot ; l’état réel peut rester indisponible.</p>
+    <section class="dom-dreame-setting"><h4>Itinéraire</h4>
+      <div class="dom-dreame-choices" role="group" aria-label="Itinéraire">
+        ${[["fast", "Rapide"], ["standard", "Standard"], ["intensive", "Lavage du sol intensif"], ["deep", "En profondeur"]]
+          .filter(([route]) => domDreameRouteAllowed(mode, route))
+          .map(([v, t]) => chip("route", v, t, d.route === v)).join("")}
+      </div>
+      <p class="muted small">Envoyé tout de suite à Dreame Home, comme le mode et l’aspiration.</p>
+    </section>
   </div>`;
 }
 document.addEventListener("change", e => {
@@ -1088,22 +1149,11 @@ document.addEventListener("change", e => {
   const value = Number(slider.value);
   const before = domDreameAdvancedDraft()[method];
   if (!(["area", "time"].includes(method)) || !Number.isInteger(value) || value === before) return;
-  if (!domDreameCommandable() || domDreameBusy) {
-    domDreameAdvancedUpdate(method, before);
-    toast("Dreame indisponible ou commande en cours : valeur non modifiée.");
+  if (!domDreameCommandable()) {
+    toast("Connectez d’abord le Dreame.");
     return;
   }
-  domDreameBusy = "advanced_interval";
-  dreameServer("command", { action: "set_wash_interval", method, value })
-    .then(() => {
-      domDreameAdvancedUpdate(method, value);
-      toast("Valeur envoyée au cloud ; vérifiez-la dans Dreame Home.");
-    })
-    .catch(err => {
-      domDreameAdvancedUpdate(method, before);
-      toast("Valeur non appliquée : " + err.message);
-    })
-    .finally(() => { domDreameBusy = ""; });
+  domDreameAdvancedUpdate(method, value);
 });
 function domDreameAdvancedUpdate(key, value) {
   const d = domDreameAdvancedDraft();
@@ -1138,7 +1188,6 @@ function domDreameFillHosts() {
   if (progs) progs.innerHTML = domDreameProgramsBlock(domDreameCommandable());
 }
 function domDreameStartPayload() {
-  // Envoyer aussi l'itinéraire choisi : auparavant, « Lecture » ne le transmettait pas.
   const cleaningMode = domDreamePrefNum("cleaning_mode", 2);
   const route = domDreameAdvancedDraft().route;
   const routes = { standard: 1, intensive: 2, deep: 3, fast: 4 };
@@ -1973,9 +2022,8 @@ function domDreameEqCard() {
     return `<article class="dom-eq-card dom-eq-dreame is-pending"><button type="button" class="dom-eq-open" data-dom-dreame-open>${domEqCardTop("🤖", "Dreame D20 Ultra")}<small>Non connecté</small></button></article>`;
   }
   const st = domDreameState || {};
-  // Afficher le dernier état connu pendant les actualisations en arrière-plan.
-  const where = typeof domDreameWhereLine === "function" ? domDreameWhereLine() : "";
-  const line = (st.label || "État en attente…") + (where ? " · " + where : "");
+  const where = typeof domDreameWhereLine === "function" ? domDreameWhereLine() : "Position en lecture…";
+  const line = typeof domDreameStatusBit === "function" ? domDreameStatusBit() : (st.label || "État en attente…");
   const hasDev = !!(domDreameStatus.device_id || (S.hh && S.hh.dreame_device_id));
   const busyStart = domDreameBusy === "start";
   const busyDock = domDreameBusy === "dock";
@@ -1983,7 +2031,7 @@ function domDreameEqCard() {
   const actions = hasDev
     ? `<div class="dom-dreame-card-actions" role="group" aria-label="Commandes rapides"><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="start" ${busyStart ? "aria-busy=true" : ""}>▶</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="pause" ${domDreameBusy === "pause" ? "aria-busy=true" : ""}>⏸</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="stop" ${domDreameBusy === "stop" ? "aria-busy=true" : ""}>⏹</button><button type="button" class="btn dom-dreame-card-btn" data-dom-dreame-cmd="dock" ${busyDock ? "aria-busy=true" : ""}>🏠</button></div>`
     : "";
-  return `<article class="dom-eq-card dom-eq-dreame"><button type="button" class="dom-eq-open" data-dom-dreame-open>${domEqCardTop("🤖", esc(st.device_name || domDreameStatus.device_name || "Dreame"))}<small>${esc(line)}</small></button>${actions}</article>`;
+  return `<article class="dom-eq-card dom-eq-dreame"><button type="button" class="dom-eq-open" data-dom-dreame-open>${domEqCardTop("🤖", esc(st.device_name || domDreameStatus.device_name || "Dreame"))}<small>${esc(line)}</small><small class="dom-dreame-card-where">Robot : ${esc(where)}</small></button>${actions}</article>`;
 }
 function domDreameSheet(fromRefresh) {
   if (!domDreameLinked()) {
@@ -2018,14 +2066,72 @@ function domDreameSheet(fromRefresh) {
     <button type="button" class="btn ghost" data-act="closeSheet">Fermer</button>
   </article>`);
   if (!fromRefresh) {
-    // Par zone reste la préférence fixe de Maisonnée. Pas d'écriture au seul
-    // affichage : cela retardait la première commande explicite de l'utilisateur.
-    // La commande Par zone est jointe aux changements de mode et contrôlée avant Lecture.
+    domDreamePullLivePrefs().then(() => domDreameFillHosts()).catch(() => {});
+    domDreamePullWhere().then(() => domDreameFillHosts()).catch(() => {});
     domDreameRefreshState(true).then(() => domDreameFillHosts()).catch(() => {});
-    // La carte peut exiger un appel robot supplémentaire. Lui donner une priorité
-    // inférieure aux commandes de réglage, sans supprimer les pièces existantes.
     domDreameScheduleRoomsWhenIdle();
   }
+}
+function domDreamePullWhere() {
+  if (!domDreameLinked() || mode !== "cloud") return Promise.resolve(false);
+  return dreameServer("robot_where", {}).then(r => {
+    if (!r) return false;
+    const live = Array.isArray(r.current_rooms) ? r.current_rooms.filter(Boolean) : [];
+    const job = Array.isArray(r.job_rooms) ? r.job_rooms.filter(Boolean) : [];
+    if (job.length) domDreameRememberJobNames(job);
+    if (live.length) {
+      domDreameMergeState({
+        current_rooms: live,
+        current_room_ids: Array.isArray(r.current_room_ids) ? r.current_room_ids : []
+      });
+      domDreameRememberState(domDreameState);
+    }
+    return !!(live.length || job.length);
+  }).catch(() => false);
+}
+function domDreamePullLivePrefs() {
+  if (!domDreameLinked() || mode !== "cloud") return Promise.resolve(false);
+  return dreameServer("live_prefs").then(r => {
+    if (!r) return false;
+    const next = {};
+    if (r.cleaning_mode != null) {
+      next.cleaning_mode = r.cleaning_mode;
+      next.cleaning_mode_label = r.cleaning_mode_label || null;
+      if (r.cleaning_mode_raw != null) next.cleaning_mode_raw = r.cleaning_mode_raw;
+      domDreameWanted.cleaning_mode = null;
+    }
+    if (r.suction != null) {
+      next.suction = r.suction;
+      next.suction_label = r.suction_label || null;
+      domDreameWanted.suction = null;
+    }
+    if (r.water != null) {
+      next.water = r.water;
+      next.water_label = r.water_label || null;
+      domDreameWanted.water = null;
+    }
+    if (r.cleaning_route != null) {
+      const routes = { 1: "standard", 2: "intensive", 3: "deep", 4: "fast" };
+      const route = routes[Number(r.cleaning_route)];
+      if (route) {
+        next.cleaning_route = Number(r.cleaning_route);
+        const d = domDreameAdvancedDraft();
+        if (d.route !== route) {
+          d.route = route;
+          try { localStorage.setItem(DOM_DREAME_ADV_KEY, JSON.stringify(d)); } catch (_) {}
+        }
+      }
+    }
+    if (r.status != null) next.status = r.status;
+    if (r.battery != null) next.battery = r.battery;
+    next.settings_readable = r.settings_readable === true;
+    if (Object.keys(next).length) {
+      domDreameMergeState(next);
+      domDreameRememberState(domDreameState);
+      domDreameSavePending();
+    }
+    return r.settings_readable === true;
+  }).catch(() => false);
 }
 // Lecture de la carte en priorité basse : évite de saturer le cloud au moment
 // où l'utilisateur commence à sélectionner les paramètres.
@@ -2480,13 +2586,17 @@ function domPage() {
 }
 VIEWS.domotique = function () {
   Promise.resolve(domEnsureDefaults()).catch(() => {});
-  setTimeout(() => {
-    if (view !== "domotique") return;
-    domPollOnView();
-    domMelPollOnView();
-    domDreamePollOnView();
-    domStPollOnView();
-  }, 0);
+  try { if (typeof domDreameRestoreState === "function") domDreameRestoreState(); } catch (_) {}
+  if (!domotiquePollArmed) {
+    domotiquePollArmed = true;
+    setTimeout(() => {
+      if (view !== "domotique") return;
+      domPollOnView();
+      domMelPollOnView();
+      domDreamePollOnView();
+      domStPollOnView();
+    }, 0);
+  }
   return domPage();
 };
 function domCloudOptions(selected) {
@@ -2680,6 +2790,9 @@ document.addEventListener("click", e => {
     const labels = { start: "Lecture", play: "Lecture", pause: "Pause", stop: "Stop", dock: "Retour base", wash_now: "Rinçage des serpillières" };
     const body = (action === "start" || action === "play") ? domDreameStartPayload() : { action };
     const nRooms = (body.segment_ids || []).length;
+    if ((action === "start" || action === "play") && nRooms) {
+      domDreameRememberJobNames(domDreamePickedNames());
+    }
     // Sécurité : une sélection vide ne doit jamais lancer toute la maison.
     // Cela vaut aussi pour le raccourci Lecture sur la carte Domotique.
     if ((action === "start" || action === "play") && nRooms === 0) {
@@ -2690,20 +2803,7 @@ document.addEventListener("click", e => {
     domDreameBusy = action;
     domDreameTask = action === "play" ? "start" : action;
     domDreameFillHosts();
-    const sendStart = async () => {
-      if (action === "start" || action === "play") {
-        // Priorité aux paramètres choisis. Le lot de mode contient déjà Par zone.
-        await domDreameFlushSettings();
-        // Si l'utilisateur lance directement Lecture sans toucher aux modes,
-        // assurer son choix Par zone une fois, à ce moment seulement.
-        const deviceKey = String(domDreamePendingId() || "default");
-        if (domDreameZoneInitDevice !== deviceKey) {
-          domDreameQueueSetting("wash_method", "area");
-          await domDreameFlushSettings();
-        }
-      }
-      return dreameServer("command", body);
-    };
+    const sendStart = async () => dreameServer("command", body);
     sendStart().then(r => {
       if (r) {
         domDreameMergeState(r);
@@ -2720,7 +2820,10 @@ document.addEventListener("click", e => {
         toast((labels[action] || "Commande") + extra + " transmise au cloud Dreame (exécution non confirmée)", null, null, null, "domotique");
       }
       domDreameFillHosts();
-      setTimeout(() => { domDreameRefreshState(true).then(() => domDreameFillHosts()).catch(() => {}); }, 2500);
+      setTimeout(() => {
+        domDreamePullWhere().then(() => { domDreameFillHosts(); if (view === "domotique") domSoftRender(); }).catch(() => {});
+        domDreameRefreshState(true).then(() => domDreameFillHosts()).catch(() => {});
+      }, 2500);
     }).catch(err => { if (err) toast(err.message); }).finally(() => {
       domDreameBusy = "";
       domDreameFillHosts();
@@ -3429,7 +3532,7 @@ VIEWS.agenda = function () {
   for (let i = 0; i < 7; i++) {
     const day = addDays(calSel, i), evs = occurrences(day, day), bs = bdaysOn(day), gs = gEventsOn(day);
     // Si la copie familiale vers Google Agenda est active, ses événements affichent déjà ces tâches : ne pas les doubler.
-    const localTasks = (typeof gtConf === "function" && gtConf().on) ? [] : (S.tasks || []).filter(t => !t.archived && t.next_due === day);
+    const localTasks = (typeof gtCopyShowsOnGoogle === "function" && gtCopyShowsOnGoogle()) ? [] : (S.tasks || []).filter(t => !t.archived && t.next_due === day);
     const googleTasks = gTasksOn(day);
     list += `<div class="day-band"><span>${esc(dayLabel(day))}${Math.abs(diffDays(today(), day)) <= 1 ? ` <span class="muted">· ${esc(fmtShort(day))}</span>` : ""}</span></div>
       ${evs.length || bs.length || gs.length || localTasks.length || googleTasks.length ? `<div class="list flat">${bs.map(b => `<button class="row" data-act="editBday" data-v="${b.id}"><span class="ev-time allday">${mi("anniv", "xs")}</span><span class="main"><span class="t">Anniversaire de ${esc(b.name)}</span>${b.year ? `<span class="m">${parse(day).getFullYear() - b.year} ans</span>` : ""}</span></button>`).join("")}${evs.map(e => eventRow(e)).join("")}${gs.map(gRow).join("")}${localTasks.map(t => taskRow(t)).join("")}${googleTasks.map(gTasksRow).join("")}</div>` : `<p class="none-day">Aucun événement</p>`}`;
@@ -3940,7 +4043,7 @@ async function fillThumbs() {
 }
 function afterRender() {
   if (view === "galerie") fillThumbs();
-  if (view !== "domotique") { domHeroLive = null; return; }
+  if (view !== "domotique") { domHeroLive = null; domotiquePollArmed = false; return; }
   const slot = document.querySelector(".dom-hero-photo");
   if (domHeroLive && slot && slot !== domHeroLive && slot.parentNode) slot.replaceWith(domHeroLive);
   domHeroLive = document.querySelector(".dom-hero-photo");
@@ -4102,30 +4205,45 @@ VIEWS.foyer = function () {
 };
 
 /* ---------- Google Agenda via Supabase (lecture seule) ---------- */
-const G = { tok: null, cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false, connected: false };
+const G = { tok: null, cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false, connected: false, googleOff: false };
 const G_ENDPOINT = SB_URL + "/functions/v1/google-calendar";
 const gClient = () => (S.hh && S.hh.google_client_id) || "";
 const gValid = () => !!(G.tok && G.tok.exp > Date.now() + 60e3);
-const gOn = () => !!(G.connected || G.ev.items.length);
-async function gServer(action, method = "GET") {
+const gOn = () => !!(G.connected || (G.ev.items && G.ev.items.length));
+async function gSession() {
   if (!sb) await loadSb();
-  const { data: { session } } = await sb.auth.getSession();
+  for (let i = 0; i < 8; i++) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.access_token) return session;
+    await new Promise(r => setTimeout(r, 180 + i * 120));
+  }
+  return null;
+}
+async function gServer(action, method = "GET") {
+  const session = await gSession();
   if (!session) throw new Error("Connexion Maisonnée requise");
   const res = await fetch(G_ENDPOINT + "/" + action, { method, headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY } });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || "Erreur Google Agenda");
   return body;
 }
+let gEnsureRun = null;
 async function gEnsure() {
-  if (gValid()) return true;
+  if (gValid()) { G.connected = true; G.googleOff = false; return true; }
   if (mode !== "cloud" || !user) return false;
-  try {
-    const t = await gServer("token");
-    G.connected = !!t.connected;
-    if (!t.connected || !t.access_token) { G.tok = null; return false; }
-    G.tok = { t: t.access_token, exp: Date.parse(t.expires_at) || Date.now() + 3500e3 };
-    return true;
-  } catch (e) { console.warn("Google Agenda", e); return false; }
+  if (gEnsureRun) return gEnsureRun;
+  gEnsureRun = (async () => {
+    try {
+      const t = await gServer("token");
+      G.connected = !!t.connected;
+      G.googleOff = !t.connected;
+      if (!t.connected || !t.access_token) { G.tok = null; return false; }
+      G.tok = { t: t.access_token, exp: Date.parse(t.expires_at) || Date.now() + 3500e3 };
+      return true;
+    } catch (e) { console.warn("Google Agenda", e); return false; }
+    finally { gEnsureRun = null; }
+  })();
+  return gEnsureRun;
 }
 async function gConnect(silent, then) {
   try {
@@ -4265,7 +4383,11 @@ async function gFetch() {
     if (!G.palette) { try { const co = await gApi("colors"); G.palette = Object.fromEntries(Object.entries(co.event || {}).map(([k, v]) => [k, v.background])); } catch (_) { G.palette = {}; } }
     G.list = (cl.items || []).map(c => ({ id: c.id, name: c.summaryOverride || c.summary || c.id, color: c.backgroundColor || "#4C8DF6", primary: !!c.primary, accessRole: c.accessRole || "reader", on: !!c.selected || !!c.primary, defRem: (c.defaultReminders || []).filter(r => r.method === "popup").map(r => r.minutes) }));
     LS.set("mz_gcallist", G.list);
-    if (!G.cals) { G.cals = G.list.filter(c => c.on).map(c => c.id); LS.set("mz_gcals", G.cals); }
+    if (!Array.isArray(G.cals) || !G.cals.length) {
+      G.cals = G.list.filter(c => c.on).map(c => c.id);
+      if (!G.cals.length) G.cals = G.list.map(c => c.id);
+      LS.set("mz_gcals", G.cals);
+    }
     const tMin = new Date(parse(addDays(today(), -40))).toISOString(), tMax = new Date(parse(addDays(today(), 150))).toISOString(), items = [];
     for (const c of G.list.filter(c => G.cals.includes(c.id))) {
       let page = "";
@@ -4294,6 +4416,30 @@ async function gFetch() {
   finally { G.busy = false; softRender(); }
 }
 async function gRefresh(then) { if (await gEnsure()) gFetch(); else toast("Reconnectez Google Agenda depuis Ma famille."); }
+let gRetryT = 0, gRetryN = 0, gStarted = false;
+function gStart(force) {
+  if (mode !== "cloud") return;
+  if (!user) return;
+  gEnsure().then(ok => {
+    if (ok) {
+      gRetryN = 0; gStarted = true;
+      if (force || G.after || !G.ev.at || Date.now() - G.ev.at > 60e3) gFetch();
+      else softRender();
+      if (typeof gTasksRefresh === "function" && GTASKS.enabled) gTasksRefresh(false);
+      return;
+    }
+    if (G.googleOff) { gRetryN = 0; gStarted = true; return; }
+    if (gRetryN >= 15) {
+      if (document.visibilityState !== "visible") { gRetryN = 0; return; }
+      clearTimeout(gRetryT);
+      gRetryT = setTimeout(() => { gRetryN = 0; gStart(true); }, 8000);
+      return;
+    }
+    gRetryN++;
+    clearTimeout(gRetryT);
+    gRetryT = setTimeout(() => gStart(true), Math.min(2500, 280 * gRetryN));
+  }).catch(() => {});
+}
 // Calendrier › « Agendas affichés »: which Google calendars appear in the calendar (on this phone)
 function gCalsSheet() {
   openSheet("Agendas affichés", `<p class="muted small" style="margin:6px 0 10px">Touchez un agenda pour l'afficher ou le masquer dans le Calendrier (sur ce téléphone).</p>
@@ -4375,28 +4521,32 @@ function gCard() {
     <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
     ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
     ${G.list.some(c => c.accessRole === "owner" || c.accessRole === "writer") ? `<label class="field"><span class="label">Agenda par défaut des nouveaux rendez-vous</span><select class="input" data-defdest><option value="local">Maisonnée (agenda familial)</option>${G.list.filter(c => c.accessRole === "owner" || c.accessRole === "writer").map(c => `<option value="${esc(c.id)}" ${defaultDest() === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>` : ""}
-    <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn" data-act="gColors">Couleurs des enfants</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
+    <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gMealSync">Mettre à jour l'agenda Repas</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn" data-act="gColors">Couleurs des enfants</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
 }
 const foyerViewG = VIEWS.foyer;
 VIEWS.foyer = function () { return foyerViewG() + gCard(); };
 if (G.ev.items.length && !G.ev.items[0].gs) G.ev.at = 0;
 const gBoot = setInterval(() => {
-  if (screen !== "app") return;
+  if (screen !== "app" || !user || mode !== "cloud") return;
   clearInterval(gBoot);
-  if (G.err && G.after) { toast(G.err === "cancelled" ? "Connexion Google annulée." : "Google n'a pas pu vous connecter : réessayez depuis Ma famille."); }
-  if (G.after === "anniv-import") gImportBdays();
-  else if (G.after) { view = G.after; render(); }
-  gEnsure().then(ok => { if (ok && (G.after || Date.now() - G.ev.at > 15 * 60e3)) gFetch(); else softRender(); });
+  if (G.err && G.after) { toast(G.err === "cancelled" ? "Connexion Google annulée." : "Google n'a pas pu vous connecter : réessayez depuis Ma famille."); G.err = null; }
+  if (G.after === "anniv-import") { G.after = null; gImportBdays(); }
+  else if (G.after) { view = G.after; G.after = null; render(); }
+  gStart(true);
 }, 300);
+window.addEventListener("pageshow", () => {
+  if (mode === "cloud" && user && typeof gStart === "function") gStart(false);
+});
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const v = b.dataset.v;
   switch (b.dataset.act) {
     case "gConnect": gConnect(false, "foyer"); break;
     case "gRefresh": gRefresh(view); break;
+    case "gMealSync": if (typeof rPushGoogleMeals === "function") rPushGoogleMeals(true); else toast("Ouvrez d'abord Repas une fois, puis réessayez."); break;
     case "gBdays": gImportBdays(); break;
     case "gColors": gColorsSheet(); break;
-    case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
+    case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.googleOff = true; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
     case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (b.closest("#sheet")) gCalsSheet(); gFetch().then(() => { if (view === "agenda") softRender(); }); break; }
     case "gCalsSheet": gCalsSheet(); break;
     case "remSheet": remSheet(b.dataset.src, v, b.dataset.day); break;
@@ -5032,7 +5182,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
     // Même règle anti-doublon que l'agenda quand les tâches locales sont copiées sur Google.
-    if (!(typeof gtConf === "function" && gtConf().on)) {
+    if (!(typeof gtCopyShowsOnGoogle === "function" && gtCopyShowsOnGoogle())) {
       for (const t of S.tasks || []) {
         if (t.archived || !t.next_due || !found(q, t.title, t.notes, t.room)) continue;
         out.push(result(t.next_due, t.title || "Tâche", "Tâche familiale", t.room || "", "editTask", t.id));

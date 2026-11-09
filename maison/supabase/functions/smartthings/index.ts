@@ -1,6 +1,7 @@
 // Maisonnée — SmartThings (Samsung TV). OAuth + PAT côté serveur.
 // Déployer SANS vérification JWT : le callback Samsung arrive sans session.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { originOk } from "../_shared/cors.ts";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -24,7 +25,7 @@ const ALLOWED = new Set([
 function cors(req: Request) {
   const origin = req.headers.get("Origin") || "";
   return {
-    "Access-Control-Allow-Origin": ALLOWED.has(origin) ? origin : "https://franckdavion.github.io",
+    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://franckdavion.github.io",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin"

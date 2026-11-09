@@ -4,7 +4,21 @@ import aesjs from "https://esm.sh/aes-js@3.1.2";
 import md5 from "https://esm.sh/md5@2.3.0";
 import pako from "https://esm.sh/pako@2.1.0";
 
-const FN_REV = "20261106b";
+const FN_REV = "20261107g";
+
+function originOk(origin: string) {
+  if (!origin) return false;
+  try {
+    const h = new URL(origin).hostname.toLowerCase();
+    return h === "franckdavion.github.io"
+      || h === "carnets-menus.vercel.app"
+      || h === "carnets-menus-franckdavion.vercel.app"
+      || /^carnets-menus-[a-z0-9]+-franckdavion\.vercel\.app$/.test(h)
+      || h === "localhost" || h === "127.0.0.1" || h === "192.168.0.146";
+  } catch {
+    return false;
+  }
+}
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -49,10 +63,15 @@ const BATTERY_LEVEL = { siid: 3, piid: 1 };
 const SUCTION_LEVEL = { siid: 4, piid: 4 };
 const WATER_VOLUME = { siid: 4, piid: 5 };
 const CLEANING_MODE = { siid: 4, piid: 23 };
+const AUTO_SWITCH_SETTINGS = { siid: 4, piid: 50 };
 const MAP_EXTEND_DATA = { siid: 6, piid: 4 };
 const MAP_DATA = { siid: 6, piid: 1 };
 const CLEANING_PROPERTIES = { siid: 4, piid: 10 };
-const DOCK_STATUSES = new Set([5, 6, 8, 9, 10, 13, 17, 18, 20, 22, 28, 30]);
+const CLEANING_PROGRESS_INFO = { siid: 4, piid: 66 };
+const DOCK_STATUSES = new Set([
+  5, 6, 8, 9, 10, 13, 16, 17, 18, 19, 20, 21, 22, 24, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  105, 106, 116, 117, 118, 121, 122
+]);
 const ACT_START = { siid: 2, aiid: 1 };
 const ACT_PAUSE = { siid: 2, aiid: 2 };
 const ACT_STOP = { siid: 4, aiid: 2 };
@@ -70,30 +89,78 @@ const STATE_LABELS: Record<number, string> = {
   1: "Nettoyage",
   2: "Veille",
   3: "Pause",
-  4: "Pause",
+  4: "Erreur",
   5: "Retour base",
   6: "Charge",
-  7: "Lavage sol",
+  7: "Lavage du sol",
   8: "Séchage serpillière",
   9: "Lavage serpillière",
-  10: "Retour station",
+  10: "Retour lavage serpillière",
   11: "Cartographie",
-  12: "Nettoyage",
+  12: "Aspiration et lavage",
   13: "Charge terminée",
   14: "Mise à jour",
-  17: "Retour (serpillière)",
-  18: "Retour (serpillière)",
-  20: "Remplissage eau",
+  15: "Appel nettoyage",
+  16: "Réinitialisation station",
+  17: "Retour (pose serpillière)",
+  18: "Retour (retrait serpillière)",
+  19: "Contrôle de l’eau",
+  20: "Remplissage d’eau",
+  21: "Lavage serpillière en pause",
   22: "Vidage auto",
   23: "Télécommande",
+  24: "Charge intelligente",
+  25: "Second passage",
+  26: "Suivi d’une personne",
+  27: "Nettoyage localisé",
   28: "Retour vidage",
-  30: "Entretien base"
+  29: "En attente de tâche",
+  30: "Entretien de la base",
+  31: "Retour vidange",
+  32: "Vidange",
+  33: "Vidange auto",
+  34: "Vidage",
+  35: "Séchage du sac",
+  36: "Séchage du sac en pause",
+  37: "Vers un nettoyage extra",
+  38: "Nettoyage extra",
+  95: "Recherche animal en pause",
+  96: "Recherche animal",
+  97: "Raccourci",
+  98: "Surveillance",
+  99: "Surveillance en pause",
+  101: "Nettoyage profond",
+  102: "Nettoyage profond en pause",
+  103: "Désinfection",
+  104: "Désinfection et séchage",
+  105: "Changement de serpillière",
+  106: "Changement de serpillière en pause",
+  107: "Entretien du sol",
+  108: "Entretien du sol en pause",
+  109: "Ramassage à distance",
+  113: "Rangement d’objets",
+  114: "Garde animal",
+  115: "Garde animal en pause",
+  116: "Pose de la serpillière",
+  117: "Retrait de la serpillière",
+  118: "Recharge intelligente",
+  120: "Nettoyage assisté",
+  121: "Entrée en station",
+  122: "Sortie de station",
+  140: "Vers l’élévateur",
+  141: "Accostage élévateur",
+  142: "Sur l’élévateur",
+  143: "Déplacement élévateur",
+  144: "Montée d’escalier",
+  145: "Escalier terminé",
+  146: "Élévateur à la base",
+  147: "Sortie de l’élévateur"
 };
 
 function cors(req: Request) {
   const origin = req.headers.get("Origin") || "";
   return {
-    "Access-Control-Allow-Origin": ALLOWED.has(origin) ? origin : "https://franckdavion.github.io",
+    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://franckdavion.github.io",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
@@ -430,6 +497,20 @@ async function dreameGetPropRows(cred: DreameCred, did: string, props: { siid: n
   return Array.isArray(data.data?.result) ? data.data!.result! : (Array.isArray(data.result) ? data.result : []);
 }
 
+async function dreameWriteCleaningMode(cred: DreameCred, did: string, mode: number, raw?: number | null) {
+  await dreameSetPropRows(cred, did, [
+    { siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encodeCleaningMode(mode, raw ?? null) }
+  ]);
+}
+
+async function dreameWriteCleaningRoute(cred: DreameCred, did: string, route: number) {
+  await dreameSetPropRows(cred, did, [{
+    siid: AUTO_SWITCH_SETTINGS.siid,
+    piid: AUTO_SWITCH_SETTINGS.piid,
+    value: JSON.stringify({ k: "CleanRoute", v: clampInt(route, 1, 4, 1) })
+  }]);
+}
+
 async function dreameSetPropRows(cred: DreameCred, did: string, props: { siid: number; piid: number; value: unknown }[]) {
   const params = props.map(p => ({ did, siid: p.siid, piid: p.piid, value: p.value }));
   const session = await ensureSession(cred);
@@ -564,10 +645,14 @@ function readI16(dv: DataView, offset: number) {
 
 function segmentFromPixel(pixel: number): number {
   if (!pixel) return 0;
-  const low = pixel & 0x3f;
-  if (low > 0 && low < 60) return low;
-  const shifted = pixel >> 2;
-  if (shifted > 0 && shifted < 60) return shifted;
+  let val = pixel & 0xff;
+  if (val > 100 && val < 200) val -= 100;
+  else if (val > 200 && val < 260) val -= 200;
+  const five = pixel & 0x1f;
+  if (five > 0 && five < 31) return five;
+  if (val > 0 && val < 60) return val;
+  const six = pixel & 0x3f;
+  if (six > 0 && six < 60) return six;
   return 0;
 }
 
@@ -593,8 +678,19 @@ function segmentAtPixel(
   if (grid <= 0 || width <= 0 || height <= 0) return 0;
   const px = Math.round((x - left) / grid);
   const py = Math.round((y - top) / grid);
-  if (px < 0 || py < 0 || px >= width || py >= height) return 0;
-  return segmentFromPixel(pixels[py * width + px]);
+  const at = (cx: number, cy: number) => {
+    if (cx < 0 || cy < 0 || cx >= width || cy >= height) return 0;
+    return segmentFromPixel(pixels[cy * width + cx]);
+  };
+  const direct = at(px, py);
+  if (direct) return direct;
+  for (let d = 1; d <= 4; d++) {
+    for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [d, -d], [-d, d], [-d, -d]]) {
+      const found = at(px + dx, py + dy);
+      if (found) return found;
+    }
+  }
+  return 0;
 }
 
 function locationFromMapBlob(value: unknown): { ids: number[]; charger: number | null; robot: number | null } {
@@ -622,36 +718,66 @@ function locationFromMapBlob(value: unknown): { ids: number[]; charger: number |
   const pixLen = width > 0 && height > 0 && width < 2000 && height < 2000 ? width * height : 0;
   const pixels = pixLen && 27 + pixLen <= inflated.length ? inflated.subarray(27, 27 + pixLen) : null;
   const json = jsonObjectFromBytes(inflated, 27 + pixLen);
-  if (json) out.ids.push(...currentRoomIdsFromValue(json));
-  if (pixels && robotA !== 32767) {
-    out.robot = segmentAtPixel(pixels, width, height, left, top, grid, robotX, robotY) || null;
+  let originLeft = left;
+  let originTop = top;
+  const origin = json && Array.isArray(json.origin) ? json.origin : null;
+  if (origin && origin.length > 1) {
+    originLeft = Number(origin[0]) || left;
+    originTop = Number(origin[1]) || top;
+  }
+  const pos = json && (json.pos || json.robot || json.robot_pos);
+  let rx = robotX;
+  let ry = robotY;
+  if (Array.isArray(pos) && pos.length >= 2) {
+    rx = Number(pos[0]);
+    ry = Number(pos[1]);
+  }
+  const robotMissing = robotA === 32767 && robotX === 32767 && robotY === 32767;
+  if (pixels && !robotMissing) {
+    out.robot = segmentAtPixel(pixels, width, height, originLeft, originTop, grid, rx, ry) || null;
   }
   if (pixels && chargerA !== 32767) {
-    out.charger = segmentAtPixel(pixels, width, height, left, top, grid, chargerX, chargerY) || null;
+    out.charger = segmentAtPixel(pixels, width, height, originLeft, originTop, grid, chargerX, chargerY) || null;
   }
-  if (out.robot) out.ids.push(out.robot);
-  if (out.charger) out.ids.push(out.charger);
-  out.ids = [...new Set(out.ids.filter(n => n > 0 && n < 100))];
+  if (out.robot) out.ids = [out.robot];
   return out;
 }
 
 function locationFromPropValue(value: unknown): { ids: number[]; charger: number | null } {
-  const ids = currentRoomIdsFromValue(value);
   const blob = locationFromMapBlob(value);
-  ids.push(...blob.ids);
+  const ids: number[] = [];
+  if (blob.robot && blob.robot !== blob.charger) ids.push(blob.robot);
   const json = tryParseJson(value);
   if (json) {
-    for (const nest of ["rism", "map", "map_extend"]) {
+    for (const key of ["cur_seg", "current_seg", "curr_seg", "cur_room", "current_room", "curSeg", "curid"]) {
+      collectRoomIds(json[key], ids);
+    }
+    for (const nest of ["rism", "map", "map_extend", "value"]) {
       const nested = json[nest];
       if (typeof nested === "string") {
         const inner = locationFromMapBlob(nested);
-        ids.push(...inner.ids);
         if (inner.charger) blob.charger = inner.charger;
-        if (inner.robot) ids.push(inner.robot);
+        if (inner.robot && inner.robot !== inner.charger) ids.push(inner.robot);
       }
     }
   }
   return { ids: [...new Set(ids.filter(n => n > 0 && n < 100))], charger: blob.charger };
+}
+
+function jobRoomIdsFromValue(value: unknown): number[] {
+  const ids: number[] = [];
+  const json = tryParseJson(value);
+  if (!json) return ids;
+  const selects = json.selects;
+  if (Array.isArray(selects)) {
+    for (const row of selects) {
+      if (Array.isArray(row) && typeof row[0] === "number") ids.push(row[0]);
+    }
+  }
+  for (const key of ["sa", "segment_ids", "seg_ids", "room_ids", "areas"]) {
+    collectRoomIds(json[key], ids);
+  }
+  return [...new Set(ids.filter(n => n > 0 && n < 100))];
 }
 
 function parseMapRoomsFromPropValue(value: unknown): DreameMapRoom[] {
@@ -674,13 +800,43 @@ function clampInt(n: unknown, min: number, max: number, fallback: number) {
 
 function decodeCleaningMode(value: unknown): { mode: number | null; raw: number | null } {
   if (typeof value !== "number" || !Number.isFinite(value)) return { mode: null, raw: null };
-  return { mode: value & 3, raw: value };
+  const protocol = value & 3;
+  // D20 Ultra (serpillière relevable) : 0 = aspiration+lavage, 2 = aspiration seule.
+  const mode = protocol === 0 ? 2 : protocol === 2 ? 0 : protocol;
+  return { mode, raw: value };
 }
 
 function encodeCleaningMode(mode: number, raw?: number | null) {
-  const m = clampInt(mode, 0, 3, 2);
-  if (raw != null && raw > 3) return (raw & ~3) | m;
-  return m;
+  const semantic = clampInt(mode, 0, 3, 2);
+  const protocol = semantic === 0 ? 2 : semantic === 2 ? 0 : semantic;
+  if (raw != null && Number.isFinite(raw) && raw > 3) return (raw & ~3) | protocol;
+  return protocol;
+}
+
+function parseAutoSwitchMap(value: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try { parsed = JSON.parse(value); } catch {
+      try { parsed = JSON.parse(b64ToUtf8(value)); } catch { return out; }
+    }
+  }
+  const items = Array.isArray(parsed)
+    ? parsed
+    : (parsed && typeof parsed === "object" && "k" in (parsed as object) ? [parsed] : []);
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const k = (item as { k?: unknown }).k;
+    const v = (item as { v?: unknown }).v;
+    if (typeof k === "string" && typeof v === "number") out[k] = v;
+  }
+  return out;
+}
+
+function cleaningRouteFromAutoSwitch(value: unknown): number | null {
+  const v = parseAutoSwitchMap(value).CleanRoute;
+  if (v == null || v < 1 || v > 4) return null;
+  return v;
 }
 
 function suctionWaterForClean(cleaningMode: number, suction: number, water: number) {
@@ -704,24 +860,28 @@ function buildSegmentSelects(
   return segmentIds.map(id => [id, rep, sw.suction, sw.water, 1]);
 }
 
-async function dreameReadSettings(cred: DreameCred, did: string) {
-  const rows = await dreameGetPropRows(cred, did, [
-    VACUUM_STATE,
-    BATTERY_LEVEL,
-    SUCTION_LEVEL,
-    WATER_VOLUME,
-    CLEANING_MODE,
-    MOP_PADS_STATE,
-    CLEANING_PROPERTIES,
-    MAP_EXTEND_DATA,
-    MAP_DATA
-  ]);
+async function dreameReadSettings(cred: DreameCred, did: string, includeMaps = false, prefsOnly = false) {
+  const props = prefsOnly
+    ? [VACUUM_STATE, BATTERY_LEVEL, SUCTION_LEVEL, WATER_VOLUME, CLEANING_MODE, AUTO_SWITCH_SETTINGS]
+    : [
+      VACUUM_STATE,
+      BATTERY_LEVEL,
+      SUCTION_LEVEL,
+      WATER_VOLUME,
+      CLEANING_MODE,
+      AUTO_SWITCH_SETTINGS,
+      MOP_PADS_STATE,
+      CLEANING_PROPERTIES
+    ];
+  if (includeMaps) props.push(MAP_EXTEND_DATA, MAP_DATA);
+  const rows = await dreameGetPropRows(cred, did, props);
   let status: number | null = null;
   let battery: number | null = null;
   let suction: number | null = null;
   let water: number | null = null;
   let cleaning_mode: number | null = null;
   let cleaning_mode_raw: number | null = null;
+  let cleaning_route: number | null = null;
   const current_room_ids: number[] = [];
   let charger_room_id: number | null = null;
   for (const row of rows) {
@@ -734,6 +894,7 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
       cleaning_mode = decoded.mode;
       cleaning_mode_raw = decoded.raw;
     }
+    if (row.siid === 4 && row.piid === 50) cleaning_route = cleaningRouteFromAutoSwitch(row.value);
     if ((row.siid === 4 && row.piid === 10) || (row.siid === 6 && (row.piid === 4 || row.piid === 1))) {
       const loc = locationFromPropValue(row.value);
       current_room_ids.push(...loc.ids);
@@ -741,10 +902,34 @@ async function dreameReadSettings(cred: DreameCred, did: string) {
     }
   }
   return {
-    status, battery, suction, water, cleaning_mode, cleaning_mode_raw,
+    status, battery, suction, water, cleaning_mode, cleaning_mode_raw, cleaning_route,
     current_room_ids: [...new Set(current_room_ids)],
     charger_room_id
   };
+}
+
+async function dreameReadRobotLocation(cred: DreameCred, did: string): Promise<{ robot: number | null; charger: number | null; job: number[] }> {
+  try {
+    await dreameSendCommand(cred, did, "action", {
+      did,
+      siid: ACT_REQUEST_MAP.siid,
+      aiid: ACT_REQUEST_MAP.aiid,
+      in: []
+    });
+    await new Promise(r => setTimeout(r, 400));
+  } catch { /* carte déjà en cache */ }
+  // MAP_DATA (6.1) est trop lourd pour le cloud : il fait sauter le délai.
+  const rows = await dreameGetPropRows(cred, did, [MAP_EXTEND_DATA, CLEANING_PROPERTIES, CLEANING_PROGRESS_INFO]);
+  let robot: number | null = null;
+  let charger: number | null = null;
+  const job: number[] = [];
+  for (const row of rows) {
+    const loc = locationFromPropValue(row.value);
+    if (loc.ids[0]) robot = loc.ids[0];
+    if (loc.charger) charger = loc.charger;
+    job.push(...jobRoomIdsFromValue(row.value));
+  }
+  return { robot, charger, job: [...new Set(job)] };
 }
 
 async function dreameFetchMapRooms(cred: DreameCred, did: string): Promise<{ rooms: DreameMapRoom[]; hint: string | null; live_ok: boolean }> {
@@ -865,7 +1050,22 @@ async function getCred(hid: string): Promise<DreameCred | null> {
   return data as DreameCred | null;
 }
 
-async function readState(cred: DreameCred) {
+function packAutoWash(cred: DreameCred | null) {
+  const row = cred as (DreameCred & Record<string, unknown>) | null;
+  if (!row) {
+    return { enabled: false, interval_minutes: 5, last_tick_at: null, last_sent_at: null, last_error: null, count: 0 };
+  }
+  return {
+    enabled: row.auto_wash_enabled === true,
+    interval_minutes: Number(row.auto_wash_interval_minutes) || 5,
+    last_tick_at: row.auto_wash_last_tick_at || null,
+    last_sent_at: row.auto_wash_last_sent_at || null,
+    last_error: row.auto_wash_last_error || null,
+    count: Number(row.auto_wash_count) || 0
+  };
+}
+
+async function readState(cred: DreameCred, quick = false) {
   const did = cred.device_id;
   if (!did) {
     return { connected: true, device_id: null, label: "Choisissez un aspirateur Dreame" };
@@ -892,19 +1092,30 @@ async function readState(cred: DreameCred) {
   let current_room_ids: number[] = [];
   let charger_room_id: number | null = cred.dock_room_id ?? null;
   try {
-    const live = await dreameReadSettings(cred, did);
-    if (live.status != null) status = live.status;
-    if (live.battery != null) battery = live.battery;
-    suction = live.suction;
-    water = live.water;
-    cleaning_mode = live.cleaning_mode;
-    current_room_ids = live.current_room_ids || [];
-    if (live.charger_room_id) charger_room_id = live.charger_room_id;
-    live_ok = live.status != null || live.battery != null || live.cleaning_mode != null || live.suction != null || live.water != null;
+    if (!quick) {
+      const live = await dreameReadSettings(cred, did, false);
+      if (live.status != null) status = live.status;
+      if (live.battery != null) battery = live.battery;
+      suction = live.suction;
+      water = live.water;
+      cleaning_mode = live.cleaning_mode;
+      current_room_ids = live.current_room_ids || [];
+      if (live.charger_room_id) charger_room_id = live.charger_room_id;
+      live_ok = live.status != null || live.battery != null || live.cleaning_mode != null || live.suction != null || live.water != null;
+    }
   } catch (e) {
     live_ok = false;
     if (!isUnreachable(e)) {
       /* keep listV2 values */
+    }
+  }
+  if (!quick && !DOCK_STATUSES.has(status ?? -1)) {
+    try {
+      const loc = await dreameReadRobotLocation(cred, did);
+      if (loc.robot) current_room_ids = [loc.robot];
+      if (loc.charger) charger_room_id = loc.charger;
+    } catch {
+      /* garder les ids déjà lus */
     }
   }
   if (charger_room_id && charger_room_id !== cred.dock_room_id) {
@@ -913,7 +1124,8 @@ async function readState(cred: DreameCred) {
       updated_at: new Date().toISOString()
     }).eq("household_id", cred.household_id);
   }
-  if ((!current_room_ids.length || DOCK_STATUSES.has(status ?? -1)) && charger_room_id) {
+  // La pièce de la station (souvent Cuisine) ne s’affiche que si le robot y est vraiment.
+  if (DOCK_STATUSES.has(status ?? -1) && charger_room_id) {
     current_room_ids = [charger_room_id];
   }
   const prefs = settingsLabels({ suction, water, cleaning_mode });
@@ -936,8 +1148,9 @@ async function readState(cred: DreameCred) {
     battery,
     status,
     label,
-    current_room_ids,
-    current_rooms,
+    ...(quick && !current_room_ids.length ? {} : { current_room_ids, current_rooms }),
+    settings_readable: !quick && live_ok,
+    quick: !!quick,
     ...prefs
   };
 }
@@ -977,7 +1190,8 @@ export async function dreameHandler(req: Request): Promise<Response> {
         device_id: hh?.dreame_device_id ?? cred?.device_id ?? null,
         device_name: cred?.device_name || null,
         rooms,
-        programs: cred ? listPrograms(cred) : []
+        programs: cred ? listPrograms(cred) : [],
+        auto_wash: packAutoWash(cred)
       });
     }
 
@@ -1055,8 +1269,47 @@ export async function dreameHandler(req: Request): Promise<Response> {
     }
 
     if (action === "state") {
-      const st = await readState(cred);
+      const quick = url.searchParams.get("quick") === "1" || payload.quick === true;
+      const st = await readState(cred, quick);
       return json(req, st);
+    }
+
+    if (action === "live_prefs") {
+      const did = cred.device_id;
+      if (!did) return json(req, { error: "Aucun aspirateur Dreame sélectionné" }, 400);
+      const live = await dreameReadSettings(cred, did, false, true);
+      const prefs = settingsLabels({
+        suction: live.suction,
+        water: live.water,
+        cleaning_mode: live.cleaning_mode
+      });
+      const settings_readable = live.cleaning_mode != null || live.suction != null || live.water != null;
+      return json(req, {
+        ok: true,
+        settings_readable,
+        live_ok: settings_readable || live.status != null || live.battery != null,
+        status: live.status,
+        battery: live.battery,
+        cleaning_route: live.cleaning_route,
+        cleaning_mode_raw: live.cleaning_mode_raw,
+        ...prefs
+      });
+    }
+
+    if (action === "robot_where") {
+      const did = cred.device_id;
+      if (!did) return json(req, { error: "Aucun aspirateur Dreame sélectionné" }, 400);
+      const loc = await dreameReadRobotLocation(cred, did);
+      const ids = loc.robot ? [loc.robot] : [];
+      const mapRooms = Array.isArray(cred.map_rooms) ? cred.map_rooms as DreameMapRoom[] : [];
+      return json(req, {
+        ok: true,
+        current_room_ids: ids,
+        current_rooms: namesForRoomIds(ids, mapRooms),
+        job_room_ids: loc.job,
+        job_rooms: namesForRoomIds(loc.job, mapRooms),
+        charger_room_id: loc.charger
+      });
     }
 
     if (action === "rooms") {
@@ -1089,25 +1342,20 @@ export async function dreameHandler(req: Request): Promise<Response> {
         const ids = Array.isArray(payload.segment_ids)
           ? [...new Set(payload.segment_ids.map(n => clampInt(n, 1, 99, 0)).filter(n => n > 0))]
           : [];
-        const prefRows: { siid: number; piid: number; value: unknown }[] = [];
-        if (suction != null) prefRows.push({ siid: 4, piid: 4, value: suction });
-        if (water != null) prefRows.push({ siid: 4, piid: 5, value: water });
-        if (cleaning_mode != null) {
-          let raw: number | null = null;
-          try { raw = (await dreameReadSettings(cred, did)).cleaning_mode_raw; } catch { /* ignore */ }
-          prefRows.push({ siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encodeCleaningMode(cleaning_mode, raw) });
+        if (!ids.length) return json(req, { error: "Choisissez au moins une pièce à nettoyer." }, 400);
+        if (payload.cleaning_route !== undefined) {
+          try {
+            await dreameWriteCleaningRoute(cred, did, clampInt(payload.cleaning_route, 1, 4, 1));
+          } catch {
+            /* L'itinéraire n'est pas toujours exposé : le départ des pièces continue. */
+          }
         }
-        if (prefRows.length) await dreameSetPropRows(cred, did, prefRows);
-        if (ids.length) {
-          await dreameCleanSegments(cred, did, ids, {
-            cleaning_mode: cleaning_mode ?? 2,
-            suction: suction ?? 1,
-            water: water ?? 2,
-            repeats: clampInt(payload.repeats, 1, 3, 1)
-          });
-        } else {
-          await dreameSendCommand(cred, did, "action", { did, siid: ACT_START.siid, aiid: ACT_START.aiid, in: [] });
-        }
+        await dreameCleanSegments(cred, did, ids, {
+          cleaning_mode: cleaning_mode ?? 2,
+          suction: suction ?? 1,
+          water: water ?? 2,
+          repeats: clampInt(payload.repeats, 1, 3, 1)
+        });
       } else if (act === "pause") {
         await dreameSendCommand(cred, did, "action", { did, siid: ACT_PAUSE.siid, aiid: ACT_PAUSE.aiid, in: [] });
       } else if (act === "stop") {
@@ -1123,23 +1371,35 @@ export async function dreameHandler(req: Request): Promise<Response> {
           updates.push({ siid: 4, piid: 5, value: clampInt(payload.water, 1, 3, 2) });
         }
         if (payload.cleaning_mode !== undefined) {
-          let raw: number | null = null;
-          try {
-            raw = (await dreameReadSettings(cred, did)).cleaning_mode_raw;
-          } catch { /* 80001 : on envoie le mode nu */ }
-          const encoded = encodeCleaningMode(payload.cleaning_mode, raw);
+          const mode = clampInt(payload.cleaning_mode, 0, 3, 2);
+          const raw = typeof payload.cleaning_mode_raw === "number" ? payload.cleaning_mode_raw : null;
+          const encoded = encodeCleaningMode(mode, raw);
           updates.push({ siid: CLEANING_MODE.siid, piid: CLEANING_MODE.piid, value: encoded });
         }
-        if (!updates.length) return json(req, { error: "Aucun réglage à appliquer" }, 400);
-        await dreameSetPropRows(cred, did, updates);
-        await new Promise(r => setTimeout(r, 400));
-        const afterPrefs = await readState(cred);
+        const writes: Promise<unknown>[] = [];
+        if (updates.length) writes.push(dreameSetPropRows(cred, did, updates));
+        if (payload.cleaning_route !== undefined) {
+          writes.push(dreameWriteCleaningRoute(cred, did, clampInt(payload.cleaning_route, 1, 4, 1)));
+        }
+        if (!writes.length) return json(req, { ok: true, skipped: true });
+        await Promise.all(writes);
         const overlay = settingsLabels({
-          suction: payload.suction !== undefined ? clampInt(payload.suction, 0, 3, 1) : afterPrefs.suction,
-          water: payload.water !== undefined ? clampInt(payload.water, 1, 3, 2) : afterPrefs.water,
-          cleaning_mode: payload.cleaning_mode !== undefined ? clampInt(payload.cleaning_mode, 0, 3, 2) : afterPrefs.cleaning_mode
+          suction: payload.suction !== undefined ? clampInt(payload.suction, 0, 3, 1) : null,
+          water: payload.water !== undefined ? clampInt(payload.water, 1, 3, 2) : null,
+          cleaning_mode: payload.cleaning_mode !== undefined ? clampInt(payload.cleaning_mode, 0, 3, 2) : null
         });
-        return json(req, { ok: true, ...afterPrefs, ...overlay });
+        const nextRaw = payload.cleaning_mode !== undefined
+          ? encodeCleaningMode(
+            clampInt(payload.cleaning_mode, 0, 3, 2),
+            typeof payload.cleaning_mode_raw === "number" ? payload.cleaning_mode_raw : null
+          )
+          : undefined;
+        return json(req, {
+          ok: true,
+          ...overlay,
+          cleaning_mode_raw: nextRaw,
+          cleaning_route: payload.cleaning_route !== undefined ? clampInt(payload.cleaning_route, 1, 4, 1) : undefined
+        });
       } else if (act === "clean_room") {
         const segmentId = clampInt(payload.segment_id, 1, 99, 0);
         if (!segmentId) return json(req, { error: "Pièce Dreame invalide" }, 400);
@@ -1255,6 +1515,21 @@ export async function dreameHandler(req: Request): Promise<Response> {
       const list = listPrograms(cred).filter(p => p.id !== id);
       await admin.from("household_dreame").update({ clean_programs: list, updated_at: new Date().toISOString(), updated_by: user.id }).eq("household_id", hid);
       return json(req, { ok: true, programs: list });
+    }
+
+    if (action === "auto_wash_config" && req.method === "POST") {
+      const enabled = payload.enabled === true;
+      const minutes = Math.max(4, Math.min(15, Number(payload.interval_minutes) || 5));
+      const { error } = await admin.from("household_dreame").update({
+        auto_wash_enabled: enabled,
+        auto_wash_interval_minutes: minutes,
+        auto_wash_last_error: null,
+        updated_at: new Date().toISOString(),
+        updated_by: user.id
+      }).eq("household_id", hid);
+      if (error) throw error;
+      const next = await getCred(hid);
+      return json(req, { ok: true, auto_wash: packAutoWash(next) });
     }
 
     return json(req, { error: "Not found" }, 404);

@@ -10,6 +10,13 @@ const GT = { busy: false, sig: "", at: 0, err: "", n: 0 };
 // the choice is kept with the household (the server copies the tasks even when the app is closed, script 11);
 // without that column yet, only on this phone
 const gtConf = () => (S.hh && S.hh.google_tasks) || LS.get("mz_gtasks", { on: false, cal: "" });
+function gtCopyShowsOnGoogle() {
+  const c = gtConf();
+  if (!c.on) return false;
+  if (c.err) return false;
+  if (typeof GT !== "undefined" && GT.err) return false;
+  return true;
+}
 let gtNoServer = false;
 async function gtSave(c) {
   LS.set("mz_gtasks", c);
@@ -48,7 +55,10 @@ async function gReq(method, path, body) {
   const r = await fetch("https://www.googleapis.com/calendar/v3/" + path, { method, headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { G.tok = null; throw new Error("expired"); }
   if (method === "POST" && r.status === 409) return { conflict: true }; // this event id exists already (perhaps deleted)
-  if (!r.ok && !(method === "DELETE" && (r.status === 404 || r.status === 410))) throw new Error("Google " + r.status);
+  if (!r.ok && !(method === "DELETE" && (r.status === 404 || r.status === 410))) {
+    const detail = await r.text().catch(() => "");
+    throw new Error("Google " + r.status + (detail ? " · " + detail.slice(0, 180) : ""));
+  }
   return method === "DELETE" ? null : r.json();
 }
 async function gtSync(force) {

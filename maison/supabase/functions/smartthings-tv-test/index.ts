@@ -1,6 +1,7 @@
 // Maisonnée TEST — lecture seule de l'état Samsung TV.
 // Fonction isolée : ne modifie pas le serveur smartthings de production.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { originOk } from "../_shared/cors.ts";
 
 const sbUrl = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -16,7 +17,7 @@ const ALLOWED = new Set([
 function cors(req: Request) {
   const origin = req.headers.get("origin") || "";
   return {
-    "Access-Control-Allow-Origin": ALLOWED.has(origin) ? origin : "https://franckdavion.github.io",
+    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://franckdavion.github.io",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Cache-Control": "no-store",
