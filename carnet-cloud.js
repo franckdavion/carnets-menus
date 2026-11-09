@@ -63,7 +63,8 @@ const hashOf=o=>stepHash(J(o));
 function myCloudRecipe(id){const r=recipes[id];return r&&!r.shared&&(!r.cloudAuthor||r.cloudAuthor===cloud.user.id||cloud.admin);}
 function cloudSoon(){if(!cloudOn())return;clearTimeout(cloudT);cloudT=setTimeout(()=>cloudPush(),2500);}
 function cloudDeleted(id){const r=recipes[id];if(!r||!cloud.user||!(r.cloudAuthor||LS.get("cm_cloudhash",{})[id]))return;const d=LS.get("cm_cloud_del",[]);d.push(id);LS.set("cm_cloud_del",d);cloudSoon();}
-async function cloudPush(){if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
+async function cloudPush(){if(location.hostname==="franckdavion.github.io")return; // ancienne PWA GitHub en lecture seule
+  if(!cloudOn()||cloud.busy)return;cloud.busy=true;const sb=cloud.sb,uid=cloud.user.id,H=LS.get("cm_cloudhash",{});
   try{// private space: the whole menu + the private part of every recipe
     let priv=privNow();
     if(cloudPh!==hashOf(shareMenu())+hashOf(priv)){
