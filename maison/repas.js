@@ -85,7 +85,7 @@ window.carnetBoot = carnetBoot;
 let ckSig = "";
 setInterval(() => {
   if (!CK.ready || screen !== "app" || (view !== "repas" && view !== "courses") || document.visibilityState !== "visible") return;
-  let sg = ""; try { sg = cev("hashOf([menu.weeks,menu.checked,menu.extras,menu.shopDays,menu.have,menu.shopExtra,menu.bought])"); } catch (_) { return; }
+  let sg = ""; try { sg = cev("hashOf([menu.weeks,menu.checked,menu.checkedQty,menu.extras,menu.shopDays,menu.have,menu.shopExtra,menu.bought])"); } catch (_) { return; }
   if (ckSig && sg !== ckSig) softRender();
   ckSig = sg;
 }, 3000);
@@ -452,6 +452,9 @@ function homeRecipeFromCarnet(id) {
     return {id:key,name:r.name||"Recette",ph:(typeof rPhotoSrc==="function"?rPhotoSrc(key):"")||"",time:r.time||0,serves:r.serves||4,fav:!!r.fav,ing,steps};
   })()`);
 }
+function openMealSheet(title, html, extra) {
+  openSheet(title, html, Object.assign({ fullScreen: true }, extra || {}));
+}
 function homeRecipeSheet(R) {
   if (!R) { toast("Cette recette n'est pas disponible."); return; }
   const ing = R.ing.length
@@ -460,7 +463,7 @@ function homeRecipeSheet(R) {
   const steps = R.steps.length
     ? `<ol style="padding-left:22px;display:flex;flex-direction:column;gap:10px;line-height:1.5">${R.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol>`
     : `<p class="muted">Aucune étape notée.</p>`;
-  openSheet(R.name, `
+  openMealSheet(R.name, `
     <section class="meal-compact meal-redesign">
       <div class="meal-top-card">
         <div class="meal-hero">
@@ -498,7 +501,7 @@ function mealSlotSheet(k) {
   const dlg = $("#sheet"), same = dlg.open && ($("#sheetTitle") || {}).textContent === title, st = dlg.scrollTop, si = $("#sheetIn").scrollTop;
   const favorite = !!cj(`!!(recipes[${JSON.stringify(s.id)}]&&recipes[${JSON.stringify(s.id)}].fav)`);
   const photo = cj(`rPhotoSrc(${JSON.stringify(s.id)})||""`);
-  openSheet(title, `
+  openMealSheet(title, `
     <section class="meal-compact meal-redesign">
       <div class="meal-top-card">
         <div class="meal-hero">
@@ -538,7 +541,7 @@ function rRemoveChooseSheet(k) {
     ${hasEntree ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="entree">🥗 Entrée · ${esc(x.ent || "Entrée")}</button>` : ""}
     ${hasDessert ? `<button type="button" class="btn block" data-act="rRemovePart" data-v="${esc(k)}" data-r="dessert">🍰 Dessert · ${esc(x.des || "Dessert")}</button>` : ""}
     <button type="button" class="btn danger block" data-act="rRemovePart" data-v="${esc(k)}" data-r="all">🗑️ Tout le repas</button>`;
-  openSheet("Retirer un élément de ce repas", `<div class="meal-remove-choice">
+  openMealSheet("Retirer un élément de ce repas", `<div class="meal-remove-choice">
     <p class="muted">Que souhaitez-vous retirer ?</p>
     ${slot && slot.lock ? `<p class="muted small">Ce repas est dans les courses. Le retirer enlève les ingrédients qui ne sont pas encore cochés. Ce qui est déjà dans le caddie, ou partagé avec un autre repas, reste.</p>` : ""}
     ${buttons}
@@ -576,7 +579,7 @@ function rFriendlyQty(qt){
 function rEditIngredientsSheet(k) {
   const items=slotIngredients(k);
   const meta=cj(`(()=>{const s=${slotJs(k)},r=s&&recipes[s.id];return {people:Number(s&&s.n)||Number(menu.people)||4,base:Number(r&&r.serves)||4,name:r&&r.name||"Recette",shared:!!(r&&r.shared)};})()`);
-  openSheet("Modifier les ingrédients · "+meta.name, `<p class="muted small">Une seule liste pour la recette et le repas. <strong>Recette de référence : ${meta.base} pers. · Repas prévu : ${meta.people} pers.</strong> Les valeurs ci-dessous concernent ${meta.people} personnes.</p>
+  openMealSheet("Modifier les ingrédients · "+meta.name, `<p class="muted small">Une seule liste pour la recette et le repas. <strong>Recette de référence : ${meta.base} pers. · Repas prévu : ${meta.people} pers.</strong> Les valeurs ci-dessous concernent ${meta.people} personnes.</p>
     <form id="rIngEditForm" data-k="${esc(k)}"><div id="rIngEditRows">${items.map((i,j)=>`<div class="field" style="display:flex;gap:8px;align-items:center;margin:8px 0"><span style="font-size:23px">${IngredientEmoji.html(i.n)}</span><input class="input" name="name${j}" aria-label="Ingrédient" value="${esc(i.n)}" style="flex:2;min-width:0"><input class="input" name="qty${j}" aria-label="Quantité" value="${esc(rFriendlyQty(i.qt))}" style="flex:1;min-width:0"><button type="button" class="btn" data-act="rIngDelete" aria-label="Supprimer">×</button></div>`).join("")}</div>
     <div class="btns"><button type="button" class="btn" data-act="rIngAdd">+ Ajouter un ingrédient</button></div>
     <p class="group-h">Enregistrer les modifications</p>
@@ -643,7 +646,7 @@ function rRecipeSheet(k, tab) {
     ${R.ing.length?`<div class="list">${R.ing.map(i=>`<div class="cx-item"><span class="nm"><button type="button" class="ing-emoji-change" data-ing-emoji-name="${esc(i.n)}" title="Changer l’emoji">${IngredientEmoji.html(i.n)}</button> ${esc(i.n)}</span><span class="q">${esc(i.qt)}</span></div>`).join("")}</div>`:`<p class="muted">Aucun ingrédient renseigné.</p>`}`;
   if(rRecipeTab==="steps") body=`<div class="btns" style="margin-top:12px"><button class="btn primary" data-act="rEditSteps" data-v="${esc(k)}">✏️ Ajouter / modifier les étapes</button></div>${R.steps.length?`<ol style="padding-left:22px;display:flex;flex-direction:column;gap:10px;line-height:1.5">${R.steps.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>`:`<p class="muted">Aucune étape : ajoutez votre préparation.</p>`}`;
   if(rRecipeTab==="info") body=`<div style="margin-top:14px">${R.info?`<p>${esc(typeof R.info==="string"?R.info:JSON.stringify(R.info))}</p>`:`<p class="muted">Aucune note enregistrée pour cette recette.</p>`}${R.wine?`<p>🍷 ${esc(typeof R.wine==="string"?R.wine:JSON.stringify(R.wine))}</p>`:""}${R.src?`<p><a href="${esc(R.src)}" target="_blank" rel="noopener">Recette d'origine ↗</a></p>`:""}<button class="btn" data-act="rRecipeOpen" data-v="${esc(k)}" data-id="${esc(R.id)}">Toutes les informations dans le Carnet ↗</button></div>`;
-  openSheet(R.name,`
+  openMealSheet(R.name,`
     <div data-recipe-detail="1" style="display:none"></div>
     ${R.ph?`<img src="${esc(R.ph)}" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:14px;margin-top:6px">`:""}
     <p class="muted small" style="margin:8px 0">${esc(dn)} ${esc(m)}${R.time?` · ⏱ ${R.time} min`:""}</p>
@@ -659,7 +662,7 @@ function rEditStepsSheet(k) {
   if(data.shared){alert("Cette recette est partagée en lecture seule. Personnalisez-la dans le Carnet de menus.");return;}
   // Les étapes détaillées du catalogue sont parfois distinctes de r.steps : préremplir avec les étapes visibles.
   const steps=data.display.length?data.display:data.steps;
-  openSheet("Modifier les étapes · "+data.name,`<p class="muted small">Les étapes enregistrées seront utilisées dans Maisonnée et Carnet de menus. Vous pouvez les réordonner.</p>
+  openMealSheet("Modifier les étapes · "+data.name,`<p class="muted small">Les étapes enregistrées seront utilisées dans Maisonnée et Carnet de menus. Vous pouvez les réordonner.</p>
     <form id="rStepsForm" data-k="${esc(k)}" data-id="${esc(data.id)}"><div id="rStepsRows">${steps.map(t=>rStepRow(t)).join("")}</div>
     <button type="button" class="btn" data-act="rStepAdd">+ Ajouter une étape</button>
     <div class="sheet-sticky btns"><button type="button" class="btn" data-act="rRecipeTab" data-v="${esc(k)}" data-tab="steps">Annuler</button><button class="btn primary" type="submit">Enregistrer les étapes</button></div></form>`);
@@ -685,7 +688,7 @@ function rQuantitiesSheet(k) {
     <span style="font-size:24px">${IngredientEmoji.html(i.n||"")}</span><span style="flex:1;min-width:110px">${esc(i.n||"")}</span>
     <input class="input" type="number" min="0" step="any" inputmode="decimal" name="q${j}" value="${esc(i.q??"")}" style="width:92px" aria-label="Quantité ${esc(i.n||"")}">
     <span>${esc(i.u||"")}</span></label>`).join("");
-  openSheet("Quantités · "+data.name,`<p class="muted small"><strong>Quantités de référence pour ${data.serves} personne(s).</strong><br>Repas prévu pour ${data.mealPeople} personne(s). Les valeurs ci-dessous sont celles de la recette de référence, pas celles du repas prévu. Les emojis, ingrédients et étapes sont conservés.</p>
+  openMealSheet("Quantités · "+data.name,`<p class="muted small"><strong>Quantités de référence pour ${data.serves} personne(s).</strong><br>Repas prévu pour ${data.mealPeople} personne(s). Les valeurs ci-dessous sont celles de la recette de référence, pas celles du repas prévu. Les emojis, ingrédients et étapes sont conservés.</p>
     <form id="rQuantityForm" data-k="${esc(k)}" data-id="${esc(data.id)}">
       ${rows}<div class="sheet-sticky btns" style="display:flex;flex-wrap:wrap">
       <button type="button" class="btn" data-act="rRecipe" data-v="${esc(k)}">Annuler</button>
@@ -754,7 +757,7 @@ function rPickWebLinks() {
 function rPickSheet(title) {
   const p = rPick, label = { main: "Choisir le plat", entree: "Choisir l'entrée", dessert: "Choisir le dessert" }[p.role];
   const h = rPickWebHrefs("");
-  openSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
+  openMealSheet(title || label, `<p class="muted small" style="margin-top:6px">${label}</p>
     ${p.role === "main" ? `<div class="btns" style="margin-top:4px"><button class="btn primary" data-act="rReroll" data-v="${esc(p.k)}">✨ Laisser le Carnet choisir</button><button class="btn" data-act="rLeft" data-v="${esc(p.k)}">🥡 Restes</button><button class="btn" data-act="rNote" data-v="${esc(p.k)}">✏️ Noter un repas</button></div>` : ""}
     <details class="card" style="margin-top:14px;padding:10px 12px" open><summary style="font-weight:700;cursor:pointer">Importer depuis Internet</summary>
       <p class="muted small" style="margin:8px 0 0">Tapez un plat, ouvrez Marmiton, 750g ou Jow, puis copiez le lien de la recette.</p>
@@ -823,7 +826,7 @@ function rLeftRecent(k) {
 function rLeftSheet(k) {
   const [dn, m] = k.split("|"), rec = rLeftRecent(k), day = addDays(rWeek, RDAYS.indexOf(dn));
   const when = x => { const n = diffDays(x.d, day); return (n === 0 ? "ce midi" : n === 1 ? (x.mm === "soir" ? "hier soir" : "hier midi") : `${RDAYS[(parse(x.d).getDay() + 6) % 7].toLowerCase()} ${x.mm}`); };
-  openSheet(`🥡 Restes · ${dn} ${m}`, `<p class="muted small" style="margin-top:6px">Un repas fait avec ce qui reste : rien ne part aux courses, et « Proposer ma semaine » ne le changera pas.</p>
+  openMealSheet(`🥡 Restes · ${dn} ${m}`, `<p class="muted small" style="margin-top:6px">Un repas fait avec ce qui reste : rien ne part aux courses, et « Proposer ma semaine » ne le changera pas.</p>
     ${rec.length ? `<p class="group-h">Les plats des derniers jours</p><div class="list">${rec.map(x => `<button class="row" data-act="rLeftPut" data-v="${esc(k)}" data-t="${esc(x.name)}"><span class="main"><span class="t">${esc(x.name)}</span><span class="m">${esc(when(x))}</span></span></button>`).join("")}</div>` : `<p class="muted small">Pas de plat noté ces 3 derniers jours.</p>`}
     <p class="group-h">Ou autre chose</p>
     <div class="inline"><input class="input" id="rLeftQ" maxlength="80" placeholder="ex. lasagnes de dimanche" autocomplete="off"><button class="btn primary" data-act="rLeftPut" data-v="${esc(k)}">OK</button></div>
@@ -831,7 +834,7 @@ function rLeftSheet(k) {
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
 }
 function rLeftShow(k, title, x) {
-  openSheet(title, `<p style="margin:8px 0 2px"><strong style="font-size:19px">${x.note ? "✏️ " + esc(x.note) : "🥡 Restes"}</strong></p>${x.note ? `<p class="muted small" style="margin:0">Repas noté (sans recette)</p>` : `<p style="margin:0">${esc(x.left)}</p>`}
+  openMealSheet(title, `<p style="margin:8px 0 2px"><strong style="font-size:19px">${x.note ? "✏️ " + esc(x.note) : "🥡 Restes"}</strong></p>${x.note ? `<p class="muted small" style="margin:0">Repas noté (sans recette)</p>` : `<p style="margin:0">${esc(x.left)}</p>`}
     ${x.past ? "" : `<div class="r-status kept"><b>Rien à acheter</b><span>« Proposer ma semaine » ne changera pas ce repas.</span></div>`}
     <div class="btns"><button class="btn" data-act="rNote" data-v="${esc(k)}">✏️ Noter autre chose</button><button class="btn" data-act="rLeft" data-v="${esc(k)}">🥡 Restes</button>${x.past ? "" : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="main">Choisir une recette</button>`}</div>
     <div class="btns"><button class="btn danger block" data-act="rRemove" data-v="${esc(k)}">Retirer ce repas</button></div>
@@ -842,7 +845,7 @@ function rLeftShow(k, title, x) {
 const R_NOTES = ["Pizza", "Restaurant", "Sandwichs", "Chez des amis", "Croque-monsieur", "Plateau-repas", "Pâtes vite faites", "Omelette", "Raclette", "Fast-food"];
 function rNoteSheet(k) {
   const [dn, m] = k.split("|"), past = weekSlots(rWeek)[k].past;
-  openSheet(`✏️ ${dn} ${m}`, `<p class="muted small" style="margin-top:6px">${past ? "Qu'avez-vous mangé ?" : "Notez simplement le repas."} Aucune recette n'est créée, rien ne part aux courses.</p>
+  openMealSheet(`✏️ ${dn} ${m}`, `<p class="muted small" style="margin-top:6px">${past ? "Qu'avez-vous mangé ?" : "Notez simplement le repas."} Aucune recette n'est créée, rien ne part aux courses.</p>
     <p class="group-h">En un geste</p>
     <div class="chips">${R_NOTES.map(t => `<button type="button" class="chip" data-act="rNotePut" data-v="${esc(k)}" data-t="${esc(t)}">${esc(t)}</button>`).join("")}</div>
     <p class="group-h">Ou écrivez-le</p>

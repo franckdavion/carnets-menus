@@ -391,6 +391,7 @@ function mzHookAuth(client) {
     mzAuthNeedsLogin = false;
     if (event === "SIGNED_IN" || event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
       if (!rt) enterCloud().catch(e => console.warn("Foyer après session", e));
+      if (typeof gStart === "function" && event !== "TOKEN_REFRESHED") try { gStart(true); } catch (_) {}
     }
   });
 }
@@ -864,6 +865,7 @@ async function mzEnterCloudBody() {
   listen(hid); screen = "app"; render(); geoTick(); mzStartShopPoll(); mzLoadNoticePrefs();
   mzWakeDomotique();
   if (typeof carnetBoot === "function") try { carnetBoot(); } catch (_) {}
+  if (typeof gStart === "function") try { gStart(true); } catch (_) {}
   loadRecipes().then(() => softRender());
 }
 
@@ -875,6 +877,7 @@ document.addEventListener("visibilitychange", async () => {
   try { await mzPollShopAdds(); await loadCloud(S.hh.id); softRender(); } catch (e) {}
   mzWakeDomotique();
   geoTick();
+  if (typeof gStart === "function") try { gStart(false); } catch (_) {}
 });
 
 /* ---------- task logic ---------- */
@@ -1528,7 +1531,13 @@ function render() {
   if (screen === "welcome") return renderWelcome(app);
   if (screen === "auth") return renderAuth(app);
   if (screen === "setup") return renderSetup(app);
-  if (!VIEWS[view]) view = "home";
+  if (!VIEWS[view]) {
+    if (view === "fidelite") {
+      app.innerHTML = `<div class="wrap"><p class="muted" style="margin-top:24px">Les cartes de fidélité ne sont pas chargées. Rechargez la page.</p></div>`;
+      return;
+    }
+    view = "home";
+  }
   const fab = { home: ["Ajouter", "quickAdd"], tasks: ["Tâche", "newTask"], anniv: ["Anniversaire", "newBday"], budget: ["Dépense", "newExp"], docs: ["Document", "newDoc"], edt: ["Créneau", "newSlot"], galerie: ["Photos", "pickPhotos"] }[view];
   if (map) { mapView = { c: map.getCenter(), z: map.getZoom() }; map.remove(); map = null; }
   const composer = view === "messages" && S.v2 ? `<form data-form="msg" class="composer" autocomplete="off"><div class="wrap inline">
@@ -1865,7 +1874,9 @@ function openSheet(title, body, ctx = {}) {
     else d.insertBefore(live, $("#sheetIn"));
   }
   const raised = !wasOpen;
-  d.classList.toggle("sheet-snap-top", !!(ctx.snapTop || wasOpen));
+  const fullScreen = !!ctx.fullScreen;
+  d.classList.toggle("sheet-full", fullScreen);
+  d.classList.toggle("sheet-snap-top", !fullScreen && !!(ctx.snapTop || wasOpen));
   resetSheetViewport(d);
   if (raised) { lockSheetBackground(); d.showModal(); }
   if (raised) mzRaiseFrontToast();
@@ -1906,7 +1917,7 @@ function closeSheet() { const d = $("#sheet"); if (d.open) d.close(); }
 $("#sheet").addEventListener("close", () => {
   const d = $("#sheet");
   resetSheetViewport(d);
-  d.classList.remove("sheet-snap-top");
+  d.classList.remove("sheet-snap-top", "sheet-full");
   unlockSheetBackground();
   sheetCtx = null;
   if (pending) render();
@@ -2275,7 +2286,7 @@ function eventSheet(e, day, appointment = false, g = null) {
 
 async function mealSheet(day, slot) {
   const m = mealAt(day, slot);
-  openSheet(`${dayLabel(day)}, ${slot}`, `<p class="muted">Chargement des recettes…</p>`, { day, slot });
+  openSheet(`${dayLabel(day)}, ${slot}`, `<p class="muted">Chargement des recettes…</p>`, { day, slot, fullScreen: true });
   await loadRecipes();
   if (!sheetCtx || sheetCtx.day !== day || sheetCtx.slot !== slot) return;
   sheetCtx.recipe = m ? m.recipe_id : null;

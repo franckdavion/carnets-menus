@@ -12,6 +12,11 @@ ok("quiche pour 4 : une tarte", C.platsFor(quiche, 4) === 1);
 ok("quiche pour 10 : trois tartes", C.platsFor(quiche, 10) === 3);
 ok("farine pour 6 : une tarte et demie", C.recipeIngredientBase(quiche, flour, 6, "main")[0] === 300);
 ok("pâte brisée pour 6 : une seule", C.recipeIngredientBase(quiche, dough, 6, "main")[0] === 1);
+ok("portions généreuses ×1,5 : 200 g → 300 g", C.mealIngredientBase({ serves: 2, ing: [] }, { n: "champignons", q: 200, u: "g" }, 2, { portionMultiplier: 1.5 })[0] === 300);
+ok("retour portions normales : 200 g", C.mealIngredientBase({ serves: 2, ing: [] }, { n: "champignons", q: 200, u: "g" }, 2, { portionMultiplier: 1 })[0] === 200);
+ok("courgettes ×1,5 arrondies à l'unité", C.fmt(C.mealIngredientBase({ serves: 2, ing: [] }, { n: "courgettes", q: 2, u: "pièce" }, 2, { portionMultiplier: 1.5 })[0], "pièce") === "3");
+ok("2 pers. → 4 pers. : 200 g → 400 g", C.mealIngredientBase({ serves: 2, ing: [] }, { n: "champignons", q: 200, u: "g" }, 4, { portionMultiplier: 1 })[0] === 400);
+ok("4 pers. généreuses : 200 g → 600 g", C.mealIngredientBase({ serves: 2, ing: [] }, { n: "champignons", q: 200, u: "g" }, 4, { portionMultiplier: 1.5 })[0] === 600);
 ok("200 g", C.fmt(200, "g") === "200 g");
 ok("1200 g devient 1,2 kg", C.fmt(1200, "g") === "1,2 kg");
 

@@ -140,12 +140,12 @@ function useFirstHtml(){const l=menu.useFirst||[];if(!l.length)return"";
 function shopping(all){
   const acc={};
   const doneQty={};
-  const add=(rid,n,when,role,skip,freshKey,done)=>{
+  const add=(rid,n,when,role,skip,freshKey,done,slot)=>{
     const r=recipes[rid]; if(!r)return;
-    const f=n/(r.serves||4);
     for(const i of r.ing||[]){
       if(!i.n)continue;
-      const[q,u]=recipeIngredientBase(r,i,n,role);
+      // Same scale as the meal sheet: people × portionMultiplier (Normales / Généreuses).
+      const[q,u]=mealIngredientBase(r,i,n,slot);
       const baseKey=norm(i.n)+"|"+u;
       const key=freshKey?baseKey+"|nouvelle-preparation:"+freshKey:baseKey;
       if(skip&&skip.includes(baseKey))continue; // left out of this meal's shopping (chosen in Maisonnée › Repas)
@@ -177,9 +177,9 @@ function shopping(all){
         else if(hasRecipe){const lab=recipes[sl.id].name+" ("+when+")";if(!acc[key].from.includes(lab))acc[key].from.push(lab);}
       }
     }else{
-      if(hasRecipe)add(sl.id,sl.n,when,"main",sk,sl.freshShopKey,done);
-      if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl.freshShopKey,done);
-      if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl.freshShopKey,done);
+      if(hasRecipe)add(sl.id,sl.n,when,"main",sk,sl.freshShopKey,done,sl);
+      if(sl.entree)add(sl.entree,sl.n,when,"entree",sk,sl.freshShopKey,done,sl);
+      if(sl.dessert)add(sl.dessert,sl.n,when,"dessert",sk,sl.freshShopKey,done,sl);
     }
   }
   for(const[rid,n]of Object.entries(menu.shopExtra||{}))if(!validatedUses(rid).length)add(rid,n,"hors menu");

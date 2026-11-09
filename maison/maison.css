@@ -1994,6 +1994,21 @@ dialog.sheet[open].sheet-snap-top{
   max-height:min(88vh,calc(var(--maison-vh,100dvh) - 16px - env(safe-area-inset-top)));
   border-radius:var(--r-lg);
 }
+/* Fiche repas / recette : toute la hauteur utile, sans laisser l'accueil (météo) visible au-dessus. */
+dialog.sheet[open].sheet-full{
+  top:env(safe-area-inset-top,0px);
+  bottom:0;
+  height:calc(var(--maison-vh,100dvh) - env(safe-area-inset-top,0px)) !important;
+  max-height:none !important;
+  margin:0 auto;
+  border-radius:var(--r-lg) var(--r-lg) 0 0;
+  width:min(640px,100%);
+}
+@supports(height:100svh){
+  dialog.sheet[open].sheet-full{
+    height:calc(var(--maison-vh,100svh) - env(safe-area-inset-top,0px)) !important;
+  }
+}
 .mz-v10-modal[open]{width:min(430px,calc(100vw - 16px));overflow:visible;}
 .sheet-top{min-width:0;}
 .sheet-h{min-width:0;}
@@ -2482,6 +2497,8 @@ dialog.sheet .dom-dreame-choice,dialog.sheet .dom-dreame-panel .btn,dialog.sheet
 .dom-dreame-prog-row .btn.primary{width:100%}
 .dom-dreame-card-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;width:100%}
 .dom-eq-dreame .dom-dreame-card-btn{min-height:44px;font-size:22px;border-radius:14px;border:1px solid rgba(151,222,255,.75);color:#f4fbff;background:linear-gradient(160deg,#284b7b,#142a4c 72%)}
+.dom-eq-dreame .dom-dreame-card-where{display:block;margin-top:3px;color:#e7f6ff;font-weight:700;font-size:14px}
+.dom-dreame-where{display:block;margin-top:6px;color:#e7f6ff;font-weight:700;font-size:18px;line-height:1.25}
 /* ── SmartThings TV ── */
 .dom-tv-panel{display:grid;gap:14px}
 .dom-tv-status{margin:0;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(126,200,255,.2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
