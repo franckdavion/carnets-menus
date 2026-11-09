@@ -1,4 +1,10 @@
 "use strict";
+// Protection temporaire : la Maisonnée GitHub Pages ancienne est neutralisée.
+// Les autres domaines (dont Vercel) conservent leur fonctionnement.
+if (location.hostname === "franckdavion.github.io") {
+  document.body.innerHTML = '<main style="padding:40px 20px;max-width:650px;margin:auto;font:18px/1.6 system-ui"><h1>Ancienne Maisonnée suspendue</h1><p>Pour protéger votre liste de courses, cette version GitHub n\u2019est plus utilisable. Ouvrez uniquement votre application Maisonnée sur Vercel.</p></main>';
+  throw new Error("Version GitHub Pages suspendue pour protéger les données Supabase.");
+}
 /* Maisonnée : tâches, agenda, repas et courses d'un foyer, partagés entre ses membres.
    Deux modes : « démo » (tout reste sur ce téléphone) et « foyer » (Supabase, mêmes comptes que le Carnet de menus). */
 
