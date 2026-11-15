@@ -320,13 +320,18 @@ input,select,textarea{font-size:16px!important}
 .sp-swap{flex:0 0 36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--accent);font-size:17px;font-weight:700;touch-action:manipulation}
 .sp-lock{flex:0 0 auto;border:1px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;min-height:36px;touch-action:manipulation}
 .sp-lock.on{background:var(--soft);border-color:var(--line);color:var(--ink)}
-#shopList .item{grid-template-columns:12px minmax(0,1fr) auto;row-gap:4px;align-items:start}
-#shopList .item>.dot{grid-row:1 / span 2;margin-top:8px}
-#shopList .item>.nm{grid-row:1 / span 2}
-#shopList .item>.q{grid-column:3;grid-row:1;text-align:right}
-#shopList .item>.have,#shopList .item>.x{grid-column:3;grid-row:2;justify-self:end}
-#shopList .item>.have~.it-del,#shopList .item>.have.on~.it-del{grid-column:4;grid-row:1 / span 2;align-self:center}
-#shopList .item:has(.it-del){grid-template-columns:12px minmax(0,1fr) auto 32px}
+#shopList .item{
+  grid-template-columns:36px minmax(0,1fr) max-content 32px;
+  column-gap:10px;row-gap:2px;align-items:start;
+}
+#shopList .item>.ing-slot,#shopList .item>.dot{grid-column:1;grid-row:1 / span 2;align-self:center}
+#shopList .item>.nm{grid-column:2;grid-row:1 / span 2;min-width:0;overflow-wrap:break-word;word-break:normal}
+#shopList .item>.q{grid-column:3;grid-row:1;justify-self:end;text-align:right}
+#shopList .item>.have,#shopList .item>.x:not(.it-del){grid-column:3;grid-row:2;justify-self:end}
+#shopList .item>.it-del{grid-column:4;grid-row:1 / span 2;align-self:center;justify-self:center}
+#shopList .item>span:empty{display:none}
+#shopList .item .from{display:block;margin-top:2px;max-width:100%;overflow-wrap:break-word;word-break:normal;white-space:normal}
+#shopList .item .drive{display:inline-block}
 .it-del{width:32px;height:32px;border-radius:50%;color:var(--muted)}
 .daily-ed{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:var(--surface)}
 .dchip.editing{outline:2px solid var(--accent);border-radius:999px}
@@ -669,6 +674,11 @@ html,body{overflow-x:hidden;}
   .rv-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
   .item{grid-template-columns:24px minmax(0,1fr);}
   .item .q,.item .have,.item .x{grid-column:2;justify-self:start;}
+  #shopList .item{
+    grid-template-columns:36px minmax(0,1fr) max-content 32px;
+  }
+  #shopList .item>.q,#shopList .item>.have,#shopList .item>.x:not(.it-del){grid-column:3;justify-self:end;}
+  #shopList .item>.it-del{grid-column:4;justify-self:center;}
 }
 
 /* TEST 2026-11-05 : recettes compactes et photos au format 3:2 (affichage uniquement) */

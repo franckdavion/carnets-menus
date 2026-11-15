@@ -423,6 +423,20 @@ function homeQty(q, u) {
   const n = String(q).replace(".", ",");
   return !u || u === "pièce" ? n : n + " " + u;
 }
+function mzRecipePhoto(r) {
+  if (!r) return "";
+  try {
+    if (typeof CK !== "undefined" && CK.ready && typeof cj === "function") {
+      const ids = [r.legacy_id, r.id].filter(Boolean);
+      const s = cj(`(()=>{const ids=${JSON.stringify(ids)};
+        if(typeof rPhotoSrc!=="function") return "";
+        for(const id of ids){const a=rPhotoSrc(id);if(a)return a;const b=rPhotoSrc("c-"+id);if(b)return b;}
+        return "";})()`);
+      if (s) return s;
+    }
+  } catch (_) {}
+  return r.image || "";
+}
 function homeRecipeFromBook(id) {
   const list = S.recipes || (typeof DEMO_RECIPES !== "undefined" ? DEMO_RECIPES : []);
   const r = list.find(x => x && (x.legacy_id === id || x.id === id || ("c-" + x.id) === id));
@@ -431,7 +445,7 @@ function homeRecipeFromBook(id) {
   return {
     id: r.legacy_id || r.id,
     name: r.name || "Recette",
-    ph: r.image || "",
+    ph: mzRecipePhoto(r),
     time: r.time || 0,
     serves: r.serves || 4,
     fav: !!r.fav,

@@ -76,6 +76,7 @@ async function runSync(){
         setState(merge3(L0,getState(),merged));} // keep edits made while the request was running
       lastOk=new Date(); setStatus("ok"); done=true;
       publishIcs(merged.calendar); publishAgenda(merged.calendar); publishShare();
+      if(typeof scheduleGoogleMeals==="function")scheduleGoogleMeals();
     }
     if(!done)throw{status:409};
   }catch(e){setStatus("err",e);}
@@ -161,6 +162,85 @@ async function publishAgenda(cal){
     }
   }catch(e){console.warn("Publication agenda.json",e);}finally{agendaBusy=false;}
 }
+let gMealBusy=false,gMealT=null;
+function scheduleGoogleMeals(){
+  clearTimeout(gMealT);
+  gMealT=setTimeout(()=>{pushGoogleMeals().catch(e=>console.warn("Agenda Repas Google",e));},1800);
+}
+async function pushGoogleMeals(){
+  if(gMealBusy||typeof sbc!=="function"||typeof SB_URL!=="string")return;
+  const sb=await sbc().catch(()=>null); if(!sb)return;
+  const{data:{session}}=await sb.auth.getSession(); if(!session)return;
+  gMealBusy=true;
+  try{
+    const tr=await fetch(SB_URL+"/functions/v1/google-calendar/token",{headers:{Authorization:"Bearer "+session.access_token,apikey:SB_KEY}});
+    const tok=await tr.json().catch(()=>({}));
+    if(!tok.connected||!tok.access_token)return;
+    const H={Authorization:"Bearer "+tok.access_token,"Content-Type":"application/json"};
+    const cl=await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer&maxResults=250",{headers:H});
+    if(!cl.ok)return;
+    const lj=await cl.json();
+    const cal=(lj.items||[]).find(c=>String(c.summaryOverride||c.summary||"").trim().toLocaleLowerCase("fr")==="repas");
+    if(!cal)return;
+    const prev=LS.get("cm_gmeal_cal",{});
+    const calMap=calendarLog({recipes,menu},prev);
+    LS.set("cm_gmeal_cal",calMap);
+    const times={midi:["12:00","13:30"],soir:["19:30","21:00"]};
+    const desired={};
+    for(const[k,item]of Object.entries(calMap)){
+      const name=typeof item==="string"?item:item&&item.t; if(!name)continue;
+      const extra=typeof item==="object"&&item&&item.d?String(item.d):"";
+      const[date,meal]=k.split("|"), t=times[meal]||times.soir;
+      desired["carnet"+date.replace(/-/g,"")+meal]={
+        summary:(meal==="midi"?"Midi : ":"Soir : ")+name,
+        start:{dateTime:`${date}T${t[0]}:00`,timeZone:"Europe/Paris"},
+        end:{dateTime:`${date}T${t[1]}:00`,timeZone:"Europe/Paris"},
+        transparency:"transparent",description:"Ajouté par le Carnet de menus"+(extra?"\n"+extra:""),status:"confirmed"
+      };
+    }
+    const sig=JSON.stringify(desired);
+    if(LS.get("cm_gmeal_sig","")===sig)return;
+    const base="https://www.googleapis.com/calendar/v3/calendars/"+encodeURIComponent(cal.id)+"/events";
+    const call=async(method,url,body)=>{
+      const r=await fetch(url,{method,headers:H,body:body?JSON.stringify(body):undefined});
+      if(!r.ok&&!(method==="DELETE"&&(r.status===404||r.status===410))) throw new Error("Google "+r.status);
+      return r.status===204?{}:r.json().catch(()=>({}));
+    };
+    const today=ymd(new Date());
+    const from=new Date(Date.now()-70*864e5).toISOString(), to=new Date(Date.now()+120*864e5).toISOString();
+    const existing={}; let page="";
+    do{
+      const j=await call("GET",base+"?showDeleted=true&singleEvents=true&maxResults=2500&timeMin="+encodeURIComponent(from)+"&timeMax="+encodeURIComponent(to)+(page?"&pageToken="+page:""));
+      for(const e of j.items||[]) if(String(e.id).startsWith("carnet")) existing[e.id]=e;
+      page=j.nextPageToken||"";
+    }while(page);
+    for(const[id,ev]of Object.entries(desired)){
+      const ex=existing[id];
+      const same=ex&&ex.status!=="cancelled"&&ex.summary===ev.summary&&
+        String(ex.start&&ex.start.dateTime||"").slice(0,16)===ev.start.dateTime.slice(0,16)&&
+        String(ex.description||"")===ev.description;
+      if(same)continue;
+      if(!ex){
+        const r=await fetch(base,{method:"POST",headers:H,body:JSON.stringify({id,...ev})});
+        if(r.status===409) await call("PUT",base+"/"+id,ev);
+        else if(!r.ok) throw new Error("Google "+r.status);
+      }else await call("PUT",base+"/"+id,ev);
+    }
+    for(const[id,ex]of Object.entries(existing)){
+      if(desired[id]||ex.status==="cancelled")continue;
+      const day=String(ex.start&&(ex.start.dateTime||ex.start.date)||"").slice(0,10);
+      if(day&&day<today)continue;
+      await call("DELETE",base+"/"+id);
+    }
+    LS.set("cm_gmeal_sig",sig); LS.set("cm_gmeal_at",Date.now());
+    const line=$("#gStatus");
+    if(line){line.textContent="Google Agenda « Repas » mis à jour à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})+".";line.style.color="";}
+  }catch(e){
+    console.warn("Agenda Repas Google",e);
+    const line=$("#gStatus");
+    if(line){line.textContent="Agenda Repas Google : "+(e.message||"mise à jour impossible");line.style.color="var(--danger)";}
+  }finally{gMealBusy=false;}
+}
 async function showGoogleStatus(){
   const line=$("#gStatus"); if(!line)return; line.textContent="";
   if(!sync)return;
@@ -195,5 +275,6 @@ $("#syncForm").addEventListener("submit",e=>{
   $("#s-off").hidden=false; $("#s-now").hidden=false; $("#s-err").textContent="";
   runSync();
 });
+setTimeout(()=>{if(typeof scheduleGoogleMeals==="function")scheduleGoogleMeals();},6000);
 
 

@@ -3,7 +3,7 @@
  "short_name": "Maisonnée",
  "description": "Les tâches, l'agenda et les repas de la maison, partagés entre vous.",
  "lang": "fr",
- "start_url": "./",
+ "start_url": "https://carnets-menus.vercel.app/maison/",
  "scope": "../",
  "display": "standalone",
  "background_color": "#121926",

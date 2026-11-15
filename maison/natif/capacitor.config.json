@@ -3,7 +3,7 @@
   "appName": "Maisonnée",
   "webDir": "www",
   "server": {
-    "url": "https://franckdavion.github.io/carnets-menus/maison/",
+    "url": "https://carnets-menus.vercel.app/maison/",
     "cleartext": false
   },
   "ios": {

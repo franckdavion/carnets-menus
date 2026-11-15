@@ -101,6 +101,7 @@ async function showPushSettings() {
       ${sw("digest", "Résumé du matin", "tâches du jour, agenda, repas du soir, anniversaires, documents qui expirent", prOk)}
       <label class="field inline" style="margin:0;gap:10px;justify-content:space-between"><span class="small">Heure du résumé</span><select class="input" data-pref="digest_at" style="max-width:140px" ${prOk ? "" : "disabled"}>${["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"].map(h => `<option value="${h}" ${pr.digest_at === h ? "selected" : ""}>${h.replace(":", " h ").replace(/ h 00$/, " h")}</option>`).join("")}</select></label>
       ${sw("birthdays", "Anniversaires", "la veille à 19 h, et le jour même dans le résumé", prOk)}
+      ${sw("animaux", "Mes animaux", "consultation de médaille, signalement « retrouvé », position GPS ou message. Une simple consultation n’est jamais présentée comme des retrouvailles.", prOk)}
       <p style="margin:6px 0 0"><strong>Après mes actions</strong></p>
       <p class="muted small" style="margin:0">La fenêtre qui confirme ce que vous venez de faire. L'enregistrement a lieu dans tous les cas. Un échec s'affiche toujours.</p>
       ${sw("confirm_agenda", "Agenda", "événement ajouté, modifié ou retiré, y compris dans Google Agenda", true)}
@@ -511,6 +512,10 @@ async function loadCloud(hid) {
   S.vShelly = !shly.error;
   S.shelly = S.vShelly ? (shly.data || []) : (S.shelly || []);
   saveLocal();
+  if (typeof window.maisonHomeStore?.adoptForMe === "function") window.maisonHomeStore.adoptForMe();
+  if (typeof window.maisonneeModuleGrid?.reload === "function") window.maisonneeModuleGrid.reload();
+  if (typeof window.mzResetHomePaint === "function") window.mzResetHomePaint();
+  if (screen === "app" && view === "home" && typeof window.maisonneeHomePaint === "function") window.maisonneeHomePaint();
   mzWakeDomotique();
   const [tk, lg, ev, ml, sh, ms, lc] = await Promise.all([
     sb.from("tasks").select("*").eq("household_id", hid).eq("archived", false),
@@ -748,12 +753,101 @@ function mzMigrateCacheQuota() {
   }
 }
 
+/** Journal local de navigation notif → journal (visible dans la console : mzNavDiagRead()). */
+function mzNavDiag(stage, detail) {
+  try {
+    const k = "mz_nav_diag";
+    const log = JSON.parse(localStorage.getItem(k) || "[]");
+    log.push({ t: Date.now(), stage, detail: String(detail || "").slice(0, 240) });
+    while (log.length > 24) log.shift();
+    localStorage.setItem(k, JSON.stringify(log));
+  } catch (_) {}
+}
+window.mzNavDiagRead = () => {
+  try { return JSON.parse(localStorage.getItem("mz_nav_diag") || "[]"); } catch (_) { return []; }
+};
+
+const MZ_PENDING_NAV_CACHE = "mz-pending-nav-v1";
+async function mzRestorePendingNavFromSw() {
+  if (!("caches" in window)) return false;
+  try {
+    const c = await caches.open(MZ_PENDING_NAV_CACHE);
+    const r = await c.match("pending");
+    if (!r) return false;
+    const j = await r.json();
+    await c.delete("pending");
+    if (!j || !j.url || Date.now() - Number(j.t || 0) > 3600000) return false;
+    const u = new URL(j.url, location.href);
+    mzNavDiag("sw_pending", u.search || u.href);
+    return mzConsumePetDeepLink(u);
+  } catch (_) { return false; }
+}
+
+/** Paramètres ?v=animaux&pet=…&event=… (notifications médaille) → localStorage + vue Mes animaux. */
+function mzConsumePetDeepLink(url) {
+  if (!url || !url.searchParams) return false;
+  let used = false;
+  const goTo = url.searchParams.get("v");
+  const petDeep = url.searchParams.get("pet");
+  const petSession = url.searchParams.get("session");
+  const petEvent = url.searchParams.get("event");
+  if (goTo) { view = goTo; LS.set("mz_view", goTo); url.searchParams.delete("v"); used = true; }
+  if (petDeep && /^[0-9a-f-]{36}$/i.test(petDeep)) {
+    view = "animaux";
+    LS.set("mz_view", "animaux");
+    LS.set("mz_open_pet", petDeep);
+    url.searchParams.delete("pet");
+    used = true;
+  }
+  if (petSession && /^[0-9a-f-]{36}$/i.test(petSession)) {
+    LS.set("mz_pet_session", petSession);
+    url.searchParams.delete("session");
+    used = true;
+  }
+  if (petEvent && /^[0-9a-f-]{36}$/i.test(petEvent)) {
+    LS.set("mz_pet_event", petEvent);
+    url.searchParams.delete("event");
+    used = true;
+  }
+  if (url.searchParams.get("log") === "1") {
+    LS.set("mz_pet_log_open", "1");
+    url.searchParams.delete("log");
+    used = true;
+  }
+  if (url.searchParams.get("logviews") === "1") {
+    LS.set("mz_pet_log_views", "1");
+    url.searchParams.delete("logviews");
+    used = true;
+  }
+  if (used) mzNavDiag("consume", "pet=" + (LS.get("mz_open_pet") || "") + " event=" + (LS.get("mz_pet_event") || ""));
+  return used;
+}
+
+function mzFinishPetDeepLink(url, replaceHistory) {
+  if (replaceHistory) history.replaceState(null, "", url.pathname + url.search + url.hash);
+  if (screen === "app") render();
+  window.dispatchEvent(new CustomEvent("mz-pet-deeplink"));
+}
+
+/** Après auth / loadCloud : ouverture médaille en attente (mz_open_pet). */
+function mzResumePendingPetDeepLink() {
+  const pet = LS.get("mz_open_pet", null);
+  if (!pet || !/^[0-9a-f-]{36}$/i.test(String(pet))) return;
+  mzNavDiag("resume_pet", pet + " ev=" + (LS.get("mz_pet_event") || ""));
+  view = "animaux";
+  LS.set("mz_view", "animaux");
+  if (screen === "app") render();
+  window.dispatchEvent(new CustomEvent("mz-pet-deeplink"));
+}
+
 async function init() {
   mzMigrateCacheQuota();
   const url = new URL(location.href), code = url.searchParams.get("code");
-  // opened from a notification (e.g. a new message): go straight to that page
-  const goTo = url.searchParams.get("v");
-  if (goTo) { view = goTo; LS.set("mz_view", goTo); url.searchParams.delete("v"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
+  let deepUsed = mzConsumePetDeepLink(url);
+  if (!deepUsed) {
+    try { deepUsed = await mzRestorePendingNavFromSw(); } catch (_) {}
+  }
+  if (deepUsed) history.replaceState(null, "", url.pathname + url.search + url.hash);
   if (code) { LS.set("mz_join", code.toUpperCase()); url.searchParams.delete("code"); history.replaceState(null, "", url.pathname + url.search + url.hash); }
   // Accès direct à la carte depuis un raccourci, en conservant la navigation habituelle.
   if (url.searchParams.get("cartes") === "1") {
@@ -867,17 +961,22 @@ async function mzEnterCloudBody() {
   if (typeof carnetBoot === "function") try { carnetBoot(); } catch (_) {}
   if (typeof gStart === "function") try { gStart(true); } catch (_) {}
   loadRecipes().then(() => softRender());
+  mzResumePendingPetDeepLink();
 }
 
 window.addEventListener("online", () => { if (mode === "cloud") mzResumeCloudSession(); });
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || mode !== "cloud") return;
+  if (LS.get("mz_open_pet")) mzResumePendingPetDeepLink();
   if (!user || !rt) return mzResumeCloudSession();
   if (!S.hh) return;
   try { await mzPollShopAdds(); await loadCloud(S.hh.id); softRender(); } catch (e) {}
   mzWakeDomotique();
   geoTick();
   if (typeof gStart === "function") try { gStart(false); } catch (_) {}
+});
+window.addEventListener("pageshow", ev => {
+  if (ev.persisted && LS.get("mz_open_pet")) mzResumePendingPetDeepLink();
 });
 
 /* ---------- task logic ---------- */
@@ -1370,7 +1469,7 @@ function mzToastHint(node) {
 }
 const MZ_NOTICE_KEY = "mz_notice_choices";
 function mzNoticeDefaults() {
-  return { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true, confirm_agenda: true, confirm_courses: true, confirm_tasks: true, confirm_domotique: true };
+  return { messages: true, reminders: true, digest: true, digest_at: "07:30", birthdays: true, shopping: true, agenda: true, animaux: true, confirm_agenda: true, confirm_courses: true, confirm_tasks: true, confirm_domotique: true };
 }
 function mzNoticePrefs() {
   try { return { ...mzNoticeDefaults(), ...JSON.parse(localStorage.getItem(MZ_NOTICE_KEY) || "{}") }; }
@@ -1551,17 +1650,19 @@ function render() {
   app.innerHTML = `
     <header class="top"><div class="wrap">${head}</div></header>
     <main class="wrap view-${view}" id="main">${mzAuthNeedsLogin && navigator.onLine !== false ? `<div class="card" role="status" style="margin-top:12px"><div class="inline" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>Sans réseau fiable : tes courses et tes cartes restent disponibles. Tu pourras te reconnecter en sortant du magasin.</span><button class="btn" type="button" data-act="auth" data-v="login">Se reconnecter</button></div></div>` : ""}${VIEWS[view]()}</main>
-    ${view === "agenda" || (view === "docs" && S.v3) ? `<div class="cal-create" id="calCreate">
-      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : "Choisir le type de création"}" hidden>
+    ${view === "agenda" || (view === "docs" && S.v3) || (view === "galerie" && S.v4) ? `<div class="cal-create" id="calCreate">
+      <div class="cal-create-options" id="calCreateOptions" role="group" aria-label="${view === "docs" ? "Ajouter un dossier ou un document" : view === "galerie" ? "Ajouter des photos ou un album" : "Choisir le type de création"}" hidden>
         ${view === "docs" ? `
           <button type="button" class="cal-create-option" data-act="newFolder"><span class="cal-create-label">Dossier</span><span class="cal-create-icon" aria-hidden="true">${I.folder}</span></button>
-          <button type="button" class="cal-create-option" data-act="newDoc"><span class="cal-create-label">Document</span><span class="cal-create-icon" aria-hidden="true">${I.file}</span></button>` : `
+          <button type="button" class="cal-create-option" data-act="newDoc"><span class="cal-create-label">Document</span><span class="cal-create-icon" aria-hidden="true">${I.file}</span></button>` : view === "galerie" ? `
+          <button type="button" class="cal-create-option" data-act="pickPhotos"><span class="cal-create-label">Photos</span><span class="cal-create-icon" aria-hidden="true">${I.galerie || I.file}</span></button>
+          <button type="button" class="cal-create-option" data-act="newPhAlbum"><span class="cal-create-label">Album</span><span class="cal-create-icon" aria-hidden="true">${I.folder}</span></button>` : `
           <button type="button" class="cal-create-option" data-act="newAppointment"><span class="cal-create-label">Rendez-vous</span><span class="cal-create-icon" aria-hidden="true">${I.today}</span></button>
           <button type="button" class="cal-create-option" data-act="newEvent"><span class="cal-create-label">Événement</span><span class="cal-create-icon" aria-hidden="true">${I.agenda}</span></button>
           <button type="button" class="cal-create-option" data-act="calCreateTask"><span class="cal-create-label">Tâche</span><span class="cal-create-icon" aria-hidden="true">${I.tasks}</span></button>`}
       </div>
-      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="${view === "docs" ? "Ajouter dans Documents" : "Créer dans l'agenda"}" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
-    </div>` : fab ? `<button type="button" class="fab mz-round-btn mz-round-btn--md" data-act="${fab[1]}" aria-label="${esc(fab[0] === "Ajouter" ? "Ajouter" : "Créer : " + fab[0])}">${I.plus}</button>` : ""}
+      <button type="button" class="fab cal-create-fab mz-round-btn mz-round-btn--md" id="calCreateButton" data-act="calCreateToggle" aria-label="${view === "docs" ? "Ajouter dans Documents" : view === "galerie" ? "Ajouter dans la galerie" : "Créer dans l'agenda"}" aria-controls="calCreateOptions" aria-expanded="false">${I.plus}</button>
+    </div>` : fab && view !== "galerie" ? `<button type="button" class="fab mz-round-btn mz-round-btn--md" data-act="${fab[1]}" aria-label="${esc(fab[0] === "Ajouter" ? "Ajouter" : "Créer : " + fab[0])}">${I.plus}</button>` : ""}
     ${composer}
     <nav class="pill" aria-label="Navigation">
       <button data-act="go" data-v="home" ${isHome ? 'aria-current="page"' : ""}>${I.home}<span>Accueil</span></button>
@@ -2201,8 +2302,34 @@ function googleEventPayload(row) {
     if (freq) payload.recurrence = [`RRULE:FREQ=${freq}${custom ? ";INTERVAL=" + custom.interval : ""}`];
   }
   if (row.colorId) payload.colorId = String(row.colorId);
-  if (row.reminders) payload.reminders = {useDefault:false, overrides: row.reminders.filter(m => m <= 40320).slice(0,5).map(minutes => ({method:"popup",minutes}))};
+  if (row.gDefault) payload.reminders = MaisonGoogleReminders.buildRemindersPayload(true);
+  else if (Array.isArray(row.reminders)) payload.reminders = MaisonGoogleReminders.buildRemindersPayload(false, row.reminders);
   return payload;
+}
+function reminderToast(out, fallback) {
+  if (out && out.summary) return out.summary;
+  if (typeof MaisonGoogleReminders !== "undefined" && out && out.results) return MaisonGoogleReminders.summarizeReminderResults(out.results);
+  return fallback;
+}
+async function saveGoogleReminders(calendarId, eventId, remindersBody) {
+  if (typeof gServer === "function") {
+    try {
+      const out = await gServer("reminders", "POST", { calendarId, eventId, reminders: remindersBody });
+      if (out && Array.isArray(out.results)) return out;
+    } catch (err) {
+      if (err && /schema_pending|Unauthorized/.test(String(err.message || ""))) throw err;
+    }
+  }
+  if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
+  const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(calendarId) + "/events/" + encodeURIComponent(eventId), {
+    method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify({ reminders: remindersBody })
+  });
+  if (!r.ok) throw new Error(r.status === 403 ? "Google refuse : cet agenda est en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
+  const read = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(calendarId) + "/events/" + encodeURIComponent(eventId), {
+    headers: { Authorization: "Bearer " + G.tok.t }
+  });
+  const event = read.ok ? await read.json().catch(() => ({})) : {};
+  return { fallback: true, results: [{ name: "votre compte Google", ok: true, reminders: event.reminders || remindersBody }], summary: "Rappels enregistrés pour votre compte Google." };
 }
 async function saveGoogleEvent(calendarId, row) {
   if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
@@ -2310,7 +2437,7 @@ function recList(q, cur) {
   if (!all.length) return `<p class="muted small">Le livre de recettes n'est pas accessible avec ce compte. Écrivez le repas ci-dessous.</p>`;
   const l = (n ? all.filter(r => r.name.toLowerCase().includes(n)) : all).slice(0, 60);
   const curR = cur && !l.some(r => r.id === cur) ? all.find(r => r.id === cur) : null;
-  return [curR, ...l].filter(Boolean).map(r => `<button type="button" class="rec" data-act="pickRecipe" data-v="${r.id}" aria-pressed="${r.id === cur}">${r.image ? `<img src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span><strong>${isFav(r.id) ? "★ " : ""}${esc(r.name)}</strong><br><span class="muted small">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted small">Aucune recette ne correspond.</p>`;
+  return [curR, ...l].filter(Boolean).map(r => { const ph = typeof mzRecipePhoto === "function" ? mzRecipePhoto(r) : (r.image || ""); return `<button type="button" class="rec" data-act="pickRecipe" data-v="${r.id}" aria-pressed="${r.id === cur}">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span><strong>${isFav(r.id) ? "★ " : ""}${esc(r.name)}</strong><br><span class="muted small">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`; }).join("") || `<p class="muted small">Aucune recette ne correspond.</p>`;
 }
 
 function memberSheet(m) {
@@ -2571,12 +2698,11 @@ document.addEventListener("submit", async e => {
       const ctx = sheetCtx || {}; btn.disabled = true;
       try {
         if (ctx.g) {
-          if (!(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
-          const body = { reminders: choice === "google" ? { useDefault: true } : { useDefault: false, overrides: rem.slice(0, 5).map(minutes => ({ method: "popup", minutes })) } };
-          const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(ctx.g.cal) + "/events/" + encodeURIComponent(ctx.g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-          if (!r.ok) throw new Error(r.status === 403 ? "Google refuse : cet agenda est en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
-          for (const x of G.ev.items) if (x.id === ctx.g.id) x.rem = body.reminders;
-          closeSheet(); toast("Rappels enregistrés dans Google Agenda.", null, null, null, "agenda"); render();
+          const body = MaisonGoogleReminders.buildRemindersPayload(choice === "google", rem);
+          const out = await saveGoogleReminders(ctx.g.cal, ctx.g.id, body);
+          const mine = (out.results || []).find(x => x.ok);
+          for (const x of G.ev.items) if (x.id === ctx.g.id) x.rem = (mine && mine.reminders) || body;
+          closeSheet(); toast(reminderToast(out, "Rappels enregistrés dans Google Agenda."), null, null, null, "agenda"); render();
         } else {
           const e0 = S.events.find(x => x.id === ctx.id);
           const ok = await patch("events", ctx.id, { reminders: rem, kind: rem.length || (e0 && e0.kind === "appointment") ? "appointment" : "event" });
@@ -2609,37 +2735,41 @@ document.addEventListener("submit", async e => {
         if (choice === "custom" && fd.save_reminder_defaults) LS.set(REMINDER_DEFAULT_KEY, reminders);
       }
       if (!row.title || !row.day) { eventFormFeedback(f, "Indique le titre et la date du rendez-vous."); return; }
-      const gDefault = !!row.gDefault; delete row.gDefault;
+      const gDefault = !!row.gDefault;
       if (sheetCtx?.g) {
-        const g = sheetCtx.g, payload = googleEventPayload(row);
+        const g = sheetCtx.g, payload = googleEventPayload({ ...row, gDefault });
         delete payload.recurrence;
-        payload.reminders = gDefault ? { useDefault: true } : { useDefault: false, overrides: row.reminders.filter(m => m <= 40320).slice(0, 5).map(minutes => ({ method: "popup", minutes })) };
+        delete payload.reminders;
         payload.colorId = chipVal(f, "gcolor") || null;
         btn.disabled = true;
         try {
           if (typeof gEnsure !== "function" || !(await gEnsure())) throw new Error("Reconnecte ton compte Google dans Ma famille.");
           const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/" + encodeURIComponent(g.cal) + "/events/" + encodeURIComponent(g.id), { method: "PATCH", headers: { Authorization: "Bearer " + G.tok.t, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (!r.ok) throw new Error(r.status === 403 ? "Google refuse la modification : cet agenda est peut-être en lecture seule pour toi." : "Erreur Google (" + r.status + ")");
+          const remOut = await saveGoogleReminders(g.cal, g.id, MaisonGoogleReminders.buildRemindersPayload(gDefault, row.reminders));
           // Une modification ouverte depuis Trajets retourne à sa fiche,
           // après relecture Google, sans confirmer de kilomètres.
           const returnTrip = sheetCtx?.ptTripReturn;
           const updatedGoogleEvent = returnTrip ? await r.json().catch(() => null) : null;
           if (returnTrip && typeof ptAfterGoogleEventSave === "function")
             await ptAfterGoogleEventSave(returnTrip, updatedGoogleEvent);
-          else { closeSheet(); toast("Modifié dans Google Agenda.", null, null, null, "agenda"); }
+          else { closeSheet(); toast(reminderToast(remOut, "Modifié dans Google Agenda."), null, null, null, "agenda"); }
           if (typeof gFetch === "function") gFetch();
         } catch (err) { eventFormFeedback(f, "Modification impossible : " + (err.message || "réseau ?")); }
         finally { btn.disabled = false; }
         break;
       }
+      delete row.gDefault;
       const destination = fd.google_destination || "local";
       if (destination !== "local" && !sheetCtx?.id) {
         btn.disabled = true;
         try {
-          await saveGoogleEvent(destination, { ...row, colorId: chipVal(f, "gcolor") || null });
+          const created = await saveGoogleEvent(destination, { ...row, gDefault, colorId: chipVal(f, "gcolor") || null });
+          let remOut = null;
+          if (created && created.id) remOut = await saveGoogleReminders(destination, created.id, MaisonGoogleReminders.buildRemindersPayload(gDefault, row.reminders));
           closeSheet(); returnToTodayAgenda();
           if (typeof gFetch === "function") gFetch();
-          toast("Rendez-vous enregistré dans Google Agenda.", null, null, null, "agenda");
+          toast(reminderToast(remOut, "Rendez-vous enregistré dans Google Agenda."), null, null, null, "agenda");
         } catch (err) { console.error("Enregistrement Google Agenda", err); eventFormFeedback(f, "Enregistrement Google impossible : " + (err?.message || "Erreur inconnue")); }
         finally { btn.disabled = false; }
         break;
@@ -2779,7 +2909,20 @@ function demoUpgrade(d) {
 }
 
 /* ---------- go ---------- */
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", ev => {
+    if (!ev.data) return;
+    if (ev.data.type === "mz-diag") { mzNavDiag("sw", ev.data.stage || ""); return; }
+    if (ev.data.type !== "mz-deeplink" || !ev.data.url) return;
+    try {
+      mzNavDiag("sw_message", ev.data.url);
+      const u = new URL(ev.data.url, location.href);
+      if (!mzConsumePetDeepLink(u)) return;
+      mzFinishPetDeepLink(u, true);
+    } catch (_) {}
+  });
+}
 // init() is called at the end of modules.js, once every module is registered
 
 // La hauteur de la fenêtre suit visualViewport (index.html).

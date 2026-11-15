@@ -18,7 +18,7 @@
 d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));d.setAttribute("data-depth",g("cm_depth","plat"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Caveat:wght@600;700&family=Abril+Fatface&display=swap">
-<link rel="stylesheet" href="carnet.css?v=20261105rec3">
+<link rel="stylesheet" href="carnet.css?v=20261109-shop-layout">
 
 </head><body>
 <div class="wrap">
@@ -465,6 +465,7 @@ Préparation :
       <span class="muted" style="font-size:13px"><b>Ou en copiant</b> : restez appuyé sur la photo → <b>Copier</b>, revenez ici, puis restez appuyé dans le cadre ci-dessous → <b>Coller</b>.</span>
       <div class="paste-zone" id="pasteZone" contenteditable="true" role="textbox" aria-label="Coller l'image ici" inputmode="none">Restez appuyé ici → Coller</div>
       <button type="button" class="btn ghost" data-act="photoPaste" style="align-self:flex-start">📋 Coller automatiquement</button></div>
+    <p class="muted" style="margin:0;font-size:13px">Une photo d’internet s’ouvre d’abord en aperçu 3:2 : recadrez, puis touchez Valider. Rien n’est enregistré si vous annulez.</p>
     <p class="muted" id="photoMsg" style="margin:0;font-size:13px"></p>
     <div class="ph-grid" id="photoGrid"></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:12px"><span class="label">Ou</span>
@@ -577,7 +578,8 @@ Préparation :
 <script src="carnet-github.js?v=20261107-repas-google"></script>
 <script src="carnet-semaine.js?v=20261031achat"></script>
 <script src="carnet-courses.js"></script>
-<script src="carnet-repas.js?v=20261031achat"></script>
+<script src="carnet-photos.js?v=20261112-photos"></script>
+<script src="carnet-repas.js?v=20261112-photos"></script>
 <script src="carnet-partage.js?v=20261107-import-open"></script>
 <script src="carnet-cloud.js?v=20261106-carnet-rapide-v1"></script>
 <script src="maison/shared-constants.js"></script>

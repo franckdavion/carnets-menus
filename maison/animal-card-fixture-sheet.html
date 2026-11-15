@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="maison.css">
+<link rel="stylesheet" href="animal-card.css?v=20261113-card-scroll">
+<style>dialog.sheet[open]{display:block;position:static;margin:0;width:100%;max-height:none}</style>
+</head><body style="margin:0;background:#090f21">
+<dialog class="sheet" open>
+<div id="sheetIn" class="sheet-in"></div>
+</dialog>
+<script src="animaux-core.js?v=20261113-card-final"></script>
+<script>
+var p=maisonAnimauxCore.publicPayload({
+  name:"Bandy",species:"chien",breed:"Jack russel",color:"Blanc et noir",
+  signs:"",description:"",message_public:"",approach_note:"",
+  publish_medical:false,publish_vet:false,publish_reward:false,status:"ok",
+  publish_phone:true,phone:"",contact_name:"Christine Binet"
+},{photo_url:"https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&q=80"});
+document.getElementById("sheetIn").innerHTML=
+  '<div class="sheet-top"><div class="grab"></div><div class="sheet-h"><h2>Aperçu du scan QR</h2></div></div>'+
+  maisonAnimauxCore.publicCardScene(p,{preview:true,embed:true});
+</script>
+</body></html>

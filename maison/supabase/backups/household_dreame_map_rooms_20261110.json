@@ -1,0 +1,31 @@
+{
+  "saved_at": "2026-11-10T20:50:00Z",
+  "reason": "Backup avant correction salle à manger 5 → 7",
+  "map_rooms_before": [
+    { "id": 1, "name": "Buanderie" },
+    { "id": 3, "name": "Salle de bain" },
+    { "id": 4, "name": "Salon" },
+    { "id": 5, "name": "Salle à manger" },
+    { "id": 6, "name": "Cuisine" }
+  ],
+  "clean_programs_before": [
+    {
+      "id": "0deeea3b-d4fa-4364-b2b0-433c96578e44",
+      "name": "aspirateur cuisine",
+      "water": 2,
+      "repeats": 1,
+      "suction": 1,
+      "room_ids": [6],
+      "cleaning_mode": 0
+    },
+    {
+      "id": "0c0afb9e-4e60-45a8-b81b-58f79941e969",
+      "name": "buanderie aspiration puis lavage",
+      "water": 2,
+      "repeats": 1,
+      "suction": 1,
+      "room_ids": [1],
+      "cleaning_mode": 3
+    }
+  ]
+}

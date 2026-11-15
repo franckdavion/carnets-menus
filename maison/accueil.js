@@ -2,10 +2,17 @@
 window.maisonHomeStore = (() => {
   const LEGACY_KEY = "maisonnee_ultimate_v3_grid_v1";
   const GEO_KEY = "maisonnee_home_geo_v1";
+  const LAST_ME = "maisonnee_home_member_last";
+  const DEFAULT_ORDER = ["agenda","repas","courses","recettes","tasks","messages","presences","foyer","anniv","docs","budget","carte","galerie","edt","domotique","fidelite","animaux"];
   function memberKey() {
-    return (typeof S !== "undefined" && S.me) ? String(S.me) : "local";
+    const id = (typeof S !== "undefined" && S.me) ? String(S.me) : "";
+    if (id) {
+      try { localStorage.setItem(LAST_ME, id); } catch (e) {}
+      return id;
+    }
+    try { return localStorage.getItem(LAST_ME) || "local"; } catch (e) { return "local"; }
   }
-  function gridKey() { return "maisonnee_home_grid_v1_" + memberKey(); }
+  function gridKey(id) { return "maisonnee_home_grid_v1_" + (id || memberKey()); }
   function readJson(key) {
     try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
   }
@@ -16,33 +23,28 @@ window.maisonHomeStore = (() => {
   function meRecord() {
     return typeof meM === "function" ? meM() : null;
   }
-  function legacyHouseGrid() {
-    const shared = typeof S !== "undefined" && S.hh && S.hh.home && typeof S.hh.home === "object" ? S.hh.home : null;
-    if (!shared) return null;
-    const order = Array.isArray(shared.order) && shared.order.length ? shared.order : null;
-    const hidden = Array.isArray(shared.hidden) ? shared.hidden : null;
-    if (!order && !hidden) return null;
-    return { order: order || [], hidden: hidden || [] };
+  function prefsOf(me) {
+    return me && me.home_prefs && typeof me.home_prefs === "object" ? me.home_prefs : null;
+  }
+  function deviceGrid(id) {
+    if (id) {
+      const mine = readJson(gridKey(String(id)));
+      if (mine && (Array.isArray(mine.order) || Array.isArray(mine.hidden))) return mine;
+    }
+    return readJson(gridKey("local")) || readJson(LEGACY_KEY);
   }
   function readGrid() {
     const me = meRecord();
-    const fromMember = me && me.home_prefs && typeof me.home_prefs === "object" ? me.home_prefs : null;
-    if (fromMember) {
-      return {
-        order: Array.isArray(fromMember.order) && fromMember.order.length ? fromMember.order : null,
-        hidden: Array.isArray(fromMember.hidden) ? fromMember.hidden : []
-      };
-    }
-    const saved = readJson(gridKey()) || readJson(LEGACY_KEY);
-    if (saved && (Array.isArray(saved.order) || Array.isArray(saved.hidden))) {
-      return {
-        order: Array.isArray(saved.order) && saved.order.length ? saved.order : null,
-        hidden: Array.isArray(saved.hidden) ? saved.hidden : []
-      };
-    }
-    const legacy = legacyHouseGrid();
-    if (legacy) return legacy;
-    return { order: null, hidden: [] };
+    const fromMember = prefsOf(me);
+    const memberOrder = fromMember && Array.isArray(fromMember.order) && fromMember.order.length ? fromMember.order : null;
+    const memberHidden = fromMember && Array.isArray(fromMember.hidden) ? fromMember.hidden : null;
+    const saved = deviceGrid(typeof S !== "undefined" ? S.me : "");
+    const localOrder = saved && Array.isArray(saved.order) && saved.order.length ? saved.order : null;
+    const localHidden = saved && Array.isArray(saved.hidden) ? saved.hidden : null;
+    return {
+      order: memberOrder || localOrder || null,
+      hidden: memberHidden || localHidden || []
+    };
   }
   function readGeo() {
     const shared = typeof S !== "undefined" && S.hh && S.hh.home && typeof S.hh.home === "object" ? S.hh.home : null;
@@ -119,7 +121,36 @@ window.maisonHomeStore = (() => {
     await Promise.all(tasks);
     return read();
   }
-  return { read, write };
+  function sortKeys(keys) {
+    const saved = read().order;
+    const order = Array.isArray(saved) && saved.length ? saved : DEFAULT_ORDER;
+    return [...keys].sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      const da = DEFAULT_ORDER.indexOf(a), db = DEFAULT_ORDER.indexOf(b);
+      return (ia < 0 ? 900 + (da < 0 ? 50 : da) : ia) - (ib < 0 ? 900 + (db < 0 ? 50 : db) : ib);
+    });
+  }
+  function adoptForMe() {
+    const me = meRecord();
+    if (!me || typeof S === "undefined" || !S.me) return;
+    const cloud = prefsOf(me);
+    if (cloud && Array.isArray(cloud.order) && cloud.order.length) {
+      try {
+        localStorage.setItem(gridKey(String(S.me)), JSON.stringify({
+          order: cloud.order,
+          hidden: Array.isArray(cloud.hidden) ? cloud.hidden : []
+        }));
+      } catch (e) {}
+      return;
+    }
+    const inherited = deviceGrid(S.me);
+    const order = inherited && Array.isArray(inherited.order) && inherited.order.length
+      ? inherited.order
+      : DEFAULT_ORDER.slice();
+    const hidden = inherited && Array.isArray(inherited.hidden) ? inherited.hidden : [];
+    void writeGrid({ order, hidden });
+  }
+  return { read, write, sortKeys, adoptForMe, defaultOrder: () => DEFAULT_ORDER.slice() };
 })();
 
 /* Grille indépendante : les actions natives data-act=go restent inchangées. */
@@ -128,7 +159,7 @@ const items=[
 ['agenda','Calendrier','📅'],['repas','Repas','🍽️'],['courses','Courses','🛒'],['recettes','Recettes','📖'],
 ['tasks','Tâches','✅'],['messages','Messages','💬'],['presences','Présences','👧'],['foyer','Ma famille','👨‍👩‍👧'],
 ['anniv','Anniversaires','🎂'],['docs','Documents','📁'],['budget','Budget','💶'],['carte','Localisation','📍'],
-['galerie','Galerie','📸'],['edt','Emploi du temps','🗓️'],['domotique','Domotique','🏠']
+['galerie','Galerie','📸'],['edt','Emploi du temps','🗓️'],['domotique','Domotique','🏠'],['fidelite','Cartes de fidélité','💳'],['animaux','Mes animaux','🐾']
 ];
 const KEY='maisonnee_ultimate_v3_grid_v1';
 let edit=false,dragId=null;
@@ -303,7 +334,8 @@ function setVisible(key, visible){
  const host=document.querySelector('#ultimate-module-grid');
  if(host)render(host);
 }
-window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:()=>edit};
+function reload(){ if(!edit) config=load(); }
+window.maisonneeModuleGrid={mount,openEditor,setVisible,reorderModules,editing:()=>edit,reload};
 })();
 
 /* Maisonnée Ultimate : ajout non destructif sur l'accueil uniquement. */
@@ -485,12 +517,12 @@ function mzHomeLite(){
 function mzSyncHomeLite(){
  document.documentElement.classList.toggle('mz-home-lite',!!document.querySelector('main.view-home')&&mzHomeLite());
 }
-let lastHomePaint='';
+let lastHomePaint='',homePaintAfterScroll=false;
 function render(){
  const main=document.querySelector('main.view-home');if(!main)return;
  mzSyncHomeLite();
  let el=main.querySelector('#ultimate-dashboard');
- if(document.documentElement.classList.contains('mz-scrolling')&&el&&el.querySelector('.mn-house-grid'))return;
+ if(document.documentElement.classList.contains('mz-scrolling')&&el&&el.querySelector('.mn-house-grid')){homePaintAfterScroll=true;return;}
  if(!el){el=document.createElement('div');el.id='ultimate-dashboard';main.prepend(el)}
  el.className='';
  const w=meteo?.current,d=meteo?.daily,now=new Date();
@@ -504,8 +536,8 @@ function render(){
  const g=apercuMaison();
  const plus={agenda:{k:g.cal.k,t:g.cal.t,m:g.cal.m},repas:{k:g.repas.k,t:g.repas.t,m:g.repas.m},courses:{k:g.courses.k,t:g.courses.t,m:g.courses.m},recettes:{k:g.recette.k,t:g.recette.t,m:g.recette.m}};
  const ton=k=>k==='agenda'?'cal':k==='recettes'?'recette':k;
- let pins=typeof homePins==='function'?homePins():['agenda','repas','courses','recettes'];
- try{const order=window.maisonHomeStore&&window.maisonHomeStore.read().order;if(Array.isArray(order)&&order.length)pins=[...pins].sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib)})}catch(e){}
+ let pins=typeof homePins==='function'?homePins():window.maisonHomeStore.defaultOrder();
+ try{if(window.maisonHomeStore&&window.maisonHomeStore.sortKeys)pins=window.maisonHomeStore.sortKeys(pins)}catch(e){}
  const wrap=(k,html)=>`<div class="mn-house-item" data-module="${k}">${html}</div>`;
  const cartes=pins.map(k=>{
   const mod=typeof modOf==='function'?modOf(k):null;if(!mod)return '';
@@ -562,7 +594,7 @@ ${cartes||'<p class="mn-house-empty">Aucun module sur l’accueil. Ajoutez-en de
  if(window.maisonneeModuleGrid?.editing?.())window.maisonneeModuleGrid.mount(main);
 }
 window.maisonneeHomePaint=render;
-window.mzResetHomePaint=()=>{lastHomePaint='';document.documentElement.classList.remove('mz-scrolling')};
+window.mzResetHomePaint=()=>{lastHomePaint='';homePaintAfterScroll=false;document.documentElement.classList.remove('mz-scrolling')};
 (()=>{let pause;window.addEventListener('scroll',()=>{
   if(!document.querySelector('main.view-home'))return;
   const frame=document.querySelector('main.view-home .mn-dayframe');
@@ -573,6 +605,7 @@ window.mzResetHomePaint=()=>{lastHomePaint='';document.documentElement.classList
   pause=setTimeout(()=>{
     frame?.classList.remove('is-paused');
     document.documentElement.classList.remove('mz-scrolling');
+    if(homePaintAfterScroll){homePaintAfterScroll=false;lastHomePaint='';render()}
   },280);
 },{passive:true});})();
 document.addEventListener('click',e=>{

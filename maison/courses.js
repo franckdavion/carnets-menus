@@ -24,7 +24,8 @@ function cxData() {
     const extras=(menu.extras||[]).map((x,ix)=>({ix,t:x.t,on:!!x.done,miss:x.missed||""}));
     const xr=Object.entries(menu.shopExtra||{}).filter(([id])=>recipes[id]).map(([id,n])=>({id,n,name:recipes[id].name,dup:validatedUses(id).length>0}));
     const have=shopping(true).filter(isHave).map(i=>({key:i.key,n:(menu.shopNameOverrides||{})[i.key]||i.n,qt:fmt(i.q,i.u)||""})).sort((a,b)=>a.n.localeCompare(b.n,"fr"));
-    return {days,plan,items,extras,xr,have,duplicateWarnings:shoppingDuplicateWarnings(),learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
+    const trips=(menu.trips||[]).map(t=>({d:t.d,got:(t.got||[]).map(g=>({n:g.n||"",q:g.q||"",r:g.r||"Divers"})),miss:Array.isArray(t.miss)?t.miss:[]}));
+    return {days,plan,items,extras,xr,have,trips,duplicateWarnings:shoppingDuplicateWarnings(),learn:menu.rayonLearn||{},order:menu.rayonOrder||[]};})()`);
 }
 /* rayons: every item in the aisle where it is found in the shop, in the order of « my » shop.
    An item typed by hand finds its aisle by its name; moved once by hand, it stays there next time (menu.rayonLearn,
@@ -61,6 +62,33 @@ function cxMoveSheet(name, cur) {
     <div class="chips">${CX_RAYONS.map(r => `<button type="button" class="chip" data-act="cxMoveTo" data-n="${esc(name)}" data-v="${esc(r)}" aria-pressed="${r === cur}">${esc(r)}</button>`).join("")}</div>`);
 }
 const cxShort = d => { try { return new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" }); } catch (_) { return d; } };
+const cxHistLabel = d => { try { return new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); } catch (_) { return d; } };
+function cxHistSheet(i) {
+  let trips = [];
+  try { trips = cxData().trips || []; } catch (_) { trips = []; }
+  if (i == null || i === "") {
+    openSheet("Courses précédentes", trips.length
+      ? `<p class="muted small" style="margin:4px 0 10px">Les sorties enregistrées quand vous tapez « Courses terminées ». Consulter ne change pas la liste actuelle.</p>
+        <div class="list">${trips.map((t, ti) => `<button type="button" class="cx-item cx-hist-row" data-act="cxHistSee" data-i="${ti}">
+          <span class="nm"><strong>${esc(cxHistLabel(t.d))}</strong><span class="cx-from">${t.got.length} article${t.got.length > 1 ? "s" : ""} acheté${t.got.length > 1 ? "s" : ""}${t.miss.length ? ` · ${t.miss.length} non trouvé${t.miss.length > 1 ? "s" : ""}` : ""}</span></span>
+        </button>`).join("")}</div>`
+      : `<p class="muted">Aucune sortie enregistrée pour l’instant. Terminez une liste une première fois pour la retrouver ici.</p>`);
+    return;
+  }
+  const t = trips[Number(i)];
+  if (!t) { cxHistSheet(); return; }
+  const rays = [...CX_RAYONS, "En plus"];
+  const blocks = rays.map(ry => {
+    const its = t.got.filter(x => x.r === ry);
+    if (!its.length) return "";
+    return `<p class="group-h">${esc(ry)}</p><div class="list">${its.map(x => `<div class="cx-item"><span class="nm">${esc(x.n)}</span>${x.q ? `<span class="q">${esc(x.q)}</span>` : ""}</div>`).join("")}</div>`;
+  }).join("");
+  openSheet(cxHistLabel(t.d), `<p class="muted small" style="margin:4px 0 8px">${t.got.length} article${t.got.length > 1 ? "s" : ""} acheté${t.got.length > 1 ? "s" : ""}. Lecture seule.</p>
+    ${blocks || `<p class="muted">Aucun article acheté ce jour-là.</p>`}
+    ${t.miss.length ? `<p class="muted small" style="margin-top:12px">Non trouvé : ${esc(t.miss.join(", "))}</p>` : ""}
+    <div class="sheet-sticky btns"><button class="btn" type="button" data-act="cxHist">← Toutes les sorties</button>
+      <button class="btn primary" type="button" data-act="cxHistReuse" data-i="${Number(i)}">Remettre dans la liste</button></div>`);
+}
 
 // Préférences d'affichage locales uniquement : ne modifient jamais les données de courses.
 // Icônes purement décoratives : les noms, l’ordre et les règles des rayons restent inchangés.
@@ -109,7 +137,8 @@ VIEWS.courses = function () {
   out += `<div class="cx-ultimate-stats" aria-label="Résumé des courses"><div><strong>${nLeft}</strong><span>À prendre</span></div><div><strong>${done.length}</strong><span>Dans le panier</span></div><div><strong>${sel.length}</strong><span>Jours sélectionnés</span></div></div>
     <div class="cx-ultimate-progress"><span style="width:${total ? Math.round(done.length / total * 100) : 0}%"></span></div>
     <div class="cx-ultimate-actions"><button class="btn primary" type="button" data-act="cxJump">🛒 Mode magasin</button><button class="btn" type="button" data-act="cxAddFocus">＋ Ajouter un article</button><a class="btn" href="${CARNET_URL}">📖 Ouvrir le Carnet</a></div>
-    <details class="card cx-ultimate-help"><summary>ⓘ Aide et états des repas</summary><p class="muted small">Touchez un plat pour choisir une action. Touchez son état pour ouvrir la fiche du repas.</p><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></details>`;
+    <details class="card cx-ultimate-help"><summary>ⓘ Aide et états des repas</summary><p class="muted small">Touchez un plat pour choisir une action. Touchez son état pour ouvrir la fiche du repas.</p><div class="cx-state-legend">${["Proposé","Gardé","En courses","Courses faites","Terminé"].map(st=>`<span class="r-meal-badge ${cxStateClass(st)}">${cxStateLabel(st)}</span>`).join("")}</div></details>
+    <div class="mz-shop-hist"><button type="button" class="btn mz-shop-hist-open" data-act="cxHist">${(D.trips || []).length ? `📋 Courses précédentes (${D.trips.length})` : "📋 Courses précédentes"}</button></div>`;
 
   if(D.duplicateWarnings&&D.duplicateWarnings.length) out += `<details class="card" style="margin-top:12px"><summary>⚠️ ${D.duplicateWarnings.length} doublon${D.duplicateWarnings.length>1?"s":""} possible${D.duplicateWarnings.length>1?"s":""} à vérifier</summary><p class="muted small">Ces articles se ressemblent. Aucun regroupement ni achat n'a été modifié automatiquement.</p>${D.duplicateWarnings.map(g=>`<p class="small">${g.map(esc).join(" / ")}</p>`).join("")}</details>`;
   out += `<p class="group-h">Courses pour</p>${D.days.length ? `<div class="chips">${D.days.map(x => `<button type="button" class="chip" data-act="cxDay" data-v="${esc(x.key)}" aria-pressed="${x.on}">${x.on ? esc(x.lab) : esc(x.lab) + " · " + x.n + " repas"}</button>`).join("")}</div>
@@ -262,7 +291,7 @@ document.addEventListener("submit",e=>{
 },true);
 document.querySelector("#sheet")?.addEventListener("close",()=>{cxRenameState=null});
 
-const CX_ACTS = ["cxEmojiEdit", "cxAddFocus", "cxMealActions", "cxActionRecipe", "cxActionMeal", "cxActionChange", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
+const CX_ACTS = ["cxEmojiEdit", "cxAddFocus", "cxMealActions", "cxActionRecipe", "cxActionMeal", "cxActionChange", "cxFold", "cxDsTog", "cxDsSee", "cxDsApply", "cxDsRemove", "cxMealLock", "cxMeal", "cxRecipe", "cxHaveClose", "cxMove", "cxMoveTo", "cxOrder", "cxOrdMove", "cxOrdSave", "cxOrdReset", "cxTick", "cxHave", "cxHaveRayon", "cxHaveUndo", "cxRmX", "cxRmR", "cxDay", "cxDaysAll", "cxDaysNone", "cxHist", "cxHistSee", "cxHistReuse", "cxFinish", "cxFinishYes", "cxFinishNo", "cxFinishUndo", "cxClear", "cxClearYes", "cxClearNo"];
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !CX_ACTS.includes(b.dataset.act) || !CK.ready) return;
   const a = b.dataset.act, v = b.dataset.v;
@@ -334,6 +363,9 @@ document.addEventListener("click", async e => {
       closeSheet(); break; }
     case "cxDaysAll": cclick({ act: "shopDaysAll" }); break;
     case "cxDaysNone": cclick({ act: "shopDaysNone" }); break;
+    case "cxHist": cxHistSheet(); return;
+    case "cxHistSee": cxHistSheet(b.dataset.i); return;
+    case "cxHistReuse": cclick({ act: "tripReuse", i: b.dataset.i }); closeSheet(); msg = "Articles remis dans la liste actuelle."; break;
     case "cxFinish": cxFinishAsk = true; break;
     case "cxFinishNo": cxFinishAsk = false; break;
     case "cxFinishYes": cclick({ act: "finishYes" }); cxFinishAsk = false; cxUndo = true; msg = "Courses terminées."; break;
@@ -407,7 +439,8 @@ window.addEventListener("message", e => {
 function mzPingCourses(body){
   try{
     if(!("Notification" in window) || Notification.permission!=="granted") return;
-    const opts={body, tag:"courses-ajout-"+Date.now(), data:{url:"./?v=courses"}};
+    const home = window.MAISON_PUBLIC_HOME || "https://carnets-menus.vercel.app/maison/";
+    const opts={body, tag:"courses-ajout-"+Date.now(), data:{url:home + "?v=courses"}};
     navigator.serviceWorker.ready.then(reg=>reg.showNotification("Courses", opts)).catch(()=>{});
   }catch(e){}
 }

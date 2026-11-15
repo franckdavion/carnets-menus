@@ -1,0 +1,28 @@
+project_id = "cluqleqbbidozpioekog"
+
+[functions.google-calendar]
+verify_jwt = false
+
+[functions.dreame]
+verify_jwt = false
+
+[functions.shelly-cloud]
+verify_jwt = false
+
+[functions.melcloud]
+verify_jwt = false
+
+[functions.homeassistant]
+verify_jwt = false
+
+[functions.smartthings]
+verify_jwt = false
+
+[functions.smartthings-tv-test]
+verify_jwt = false
+
+[functions.maison-push-dispatch]
+verify_jwt = false
+
+[functions.animal-public]
+verify_jwt = false

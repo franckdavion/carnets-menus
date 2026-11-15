@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Médaille Maisonnée</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0a0e18">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/maison/animal-card.css?v=20261113-geo-universal">
+</head>
+<body>
+<div class="id-scene" id="scene">
+  <main class="id-card" id="root"><p class="id-meta" style="padding:20px">Chargement de la médaille…</p></main>
+  <p class="id-scene-hint" id="petHint" hidden></p>
+  <div class="id-dock" id="dock" hidden></div>
+</div>
+<script src="/maison/animaux-core.js?v=20261113-geo-universal"></script>
+<script>
+(function () {
+  const SB_URL = "https://cluqleqbbidozpioekog.supabase.co";
+  const SB_KEY = "sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
+  const FN = SB_URL + "/functions/v1/animal-public";
+  const C = window.maisonAnimauxCore;
+  const GEO = C && C.GEO ? C.GEO : { DENIED: 1, UNAVAILABLE: 2, TIMEOUT: 3 };
+  const root = document.getElementById("root");
+  const dock = document.getElementById("dock");
+  const hint = document.getElementById("petHint");
+  let lastPet = null, sending = false, gpsAttempts = 0, consultSessionId = "";
+  const token = (location.pathname.match(/\/a\/([a-f0-9]{16,40})/i) || [])[1]
+    || new URLSearchParams(location.search).get("token") || "";
+  const geoDenyKey = () => "mz_pet_geo_den_" + token;
+  const sessKey = () => "mz_pet_sess_" + token;
+  function loadSessionId() {
+    try {
+      return localStorage.getItem(sessKey()) || sessionStorage.getItem(sessKey()) || "";
+    } catch (_) {
+      try { return sessionStorage.getItem(sessKey()) || ""; } catch (__) { return ""; }
+    }
+  }
+  function saveSessionId(id) {
+    if (!id) return;
+    consultSessionId = id;
+    try { localStorage.setItem(sessKey(), id); } catch (_) {}
+    try { sessionStorage.setItem(sessKey(), id); } catch (_) {}
+  }
+  consultSessionId = loadSessionId();
+
+  const setStatus = (msg, kind) => {
+    const el = document.getElementById("aNote");
+    if (!el) return;
+    el.className = "status" + (kind ? " " + kind : "");
+    el.textContent = msg || "";
+  };
+
+  function petName() {
+    return (lastPet && lastPet.name) || "l’animal";
+  }
+
+  function geoWasDenied() {
+    try { return sessionStorage.getItem(geoDenyKey()) === "1"; } catch (_) { return false; }
+  }
+  function markGeoDenied() {
+    try { sessionStorage.setItem(geoDenyKey(), "1"); } catch (_) {}
+  }
+
+  function showManual(failed) {
+    const panel = document.getElementById("aManualPanel");
+    const lead = document.getElementById("aManualLead");
+    if (!panel) return;
+    panel.hidden = false;
+    if (lead && C && C.geoManualLead) lead.textContent = C.geoManualLead(petName(), !!failed);
+    try { panel.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch (_) {}
+  }
+
+  function appendBrowserHint(baseMsg) {
+    const hintText = C && C.embeddedBrowserHint ? C.embeddedBrowserHint(navigator.userAgent || "") : "";
+    if (!hintText) return baseMsg;
+    return baseMsg + " " + hintText;
+  }
+
+  function bindActions() {
+    const f = document.getElementById("aFound");
+    if (f) f.onclick = onFound;
+    const g = document.getElementById("aGps");
+    if (g) g.onclick = () => sendGps();
+    const m = document.getElementById("aMsg");
+    if (m) m.onclick = () => {
+      const box = document.getElementById("aMsgBox");
+      if (!box) return;
+      box.style.display = box.style.display !== "block" ? "block" : "none";
+    };
+    const ms = document.getElementById("aMsgSend");
+    if (ms) ms.onclick = sendMsg;
+    const as = document.getElementById("aAddrSend");
+    if (as) as.onclick = sendManual;
+    const addr = document.getElementById("aAddr");
+    if (addr) addr.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); sendManual(); } };
+    const ws = document.getElementById("aWhoSend");
+    if (ws) ws.onclick = sendContact;
+  }
+
+  function paint(err, pet, note, noteKind) {
+    dock.hidden = true;
+    dock.innerHTML = "";
+    if (hint) { hint.hidden = true; hint.innerHTML = ""; }
+    if (err) {
+      lastPet = null;
+      root.className = "id-card";
+      const esc = C.escapeHtml;
+      root.innerHTML = `<div class="id-err"><h1>Médaille introuvable</h1><p class="id-meta">${esc(err)}</p><p class="id-foot">Cette carte n’ouvre pas Maisonnée et ne demande aucun compte.</p></div>`;
+      document.title = "Médaille Maisonnée";
+      return;
+    }
+    lastPet = pet;
+    document.title = (pet.name || "Médaille") + " · Médaille";
+    root.className = "id-card";
+    root.innerHTML = C.publicCardMain(pet);
+    if (hint && C.publicCardHint) { hint.innerHTML = C.publicCardHint(); hint.hidden = false; }
+    dock.innerHTML = C.publicCardDock(pet, { note, noteKind });
+    dock.hidden = false;
+    bindActions();
+  }
+
+  function finderFromForm() {
+    const finder_name = String((document.getElementById("aWho") || {}).value || "").trim().slice(0, 60);
+    const finder_phone = String((document.getElementById("aTel") || {}).value || "").replace(/[^\d+().\s-]/g, "").trim().slice(0, 24);
+    const out = {};
+    if (finder_name) out.finder_name = finder_name;
+    if (finder_phone) out.finder_phone = finder_phone;
+    return out;
+  }
+
+  async function call(body) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const payload = Object.assign({}, body);
+      if (consultSessionId) payload.session_id = consultSessionId;
+      const res = await fetch(FN, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SB_KEY },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Le serveur n’a pas pu enregistrer.");
+      return data;
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("Réseau trop lent. Réessayez.");
+      if (/Failed to fetch|NetworkError|Load failed/i.test(String(e.message || e))) throw new Error("Pas de réseau, ou serveur inaccessible.");
+      throw e;
+    } finally { clearTimeout(t); }
+  }
+
+  async function onFound() {
+    const n = petName();
+    if (!confirm("Confirmer : vous signalez avoir trouvé " + n + " ? La famille sera prévenue. Le mode « perdu » reste à leur main.")) return;
+    await postAction("found", finderFromForm(), "Signalement envoyé à la famille. Merci.");
+  }
+
+  async function postAction(action, extra, okMsg) {
+    if (sending) return;
+    sending = true;
+    setStatus("Envoi en cours…");
+    try {
+      const data = await call({ token, action, ...extra });
+      if (!data || data.ok !== true) throw new Error("Enregistrement non confirmé.");
+      setStatus(okMsg, "ok");
+      if (data.pet) lastPet = data.pet;
+      if (data.session_id) saveSessionId(data.session_id);
+      return true;
+    } catch (e) {
+      setStatus(e.message || "Envoi impossible", "err");
+      return false;
+    } finally { sending = false; }
+  }
+
+  function requestPosition(useRelaxed) {
+    const opts = useRelaxed && C.gpsOptionsRelaxed
+      ? C.gpsOptionsRelaxed()
+      : (C && C.gpsOptions ? C.gpsOptions() : { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+    });
+  }
+
+  async function sendGps() {
+    const btn = document.getElementById("aGps");
+    if (!navigator.geolocation) {
+      setStatus(appendBrowserHint("Le GPS n’est pas disponible dans ce navigateur."), "err");
+      showManual(true);
+      return;
+    }
+    if (geoWasDenied()) {
+      setStatus(appendBrowserHint(C.geoErrorMessage(GEO.DENIED, { deniedBefore: true, petName: petName() })), "err");
+      showManual(true);
+      return;
+    }
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const st = await navigator.permissions.query({ name: "geolocation" });
+        if (st && st.state === "denied") {
+          markGeoDenied();
+          setStatus(appendBrowserHint(C.geoErrorMessage(GEO.DENIED, { deniedBefore: true, petName: petName() })), "err");
+          showManual(true);
+          return;
+        }
+      } catch (_) {}
+    }
+    if (btn) btn.disabled = true;
+    setStatus("Demande d’autorisation… Acceptez la localisation si le téléphone le propose.");
+    try {
+      const useRelaxed = gpsAttempts > 0;
+      const pos = await requestPosition(useRelaxed);
+      const loc = C && C.locationFromCoords ? C.locationFromCoords(pos.coords) : null;
+      if (!loc) {
+        setStatus("Coordonnées invalides.", "err");
+        showManual(true);
+        if (btn) btn.disabled = false;
+        return;
+      }
+      const warn = loc.accuracy && loc.accuracy > 150 ? " (précision ±" + loc.accuracy + " m)" : (loc.accuracy ? " (±" + loc.accuracy + " m)" : "");
+      setStatus("Position obtenue. Envoi…");
+      try {
+        const data = await call({ token, action: "location", ...loc, ...finderFromForm() });
+        if (!data || data.ok !== true) throw new Error("Le serveur n’a pas confirmé l’enregistrement.");
+        setStatus("Position transmise à la famille. Merci." + warn, "ok");
+        const panel = document.getElementById("aManualPanel");
+        if (panel) panel.hidden = true;
+      } catch (e) {
+        setStatus(e.message || "Envoi de la position impossible.", "err");
+        showManual(true);
+      }
+    } catch (err) {
+      const code = err && err.code;
+      if (code === GEO.DENIED) markGeoDenied();
+      const canRetry = C && C.shouldRetryGps ? C.shouldRetryGps(code, gpsAttempts) : false;
+      if (canRetry) {
+        gpsAttempts += 1;
+        setStatus("Nouvelle tentative avec position approximative…");
+        if (btn) btn.disabled = false;
+        return sendGps();
+      }
+      const msg = C && C.geoErrorMessage
+        ? C.geoErrorMessage(code, { deniedBefore: geoWasDenied(), petName: petName() })
+        : "Impossible d’obtenir la position.";
+      setStatus(appendBrowserHint(msg), "err");
+      showManual(true);
+    }
+    if (btn) btn.disabled = false;
+  }
+
+  async function sendManual() {
+    const address = (document.getElementById("aAddr") || {}).value || "";
+    if (String(address).trim().length < 2) {
+      setStatus("Indiquez un lieu (adresse, ville ou lieu-dit).", "err");
+      showManual(true);
+      return;
+    }
+    const ok = await postAction("location", {
+      address: String(address).trim(),
+      source: "manual",
+      ...finderFromForm()
+    }, "Lieu transmis à la famille. Merci.");
+    if (ok) {
+      const panel = document.getElementById("aManualPanel");
+      if (panel) panel.hidden = true;
+    }
+  }
+
+  async function sendContact() {
+    const f = finderFromForm();
+    if (!f.finder_name && !f.finder_phone) { setStatus("Indiquez un prénom ou un téléphone.", "err"); return; }
+    await postAction("message", { message: "Coordonnées laissées", ...f }, "Coordonnées envoyées à la famille.");
+  }
+
+  async function sendMsg() {
+    const message = ((document.getElementById("aMsgTxt") || {}).value || "").trim();
+    const f = finderFromForm();
+    if (message.length < 2 && !f.finder_name && !f.finder_phone) { setStatus("Message trop court.", "err"); return; }
+    await postAction("message", { message: message || "Coordonnées laissées", ...f }, "Message envoyé à la famille.");
+  }
+
+  async function boot() {
+    if (!token || (C && !/^[a-f0-9]{16,40}$/i.test(token))) {
+      paint("Lien de médaille incomplet.", null);
+      return;
+    }
+    try {
+      const data = await call({ token, action: "view" });
+      const pet = data.pet;
+      if (!pet) { paint("médaille inconnue", null); return; }
+      const leak = C ? C.forbiddenPublicKeys(pet) : [];
+      if (leak.length) { paint("fiche incomplète", null); return; }
+      if (data.session_id) saveSessionId(data.session_id);
+      paint(null, pet, data.noted ? "Consultation enregistrée." : "", data.noted ? "ok" : "");
+    } catch (e) {
+      paint(e.message || "médaille inconnue", null);
+    }
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 "use strict";
 /* Maisonnée : accueil en modules, Explorer, calendrier du mois, et les modules
    Anniversaires, Budget, Documents, Emploi du temps, Recettes, Courses. Chargé après app.js. */
-window.MAISONNEE_DOM_BUILD = "20261103-dreame-auto-wash-v10-6";
+window.MAISONNEE_DOM_BUILD = "20261110-dreame-rooms-v3";
 
 Object.assign(TABLES, { bdays: "birthdays", exp: "expenses", docs: "documents", sched: "schedule", shelly: "shelly_devices" });
 const V3 = ["bdays", "exp", "docs", "sched"]; // tables added by supabase/migrations/0003_anniversaires_budget_documents.sql
@@ -27,6 +27,8 @@ MC.fidelite = "#55C8FF";
 MI.fidelite = '<rect class="f" x="3" y="7" width="26" height="19" rx="4"/><path d="M3 13h26M8 19v3M11 19v3M14 19v3M18 19v3M22 19v3M25 19v3"/>';
 MC.galerie = "#F4729C";
 MI.galerie = '<rect class="f" x="4" y="9" width="24" height="17" rx="5"/><path d="M11 9l2-3.5h6L21 9"/><circle cx="16" cy="17.5" r="4.3"/><circle class="s" cx="23.5" cy="13" r="1.2"/>';
+MC.animaux = "#E8A04A";
+MI.animaux = '<path class="f" d="M9 14c-2.2 0-4-1.8-4-3.6S7.2 7 9 7s3.6 1.6 3.6 3.4S11.2 14 9 14zm14 0c-2.2 0-4-1.8-4-3.6S20.8 7 22.6 7 26 8.6 26 10.4 24.4 14 23 14zM7.5 20c-2 0-3.5-1.5-3.5-3.2S5.8 14 7.5 14 11 15.2 11 17 9.5 20 7.5 20zm17 0c-2 0-3.5-1.5-3.5-3.2S22.8 14 24.5 14 28 15.2 28 17 26.5 20 24.5 20z"/><ellipse class="f" cx="16" cy="23" rx="8.5" ry="6.5"/>';
 const mi = (k, cls = "") => `<span class="mi ${cls}" style="--mc:${MC[k]}" aria-hidden="true"><svg viewBox="0 0 32 32">${MI[k]}</svg></span>`;
 I.grid = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>';
 I.home = '<svg viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/><circle cx="12" cy="14.5" r="2"/></svg>';
@@ -50,21 +52,30 @@ const MODS = [
   { k: "docs", t: "Documents", g: "Organisation", sub() { const soon = S.docs.filter(d => d.expires_on && diffDays(today(), d.expires_on) <= 30).length; return soon ? `${plural(soon, "document expire", "documents expirent")} bientôt` : S.docs.length ? plural(S.docs.length, "document", "documents") : "Papiers importants"; } },
   { k: "edt", t: "Emploi du temps", g: "Organisation", sub() { const now = nowSlots(); return now.length ? `${(member(now[0].member_id) || {}).name || ""} : ${now[0].title}` : S.sched.length ? "La semaine de chacun" : "Plannings de chacun"; } },
   { k: "carte", t: "Localisation", g: "Organisation", sub() { const n = S.locs.length; return n ? plural(n, "position partagée", "positions partagées") : "Où sont-ils ?"; } },
-  { k: "fidelite", t: "Cartes de fidélité", g: "Organisation", sub() { const n = window.maisonneeCartesCount?.() || 0; const fam = window.maisonneeCartesFamily?.(); if (!n) return fam ? "Cartes du foyer" : "Ajouter une carte"; return plural(n, "carte enregistrée", "cartes enregistrées") + (fam ? " · foyer" : ""); } }
+  { k: "fidelite", t: "Cartes de fidélité", g: "Organisation", sub() { const n = window.maisonneeCartesCount?.() || 0; const fam = window.maisonneeCartesFamily?.(); if (!n) return fam ? "Cartes du foyer" : "Ajouter une carte"; return plural(n, "carte enregistrée", "cartes enregistrées") + (fam ? " · foyer" : ""); } },
+  { k: "animaux", t: "Mes animaux", g: "Organisation", sub() { const n = window.maisonneeAnimauxCount?.() || 0; return n ? plural(n, "animal du foyer", "animaux du foyer") : "Fiches et médailles du foyer"; } }
 ];
 const modOf = k => MODS.find(m => m.k === k);
 const homePins = () => {
+  let pins;
   if (typeof window.maisonHomeStore !== "undefined" && window.maisonHomeStore.read) {
     const h = window.maisonHomeStore.read();
     const hidden = Array.isArray(h.hidden) ? h.hidden : [];
-    return MODS.map(m => m.k).filter(k => !hidden.includes(k));
+    pins = MODS.map(m => m.k).filter(k => !hidden.includes(k));
+  } else {
+    try {
+      const grid = JSON.parse(localStorage.getItem("maisonnee_ultimate_v3_grid_v1"));
+      if (grid && Array.isArray(grid.hidden)) pins = MODS.map(m => m.k).filter(k => !grid.hidden.includes(k));
+    } catch (_) {}
+    if (!pins) {
+      const p = LS.get("mz_home", null);
+      pins = Array.isArray(p) ? p.filter(modOf) : MODS.map(m => m.k);
+    }
   }
   try {
-    const grid = JSON.parse(localStorage.getItem("maisonnee_ultimate_v3_grid_v1"));
-    if (grid && Array.isArray(grid.hidden)) return MODS.map(m => m.k).filter(k => !grid.hidden.includes(k));
+    if (window.maisonHomeStore && window.maisonHomeStore.sortKeys) return window.maisonHomeStore.sortKeys(pins);
   } catch (_) {}
-  const p = LS.get("mz_home", null);
-  return Array.isArray(p) ? p.filter(modOf) : MODS.map(m => m.k);
+  return pins;
 };
 let exploreEdit = false;
 function v3Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0003_anniversaires_budget_documents.sql</b> dans Supabase (comme les deux premiers), puis rouvrez l'appli.</div>`; }
@@ -193,6 +204,13 @@ let domDreamePrefAt = 0;
 let domDreamePrefDraft = {};
 let domDreamePrefTimer = null;
 let domDreamePrefInflight = null;
+let domDreameMapQuietUntil = 0;
+function domDreameNoteCleanCommand() {
+  domDreameMapQuietUntil = Date.now() + 25000;
+}
+function domDreameMapQuiet() {
+  return Date.now() < domDreameMapQuietUntil;
+}
 const DOM_DREAME_PREF_BATCH_MS = 250; // Regrouper les clics proches sans retarder les changements isolés.
 let domDreameWanted = { cleaning_mode: null, suction: null, water: null };
 // Unconfirmed choices are local UI preferences, not verified robot state.
@@ -760,10 +778,26 @@ async function domDreameFlushSettings() {
     /* L'écran a déjà le choix. Dreame Home peut mettre quelques secondes. */
   }
 }
+function dreameClientTimeoutMs(action, body) {
+  if (/quick=/.test(String(action))) return 10000;
+  if (body && body._prefs) return 12000;
+  const act = body && body.action;
+  if (action === "command" && (act === "start" || act === "play" || act === "clean_rooms" || act === "run_program" || act === "clean_room")) return 42000;
+  return 18000;
+}
+function dreameClientError(e) {
+  if (!e) return new Error("Erreur Dreame");
+  if (e.name === "AbortError") return new Error("Délai dépassé en contactant Dreame. Réessayez.");
+  const msg = String(e.message || e);
+  if (e instanceof TypeError || /load failed|failed to fetch|networkerror|network request failed/i.test(msg)) {
+    return new Error("Impossible de joindre le serveur Dreame. La commande a parfois tout de même atteint le robot : vérifiez Dreame Home. Réessayez si besoin.");
+  }
+  return e instanceof Error ? e : new Error(msg);
+}
 async function dreameServer(action, body) {
   const run = async () => {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), /quick=/.test(String(action)) ? 10000 : (body && body._prefs ? 12000 : 18000)) : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), dreameClientTimeoutMs(action, body)) : null;
     try {
       if (!sb) await loadSb();
       const { data: { session } } = await sb.auth.getSession();
@@ -781,18 +815,14 @@ async function dreameServer(action, body) {
       }
       return out;
     } catch (e) {
-      if (e && e.name === "AbortError") throw new Error("Délai dépassé en contactant Dreame. Réessayez.");
-      if (e instanceof TypeError && /fetch/i.test(String(e.message))) {
-        throw new Error("Impossible de joindre le serveur Dreame (fonction Supabase « dreame »). Vérifiez votre connexion ou réessayez.");
-      }
-      throw e;
+      throw dreameClientError(e);
     } finally {
       if (timer) clearTimeout(timer);
     }
   };
   // Ne jamais bloquer une lecture de batterie derrière la lecture des pièces.
-  // Garder l'ordre strict pour les commandes envoyées au robot.
-  if (action !== "command" || (body && body._prefs)) return run();
+  // Sérialiser aussi set_prefs : CleanRoute / mode ne doivent pas courir en parallèle de START_CUSTOM.
+  if (action !== "command") return run();
   const p = domDreameCmdChain.then(run, run);
   domDreameCmdChain = p.catch(() => {});
   return p;
@@ -1262,7 +1292,11 @@ function domDreameLaunchProgram(programId) {
   domDreameFillHosts();
   // Le programme enregistré contient déjà ses pièces et paramètres : aucune
   // sélection manuelle ni lecture lente supplémentaire n'est nécessaire.
-  domRunDreameCommand(() => dreameServer("command", { action: "run_program", program_id: programId }))
+  domDreameNoteCleanCommand();
+  domRunDreameCommand(async () => {
+    await domDreameFlushSettings();
+    return dreameServer("command", { action: "run_program", program_id: programId });
+  })
     .then(r => {
       if (!r) return;
       domDreameMergeState(r);
@@ -2074,6 +2108,7 @@ function domDreameSheet(fromRefresh) {
 }
 function domDreamePullWhere() {
   if (!domDreameLinked() || mode !== "cloud") return Promise.resolve(false);
+  if (domDreameMapQuiet()) return Promise.resolve(false);
   return dreameServer("robot_where", {}).then(r => {
     if (!r) return false;
     const live = Array.isArray(r.current_rooms) ? r.current_rooms.filter(Boolean) : [];
@@ -2142,7 +2177,7 @@ function domDreameScheduleRoomsWhenIdle(attempt = 0) {
     domDreameRoomsIdleTimer = null;
     if (!document.querySelector(".dom-dreame-panel")) return;
     const hasPending = !!domDreamePrefInflight || !!domDreamePrefTimer ||
-      Object.keys(domDreamePrefDraft).length > 0 || !!domDreameBusy;
+      Object.keys(domDreamePrefDraft).length > 0 || !!domDreameBusy || domDreameMapQuiet();
     if (hasPending) {
       if (attempt < 20) domDreameScheduleRoomsWhenIdle(attempt + 1);
       return;
@@ -2803,7 +2838,11 @@ document.addEventListener("click", e => {
     domDreameBusy = action;
     domDreameTask = action === "play" ? "start" : action;
     domDreameFillHosts();
-    const sendStart = async () => dreameServer("command", body);
+    const sendStart = async () => {
+      domDreameNoteCleanCommand();
+      await domDreameFlushSettings();
+      return dreameServer("command", body);
+    };
     sendStart().then(r => {
       if (r) {
         domDreameMergeState(r);
@@ -2816,13 +2855,14 @@ document.addEventListener("click", e => {
         toast("Nettoyage lancé, mais puissance/itinéraire non confirmés : vérifiez Dreame Home.", null, null, null, "domotique");
       } else if ((action === "start" || action === "play") && r?.settings_reapply_sent) {
         toast("Nettoyage transmis · puissance et itinéraire renvoyés (état réel non confirmé)", null, null, null, "domotique");
+      } else if ((action === "start" || action === "play") && Array.isArray(r?.rooms) && r.rooms.length) {
+        toast("Nettoyage demandé : " + r.rooms.join(", ") + ". Si le robot dit « zone inatteignable », vérifiez portes et zones interdites dans Dreame Home.", null, null, null, "domotique");
       } else {
         toast((labels[action] || "Commande") + extra + " transmise au cloud Dreame (exécution non confirmée)", null, null, null, "domotique");
       }
       domDreameFillHosts();
       setTimeout(() => {
-        domDreamePullWhere().then(() => { domDreameFillHosts(); if (view === "domotique") domSoftRender(); }).catch(() => {});
-        domDreameRefreshState(true).then(() => domDreameFillHosts()).catch(() => {});
+        domDreameRefreshState(true).then(() => { domDreameFillHosts(); if (view === "domotique") domSoftRender(); }).catch(() => {});
       }, 2500);
     }).catch(err => { if (err) toast(err.message); }).finally(() => {
       domDreameBusy = "";
@@ -3067,7 +3107,17 @@ document.addEventListener("click", e => {
     if (!Number.isFinite(segment_id)) return;
     domDreameBusy = "room_" + segment_id;
     if (view !== "home") render();
-    domRunDreameCommand(() => dreameServer("command", { action: "clean_room", segment_id })).then(r => {
+    domDreameNoteCleanCommand();
+    domRunDreameCommand(async () => {
+      await domDreameFlushSettings();
+      return dreameServer("command", {
+        action: "clean_room",
+        segment_id,
+        cleaning_mode: domDreamePrefNum("cleaning_mode", 2),
+        suction: domDreamePrefNum("suction", 1),
+        water: domDreamePrefNum("water", 2)
+      });
+    }).then(r => {
       if (!r) return;
       domDreameMergeState(r);
       domDreameStateAt = 0;
@@ -3589,13 +3639,13 @@ function recBookHtml() {
   const n = recQ.trim().toLowerCase();
   let l = recTab === "fav" && S.favs instanceof Set ? S.recipes.filter(r => S.favs.has(r.id)) : S.recipes;
   if (n) l = l.filter(r => r.name.toLowerCase().includes(n) || (r.cat || "").toLowerCase().includes(n));
-  return l.slice(0, 150).map(r => `<button class="row" data-act="openRecipe" data-v="${r.id}">${r.image ? `<img class="thumb" src="${esc(r.image)}" alt="" loading="lazy">` : `<span class="thumb">${mi("recettes", "sm")}</span>`}<span class="main"><span class="t">${isFav(r.id) ? "★ " : ""}${esc(r.name)}</span><span class="m">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`).join("") || `<p class="muted" style="padding:14px">Aucune recette ne correspond.</p>`;
+  return l.slice(0, 150).map(r => { const ph = typeof mzRecipePhoto === "function" ? mzRecipePhoto(r) : (r.image || ""); return `<button class="row" data-act="openRecipe" data-v="${r.id}">${ph ? `<img class="thumb" src="${esc(ph)}" alt="" loading="lazy">` : `<span class="thumb">${mi("recettes", "sm")}</span>`}<span class="main"><span class="t">${isFav(r.id) ? "★ " : ""}${esc(r.name)}</span><span class="m">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}</span></span></button>`; }).join("") || `<p class="muted" style="padding:14px">Aucune recette ne correspond.</p>`;
 }
 function recipeSheet(id) {
   const r = recipeOf(id); if (!r) return;
   const days = Array.from({ length: 7 }, (_, i) => addDays(today(), i));
   openSheet(r.name, `
-    ${r.image ? `<img src="${esc(r.image)}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-top:6px">` : ""}
+    ${(() => { const ph = typeof mzRecipePhoto === "function" ? mzRecipePhoto(r) : (r.image || ""); return ph ? `<img src="${esc(ph)}" alt="" style="width:100%;max-height:220px;object-fit:cover;border-radius:16px;margin-top:6px">` : ""; })()}
     <p class="muted" style="margin-top:10px">${esc(r.cat || "")}${r.time ? " · " + r.time + " min" : ""}${r.serves ? " · " + r.serves + " pers." : ""}</p>
     ${Array.isArray(r.ing) && r.ing.length ? `<h3 style="margin-top:14px">Ingrédients</h3><ul class="ing">${r.ing.map(g => `<li><span>${esc(g.n)}</span><span class="muted">${esc(fmtQty(Number(g.q) || 0, g.u))}</span></li>`).join("")}</ul>` : ""}
     ${r.steps ? `<h3 style="margin-top:14px">Étapes</h3><ol class="steps">${String(r.steps).split(/\n+/).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
@@ -4002,7 +4052,27 @@ const PH_BUCKET = "household-photos";
 let phAlbum = "", phPending = [], lbList = [], lbIdx = -1;
 const purl = {}; // signed address cache: path -> { url, until }
 function v4Notice() { return `<div class="empty"><strong>Encore une étape.</strong>Collez le script <b>supabase/migrations/0004_galerie.sql</b> dans Supabase (comme les précédents), puis rouvrez l'appli.</div>`; }
-const albums = () => [...new Set(S.photos.map(p => p.album).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+const phAlbumsSaved = () => (S.hh && Array.isArray(S.hh.photo_albums) ? S.hh.photo_albums : LS.get("mz_phalbums", []));
+async function phSaveAlbums(list) {
+  list = [...new Set(list.map(s => String(s || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  LS.set("mz_phalbums", list);
+  if (mode === "cloud" && S.hh && "photo_albums" in S.hh) {
+    const before = S.hh.photo_albums;
+    S.hh.photo_albums = list;
+    saveLocal();
+    const { error } = await sb.from("households").update({ photo_albums: list }).eq("id", S.hh.id);
+    if (error) { S.hh.photo_albums = before; saveLocal(); }
+  }
+}
+const albums = () => [...new Set([...phAlbumsSaved(), ...S.photos.map(p => p.album).filter(Boolean)])].sort((a, b) => a.localeCompare(b, "fr"));
+const phInAlbum = name => S.photos.filter(p => p.album === name).length;
+function albumSheet(rename) {
+  const cur = rename ? phAlbum : "";
+  openSheet(rename ? "Renommer l'album" : "Nouvel album", `<form data-form="phAlbumCrud">
+    <label class="field"><span class="label">Nom de l'album</span><input class="input" name="name" value="${esc(cur)}" maxlength="40" required placeholder="Ex. Vacances d'été, Anniversaire…" autofocus></label>
+    ${mode === "cloud" && S.hh && !("photo_albums" in S.hh) ? `<p class="muted small">Un album vide reste sur ce téléphone tant que le script <b>supabase/migrations/0036_photo_albums.sql</b> n'est pas appliqué sur Supabase.</p>` : ""}
+    <div class="sheet-sticky btns" style="margin-top:0"><button class="btn primary" type="submit" style="flex:1">${rename ? "Renommer" : "Créer"}</button></div></form>`, { rename: !!rename });
+}
 const phSorted = () => S.photos.filter(p => !phAlbum || p.album === phAlbum).sort((a, b) => String(b.taken_at || b.created_at).localeCompare(String(a.taken_at || a.created_at)));
 
 async function signPaths(paths) {
@@ -4031,8 +4101,9 @@ VIEWS.galerie = function () {
     grid += `<button class="ph" data-act="lbOpen" data-v="${i}" aria-label="Photo${p.caption ? " : " + esc(p.caption) : ""}"><img data-ph="${p.id}" alt="" loading="lazy"></button>`;
   });
   if (lastMonth) grid += "</div>";
-  return `${al.length ? `<div class="who" style="margin-top:4px"><button class="plain" data-act="phAlbum" data-v="" aria-pressed="${!phAlbum}">Toutes</button>${al.map(a => `<button class="plain" data-act="phAlbum" data-v="${esc(a)}" aria-pressed="${phAlbum === a}">${esc(a)} <span class="muted">${S.photos.filter(p => p.album === a).length}</span></button>`).join("")}</div>` : ""}
-    ${list.length ? grid : `<div class="empty" style="margin-top:12px"><strong>Aucune photo pour l'instant.</strong>Ajoutez des photos depuis votre téléphone : tout le foyer les verra, et elles restent privées.</div>`}`;
+  return `${al.length ? `<div class="who" style="margin-top:4px"><button class="plain" data-act="phAlbum" data-v="" aria-pressed="${!phAlbum}">Toutes</button>${al.map(a => `<button class="plain" data-act="phAlbum" data-v="${esc(a)}" aria-pressed="${phAlbum === a}">${esc(a)} <span class="muted">${phInAlbum(a)}</span></button>`).join("")}</div>` : ""}
+    ${phAlbum ? `<div class="btns" style="margin-top:6px"><button class="btn" data-act="pickPhotos">Ajouter des photos</button><button class="btn" data-act="phRenameAlbum">Renommer</button>${!phInAlbum(phAlbum) ? `<button class="btn ghost danger" data-act="phDelAlbum">Supprimer l'album</button>` : ""}</div>` : ""}
+    ${list.length ? grid : phAlbum ? `<div class="empty" style="margin-top:12px"><strong>Album vide.</strong>Ajoutez des photos avec le bouton ci-dessus ou le + en bas à droite.</div>` : `<div class="empty" style="margin-top:12px"><strong>Aucune photo pour l'instant.</strong>Ajoutez des photos depuis votre téléphone : tout le foyer les verra, et elles restent privées.</div>`}`;
 };
 async function fillThumbs() {
   const imgs = [...document.querySelectorAll("img[data-ph]")];
@@ -4138,6 +4209,14 @@ document.addEventListener("click", async e => {
   const v = b.dataset.v;
   switch (b.dataset.act) {
     case "pickPhotos": closeSheet(); if (!S.v4) { view = "galerie"; render(); break; } phIn.click(); break;
+    case "newPhAlbum": closeSheet(); if (!S.v4) { view = "galerie"; render(); break; } albumSheet(false); break;
+    case "phRenameAlbum": if (!phAlbum) break; albumSheet(true); break;
+    case "phDelAlbum": {
+      if (!phAlbum || phInAlbum(phAlbum)) { toast("Retirez d'abord toutes les photos de cet album (déplacez-les ou supprimez-les)."); break; }
+      const gone = phAlbum; phAlbum = "";
+      await phSaveAlbums(phAlbumsSaved().filter(a => a !== gone));
+      render(); toast("Album supprimé."); break;
+    }
     case "phAlbum": phAlbum = v; render(); break;
     case "lbOpen": lbOpen(+v); break;
     case "lbClose": lbClose(); break;
@@ -4169,14 +4248,39 @@ document.addEventListener("click", async e => {
   }
 });
 document.addEventListener("submit", async e => {
-  const f = e.target.closest("form[data-form]"); if (!f || !["phUpload", "phAlbumSet"].includes(f.dataset.form)) return;
+  const f = e.target.closest("form[data-form]"); if (!f || !["phUpload", "phAlbumSet", "phAlbumCrud"].includes(f.dataset.form)) return;
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(f).entries()), album = (fd.newAlbum || "").trim() || chipVal(f, "album") || "";
-  if (f.dataset.form === "phAlbumSet") { const id = sheetCtx.photo; closeSheet(); await patch("photos", id, { album, caption: (fd.caption || "").trim() }); if (lbIdx >= 0) { lbList = phSorted(); lbIdx = Math.max(0, lbList.findIndex(x => x.id === id)); lbDraw(); } return; }
+  if (f.dataset.form === "phAlbumCrud") {
+    const name = String(fd.name || "").trim(); if (!name) return;
+    closeSheet();
+    if (sheetCtx.rename) {
+      const old = phAlbum;
+      if (!old || name === old) return;
+      if (albums().includes(name)) { toast("Un album porte déjà ce nom."); return; }
+      for (const p of S.photos.filter(x => x.album === old)) await patch("photos", p.id, { album: name });
+      await phSaveAlbums([...phAlbumsSaved().filter(a => a !== old), name]);
+      phAlbum = name; render(); toast("Album renommé.");
+    } else {
+      if (albums().includes(name)) { phAlbum = name; render(); toast("Album existant ouvert."); return; }
+      await phSaveAlbums([...phAlbumsSaved(), name]);
+      phAlbum = name; render(); toast("Album créé.");
+    }
+    return;
+  }
+  if (f.dataset.form === "phAlbumSet") {
+    const id = sheetCtx.photo; closeSheet();
+    await patch("photos", id, { album, caption: (fd.caption || "").trim() });
+    if (album && !albums().includes(album)) await phSaveAlbums([...phAlbumsSaved(), album]);
+    if (lbIdx >= 0) { lbList = phSorted(); lbIdx = Math.max(0, lbList.findIndex(x => x.id === id)); lbDraw(); }
+    return;
+  }
   const btn = f.querySelector("[type=submit]"); btn.disabled = true;
   const files = phPending; phPending = [];
   const n = await uploadPhotos(files, album, (fd.caption || "").trim(), btn);
-  closeSheet(); phAlbum = album; view = "galerie"; render();
+  closeSheet();
+  if (album && !albums().includes(album)) await phSaveAlbums([...phAlbumsSaved(), album]);
+  phAlbum = album; view = "galerie"; render();
   toast(n === files.length ? (n > 1 ? `${n} photos ajoutées.` : "Photo ajoutée.") : `${n} sur ${files.length} photos ajoutées. Réessayez pour les autres (réseau ?).`);
 });
 
@@ -4205,7 +4309,7 @@ VIEWS.foyer = function () {
 };
 
 /* ---------- Google Agenda via Supabase (lecture seule) ---------- */
-const G = { tok: null, cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false, connected: false, googleOff: false };
+const G = { tok: null, cals: LS.get("mz_gcals", null), list: LS.get("mz_gcallist", []), ev: LS.get("mz_gev", { at: 0, items: [] }), after: null, err: null, busy: false, connected: false, googleOff: false, remindersStatus: null };
 const G_ENDPOINT = SB_URL + "/functions/v1/google-calendar";
 const gClient = () => (S.hh && S.hh.google_client_id) || "";
 const gValid = () => !!(G.tok && G.tok.exp > Date.now() + 60e3);
@@ -4219,10 +4323,14 @@ async function gSession() {
   }
   return null;
 }
-async function gServer(action, method = "GET") {
+async function gServer(action, method = "GET", payload) {
   const session = await gSession();
   if (!session) throw new Error("Connexion Maisonnée requise");
-  const res = await fetch(G_ENDPOINT + "/" + action, { method, headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY } });
+  const res = await fetch(G_ENDPOINT + "/" + action, {
+    method,
+    headers: { Authorization: "Bearer " + session.access_token, apikey: SB_KEY, ...(payload ? { "Content-Type": "application/json" } : {}) },
+    body: payload === undefined ? undefined : JSON.stringify(payload)
+  });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || "Erreur Google Agenda");
   return body;
@@ -4421,11 +4529,12 @@ function gStart(force) {
   if (mode !== "cloud") return;
   if (!user) return;
   gEnsure().then(ok => {
-    if (ok) {
+      if (ok) {
       gRetryN = 0; gStarted = true;
       if (force || G.after || !G.ev.at || Date.now() - G.ev.at > 60e3) gFetch();
       else softRender();
       if (typeof gTasksRefresh === "function" && GTASKS.enabled) gTasksRefresh(false);
+      gServer("reminders-status").then(st => { G.remindersStatus = st; if (view === "foyer") softRender(); }).catch(() => { G.remindersStatus = { schemaReady: false }; });
       return;
     }
     if (G.googleOff) { gRetryN = 0; gStarted = true; return; }
@@ -4517,10 +4626,18 @@ function gCard() {
     <p class="small" style="margin:0 0 8px">Pour afficher vos agendas et anniversaires Google, il faut une fois créer un « identifiant client » dans la console Google (gratuit). Le guide est dans le fichier LISEZMOI du dossier maison.</p>
     <form data-form="gClient" class="inline"><input class="input" name="cid" placeholder="xxxx.apps.googleusercontent.com" required pattern=".+\\.apps\\.googleusercontent\\.com"><button class="btn ink" type="submit">Enregistrer</button></form></div>`;
   if (!G.connected && !G.ev.items.length) return `<h2>Agenda Google</h2><div class="card"><p class="small" style="margin:0">Affichez vos agendas Google dans le Calendrier (sur ce téléphone) et importez vos anniversaires.</p><div class="btns"><button class="btn primary" data-act="gConnect">Connecter mon agenda Google</button></div></div>`;
+  const rs = G.remindersStatus;
+  const consentReady = !!(rs && rs.schemaReady);
+  const appleHint = `<p class="muted small" style="margin:10px 0 0">Calendrier Apple : sur chaque iPhone, affichez l'agenda familial <strong>sous votre propre compte Google</strong> (chez Franck : cocher « Agendas » partagé). Si le même agenda apparaît aussi sous le compte de l'autre personne, décochez-le là : sinon Apple lit les rappels de cette autre identité, et les rendez-vous peuvent doubler.</p>`;
+  const consentBox = consentReady
+    ? `<label class="switch" style="margin-top:12px"><strong>Appliquer aussi mes rappels familiaux</strong><input type="checkbox" data-family-reminders ${rs.me && rs.me.familyReminders ? "checked" : ""}> <span class="muted small">Maisonnée recopiera les rappels de cet agenda sur <em>votre</em> compte Google uniquement. L'autre membre doit cocher la même case de son côté.</span></label>`
+    : `<p class="muted small" style="margin:10px 0 0">Les rappels des deux comptes Google pourront être alignés après validation du schéma et le consentement de chacun. Rien n'est activé pour l'instant.</p>`;
   return `<h2>Agenda Google</h2><div class="card">
     <p class="small" style="margin:0 0 8px">${G.ev.at ? "Mis à jour " + esc(ago(new Date(G.ev.at).toISOString())) : "Connecté"}. Visible sur ce téléphone seulement.</p>
     ${G.list.length ? `<div class="chips">${G.list.map(c => `<button class="chip" data-act="gCal" data-v="${esc(c.id)}" aria-pressed="${!!(G.cals && G.cals.includes(c.id))}"><span class="cat-dot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join("")}</div>` : ""}
+    ${G.list.length ? `<p class="muted small" style="margin:8px 0 0">${G.list.map(c => `${esc(c.name)} : ${esc(c.id)}${c.primary ? " (principal)" : ""}`).join("<br>")}</p>` : ""}
     ${G.list.some(c => c.accessRole === "owner" || c.accessRole === "writer") ? `<label class="field"><span class="label">Agenda par défaut des nouveaux rendez-vous</span><select class="input" data-defdest><option value="local">Maisonnée (agenda familial)</option>${G.list.filter(c => c.accessRole === "owner" || c.accessRole === "writer").map(c => `<option value="${esc(c.id)}" ${defaultDest() === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>` : ""}
+    ${appleHint}${consentBox}
     <div class="btns"><button class="btn" data-act="gRefresh">Actualiser</button><button class="btn" data-act="gMealSync">Mettre à jour l'agenda Repas</button><button class="btn" data-act="gBdays">Importer mes anniversaires</button><button class="btn" data-act="gColors">Couleurs des enfants</button><button class="btn ghost danger" data-act="gOff">Déconnecter</button></div></div>`;
 }
 const foyerViewG = VIEWS.foyer;
@@ -4537,6 +4654,19 @@ const gBoot = setInterval(() => {
 window.addEventListener("pageshow", () => {
   if (mode === "cloud" && user && typeof gStart === "function") gStart(false);
 });
+document.addEventListener("change", async e => {
+  if (!e.target.matches("[data-family-reminders]")) return;
+  const on = e.target.checked;
+  try {
+    await gServer("reminders-consent", "POST", { enabled: on });
+    if (!G.remindersStatus) G.remindersStatus = { schemaReady: true, me: {} };
+    G.remindersStatus.me = { ...(G.remindersStatus.me || {}), familyReminders: on };
+    toast(on ? "Consentement enregistré : vos rappels familiaux pourront être recopiés sur votre compte Google." : "Consentement retiré pour votre compte Google.");
+  } catch (_) {
+    e.target.checked = !on;
+    toast("Consentement non enregistré. Le schéma n'est pas encore validé, ou le réseau a échoué.");
+  }
+});
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const v = b.dataset.v;
@@ -4546,7 +4676,7 @@ document.addEventListener("click", async e => {
     case "gMealSync": if (typeof rPushGoogleMeals === "function") rPushGoogleMeals(true); else toast("Ouvrez d'abord Repas une fois, puis réessayez."); break;
     case "gBdays": gImportBdays(); break;
     case "gColors": gColorsSheet(); break;
-    case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.googleOff = true; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
+    case "gOff": { try { await gServer("disconnect", "POST"); } catch (e) { toast("Déconnexion impossible : " + e.message); break; } G.tok = null; G.connected = false; G.googleOff = true; G.remindersStatus = null; G.ev = { at: 0, items: [] }; G.list = []; G.cals = null; ["mz_gtok", "mz_gev", "mz_gcallist", "mz_gcals"].forEach(k => LS.del(k)); render(); toast("Agenda Google déconnecté."); break; }
     case "gCal": { G.cals = G.cals || []; G.cals = G.cals.includes(v) ? G.cals.filter(x => x !== v) : [...G.cals, v]; LS.set("mz_gcals", G.cals); render(); if (b.closest("#sheet")) gCalsSheet(); gFetch().then(() => { if (view === "agenda") softRender(); }); break; }
     case "gCalsSheet": gCalsSheet(); break;
     case "remSheet": remSheet(b.dataset.src, v, b.dataset.day); break;
@@ -4666,6 +4796,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const cataloguePanel = tail.find(n => n.querySelector('[data-act="catOpen"]'));
     const catalogueButton = cataloguePanel?.querySelector('[data-act="catOpen"]')?.outerHTML || '<button type="button" class="btn block" data-act="catOpen">🛍️ Catalogue de produits</button>';
     const catalogueAccess = '<div class="btns mz-shop-catalogue-access" style="margin-top:10px">' + catalogueButton + '</div>';
+    const hist = nodes.find(n => n.matches('.mz-shop-hist'));
 
     if (uxScreen === 'store') {
       return '<section class="mz-shop-screen mz-shop-store" aria-label="Courses en magasin">' +
@@ -4683,6 +4814,7 @@ document.addEventListener('DOMContentLoaded', function () {
       '<div class="mz-shop-progress-track" role="progressbar" aria-label="Achats effectués" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><span style="width:' + pct + '%"></span></div>' +
       '<div class="mz-shop-hero-actions"><button class="mz-shop-enter" type="button" data-act="mzShopEnter">🛒 En magasin <span>' + left + ' à prendre</span></button>' +
       '<button type="button" class="mz-round-btn mz-round-btn--md mz-shop-addfab" data-act="catOpen" aria-label="Choisir un article dans le catalogue">' + I.plus + '</button></div></div>' +
+      (hist ? hist.outerHTML : '') +
       '<div class="mz-shop-inlineadd"><label class="mz-shop-label" for="cxIn">Saisir un article</label>' + form + catalogueAccess + '</div>' +
       '<details class="mz-shop-panel" id="mzShopDays"' + (daysOpen ? ' open' : '') + '><summary><span>Jours et repas</span><small>' + days + ' jour' + (days > 1 ? 's' : '') + ' sélectionné' + (days > 1 ? 's' : '') + '</small></summary>' +
       '<div class="mz-shop-panel-content">' + join(nodes.slice(d, f)) + '</div></details>' +

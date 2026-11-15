@@ -317,42 +317,47 @@ function rPhotos(){return LS.get(RPH,{});}
 function saveRPhoto(id,data){const m=rPhotos();if(data)m[id]=data;else delete m[id];let keys=Object.keys(m);
   for(;;){try{localStorage.setItem(RPH,JSON.stringify(m));break;}catch(e){if(keys.length<=1)break;delete m[keys.shift()];keys=Object.keys(m);}}}
 const rFetching=new Set();
-/* matching photo for every recipe: free photos from Wikipédia / Wikimedia Commons, found by the recipe's name; "Autre photo" cycles */
-/* v4: better search (key words, Openverse), no maps / coats of arms; older caches are dropped */ const AUTOPH="cm_autoph5";try{["cm_autoph","cm_autoph2","cm_autoph3","cm_autoph4"].forEach(k=>localStorage.removeItem(k));}catch(e){}
-// not a picture of food: maps, flags, coats of arms, logos, places, people…
-const PH_BAD=/\b(map|carte|plan|locator|location|localisation|situation|blason|armoiries|coat[ _]of[ _]arms|flag|drapeau|logo|icon|ic[oô]ne|diagram|sch[ée]ma|chart|graph|signature|portrait|panneau|sign|stamp|timbre|carton|poster|affiche|book|livre|page|scan|osm|relief|commune|village|church|[ée]glise|ch[aâ]teau|street|rue|gare|station|vache|cow|bull|cattle|ox|taureau|b[œo]euf[ _]?(de|du)?[ _]?(race|breed))\b/i;
+/* matching photo: Wikipedia / Commons / Openverse, then relevance score (carnet-photos.js) */
+const AUTOPH="cm_autoph6";try{["cm_autoph","cm_autoph2","cm_autoph3","cm_autoph4","cm_autoph5"].forEach(k=>localStorage.removeItem(k));}catch(e){}
+const PH_BAD=/\b(map|carte|plan|locator|location|localisation|situation|blason|armoiries|coat[ _]of[ _]arms|flag|drapeau|logo|icon|ic[oô]ne|diagram|sch[ée]ma|chart|graph|signature|portrait|panneau|sign|stamp|timbre|carton|poster|affiche|book|livre|page|scan|osm|relief|commune|village|church|[ée]glise|ch[aâ]teau|street|rue|gare|station|vache|cow|bull|cattle|ox|taureau|b[œo]euf[ _]?(de|du)?[ _]?(race|breed))\b|logo_|_logo|kfc|kentucky|bowles|camilla/i;
 const PH_PLACE=/commune|ville|village|hameau|rivi[eè]re|fleuve|d[ée]partement|r[ée]gion|pays|personnalit|footballeur|joueur|homme politique|femme politique|chanteu|acteur|actrice|r[ée]alisat|film|album|chanson|groupe|entreprise|soci[ée]t[ée]|famille|genre|esp[eè]ce|race|navire|[ée]mission|s[ée]rie|roman|personnage/i;let autoCache=LS.get(AUTOPH,{}),autoQ=[],autoBusy=0,autoPend=new Set(),autoT=null;
 const autoKey=r=>norm(r.name);
+function phApi(){return typeof carnetPhotos!=="undefined"?carnetPhotos:null;}
+function phQueries(name){const P=phApi();if(P&&P.searchQueries)return P.searchQueries(name);return [String(name||"").trim()].filter(Boolean);}
+function phRank(name,list,mode){const P=phApi();if(!P||!P.rank)return list||[];return P.rank(name,list,mode);}
+function autoPickOk(r,u){if(!r||!u)return false;if(rejected(r).has(u))return false;const P=phApi();if(!P)return true;
+  const hit=((autoCache[autoKey(r)]||{}).list||[]).find(x=>x.u===u)||{u,title:u,page:"",desc:""};
+  return P.acceptAuto(P.scoreCandidate(r.name,hit));}
 function autoList(id){const r=recipes[id];if(!r)return[];const c=autoCache[autoKey(r)];if(c)return c.list||[];
   if(!autoPend.has(id)){autoPend.add(id);autoQ.push(id);autoPump();}return[];}
 function autoPump(){while(autoBusy<4&&autoQ.length){const id=autoQ.shift();autoBusy++;
   findPhotos(recipes[id]).then(list=>{const r=recipes[id];if(r){autoCache[autoKey(r)]={list,t:Date.now()};try{LS.set(AUTOPH,autoCache);}catch(e){}}})
     .catch(()=>{}).finally(()=>{autoBusy--;autoPend.delete(id);if(!autoT)autoT=setTimeout(()=>{autoT=null;render();},600);autoPump();});}}
-// "Gratin de chou-fleur léger au fromage frais" → "gratin chou-fleur": the words that name the dish
-const PH_STOP=new Set("de du des d la le les l au aux à a et en avec sans sur pour façon style ma mon mes maison express rapide facile léger légère légers légères allégé allégée crémeux crémeuse crémeuses fondant fondante simple simplifié simplifiée revisité revisitée minute moelleux moelleuse croustillant croustillante gourmand gourmande healthy recette meilleure".split(" "));
-function phKeywords(name){return name.toLowerCase().replace(/[()&,:;!?.«»"]/g," ").replace(/(pommes?|noix|fruits?|haricots?) de (terre|saint-jacques|coco|mer|cajou)/g,"$1_de_$2").split(/\s+/).filter(w=>w&&!PH_STOP.has(w)&&!/^\d/.test(w)&&!/^(d|l|qu)'/.test(w)).slice(0,3).join(" ").replace(/_/g," ");}
+function phKeywords(name){const P=phApi();if(P&&P.phKeywords)return P.phKeywords(name).join(" ");
+  return name.toLowerCase().replace(/[()&,:;!?.«»"]/g," ").split(/\s+/).filter(Boolean).slice(0,4).join(" ");}
 async function findPhotos(r,max){
   const name=String(r.name||"").replace(/\([^)]*\)/g," ").replace(/\s+/g," ").trim(),out=[],seen=new Set();
   const add=x=>{if(x&&x.u&&!seen.has(x.u)){seen.add(x.u);out.push(x);}};
-  const head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),key=phKeywords(name),key2=key.split(" ").slice(0,2).join(" ");
+  const qs=phQueries(name),head=name.split(/,| & | et | aux | au | à la | à l'| sauce /i)[0].trim(),mode=max?"picker":"auto";
   const want=max||8;
-  // 1. Wikipédia: the article of the dish (best match for classic dishes)
-  for(const t of [...new Set([name,head])]){if(out.length)break;try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
-    if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source&&!PH_PLACE.test(d.description||"")&&!PH_BAD.test(d.thumbnail.source)){const o=d.originalimage||{};
-      add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia"});}}}catch(e){}}
-  // 2. Wikipédia search: the dish articles that match the key words (their main picture)
-  for(const q of [...new Set([key,key2].filter(Boolean))]){if(out.length>=3)break;
-    try{const x=await fetch("https://fr.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=5&prop=pageimages|description&piprop=thumbnail&pithumbsize=640&gsrsearch="+encodeURIComponent(q));
+  for(const t of [...new Set([name,head])]){try{const x=await fetch("https://fr.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(t.replace(/ /g,"_")));
+    if(x.ok){const d=await x.json();if(d&&d.type==="standard"&&d.thumbnail&&d.thumbnail.source&&!PH_PLACE.test(d.description||"")&&!PH_BAD.test((d.title||"")+" "+(d.description||"")+" "+d.thumbnail.source)){const o=d.originalimage||{};
+      add({u:o.source&&o.width&&o.width<=1600?o.source:(o.width>640?d.thumbnail.source.replace(/\/\d+px-/,"/640px-"):d.thumbnail.source),page:d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page,src:"Wikipédia",title:d.title||"",desc:d.description||"",extract:d.extract||""});}}}catch(e){}}
+  for(const q of qs){if(out.length>=12)break;
+    try{const x=await fetch("https://fr.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=8&prop=pageimages|description|extracts&exintro=1&explaintext=1&piprop=thumbnail&pithumbsize=640&gsrsearch="+encodeURIComponent(q));
       if(x.ok){const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
-        for(const pg of pages){if(pg.thumbnail&&pg.thumbnail.source&&!PH_PLACE.test(pg.description||"")&&!PH_BAD.test(pg.thumbnail.source))add({u:pg.thumbnail.source,page:"https://fr.wikipedia.org/wiki/"+encodeURIComponent((pg.title||"").replace(/ /g,"_")),src:"Wikipédia"});}}}catch(e){}}
-  // 3. Wikimedia Commons
-  for(const q of [...new Set([key,head,key2].filter(Boolean))]){if(out.length>=(max?want:2))break; // automatic: Commons only when Wikipédia found little
-    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+want+"&prop=imageinfo&iiprop=url&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
+        for(const pg of pages){const blob=(pg.title||"")+" "+(pg.description||"")+" "+(pg.extract||"")+" "+((pg.thumbnail||{}).source||"");
+          if(pg.thumbnail&&pg.thumbnail.source&&!PH_PLACE.test(pg.description||"")&&!PH_BAD.test(blob))add({u:pg.thumbnail.source,page:"https://fr.wikipedia.org/wiki/"+encodeURIComponent((pg.title||"").replace(/ /g,"_")),src:"Wikipédia",title:pg.title||"",desc:pg.description||"",extract:pg.extract||""});}}}catch(e){}}
+  for(const q of qs){if(out.length>=16)break;
+    try{const x=await fetch("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit="+want+"&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=640&gsrsearch="+encodeURIComponent(q+" filetype:bitmap"));
       if(!x.ok)continue;const d=await x.json();const pages=Object.values((d.query||{}).pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
-      for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(ii&&ii.thumburl&&!/\.(svg|gif|tiff?|pdf|djvu)$/i.test(pg.title||"")&&!PH_BAD.test(pg.title||""))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons"});}}catch(e){}}
-  if(max&&out.length<max){try{const x=await fetch("https://api.openverse.org/v1/images/?page_size=16&mature=false&q="+encodeURIComponent(key||name));
-    if(x.ok){const d=await x.json();for(const it of d.results||[]){if(PH_BAD.test((it.title||"")+" "+(it.tags||[]).map(t=>t.name||"").join(" ")))continue;const u=it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail;if(u)add({u,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse"});}}}catch(e){}}
-  return out.slice(0,want);}
+      for(const pg of pages){const ii=(pg.imageinfo||[])[0];if(!ii||!ii.thumburl||/\.(svg|gif|tiff?|pdf|djvu)$/i.test(pg.title||""))continue;
+        const meta=ii.extmetadata||{},cap=(meta.ImageDescription&&meta.ImageDescription.value)||"",obj=(meta.ObjectName&&meta.ObjectName.value)||"";
+        const blob=(pg.title||"")+" "+cap+" "+obj+" "+ii.thumburl;
+        if(!PH_BAD.test(blob))add({u:ii.thumburl,page:ii.descriptionurl,src:"Wikimedia Commons",title:pg.title||"",desc:cap,extract:obj});}}catch(e){}}
+  if(max&&out.length<max){for(const q of qs.slice(0,2)){try{const x=await fetch("https://api.openverse.org/v1/images/?page_size=16&mature=false&q="+encodeURIComponent(q||name));
+    if(x.ok){const d=await x.json();for(const it of d.results||[]){const tags=(it.tags||[]).map(t=>t.name||"").join(" ");if(PH_BAD.test((it.title||"")+" "+tags))continue;const u=it.url&&/\.(jpe?g|png|webp)(\?|$)/i.test(it.url)?it.url:it.thumbnail;if(u)add({u,page:it.foreign_landing_url||it.url,src:it.source?("Openverse · "+it.source):"Openverse",title:it.title||"",desc:tags});}}}catch(e){}}}
+  return phRank(name,out,mode).slice(0,want);}
 /* photo chooser: candidates found on the internet, a free search, my own photo, or the address of any image */
 let photoId=null;
 async function openPhotoPick(id){const r=recipes[id];if(!r)return;photoId=id;$("#photoQ").value=r.name;$("#photoUrl").value="";
@@ -363,9 +368,11 @@ async function photoSearch(q,first){const id=photoId;if(!id)return;q=String(q||"
   $("#photoGoogle").href="https://www.google.com/search?tbm=isch&q="+encodeURIComponent(q+" recette");
   $("#photoMsg").textContent="Recherche de photos…";$("#photoGrid").innerHTML="";
   let list=first?autoList(id):[];if(list.length<6){try{list=[...list,...(await findPhotos({name:q},16))];}catch(e){}}
-  const seen=new Set(),nope=rejected(recipes[id]);list=list.filter(x=>x&&x.u&&!nope.has(x.u)&&!seen.has(x.u)&&seen.add(x.u));if(photoId!==id)return;
+  const seen=new Set(),nope=rejected(recipes[id]),r=recipes[id];
+  list=list.filter(x=>x&&x.u&&!nope.has(x.u)&&!seen.has(x.u)&&seen.add(x.u));
+  list=phRank(q,list,"picker");if(photoId!==id)return;
   photoCands=list;const cur=rPhotoSrc(id);
-  $("#photoMsg").textContent=list.length?"Touchez une photo pour la choisir.":"Aucune photo trouvée : essayez un autre mot (ex. le plat principal), ou collez l'adresse d'une image.";
+  $("#photoMsg").textContent=list.length?"Touchez une photo pour l'aperçu, le recadrage et la confirmation.":"Aucune photo suffisamment proche de ce plat : essayez d'autres mots, ou collez l'adresse d'une image.";
   renderPhotoGrid();}
 function renderPhotoGrid(){const id=photoId,cur=rPhotoSrc(id),nope=rejected(recipes[id]);
   $("#photoGrid").innerHTML=photoCands.map((x,i)=>nope.has(x.u)?"":`<div class="ph-w"><button type="button" class="ph-c${x.u===cur?" on":""}" data-act="photoChoose" data-i="${i}"><img src="${esc(x.u)}" alt="" loading="lazy" onerror="this.closest('.ph-w').remove()"></button><button type="button" class="ph-x" data-act="photoReject" data-i="${i}" aria-label="Supprimer cette photo">✕</button></div>`).join("");
@@ -402,8 +409,16 @@ async function pasteImage(){const id=photoId;if(!id)return;
     else if(navigator.clipboard&&navigator.clipboard.readText){const t=(await navigator.clipboard.readText()).trim();if(/^https:\/\/\S+$/.test(t)){$("#photoUrl").value=t;document.querySelector('[data-act=photoUrlOk]').click();return;}}
     toast("Rien à coller automatiquement : restez appuyé dans le cadre puis « Coller »");$("#pasteZone").focus();}
   catch(e){toast("Ce téléphone refuse le collage automatique : restez appuyé dans le cadre puis « Coller »");$("#pasteZone").focus();}}
-function choosePhoto(c){const r=recipes[photoId];if(!r||!c)return;const n=Object.assign({},r,{pick:{u:c.u,page:c.page||"",src:c.src||"internet"}});delete n.noAuto;
-  saveRecipe(photoId,n);$("#photoSheet").hidden=true;toast("Photo choisie");}
+async function choosePhoto(c){const id=photoId,r=recipes[id];if(!r||!c||!c.u)return;
+  const held=r.photo||r.cloudPhoto||(r.pick&&r.pick.u)||r.image;
+  if(held&&!confirm("Remplacer la photo actuelle de « "+r.name+" » ?"))return;
+  $("#photoSheet").hidden=true;
+  let ok=false;
+  try{ok=await openCrop(id,c.u,true);}catch(e){ok=false;}
+  if(ok)return;
+  if(!confirm("Cette image ne peut pas être recadrée ici (le site bloque). L'associer quand même à « "+r.name+" » ?"))return;
+  const n=Object.assign({},r,{pick:{u:c.u,page:c.page||"",src:c.src||"internet"}});delete n.noAuto;
+  saveRecipe(id,n);toast("Photo choisie");}
 $("#photoForm").addEventListener("submit",e=>{e.preventDefault();photoSearch($("#photoQ").value);});
 document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IMG")return;
   if(im.dataset.site){const bad=LS.get("cm_badimg",{});bad[im.dataset.site]=1;LS.set("cm_badimg",bad);clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);return;}
@@ -412,16 +427,15 @@ document.addEventListener("error",e=>{const im=e.target;if(!im||im.tagName!=="IM
   const n=c.list.length;c.list=c.list.filter(x=>x.u!==im.getAttribute("src"));if(c.list.length!==n){try{LS.set(AUTOPH,autoCache);}catch(x){}clearTimeout(autoT);autoT=setTimeout(()=>{autoT=null;render();},200);}},true);
 const rejected=r=>new Set((r&&r.noPh)||[]);
 let autoPickT=null;function autoPickSave(){clearTimeout(autoPickT);autoPickT=setTimeout(()=>{LS.set("cm_recipes",recipes);cloudSoon();},3000);}
-function autoPhoto(id){const r=recipes[id],nope=rejected(r),l=autoList(id).filter(x=>!nope.has(x.u));if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
+function autoPhoto(id){const r=recipes[id],nope=rejected(r),l=autoList(id).filter(x=>x&&x.u&&!nope.has(x.u)&&autoPickOk(r,x.u));if(!l.length)return null;return l[(Number(r.autoIdx)||0)%l.length];}
 function rPhotoSrc(id){const r=recipes[id];if(!r)return"";
-  if(!r.photo){if(r.cloudPhoto)return r.cloudPhoto; // a member's own photo, from the common book
-    const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u; // a photo from a book I follow
-    if(r.pick&&r.pick.u)return r.pick.u; // chosen in "Choisir une photo"
-    if(r.image&&!LS.get("cm_badimg",{})[id])return r.image; // photo of the site the recipe came from
+  if(!r.photo){if(r.cloudPhoto)return r.cloudPhoto;
+    const sp=LS.get("cm_sh_photos",{})[id];if(sp)return sp.u;
+    if(r.pick&&r.pick.u)return r.pick.u;
+    if(r.image&&!LS.get("cm_badimg",{})[id])return r.image;
     if(r.noAuto)return"";
-    // the photo found automatically is remembered in the shared carnet, so every phone of the household shows the same one
-    if(r.autoPick&&!rejected(r).has(r.autoPick))return r.autoPick;
-    const a=autoPhoto(id);if(a&&cloudCarnet()){r.autoPick=a.u;autoPickSave();}return a?a.u:"";}
+    if(r.autoPick&&autoPickOk(r,r.autoPick))return r.autoPick;
+    const a=autoPhoto(id);if(a&&cloudCarnet()&&autoPickOk(r,a.u)&&r.autoPick!==a.u){r.autoPick=a.u;autoPickSave();}return a?a.u:"";}
   const m=rPhotos();if(m[id])return m[id];if(r.cloudPhoto)return r.cloudPhoto; // my photo, taken on another phone of the household
   if(sync&&!rFetching.has(id)){rFetching.add(id);gh("GET",null,sync.repo,recipeDataPhotoPath(id)).then(x=>x.status===200?x.json():null).then(d=>{if(d&&d.content){saveRPhoto(id,"data:image/jpeg;base64,"+d.content.replace(/\s/g,""));render();}}).catch(()=>{});}
   return"";}
@@ -433,10 +447,10 @@ function cropOrig(id,data){try{const m=LS.get(ORIG,{});if(data===undefined)retur
 function loadImg(src,cors){return new Promise((ok,ko)=>{const i=new Image();if(cors)i.crossOrigin="anonymous";i.onload=()=>ok(i);i.onerror=ko;i.src=src;});}
 async function openCrop(id,src,isNew){let img;
   if(/^https?:/.test(src)){try{img=await loadImg(src,true);const t=document.createElement("canvas");t.width=t.height=2;t.getContext("2d").drawImage(img,0,0,2,2);t.toDataURL();}
-    catch(e){toast("Ce site ne permet pas de recadrer sa photo : enregistrez-la dans vos photos puis « 📷 Ma photo ».");return;}}
+    catch(e){toast("Ce site ne permet pas de recadrer sa photo : enregistrez-la dans vos photos puis « 📷 Ma photo ».");return false;}}
   else img=await loadImg(src);
   crop={id,img,src,isNew,z:1,ox:0,oy:0,rot:0,fit:"contain"};
-  $("#cropSheet").hidden=false;$("#cropZoom").value=1;requestAnimationFrame(()=>drawCrop());}
+  $("#cropSheet").hidden=false;$("#cropZoom").value=1;requestAnimationFrame(()=>drawCrop());return true;}
 function cropDims(){const r=crop.rot%2,iw=r?crop.img.height:crop.img.width,ih=r?crop.img.width:crop.img.height;return{iw,ih};}
 function clampCrop(W,H){const{iw,ih}=cropDims(),b=crop.fit==="cover"?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih),s=b*crop.z,lx=Math.abs(iw*s-W)/2/W,ly=Math.abs(ih*s-H)/2/H;
   crop.ox=Math.max(-lx,Math.min(lx,crop.ox));crop.oy=Math.max(-ly,Math.min(ly,crop.oy));return s;}

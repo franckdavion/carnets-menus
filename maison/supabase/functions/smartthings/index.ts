@@ -10,7 +10,7 @@ const stClientId = Deno.env.get("SMARTTHINGS_CLIENT_ID") || "";
 const stClientSecret = Deno.env.get("SMARTTHINGS_CLIENT_SECRET") || "";
 const admin = createClient(sbUrl, service, { auth: { persistSession: false } });
 const ST_BASE = "https://api.smartthings.com/v1";
-const HOME = "https://franckdavion.github.io/carnets-menus/maison/";
+const HOME = "https://carnets-menus.vercel.app/maison/";
 const CALLBACK = `${sbUrl}/functions/v1/smartthings/callback`;
 const ST_SCOPES = "r:devices:* x:devices:* r:locations:*";
 const ALLOWED = new Set([
@@ -25,7 +25,7 @@ const ALLOWED = new Set([
 function cors(req: Request) {
   const origin = req.headers.get("Origin") || "";
   return {
-    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://franckdavion.github.io",
+    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://carnets-menus.vercel.app",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin"

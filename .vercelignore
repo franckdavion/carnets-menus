@@ -1,0 +1,11 @@
+.git
+maison/natif
+**/node_modules
+.cursor
+.DS_Store
+maison/test-repas
+maison/test-trajets
+maison/essai
+maison/essai.html
+maison/essai-app.js
+maison/essai-modules.js

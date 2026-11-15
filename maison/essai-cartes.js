@@ -134,6 +134,12 @@
       cloud.householdName = context.householdName;
       cloud.enabled = savedCloudFlag(context.householdId);
       await walletSync(!cloud.enabled);
+      if (!cloud.enabled && cloud.householdId) {
+        // Un autre appareil a déjà partagé des cartes : rejoindre le foyer sans redemander.
+        cloud.enabled = true;
+        try { localStorage.setItem(CLOUD_PREFIX + context.householdId, "1"); } catch (_) {}
+        await walletSync();
+      }
       if (cloud.enabled) walletSubscribe();
     } catch (error) {
       walletStatus("Cartes familiales en attente : " + (error.message || "connexion indisponible"));
@@ -268,11 +274,18 @@
       }
       if (incoming.length) await putMany(incoming, true);
       if (pullOnly) {
+        const familyLive = remoteRows.some(row => !row.deleted_at);
+        if (familyLive) {
+          cloud.enabled = true;
+          try { localStorage.setItem(CLOUD_PREFIX + cloud.householdId, "1"); } catch (_) {}
+        }
         cloud.message = added ? added + " carte(s) récupérée(s) depuis le foyer « " +
-          cloud.householdName + " »." : "Cartes du foyer consultables sur cet appareil.";
+          cloud.householdName + " »." : (familyLive
+          ? "Cartes du foyer « " + cloud.householdName + " »."
+          : "Cartes du foyer consultables sur cet appareil.");
         if (failed) cloud.warning = failed + " capture(s) non téléchargée(s). Réessaie avec Internet.";
         await reload();
-        return;
+        if (!cloud.enabled) return;
       }
       // Relire après fusion, pour ne jamais écraser les cartes reçues du serveur.
       const localNow = await all();
@@ -375,6 +388,7 @@
     redraw();
   }
   window.maisonneeCartesCount = () => state.cards.length;
+  window.maisonneeCartesFamily = () => !!(cloud.householdId && (cloud.enabled || state.cards.some(c => c.syncHouseholdId)));
   const lookup = id => state.cards.find(c => c.id === id);
   /* Catalogue local de styles : ces vignettes sont dessinées dans Maisonnée
      pour rester disponibles en mode avion, sans charger des logos externes. */

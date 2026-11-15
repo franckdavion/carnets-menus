@@ -28,7 +28,7 @@ export function originOk(origin: string) {
 export function cors(req: Request, extra: Record<string, string> = {}) {
   const origin = req.headers.get("Origin") || req.headers.get("origin") || "";
   return {
-    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://franckdavion.github.io",
+    "Access-Control-Allow-Origin": originOk(origin) ? origin : "https://carnets-menus.vercel.app",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     Vary: "Origin",

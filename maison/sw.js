@@ -1,10 +1,27 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v164";
+const CACHE = "carnet-archive-maison-v192";
+const MAISON_HOME = "https://carnets-menus.vercel.app/maison/";
+function maisonLaunchUrl(raw) {
+  const s = String(raw || "./").trim() || "./";
+  try {
+    const u = /^https?:/i.test(s) ? new URL(s) : new URL(s, MAISON_HOME);
+    if (/\.github\.io$/i.test(u.hostname)) {
+      u.protocol = "https:";
+      u.host = "carnets-menus.vercel.app";
+      u.pathname = u.pathname.replace(/^\/carnets-menus/, "") || "/maison/";
+      if (!u.pathname.startsWith("/maison")) u.pathname = "/maison/" + u.pathname.replace(/^\//, "");
+    }
+    return u.href;
+  } catch (_) {
+    return MAISON_HOME;
+  }
+}
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css", "trajets-v2.css", "fonds-bibliotheque.css",
   "espace.js", "push-config.js", "shared-constants.js", "vendor/supabase.min.js", "supabase/functions/_shared/cal.js",
   "app.js", "essai-cartes.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
+  "animaux-core.js", "animaux.js", "animal-card.css", "animal.html", "vendor/qrcode.min.js", "assets/modules3d/animaux.svg",
   "presences-core.js", "presences-trajets-core.js", "presences.js", "presences-trajets.js", "presences-export.js",
   "natif.js", "accueil.js", "bandeau-jour.js", "fonds-bibliotheque.js",
   "../ingredient-arts.js", "../ingredient-emojis.js", "../navigation-retour.js",
@@ -22,6 +39,12 @@ self.addEventListener("fetch", e => {
   if (!own) return;
   // Cache d’abord pour supabase.min.js : un aller-retour GitHub Pages à froid
   // fait rater getSession sur iPhone, et toute la domotique reste « non connectée ».
+  if (/\/animal-card\.css$/.test(u.pathname)) {
+    e.respondWith(fetch(new Request(e.request, { cache: "no-store" })).catch(() =>
+      caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true }))
+    ));
+    return;
+  }
   if (/\/vendor\/supabase\.min\.js$/.test(u.pathname)) {
     e.respondWith(caches.open(CACHE).then(c => c.match(e.request, { ignoreSearch: true }).then(hit => {
       if (hit) return hit;
@@ -55,26 +78,54 @@ self.addEventListener("fetch", e => {
 self.addEventListener("push", event => {
   let p = {};
   try { p = event.data ? event.data.json() : {}; } catch (_) { p = {body:event.data?.text() || ""}; }
-  const url = typeof p.url === "string" && p.url.startsWith("./") ? p.url : "./";
-  event.waitUntil(self.registration.showNotification(String(p.title || "Maisonnée").slice(0,100), {
-    body:String(p.body || "Nouvelle notification").slice(0,240),
-    icon:"./icon-192.png", badge:"./icon-192.png",
-    tag:String(p.tag || "maison"), data:{url}
-  }));
+  const url = maisonLaunchUrl(p.url);
+  const opts = {
+    body: String(p.body || "Nouvelle notification").slice(0, 240),
+    icon: MAISON_HOME + "icon-192.png",
+    badge: MAISON_HOME + "icon-192.png",
+    tag: String(p.tag || "maison"),
+    data: { url }
+  };
+  if (p.renotify) opts.renotify = true;
+  event.waitUntil(self.registration.showNotification(String(p.title || "Maisonnée").slice(0, 100), opts));
 });
+function isMaisonClientUrl(href) {
+  try {
+    const u = new URL(href);
+    return u.origin === "https://carnets-menus.vercel.app" && u.pathname.startsWith("/maison/");
+  } catch (_) { return false; }
+}
+
+const MZ_PENDING_NAV = "mz-pending-nav-v1";
+async function mzStashPendingNav(url) {
+  try {
+    const c = await caches.open(MZ_PENDING_NAV);
+    await c.put("pending", new Response(JSON.stringify({ url, t: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+  } catch (_) {}
+}
+function mzDiagClients(clients, stage) {
+  for (const w of clients) {
+    try { w.postMessage({ type: "mz-diag", stage }); } catch (_) {}
+  }
+}
+
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   event.waitUntil((async () => {
-    const url = new URL(event.notification.data?.url || "./", self.registration.scope).href;
+    const url = maisonLaunchUrl(event.notification.data?.url);
+    await mzStashPendingNav(url);
     const windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const scope = self.registration.scope;
-    const existing = windows.find(c => typeof c.url === "string" && c.url.startsWith(scope));
-    if (existing) {
-      await existing.focus();
-      if (existing.navigate) {
-        try { await existing.navigate(url); }
-        catch (_) { await clients.openWindow(url); }
-      } else await clients.openWindow(url);
-    } else await clients.openWindow(url);
+    const maison = windows.filter(c => typeof c.url === "string" && isMaisonClientUrl(c.url));
+    mzDiagClients(maison, "notif_click clients=" + maison.length);
+    const focused = maison.find(c => c.focused) || maison[0];
+    if (focused) {
+      try { focused.postMessage({ type: "mz-deeplink", url }); } catch (_) {}
+      await focused.focus();
+      if (focused.navigate) {
+        try { await focused.navigate(url); return; } catch (_) {}
+      }
+      return;
+    }
+    await clients.openWindow(url);
   })());
 });
