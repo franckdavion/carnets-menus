@@ -1,27 +1,6 @@
 {
   "framework": null,
   "buildCommand": "",
-  "outputDirectory": ".",
-  "rewrites": [
-    { "source": "/a/:token", "destination": "/maison/animal.html" },
-    { "source": "/carnets-menus/api/:path*", "destination": "/api/:path*" },
-    { "source": "/carnets-menus/:path*", "destination": "/:path*" }
-  ],
-  "functions": {
-    "api/import-recipe.js": { "maxDuration": 60 }
-  },
-  "headers": [
-    {
-      "source": "/a/(.*)",
-      "headers": [
-        { "key": "Permissions-Policy", "value": "geolocation=(self)" }
-      ]
-    },
-    {
-      "source": "/maison/animal.html",
-      "headers": [
-        { "key": "Permissions-Policy", "value": "geolocation=(self)" }
-      ]
-    }
-  ]
+  "outputDirectory": "maison/essai/agenda-v2",
+  "public": false
 }

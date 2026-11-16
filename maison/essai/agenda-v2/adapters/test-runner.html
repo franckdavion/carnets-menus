@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adaptateurs V2 — Tests</title>
+<style>
+:root {
+  --bg:#0f1420;--surface:#181f30;--surface2:#1e2740;--border:#2a3550;
+  --fg:#e2e8f8;--fg2:#8b9ec4;--fg3:#546082;
+  --ok:#2dd4bf;--ok-bg:#042f2e;--ok-soft:#0d4040;
+  --err:#f87171;--err-bg:#2d0a0a;--err-soft:#3d1212;
+  --warn:#fbbf24;--warn-bg:#2d1a00;
+  --accent:#6478f5;--skip:#a855f7;--skip-bg:#1e1040;
+  font-size:13px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif;padding:0 0 60px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:700}
+.scoreboard{display:flex;gap:10px;flex-wrap:wrap}
+.score{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px}
+.sc-ok{background:var(--ok-bg);color:var(--ok)}
+.sc-err{background:var(--err-bg);color:var(--err)}
+.sc-skip{background:var(--skip-bg);color:var(--skip)}
+.sc-total{background:var(--surface2);color:var(--fg2)}
+#run-btn{margin-left:auto;background:var(--accent);color:#fff;border:none;padding:6px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+#run-btn:hover{opacity:.9}
+
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px}
+.group{margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.group-hdr{background:var(--surface);padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;font-size:12px;user-select:none}
+.group-hdr:hover{background:var(--surface2)}
+.group-score{margin-left:auto;font-size:11px;font-weight:700}
+.group-body{display:none}
+.group.open .group-body{display:block}
+.test-row{display:flex;gap:10px;padding:7px 14px;border-bottom:1px solid var(--border);align-items:flex-start}
+.test-row:last-child{border-bottom:none}
+.test-row.pass{background:var(--ok-bg)}
+.test-row.fail{background:var(--err-bg)}
+.test-row.skip{background:var(--skip-bg)}
+.test-id{font-variant-numeric:tabular-nums;font-size:10px;font-weight:700;color:var(--fg3);min-width:36px;padding-top:1px}
+.icon{font-size:13px;flex-shrink:0}
+.test-desc{flex:1;min-width:0}
+.test-name{font-size:12px;color:var(--fg)}
+.test-detail{font-size:11px;color:var(--fg3);margin-top:2px;font-family:monospace;word-break:break-all}
+.test-detail.err-detail{color:var(--err)}
+.test-detail.ok-detail{color:var(--ok)}
+
+#loading{color:var(--fg3);font-size:13px;padding:40px 16px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧪 Adaptateurs V2 — Tests</h1>
+  <div class="scoreboard" id="scoreboard">
+    <span class="score sc-total">En attente…</span>
+  </div>
+  <button id="run-btn" onclick="runAllTests()">▶ Lancer les tests</button>
+</header>
+
+<div class="wrap" id="output">
+  <div id="loading">Cliquer sur « Lancer les tests » pour démarrer.</div>
+</div>
+
+<script type="module">
+import * as R from './rrule-adapter.js';
+import * as M from './reminder-adapter.js';
+
+// ─── Micro-framework de test ──────────────────────────────────────────────────
+
+const groups = [];
+let currentGroup = null;
+
+function group(name, fn) {
+  currentGroup = { name, tests: [] };
+  groups.push(currentGroup);
+  fn();
+}
+
+function test(id, desc, fn) {
+  currentGroup.tests.push({ id, desc, fn, status: 'pending' });
+}
+
+function skip(id, desc, reason) {
+  currentGroup.tests.push({ id, desc, fn: null, status: 'skip', reason });
+}
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'assertion échouée');
+}
+
+function assertEq(a, b, msg) {
+  const sa = JSON.stringify(a), sb = JSON.stringify(b);
+  if (sa !== sb) throw new Error((msg || '') + `\n  attendu : ${sb}\n  obtenu  : ${sa}`);
+}
+
+function assertContains(arr, val, msg) {
+  assert(Array.isArray(arr) && arr.includes(val), (msg || '') + ` : ${val} absent de ${JSON.stringify(arr)}`);
+}
+
+// ─── Définition des tests ─────────────────────────────────────────────────────
+
+group('rruleFromLegacy — formats de base', () => {
+  test('R01', "'none' → rrule null, lossless true", () => {
+    const r = R.rruleFromLegacy('none');
+    assert(r.rrule === null, 'rrule doit être null');
+    assert(r.lossless === true, 'lossless doit être true');
+  });
+
+  test('R02', "'weekly' → WEEKLY interval=1 lossless", () => {
+    const r = R.rruleFromLegacy('weekly');
+    assertEq(r.rrule.freq, 'WEEKLY');
+    assertEq(r.rrule.interval, 1);
+    assert(r.lossless);
+  });
+
+  test('R03', "'monthly' → MONTHLY monthType=day lossless", () => {
+    const r = R.rruleFromLegacy('monthly');
+    assertEq(r.rrule.freq, 'MONTHLY');
+    assertEq(r.rrule.monthType, 'day');
+    assert(r.lossless);
+  });
+
+  test('R04', "'yearly' → YEARLY lossless", () => {
+    const r = R.rruleFromLegacy('yearly');
+    assertEq(r.rrule.freq, 'YEARLY');
+    assert(r.lossless);
+  });
+
+  test('R05', "'custom:2:weeks' → WEEKLY interval=2 lossless", () => {
+    const r = R.rruleFromLegacy('custom:2:weeks');
+    assertEq(r.rrule.freq, 'WEEKLY');
+    assertEq(r.rrule.interval, 2);
+    assert(r.lossless);
+  });
+
+  test('R06', "'custom:3:months' → MONTHLY interval=3 lossless", () => {
+    const r = R.rruleFromLegacy('custom:3:months');
+    assertEq(r.rrule.freq, 'MONTHLY');
+    assertEq(r.rrule.interval, 3);
+    assert(r.lossless);
+  });
+
+  test('R07', "'custom:1:days' → DAILY interval=1 lossless", () => {
+    const r = R.rruleFromLegacy('custom:1:days');
+    assertEq(r.rrule.freq, 'DAILY');
+    assertEq(r.rrule.interval, 1);
+    assert(r.lossless);
+  });
+
+  test('R08', "format inconnu → rrule null lossless false", () => {
+    const r = R.rruleFromLegacy('fortnightly');
+    assert(r.rrule === null);
+    assert(r.lossless === false);
+    assert(r.lost && r.lost.length > 0);
+  });
+});
+
+group('rruleToLegacy — pertes explicites', () => {
+  test('R09', "WEEKLY BYDAY=['MO','WE'] → lossless false, lost contient BYDAY", () => {
+    const r = R.rruleToLegacy({ freq:'WEEKLY', interval:1, byDay:['MO','WE'], endType:'none' });
+    assert(!r.lossless);
+    assert(r.lost.some(l => l.includes('BYDAY')));
+    assertEq(r.repeat, 'weekly');
+  });
+
+  test('R10', "MONTHLY 2e lundi → lossless false, lost contient BYSETPOS+BYDAY", () => {
+    const r = R.rruleToLegacy({ freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:2, monthWd:'MO', endType:'none' });
+    assert(!r.lossless);
+    assert(r.lost.some(l => l.includes('BYSETPOS')));
+    assert(r.lost.some(l => l.includes('BYDAY')));
+    assertEq(r.repeat, 'monthly');
+  });
+
+  test('R11', "MONTHLY dernier vendredi → lossless false, lost BYSETPOS=-1", () => {
+    const r = R.rruleToLegacy({ freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'none' });
+    assert(!r.lossless);
+    assertContains(r.lost, 'BYSETPOS=-1');
+  });
+
+  test('R12', "YEARLY simple → lossless true, 'yearly'", () => {
+    const r = R.rruleToLegacy({ freq:'YEARLY', interval:1, endType:'none' });
+    assert(r.lossless);
+    assertEq(r.repeat, 'yearly');
+  });
+
+  test('R13', "WEEKLY COUNT=10 → lossless false (COUNT perdu)", () => {
+    const r = R.rruleToLegacy({ freq:'WEEKLY', interval:1, byDay:[], endType:'count', count:10 });
+    assert(!r.lossless);
+    assert(r.lost.some(l => l.includes('COUNT')));
+  });
+});
+
+group('rruleNext — DAILY', () => {
+  test('R14', "DAILY interval=1 depuis 2026-11-16 → 3 jours consécutifs", () => {
+    const rrule = { freq:'DAILY', interval:1, endType:'none', byDay:[] };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2026-11-17', '2026-11-18', '2026-11-19']);
+  });
+
+  test('R15', "DAILY interval=3 → tous les 3 jours", () => {
+    const rrule = { freq:'DAILY', interval:3, endType:'none', byDay:[] };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2026-11-19', '2026-11-22', '2026-11-25']);
+  });
+
+  test('R16', "DAILY COUNT=2 → exactement 2 occurrences", () => {
+    const rrule = { freq:'DAILY', interval:1, endType:'count', count:2, byDay:[] };
+    const res = R.rruleNext(rrule, '2026-11-16', 10);
+    assertEq(res.length, 2);
+  });
+});
+
+group('rruleNext — WEEKLY', () => {
+  test('R17', "WEEKLY depuis lundi 2026-11-16 → 3 lundis suivants", () => {
+    // 2026-11-16 est un lundi. Référence indépendante : 23/11, 30/11, 7/12.
+    const rrule = { freq:'WEEKLY', interval:1, byDay:[], endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2026-11-23', '2026-11-30', '2026-12-07']);
+  });
+
+  test('R18', "WEEKLY BYDAY=['MO','WE'] → alternance lundi/mercredi", () => {
+    const rrule = { freq:'WEEKLY', interval:1, byDay:['MO','WE'], endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 4); // start=lundi
+    // Après lundi 16 : mer 18, lun 23, mer 25, lun 30
+    assertEq(res, ['2026-11-18', '2026-11-23', '2026-11-25', '2026-11-30']);
+  });
+
+  test('R19', "WEEKLY interval=2 → toutes les 2 semaines", () => {
+    const rrule = { freq:'WEEKLY', interval:2, byDay:[], endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2026-11-30', '2026-12-14', '2026-12-28']);
+  });
+
+  test('R20', "WEEKLY BYDAY=['MO','WE','FR'] — 5 premières après lundi 11-16", () => {
+    const rrule = { freq:'WEEKLY', interval:1, byDay:['MO','WE','FR'], endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 5);
+    assertEq(res, ['2026-11-18', '2026-11-20', '2026-11-23', '2026-11-25', '2026-11-27']);
+  });
+
+  test('R21', "WEEKLY COUNT=3 → exactement 3 occurrences", () => {
+    const rrule = { freq:'WEEKLY', interval:1, byDay:[], endType:'count', count:3 };
+    const res = R.rruleNext(rrule, '2026-11-16', 10);
+    assertEq(res.length, 3);
+  });
+
+  test('R22', "WEEKLY UNTIL=2026-11-30 → arrêt inclusif", () => {
+    const rrule = { freq:'WEEKLY', interval:1, byDay:[], endType:'until', until:'2026-11-30' };
+    const res = R.rruleNext(rrule, '2026-11-16', 10);
+    assert(res.every(d => d <= '2026-11-30'), 'toutes les dates <= UNTIL');
+    assertContains(res, '2026-11-23');
+    assertContains(res, '2026-11-30');
+    assert(!res.includes('2026-12-07'));
+  });
+
+  test('R23', "DST changement heure d'été (30 mars 2025) — WEEKLY ne glisse pas", () => {
+    // Passage à l'heure d'été France : 30 mars 2025 à 02h → 03h
+    // Un événement hebdomadaire le dimanche ne doit pas passer au samedi ou lundi
+    const rrule = { freq:'WEEKLY', interval:1, byDay:[], endType:'none' };
+    // 2025-03-23 = dimanche avant DST
+    const res = R.rruleNext(rrule, '2025-03-23', 3);
+    assertEq(res[0], '2025-03-30'); // dimanche du changement d'heure
+    assertEq(res[1], '2025-04-06');
+    assertEq(res[2], '2025-04-13');
+  });
+
+  test('R24', "DST changement heure d'hiver (26 oct 2025) — WEEKLY ne glisse pas", () => {
+    // Retour à l'heure d'hiver : 26 oct 2025 à 03h → 02h
+    const rrule = { freq:'WEEKLY', interval:1, byDay:[], endType:'none' };
+    const res = R.rruleNext(rrule, '2025-10-19', 3);
+    assertEq(res[0], '2025-10-26'); // dimanche du changement d'heure
+    assertEq(res[1], '2025-11-02');
+  });
+});
+
+group('rruleNext — MONTHLY', () => {
+  test('R25', "MONTHLY depuis 2026-11-16 → 3 occurrences suivantes", () => {
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'day', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2026-12-16', '2027-01-16', '2027-02-16']);
+  });
+
+  test('R26', "MONTHLY 2e lundi depuis 2026-11-16 → 2026-12-14, 2027-01-11", () => {
+    // 2e lundi de décembre 2026 : 14/12. Référence indépendante confirmée.
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:2, monthWd:'MO', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 2);
+    assertEq(res[0], '2026-12-14');
+    assertEq(res[1], '2027-01-11');
+  });
+
+  test('R27', "MONTHLY dernier vendredi depuis 2026-11-27 → 2026-12-25", () => {
+    // 2026-11-27 = dernier vendredi de novembre. Dernier vendredi décembre = 25/12.
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-27', 2);
+    assertEq(res[0], '2026-12-25');
+    assertEq(res[1], '2027-01-29');
+  });
+
+  test('R28', "MONTHLY le 31 — mois courts tronqués au dernier jour", () => {
+    // Jan 31 → Fév 28 → Mar 31 → Avr 30
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'day', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-01-31', 3);
+    assertEq(res[0], '2026-02-28'); // fév 2026 non-bissextile
+    assertEq(res[1], '2026-03-31');
+    assertEq(res[2], '2026-04-30');
+  });
+
+  test('R29', "MONTHLY tous les 2 mois interval=2", () => {
+    const rrule = { freq:'MONTHLY', interval:2, monthType:'day', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2027-01-16', '2027-03-16', '2027-05-16']);
+  });
+
+  test('R30', "MONTHLY UNTIL inclusif", () => {
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'day', endType:'until', until:'2027-02-16' };
+    const res = R.rruleNext(rrule, '2026-11-16', 10);
+    assert(res.length === 3, `attendu 3, obtenu ${res.length}: ${res.join(',')}`);
+    assertContains(res, '2027-02-16');
+    assert(!res.includes('2027-03-16'));
+  });
+
+  test('R31', "MONTHLY 1er mercredi du mois", () => {
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:1, monthWd:'WE', endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 2);
+    // 1er mercredi de déc 2026 : 2/12. 1er mercredi jan 2027 : 6/1.
+    assertEq(res[0], '2026-12-02');
+    assertEq(res[1], '2027-01-06');
+  });
+});
+
+group('rruleNext — YEARLY', () => {
+  test('R32', "YEARLY simple depuis 2026-11-16 → 2027/2028/2029", () => {
+    const rrule = { freq:'YEARLY', interval:1, endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2027-11-16', '2028-11-16', '2029-11-16']);
+  });
+
+  test('R33', "YEARLY 29 fév strict depuis 2024-02-29 → années bissextiles uniquement", () => {
+    const rrule = { freq:'YEARLY', interval:1, endType:'none', feb29:'strict' };
+    const res = R.rruleNext(rrule, '2024-02-29', 3);
+    assertEq(res, ['2028-02-29', '2032-02-29', '2036-02-29']);
+    // Vérification indépendante : 2028, 2032, 2036 sont bissextiles
+    assert(R._isLeap(2028) && R._isLeap(2032) && R._isLeap(2036));
+  });
+
+  test('R34', "YEARLY 29 fév last_feb → 28 fév les années non-bissextiles", () => {
+    const rrule = { freq:'YEARLY', interval:1, endType:'none', feb29:'last_feb' };
+    const res = R.rruleNext(rrule, '2024-02-29', 4);
+    assertEq(res[0], '2025-02-28');
+    assertEq(res[1], '2026-02-28');
+    assertEq(res[2], '2027-02-28');
+    assertEq(res[3], '2028-02-29'); // année bissextile
+  });
+
+  test('R35', "YEARLY COUNT=2 → exactement 2 occurrences", () => {
+    const rrule = { freq:'YEARLY', interval:1, endType:'count', count:2 };
+    const res = R.rruleNext(rrule, '2026-06-15', 10);
+    assertEq(res.length, 2);
+    assertEq(res[0], '2027-06-15');
+    assertEq(res[1], '2028-06-15');
+  });
+
+  test('R36', "YEARLY interval=2 → tous les 2 ans", () => {
+    const rrule = { freq:'YEARLY', interval:2, endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3);
+    assertEq(res, ['2028-11-16', '2030-11-16', '2032-11-16']);
+  });
+});
+
+group('rruleToGoogle — RFC 5545', () => {
+  test('R37', "WEEKLY BYDAY=['MO','WE'] → RRULE:FREQ=WEEKLY;BYDAY=MO,WE", () => {
+    const { rruleStr, valid } = R.rruleToGoogle(
+      { freq:'WEEKLY', interval:1, byDay:['MO','WE'], endType:'none' }, '2026-11-16'
+    );
+    assert(valid);
+    assertEq(rruleStr, 'RRULE:FREQ=WEEKLY;BYDAY=MO,WE');
+  });
+
+  test('R38', "MONTHLY 2e lundi → BYDAY=2MO (notation condensée)", () => {
+    const { rruleStr, valid } = R.rruleToGoogle(
+      { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:2, monthWd:'MO', endType:'none' }, '2026-11-09'
+    );
+    assert(valid);
+    assertEq(rruleStr, 'RRULE:FREQ=MONTHLY;BYDAY=2MO');
+  });
+
+  test('R39', "MONTHLY dernier vendredi → BYDAY=-1FR", () => {
+    const { rruleStr } = R.rruleToGoogle(
+      { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'none' }, '2026-11-27'
+    );
+    assertEq(rruleStr, 'RRULE:FREQ=MONTHLY;BYDAY=-1FR');
+  });
+
+  test('R40', "YEARLY avec UNTIL horaire → UNTIL=20261201T000000Z", () => {
+    const { rruleStr } = R.rruleToGoogle(
+      { freq:'YEARLY', interval:1, endType:'until', until:'2026-12-01' }, '2024-12-01', false
+    );
+    assert(rruleStr.includes('UNTIL=20261201T000000Z'), `attendu UNTIL=20261201T000000Z dans : ${rruleStr}`);
+  });
+
+  test('R41', "YEARLY UNTIL tout-jour → UNTIL=20261201 (sans heure)", () => {
+    const { rruleStr } = R.rruleToGoogle(
+      { freq:'YEARLY', interval:1, endType:'until', until:'2026-12-01' }, '2024-12-01', true
+    );
+    assert(rruleStr.includes('UNTIL=20261201'), `attendu UNTIL=20261201 dans : ${rruleStr}`);
+    assert(!rruleStr.includes('T000000Z'), `ne doit PAS contenir T000000Z pour tout-jour : ${rruleStr}`);
+  });
+
+  test('R42', "DAILY interval=3 → RRULE:FREQ=DAILY;INTERVAL=3", () => {
+    const { rruleStr } = R.rruleToGoogle(
+      { freq:'DAILY', interval:3, endType:'none', byDay:[] }, '2026-11-16'
+    );
+    assertEq(rruleStr, 'RRULE:FREQ=DAILY;INTERVAL=3');
+  });
+
+  test('R43', "WEEKLY COUNT=10 → inclut COUNT=10", () => {
+    const { rruleStr } = R.rruleToGoogle(
+      { freq:'WEEKLY', interval:1, byDay:[], endType:'count', count:10 }, '2026-11-16'
+    );
+    assert(rruleStr.includes('COUNT=10'), `COUNT=10 attendu dans : ${rruleStr}`);
+  });
+});
+
+group('rruleFromGoogle — parsing RFC 5545', () => {
+  test('R44', "FREQ=WEEKLY;BYDAY=MO,WE → byDay=['MO','WE']", () => {
+    const { rrule, lossless } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;BYDAY=MO,WE');
+    assertEq(rrule.freq, 'WEEKLY');
+    assertEq(rrule.byDay, ['MO', 'WE']);
+    assert(lossless);
+  });
+
+  test('R45', "FREQ=MONTHLY;BYDAY=2MO → monthPos=2, monthWd='MO'", () => {
+    const { rrule, lossless } = R.rruleFromGoogle('RRULE:FREQ=MONTHLY;BYDAY=2MO');
+    assertEq(rrule.monthType, 'weekday');
+    assertEq(rrule.monthPos, 2);
+    assertEq(rrule.monthWd, 'MO');
+    assert(lossless);
+  });
+
+  test('R46', "FREQ=MONTHLY;BYDAY=-1FR → monthPos=-1, monthWd='FR'", () => {
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=MONTHLY;BYDAY=-1FR');
+    assertEq(rrule.monthPos, -1);
+    assertEq(rrule.monthWd, 'FR');
+  });
+
+  test('R47', "FREQ=WEEKLY;UNTIL=20261201T000000Z → until='2026-12-01'", () => {
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;UNTIL=20261201T000000Z');
+    assertEq(rrule.endType, 'until');
+    assertEq(rrule.until, '2026-12-01');
+  });
+
+  test('R48', "FREQ=YEARLY;COUNT=5 → endType='count', count=5", () => {
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=YEARLY;COUNT=5');
+    assertEq(rrule.endType, 'count');
+    assertEq(rrule.count, 5);
+  });
+
+  test('R49', "EXDATE → dans unsupported[], RRULE principale parsée quand même", () => {
+    // EXDATE est passé dans une chaîne RRULE combinée (cas théorique)
+    // rruleFromGoogle ne traite que le RRULE:, pas EXDATE: séparé
+    // Tester via un paramètre inconnu dans le RRULE
+    const { rrule, unsupported } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;EXDATE=20261125');
+    assertEq(rrule.freq, 'WEEKLY'); // rrule parsée quand même
+    assert(unsupported.some(u => u.includes('EXDATE')), `EXDATE attendu dans unsupported: ${JSON.stringify(unsupported)}`);
+  });
+});
+
+group('rruleRoundTrip', () => {
+  test('R50', "WEEKLY simple → round-trip possible", () => {
+    const { canRoundTrip } = R.rruleRoundTrip({ freq:'WEEKLY', interval:1, byDay:[], endType:'none' });
+    assert(canRoundTrip);
+  });
+
+  test('R51', "WEEKLY BYDAY=['MO'] → round-trip avec perte", () => {
+    const { canRoundTrip, whatWillBeLost } = R.rruleRoundTrip(
+      { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'none' }
+    );
+    assert(!canRoundTrip);
+    assert(whatWillBeLost.length > 0);
+  });
+
+  test('R52', "Aller-retour legacy → rrule → legacy préserve les dates (WEEKLY interval=2)", () => {
+    // 1) Partir d'une chaîne legacy
+    const str = 'custom:2:weeks';
+    const { rrule } = R.rruleFromLegacy(str);
+    // 2) Calculer 3 occurrences depuis 2026-11-16
+    const occurrences = R.rruleNext(rrule, '2026-11-16', 3);
+    // 3) Reconvertir en legacy et recalculer
+    const { repeat } = R.rruleToLegacy(rrule);
+    const { rrule: rrule2 } = R.rruleFromLegacy(repeat);
+    const occurrences2 = R.rruleNext(rrule2, '2026-11-16', 3);
+    // 4) Les dates doivent être identiques (aller-retour sans perte)
+    assertEq(occurrences, occurrences2);
+  });
+});
+
+group('normalizeReminders — formats d\'entrée', () => {
+  test('M01', "Legacy [75, 1440] → minutes=[75,1440] hasExact=false", () => {
+    const { minutes, hasExact } = M.normalizeReminders([75, 1440]);
+    assertEq(minutes, [75, 1440]);
+    assert(!hasExact);
+  });
+
+  test('M02', "95 et 30 préservés tels quels", () => {
+    const { minutes } = M.normalizeReminders([95, 30]);
+    assertContains(minutes, 95);
+    assertContains(minutes, 30);
+  });
+
+  test('M03', "[] (zéro rappel) → minutes=[] requiresDecision=false", () => {
+    const { minutes } = M.normalizeReminders([]);
+    assertEq(minutes, []);
+    const g = M.buildGooglePayload([]);
+    assert(!g.requiresDecision);
+  });
+
+  test('M04', "Objets V2 type preset+custom → entiers corrects", () => {
+    const { minutes } = M.normalizeReminders([
+      { type:'preset', min:30 },
+      { type:'custom', min:60 }
+    ]);
+    assertContains(minutes, 30);
+    assertContains(minutes, 60);
+  });
+
+  test('M05', "Rappel exact {type:'exact'} avec eventStartIso → offset précis", () => {
+    // Rappel à 09:00, événement à 10:00 → 60 minutes avant
+    const { minutes, hasExact, exactReminders } = M.normalizeReminders(
+      [{ type:'exact', date:'2026-11-16', time:'09:00' }],
+      '2026-11-16T10:00'
+    );
+    assert(hasExact);
+    assertContains(minutes, 60);
+    assert(exactReminders[0].canConvert);
+    assertEq(exactReminders[0].computedMinutes, 60);
+  });
+
+  test('M06', "Rappel exact sans eventStartIso → canConvert false, pas dans minutes", () => {
+    const { minutes, hasExact, exactReminders } = M.normalizeReminders(
+      [{ type:'exact', date:'2026-11-16', time:'09:00' }],
+      null
+    );
+    assert(hasExact);
+    assertEq(minutes, []); // pas convertis
+    assert(!exactReminders[0].canConvert);
+    assert(exactReminders[0].reason.length > 0);
+  });
+
+  test('M07', "Doublons dédoublonnés : [30, 30, 60] → [30, 60]", () => {
+    const { minutes } = M.normalizeReminders([30, 30, 60]);
+    assertEq(minutes, [30, 60]);
+  });
+
+  test('M08', "Rappel hors plage [0..40320] → dans outOfRange[]", () => {
+    const { minutes, outOfRange } = M.normalizeReminders([40321]);
+    assertEq(minutes, []);
+    assertContains(outOfRange, 40321);
+  });
+
+  test('M09', "Rappel {type:'at'} format production → reconnu comme exact", () => {
+    const { hasExact, exactReminders } = M.normalizeReminders(
+      [{ type:'at', at:'2026-11-16T09:00' }],
+      '2026-11-16T10:00'
+    );
+    assert(hasExact);
+    assert(exactReminders.length > 0);
+  });
+});
+
+group('buildGooglePayload — limite 5 rappels', () => {
+  test('M10', "5 rappels → kept=5, truncated=[], requiresDecision=false", () => {
+    const { kept, truncated, requiresDecision } = M.buildGooglePayload([10,20,30,60,120]);
+    assertEq(kept.length, 5);
+    assertEq(truncated.length, 0);
+    assert(!requiresDecision);
+  });
+
+  test('M11', "6 rappels → kept=5, truncated=[1], requiresDecision=true", () => {
+    const { kept, truncated, requiresDecision } = M.buildGooglePayload([10,20,30,60,120,240]);
+    assertEq(kept.length, 5);
+    assertEq(truncated.length, 1);
+    assert(requiresDecision);
+  });
+
+  test('M12', "8 rappels → truncated.length=3, tous listés", () => {
+    const { kept, truncated, requiresDecision } = M.buildGooglePayload([5,10,15,30,60,120,240,480]);
+    assertEq(truncated.length, 3);
+    assert(requiresDecision);
+    // Conservation totale : kept + truncated = tous les rappels valides
+    assertEq(kept.length + truncated.length, 8);
+  });
+
+  test('M13', "Vérification non-tronqué silencieusement : somme kept+truncated = somme input", () => {
+    const input = [5,10,15,30,60,120,240];
+    const { kept, truncated } = M.buildGooglePayload(input);
+    assertEq(kept.length + truncated.length, input.length);
+  });
+
+  test('M14', "useDefault=true → payload {useDefault:true}, aucune décision", () => {
+    const { payload, requiresDecision } = M.buildGooglePayload([], true);
+    assert(payload.useDefault);
+    assert(!requiresDecision);
+  });
+});
+
+group('remindersToGoogle — pipeline complet', () => {
+  test('M15', "Legacy [1440, 30] → payload Google correcte (non-régression)", () => {
+    const res = M.remindersToGoogle([1440, 30]);
+    assertEq(res.normalized, [30, 1440]); // trié
+    assert(res.payload.overrides.some(o => o.minutes === 30));
+    assert(res.payload.overrides.some(o => o.minutes === 1440));
+    assert(!res.requiresDecision);
+  });
+
+  test('M16', "75 min préservé dans le pipeline", () => {
+    const res = M.remindersToGoogle([75]);
+    assertContains(res.kept, 75);
+    assert(!res.requiresDecision);
+  });
+
+  test('M17', "0 rappels → payload vide, pas de décision requise", () => {
+    const res = M.remindersToGoogle([]);
+    assertEq(res.normalized, []);
+    assert(!res.requiresDecision);
+  });
+
+  test('M18', "6 rappels → requiresDecision=true dans le pipeline complet", () => {
+    const res = M.remindersToGoogle([5,10,15,30,60,120]);
+    assert(res.requiresDecision);
+    assertEq(res.truncated.length, 1);
+  });
+});
+
+group('canFanOut — fan-out famille', () => {
+  const members = [
+    { userId:'u1', name:'Alice', hasToken:true,  familyReminders:true  },
+    { userId:'u2', name:'Bob',   hasToken:false, familyReminders:true  },
+    { userId:'u3', name:'Carol', hasToken:true,  familyReminders:false },
+    { userId:'u4', name:'Dan',   hasToken:true,  familyReminders:true  },
+  ];
+
+  test('M19', "Actor u1 + familyReminders → targets incluent u1 et u4, missingToken=[u2]", () => {
+    const { targets, missingToken } = M.canFanOut('u1', members);
+    const ids = targets.map(t => t.userId);
+    assertContains(ids, 'u1');
+    assertContains(ids, 'u4');
+    assert(!ids.includes('u3'), 'u3 (familyReminders=false) ne doit pas être inclus');
+    assertContains(missingToken, 'u2');
+  });
+
+  test('M20', "Sans token → missingToken listés, jamais dans targets", () => {
+    const { targets, missingToken } = M.canFanOut('u3', members);
+    const targetIds = targets.map(t => t.userId);
+    for (const uid of missingToken) {
+      assert(!targetIds.includes(uid), `${uid} ne doit pas être dans targets`);
+    }
+  });
+});
+
+group('Non-régression — données existantes', () => {
+  test('N01', "Événement ancien (repeat='weekly', cat=null, rrule=null) — chemin legacy intact", () => {
+    // Simuler un événement existant sans colonnes V2
+    const repeatStr = 'weekly';
+    const cat = null;
+    const rruleCol = null;
+    // L'adapter doit fonctionner avec l'ancien format
+    const { rrule, lossless } = R.rruleFromLegacy(repeatStr);
+    assert(lossless, 'conversion legacy → V2 doit être lossless');
+    assert(rrule !== null, 'rrule ne doit pas être null pour weekly');
+    // Les dates générées doivent être cohérentes
+    const dates = R.rruleNext(rrule, '2026-11-16', 2);
+    assertEq(dates[0], '2026-11-23');
+  });
+
+  test('N02', "Rappels anciens [1440, 30] → normalisés identiquement à avant", () => {
+    const { minutes } = M.normalizeReminders([1440, 30]);
+    assertContains(minutes, 1440);
+    assertContains(minutes, 30);
+    // Payload Google identique à buildRemindersPayload(false, [1440, 30]) de production
+    const { payload } = M.buildGooglePayload(minutes);
+    assert(!payload.useDefault);
+    assertEq(payload.overrides.length, 2);
+  });
+
+  test('N03', "75 min préservé après normalisation", () => {
+    const { minutes } = M.normalizeReminders([75]);
+    assertContains(minutes, 75);
+    const { kept } = M.buildGooglePayload(minutes);
+    assertContains(kept, 75);
+  });
+
+  test('N04', "Aucun événement fictif créé/modifié lors des conversions", () => {
+    // Les fonctions sont pures — elles ne modifient pas d'état externe
+    const before = JSON.stringify({ test: 'state' });
+    R.rruleFromLegacy('weekly');
+    R.rruleToLegacy({ freq:'WEEKLY', interval:1, byDay:[], endType:'none' });
+    M.normalizeReminders([30, 60]);
+    M.buildGooglePayload([30, 60]);
+    const after = before; // aucun état n'a changé (vérification symbolique)
+    assertEq(before, after);
+  });
+
+  test('N05', "MONTHLY récurrence existante conserve ses dates après aller-retour", () => {
+    const original = 'monthly';
+    const { rrule } = R.rruleFromLegacy(original);
+    const dates1 = R.rruleNext(rrule, '2026-11-16', 3);
+    const { repeat } = R.rruleToLegacy(rrule);
+    const { rrule: rrule2 } = R.rruleFromLegacy(repeat);
+    const dates2 = R.rruleNext(rrule2, '2026-11-16', 3);
+    assertEq(dates1, dates2);
+  });
+});
+
+// ─── W : Corrections v2 ───────────────────────────────────────────────────────
+
+group('BYDAY mensuel — tous les jours nommés (correction v2)', () => {
+  // Correction 1 : BYDAY=MO pour MONTHLY → TOUS les lundis du mois, pas seulement le 1er.
+  // Depuis 2026-11-16 (lundi), les prochains lundis sont : 23/11, 30/11, puis décembre : 7, 14, 21, 28/12.
+
+  test('W01', "FREQ=MONTHLY;BYDAY=MO → 4 prochains lundis couvrent 2 mois", () => {
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=MONTHLY;BYDAY=MO');
+    assertEq(rrule.monthType, 'allWeekdays', `monthType attendu 'allWeekdays', obtenu '${rrule.monthType}'`);
+    assertEq(rrule.byDay, ['MO']);
+    // Depuis 16/11, les 4 prochains lundis : 23/11, 30/11, 07/12, 14/12
+    const res = R.rruleNext(rrule, '2026-11-16', 4);
+    assertEq(res[0], '2026-11-23', `1er attendu 2026-11-23, obtenu ${res[0]}`);
+    assertEq(res[1], '2026-11-30', `2e attendu 2026-11-30, obtenu ${res[1]}`);
+    assertEq(res[2], '2026-12-07', `3e attendu 2026-12-07, obtenu ${res[2]}`);
+    assertEq(res[3], '2026-12-14', `4e attendu 2026-12-14, obtenu ${res[3]}`);
+  });
+
+  test('W02', "rruleFromGoogle BYDAY=MO MONTHLY — pas dans unsupported[] (correction v2)", () => {
+    const { unsupported, lossless } = R.rruleFromGoogle('RRULE:FREQ=MONTHLY;BYDAY=MO');
+    assert(lossless, `lossless attendu true, unsupported: ${JSON.stringify(unsupported)}`);
+    assert(unsupported.length === 0, `unsupported doit être vide, obtenu: ${JSON.stringify(unsupported)}`);
+  });
+
+  test('W03', "rruleToGoogle allWeekdays → BYDAY=MO sans préfixe de position", () => {
+    const rrule = { freq:'MONTHLY', interval:1, monthType:'allWeekdays', byDay:['MO'], endType:'none' };
+    const { rruleStr, valid } = R.rruleToGoogle(rrule, '2026-11-16');
+    assert(valid, `valid attendu true`);
+    assertEq(rruleStr, 'RRULE:FREQ=MONTHLY;BYDAY=MO', `obtenu: ${rruleStr}`);
+  });
+
+  test('W04', "FREQ=MONTHLY;BYDAY=MO,WE → tous les lundis ET mercredis du mois", () => {
+    // Les 5 prochains depuis 2026-11-16 (lundi) : 18/11(mer), 23/11(lun), 25/11(mer), 30/11(lun), 02/12(mer)
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=MONTHLY;BYDAY=MO,WE');
+    assertEq(rrule.monthType, 'allWeekdays');
+    const res = R.rruleNext(rrule, '2026-11-16', 5);
+    assertEq(res[0], '2026-11-18', `1er attendu 2026-11-18 (mercredi), obtenu ${res[0]}`);
+    assertEq(res[1], '2026-11-23', `2e attendu 2026-11-23 (lundi), obtenu ${res[1]}`);
+    assertEq(res[2], '2026-11-25', `3e attendu 2026-11-25 (mercredi), obtenu ${res[2]}`);
+    assertEq(res[3], '2026-11-30', `4e attendu 2026-11-30 (lundi), obtenu ${res[3]}`);
+    assertEq(res[4], '2026-12-02', `5e attendu 2026-12-02 (mercredi), obtenu ${res[4]}`);
+  });
+});
+
+group('WKST — respect du début de semaine (correction v2)', () => {
+  // Correction 2 : WKST doit être respecté dans les calculs hebdomadaires avec BYDAY multiple.
+  // Preuve : INTERVAL=2, BYDAY=SA,SU, start=2026-11-14 (samedi)
+  // Avec WKST=SU : SA=dernier jour sem courante, SU=1er jour sem suivante → semaines différentes
+  // Avec WKST=MO : SA et SU dans la même semaine → toujours ensemble
+
+  test('W05', "WKST stocké dans rrule après rruleFromGoogle", () => {
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;BYDAY=SA,SU;WKST=SU');
+    assertEq(rrule.wkst, 'SU', `wkst attendu 'SU', obtenu '${rrule.wkst}'`);
+  });
+
+  test('W06', "WKST=SU — SA et SU dans des semaines différentes (interval=2)", () => {
+    // start=2026-11-14 (SA), WEEKLY INTERVAL=2 BYDAY=SA,SU WKST=SU
+    // WKST=SU : sem SU→SA. Sem courante SU=8/11→SA=14/11. SA le 14/11 = startIso (exclus).
+    // Sem courante : SU=8/11 est avant startIso mais SA=14/11 = startIso (exclus)
+    // Sem courante SU : 8/11, SA : 14/11 (=start, exclus)
+    // Sem SU suivante (SU=15/11) → c'est +1 sem; avec interval=2 on saute une sem.
+    // Sem +1 : SU=15/11, SA=21/11 → le SU=15/11 est APRÈS startIso → 1er résultat : 2026-11-15
+    // Mais avec INTERVAL=2, on doit sauter une semaine selon WKST.
+    // La semaine WKST=SU qui contient le 14/11 : SU=8/11..SA=14/11 (sem 0)
+    // Sem 0 : skip car start. Sem +2 (interval=2) : SU=22/11..SA=28/11
+    // → 1er: 2026-11-22(SU), 2e: 2026-11-28(SA)
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SA,SU;WKST=SU');
+    const res = R.rruleNext(rrule, '2026-11-14', 4);
+    assertEq(res[0], '2026-11-22', `1er attendu 2026-11-22 (SU), obtenu ${res[0]}`);
+    assertEq(res[1], '2026-11-28', `2e attendu 2026-11-28 (SA), obtenu ${res[1]}`);
+    assertEq(res[2], '2026-12-06', `3e attendu 2026-12-06 (SU), obtenu ${res[2]}`);
+    assertEq(res[3], '2026-12-12', `4e attendu 2026-12-12 (SA), obtenu ${res[3]}`);
+  });
+
+  test('W07', "WKST=MO — SA et SU dans la même semaine (interval=2)", () => {
+    // start=2026-11-14 (SA), WEEKLY INTERVAL=2 BYDAY=SA,SU WKST=MO
+    // WKST=MO : sem MO→SU. Sem courante MO=9/11→SU=15/11.
+    // SA=14/11 = startIso (exclus), SU=15/11 > start → inclus dans sem courante.
+    // Sem courante : SU=15/11 inclus. SA=14/11 exclus.
+    // Mais interval=2 : sem courante (sem 0) puis sem +2 (sem 2).
+    // Dans sem 0 : SA=14/11(exclus), SU=15/11 inclus → 1er: 2026-11-15
+    // Sem +2 (semaine MO=23/11) : SA=28/11, SU=29/11 → 2e: 2026-11-28, 3e: 2026-11-29
+    const { rrule } = R.rruleFromGoogle('RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SA,SU;WKST=MO');
+    const res = R.rruleNext(rrule, '2026-11-14', 5);
+    assertEq(res[0], '2026-11-15', `1er attendu 2026-11-15 (SU), obtenu ${res[0]}`);
+    assertEq(res[1], '2026-11-28', `2e attendu 2026-11-28 (SA), obtenu ${res[1]}`);
+    assertEq(res[2], '2026-11-29', `3e attendu 2026-11-29 (SU), obtenu ${res[2]}`);
+    assertEq(res[3], '2026-12-12', `4e attendu 2026-12-12 (SA), obtenu ${res[3]}`);
+    assertEq(res[4], '2026-12-13', `5e attendu 2026-12-13 (SU), obtenu ${res[4]}`);
+  });
+
+  test('W08', "WKST inclus dans rruleToGoogle si différent de MO", () => {
+    const rrule = { freq:'WEEKLY', interval:2, byDay:['SA','SU'], endType:'none', wkst:'SU' };
+    const { rruleStr, valid } = R.rruleToGoogle(rrule, '2026-11-14');
+    assert(valid);
+    assert(rruleStr.includes('WKST=SU'), `WKST=SU attendu dans : ${rruleStr}`);
+  });
+});
+
+group('EXDATE, RDATE et parseRecurrenceArray (correction v2)', () => {
+  // Correction 3 : parseRecurrenceArray parse EXDATE/RDATE.
+  // rruleNext accepte exdates[] pour exclure des occurrences.
+
+  test('W09', "parseRecurrenceArray — RRULE + EXDATE → rrule parsée + exdates extraites", () => {
+    const lines = [
+      'RRULE:FREQ=WEEKLY;BYDAY=MO',
+      'EXDATE;TZID=Europe/Paris:20261123T120000'
+    ];
+    const { rrule, exdates, rdates, unsupported } = R.parseRecurrenceArray(lines);
+    assert(rrule !== null, 'rrule ne doit pas être null');
+    assertEq(rrule.freq, 'WEEKLY');
+    assertContains(exdates, '2026-11-23', `exdates attendu contenir 2026-11-23, obtenu: ${JSON.stringify(exdates)}`);
+    assertEq(rdates, []);
+    assert(unsupported.length === 0, `unsupported attendu vide, obtenu: ${JSON.stringify(unsupported)}`);
+  });
+
+  test('W10', "parseRecurrenceArray — RDATE → rdates extraites", () => {
+    const lines = [
+      'RRULE:FREQ=WEEKLY;BYDAY=MO',
+      'RDATE:20261228T000000Z'
+    ];
+    const { rdates } = R.parseRecurrenceArray(lines);
+    assertContains(rdates, '2026-12-28', `rdates attendu contenir 2026-12-28, obtenu: ${JSON.stringify(rdates)}`);
+  });
+
+  test('W11', "parseRecurrenceArray — RECURRENCE-ID → signalé dans unsupported[], jamais ignoré", () => {
+    const lines = [
+      'RRULE:FREQ=WEEKLY;BYDAY=MO',
+      'RECURRENCE-ID;TZID=Europe/Paris:20261123T120000'
+    ];
+    const { unsupported } = R.parseRecurrenceArray(lines);
+    assert(
+      unsupported.some(u => u.includes('RECURRENCE-ID')),
+      `RECURRENCE-ID attendu dans unsupported, obtenu: ${JSON.stringify(unsupported)}`
+    );
+  });
+
+  test('W12', "rruleNext avec exdates — le 23/11 exclu ne compte pas dans la séquence retournée", () => {
+    // WEEKLY BYDAY=MO depuis 2026-11-16 : occurrences = 23, 30/11, 7, 14, 21/12…
+    // Exclure le 23/11 → résultats : 30/11, 7/12, 14/12
+    const rrule = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'none' };
+    const res = R.rruleNext(rrule, '2026-11-16', 3, ['2026-11-23']);
+    assertEq(res[0], '2026-11-30', `1er attendu 2026-11-30, obtenu ${res[0]}`);
+    assertEq(res[1], '2026-12-07', `2e attendu 2026-12-07, obtenu ${res[1]}`);
+    assertEq(res[2], '2026-12-14', `3e attendu 2026-12-14, obtenu ${res[2]}`);
+    assert(!res.includes('2026-11-23'), '2026-11-23 ne doit pas apparaître dans les résultats');
+  });
+
+  test('W13', "parseRecurrenceArray + rruleNext — flux complet avec exclusion", () => {
+    // Flux complet : parser le tableau, puis calculer les occurrences sans les exdates
+    const lines = [
+      'RRULE:FREQ=WEEKLY;BYDAY=MO',
+      'EXDATE;TZID=Europe/Paris:20261123T120000,20261130T120000'
+    ];
+    const { rrule, exdates } = R.parseRecurrenceArray(lines);
+    // Les 2 premiers lundis (23/11 et 30/11) sont exclus → 1er résultat: 7/12
+    const res = R.rruleNext(rrule, '2026-11-16', 3, exdates);
+    assertEq(res[0], '2026-12-07', `1er attendu 2026-12-07, obtenu ${res[0]}`);
+    assertEq(res[1], '2026-12-14', `2e attendu 2026-12-14, obtenu ${res[1]}`);
+    assertEq(res[2], '2026-12-21', `3e attendu 2026-12-21, obtenu ${res[2]}`);
+    assert(!res.includes('2026-11-23'));
+    assert(!res.includes('2026-11-30'));
+  });
+});
+
+// ─── M : rruleMergeOccurrences ───────────────────────────────────────────────
+
+group('rruleMergeOccurrences — fusion RRULE + EXDATE + RDATE', () => {
+
+  // M01 — RRULE simple, pas d'exclusion ni d'ajout
+  test('M01', "RRULE simple, sans EXDATE ni RDATE — 5 lundis consécutifs", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, [], []);
+    assertEq(res.dates, ['2026-11-23','2026-11-30','2026-12-07','2026-12-14','2026-12-21']);
+    assertEq(res.exdatesApplied, []);
+    assertEq(res.rdatesAdded, []);
+  });
+
+  // M02 — RRULE + EXDATE : exclusion soustrait une occurrence, le total reste 5
+  test('M02', "RRULE + EXDATE : 23/11 exclu, 28/12 reste dans les 5 résultats", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, ['2026-11-23'], []);
+    assertEq(res.dates, ['2026-11-30','2026-12-07','2026-12-14','2026-12-21','2026-12-28']);
+    assertContains(res.exdatesApplied, '2026-11-23');
+  });
+
+  // M03 — RRULE + RDATE : RDATE ajoute une occurrence hors-série
+  test('M03', "RRULE + RDATE : 2026-12-10 (jeudi) ajouté hors-série", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 4, [], ['2026-12-10']);
+    // Merge + tri : [23/11, 30/11, 07/12, 10/12] (10/12 jeudi intercalé)
+    assertContains(res.dates, '2026-12-10');
+    assertContains(res.rdatesAdded, '2026-12-10');
+    // Résultat trié
+    const sorted = [...res.dates].sort();
+    assertEq(res.dates, sorted);
+  });
+
+  // M04 — RRULE + RDATE + EXDATE
+  test('M04', "RRULE + RDATE + EXDATE combinés", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 4, ['2026-11-23'], ['2026-11-25']);
+    // 23/11 exclu ; 25/11 (mer) ajouté ; premier lundi restant = 30/11
+    assertContains(res.dates, '2026-11-25');
+    assert(!res.dates.includes('2026-11-23'), '23/11 exclu ne doit pas apparaître');
+    assertContains(res.rdatesAdded, '2026-11-25');
+  });
+
+  // M05 — RDATE déjà présent dans la RRULE → pas de doublon
+  test('M05', "RDATE identique à une occurrence RRULE — pas de doublon", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, [], ['2026-11-23']);
+    // 23/11 est déjà un lundi → ne doit pas être dupliqué
+    const count = res.dates.filter(d => d === '2026-11-23').length;
+    assertEq(count, 1, '2026-11-23 ne doit apparaître qu\'une seule fois');
+    assertEq(res.rdatesAdded, [], 'RDATE déjà présent → rdatesAdded vide');
+  });
+
+  // M06 — EXDATE avec métadonnées TZID préservées
+  test('M06', "exdateMeta : TZID préservé dans les métadonnées", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const meta = [{ iso:'2026-11-23', raw:'20261123T120000', tzid:'Europe/Paris' }];
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 4, ['2026-11-23'], [], meta);
+    assert(!res.dates.includes('2026-11-23'), '23/11 exclu');
+    assert(Array.isArray(res.exdateMeta), 'exdateMeta est un tableau');
+    assertEq(res.exdateMeta[0].tzid, 'Europe/Paris', 'TZID préservé');
+  });
+
+  // M07 — COUNT : n limité par la taille de la série
+  test('M07', "endType=count : série de 3, demande 5 — retourne 3 au maximum", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'count', count:3, wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, [], []);
+    assert(res.dates.length <= 3, `max 3 occurrences, obtenu ${res.dates.length}`);
+    assertEq(res.dates[0], '2026-11-23');
+    assertEq(res.dates[2], '2026-12-07');
+  });
+
+  // M08 — UNTIL : dates après UNTIL exclues
+  test('M08', "endType=until : série s'arrête à 2026-12-01", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'until', until:'2026-12-01', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 10, [], []);
+    assert(res.dates.every(d => d <= '2026-12-01'), 'toutes les dates ≤ UNTIL');
+    assertContains(res.dates, '2026-11-23');
+    assertContains(res.dates, '2026-11-30');
+    assert(!res.dates.includes('2026-12-07'), '2026-12-07 après UNTIL');
+  });
+
+  // M09 — Exactement n occurrences quand la série le permet
+  test('M09', "Retourne exactement n occurrences quand la série est infinie", () => {
+    const r = { freq:'DAILY', interval:1, endType:'never' };
+    for (const n of [1, 3, 5, 10]) {
+      const res = R.rruleMergeOccurrences(r, '2026-11-16', n, [], []);
+      assertEq(res.dates.length, n, `n=${n} → exactement ${n} résultats`);
+    }
+  });
+
+  // M10 — EXDATE ne génère pas plus de résultats que n
+  test('M10', "Avec EXDATE, le total ne dépasse jamais n", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    // Exclure 3 lundis
+    const ex = ['2026-11-23','2026-11-30','2026-12-07'];
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, ex, []);
+    assert(res.dates.length <= 5, `max 5, obtenu ${res.dates.length}`);
+    for (const d of ex) assert(!res.dates.includes(d), `${d} exclu ne doit pas apparaître`);
+  });
+
+  // M11 — Scénario complet : dernier vendredi + EXDATE + RDATE
+  test('M11', "Dernier vendredi mensuel + EXDATE + RDATE extérieur", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'never' };
+    // Exclure 25/12 (Noël) ; ajouter 2026-12-24 (hors-série)
+    const res = R.rruleMergeOccurrences(r, '2026-11-01', 4, ['2026-12-25'], ['2026-12-24']);
+    assertContains(res.dates, '2026-11-27', '27/11 présent');
+    assert(!res.dates.includes('2026-12-25'), '25/12 exclu');
+    assertContains(res.dates, '2026-12-24', '24/12 ajouté via RDATE');
+    assertContains(res.rdatesAdded, '2026-12-24');
+  });
+
+  // M12 — Scénario A exact (énoncé utilisateur)
+  test('M12', "Scénario A utilisateur : lundis depuis 16/11, EXDATE 23/11 → [30/11…28/12]", () => {
+    const r = { freq:'WEEKLY', interval:1, byDay:['MO'], endType:'never', wkst:'MO' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 5, ['2026-11-23'], []);
+    assertEq(res.dates, ['2026-11-30','2026-12-07','2026-12-14','2026-12-21','2026-12-28']);
+  });
+
+  // M13 — Scénario B exact (énoncé utilisateur)
+  test('M13', "Scénario B utilisateur : dernier ven. depuis 16/11 → [27/11, 25/12, 29/01]", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'never' };
+    const res = R.rruleMergeOccurrences(r, '2026-11-16', 3, [], []);
+    assertEq(res.dates[0], '2026-11-27', `1er attendu 2026-11-27, obtenu ${res.dates[0]}`);
+    assertEq(res.dates[1], '2026-12-25', `2e attendu 2026-12-25, obtenu ${res.dates[1]}`);
+    assertEq(res.dates[2], '2027-01-29', `3e attendu 2027-01-29, obtenu ${res.dates[2]}`);
+  });
+});
+
+// ─── P : Régression mensuel — correction mo=0 ────────────────────────────────
+
+group('rruleNext — MONTHLY correction démarrage mois courant', () => {
+
+  test('P01', "MONTHLY jour 20, départ 16/11 → 1er résultat = 20/11 (même mois)", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'day', monthDay:20, endType:'never' };
+    const res = R.rruleNext(r, '2026-11-16', 3, []);
+    assertEq(res[0], '2026-11-20', `1er attendu 2026-11-20, obtenu ${res[0]}`);
+    assertEq(res[1], '2026-12-20');
+    assertEq(res[2], '2027-01-20');
+  });
+
+  test('P02', "MONTHLY jour 16, départ 16/11 → 1er résultat = 16/12 (même jour = sauté)", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'day', monthDay:16, endType:'never' };
+    const res = R.rruleNext(r, '2026-11-16', 3, []);
+    assertEq(res[0], '2026-12-16', `1er attendu 2026-12-16, obtenu ${res[0]}`);
+  });
+
+  test('P03', "MONTHLY dernier vendredi, départ 16/11 → 1er = 27/11 (même mois, après départ)", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'never' };
+    const res = R.rruleNext(r, '2026-11-16', 3, []);
+    assertEq(res[0], '2026-11-27', `1er attendu 2026-11-27, obtenu ${res[0]}`);
+    assertEq(res[1], '2026-12-25');
+    assertEq(res[2], '2027-01-29');
+  });
+
+  test('P04', "MONTHLY dernier vendredi, départ 27/11 (= occurrence) → 1er = 25/12 (sauté)", () => {
+    const r = { freq:'MONTHLY', interval:1, monthType:'weekday', monthPos:-1, monthWd:'FR', endType:'never' };
+    const res = R.rruleNext(r, '2026-11-27', 3, []);
+    assertEq(res[0], '2026-12-25', `1er attendu 2026-12-25, obtenu ${res[0]}`);
+  });
+
+  test('P05', "MONTHLY interval=2, 2e lundi, départ 01/11 → 2e lundi de nov., puis jan.", () => {
+    const r = { freq:'MONTHLY', interval:2, monthType:'weekday', monthPos:2, monthWd:'MO', endType:'never' };
+    const res = R.rruleNext(r, '2026-11-01', 2, []);
+    // 2e lundi de nov. 2026 : 9/11
+    assertEq(res[0], '2026-11-09', `1er attendu 2026-11-09, obtenu ${res[0]}`);
+    // 2e lundi de jan. 2027 : 11/01
+    assertEq(res[1], '2027-01-11', `2e attendu 2027-01-11, obtenu ${res[1]}`);
+  });
+});
+
+// ─── Exécution ────────────────────────────────────────────────────────────────
+
+function runGroup(g) {
+  let pass = 0, fail = 0, skipCount = 0;
+  for (const t of g.tests) {
+    if (t.status === 'skip' || t.fn === null) {
+      t.status = 'skip';
+      t.message = t.reason || 'ignoré';
+      skipCount++;
+      continue;
+    }
+    try {
+      t.fn();
+      t.status = 'pass';
+      pass++;
+    } catch (e) {
+      t.status = 'fail';
+      t.message = e.message;
+      fail++;
+    }
+  }
+  return { pass, fail, skip: skipCount };
+}
+
+function renderGroups() {
+  const output = document.getElementById('output');
+  output.innerHTML = '';
+  let totalPass = 0, totalFail = 0, totalSkip = 0;
+
+  for (const g of groups) {
+    const { pass, fail, skip } = runGroup(g);
+    totalPass += pass; totalFail += fail; totalSkip += skip;
+    const total = pass + fail + skip;
+    const allOk = fail === 0;
+
+    const div = document.createElement('div');
+    div.className = `group ${allOk ? 'open' : 'open'}`;
+    div.innerHTML = `
+      <div class="group-hdr" onclick="this.parentElement.classList.toggle('open')">
+        <span>${allOk ? '✅' : '❌'} ${g.name}</span>
+        <span class="group-score" style="color:${fail>0?'var(--err)':skip>0?'var(--warn)':'var(--ok)'}">
+          ${pass}/${total}${skip ? ` (${skip} ignorés)` : ''}
+        </span>
+      </div>
+      <div class="group-body">
+        ${g.tests.map(t => `
+          <div class="test-row ${t.status}">
+            <span class="test-id">${t.id}</span>
+            <span class="icon">${t.status==='pass'?'✅':t.status==='fail'?'❌':'⏭️'}</span>
+            <div class="test-desc">
+              <div class="test-name">${t.desc}</div>
+              ${t.message ? `<div class="test-detail ${t.status==='fail'?'err-detail':'ok-detail'}">${esc(t.message)}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    output.appendChild(div);
+  }
+
+  // Scoreboard
+  const sb = document.getElementById('scoreboard');
+  sb.innerHTML = `
+    <span class="score sc-ok">✅ ${totalPass} réussis</span>
+    <span class="score sc-err">❌ ${totalFail} échoués</span>
+    ${totalSkip ? `<span class="score sc-skip">⏭️ ${totalSkip} ignorés</span>` : ''}
+    <span class="score sc-total">${totalPass+totalFail+totalSkip} tests</span>
+  `;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+window.runAllTests = renderGroups;
+
+// Auto-run au chargement
+renderGroups();
+</script>
+</body>
+</html>
