@@ -788,8 +788,33 @@ input, textarea, select { color-scheme: dark; }
 .mz-pill button:active { opacity: .8; }
 
 </style>
+<!-- Supabase JS — Phase 1 lecture seule -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
+
+<!-- AUTH OVERLAY Phase 1 — prévisualisation lecture seule -->
+<div id="sb-auth-overlay" style="display:none;position:fixed;inset:0;z-index:999;background:#0E1620;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+  <div style="max-width:360px;width:100%">
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:36px;margin-bottom:12px">📅</div>
+      <div style="font-size:22px;font-weight:700;color:#EEF2F8;margin-bottom:6px">Agenda V2</div>
+      <div style="font-size:14px;color:#8F9BB0">Prévisualisation · Lecture seule</div>
+    </div>
+    <div id="sb-auth-error" style="display:none;background:rgba(246,92,92,0.14);border:1px solid rgba(246,92,92,0.3);border-radius:12px;padding:12px 16px;font-size:14px;color:#FF8080;margin-bottom:16px"></div>
+    <input id="sb-auth-email" type="email" autocomplete="email" placeholder="Adresse e-mail"
+      style="width:100%;box-sizing:border-box;background:#1B2433;border:1px solid #2B374B;border-radius:14px;padding:14px 16px;font-size:16px;color:#EEF2F8;margin-bottom:12px;outline:none;font-family:inherit">
+    <input id="sb-auth-password" type="password" autocomplete="current-password" placeholder="Mot de passe"
+      style="width:100%;box-sizing:border-box;background:#1B2433;border:1px solid #2B374B;border-radius:14px;padding:14px 16px;font-size:16px;color:#EEF2F8;margin-bottom:20px;outline:none;font-family:inherit">
+    <button id="sb-auth-btn" onclick="sbLogin()"
+      style="width:100%;background:#4C8DF6;color:#fff;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit">
+      Connexion
+    </button>
+    <div id="sb-auth-loading" style="display:none;text-align:center;margin-top:16px;font-size:14px;color:#8F9BB0">Chargement des données…</div>
+    <div style="text-align:center;margin-top:20px;font-size:13px;color:#8F9BB0">Utilisez vos identifiants Maisonnée</div>
+  </div>
+</div>
+
 <div id="app">
 
   <!-- SHELL: barre Maisonnée -->
@@ -959,11 +984,8 @@ function toast(msg, dur) {
 }
 
 // ---- MEMBRES ----
-const MEMBERS = [
-  { id: 'f', name: 'Franck', color: '#4C8DF6', initials: 'F' },
-  { id: 'm', name: 'Marie',  color: '#F65C9B', initials: 'M' },
-  { id: 'l', name: 'Léa',   color: '#34C768', initials: 'L' },
-];
+// Initialement vides — remplacés par les vraies données Supabase après authentification
+let MEMBERS = [];
 
 const CATS = [
   { id: 'rva',    label: 'Rendez-vous', icon: '📅', bg: 'rgba(76,141,246,0.14)', ink: '#7BAAFF', dot: '#4C8DF6' },
@@ -974,10 +996,20 @@ const CATS = [
   { id: 'travail',label: 'Travail',     icon: '💼', bg: 'rgba(26,188,213,0.14)', ink: '#4CD9EF', dot: '#1ABCD5' },
 ];
 
+// Mapping Supabase kind → catégorie V2
+// colorId (IDs couleur Google Calendar 1-11) peut affiner la catégorie
+function kindToCat(kind, colorId) {
+  const COLOR_TO_CAT = { 1:'perso',2:'perso',3:'sport',4:'famille',5:'travail',6:'travail',7:'sante',8:'perso',9:'travail',10:'sport',11:'sante' };
+  if (colorId && COLOR_TO_CAT[colorId]) return COLOR_TO_CAT[colorId];
+  if (kind === 'rdv') return 'rva';
+  if (kind === 'task') return 'travail';
+  return 'famille'; // kind === 'event'
+}
+
 // ---- DATE HELPERS ----
-const NOW = new Date(2026, 10, 16, 9, 23);
+const NOW = new Date();
 function isoDate(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
-function today() { return '2026-11-16'; }
+function today() { const d = NOW; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(iso, n) { const d = new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function fmtDateShort(iso) { return new Date(iso+'T12:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }
 function fmtRemLabel(r) {
@@ -1091,6 +1123,8 @@ const LIST_CHUNK = 30;
 let listChunksLoaded = 1;
 
 function buildRruleFrom(e) {
+  // Priorité à e.rrule (format V2 de prodToV2 / Supabase), fallback sur propriétés plates (DEMO_EVENTS)
+  if (e.rrule && e.rrule.freq && e.rrule.freq !== 'NONE') return e.rrule;
   return { freq: e.rrule_freq, interval: e.rrule_interval || 1, byDay: e.rrule_byDay || [],
            monthType: e.rrule_monthType, monthDay: e.rrule_monthDay, monthPos: e.rrule_monthPos,
            monthWd: e.rrule_monthWd, endType: e.rrule_endType || 'never', until: e.rrule_until,
@@ -1103,7 +1137,7 @@ function buildEventIndex(fromIso, toIso) {
     if (e.date >= fromIso && e.date <= toIso) {
       (idx[e.date] = idx[e.date] || []).push(e);
     }
-    if (e.rrule_freq && e.rrule_freq !== 'NONE') {
+    if ((e.rrule?.freq || e.rrule_freq) && (e.rrule?.freq || e.rrule_freq) !== 'NONE') {
       const r = buildRruleFrom(e);
       const occs = rruleNext(r, e.date, 200, e.exdates || []);
       for (const iso of occs) {
@@ -1912,8 +1946,10 @@ function collectEditorInputs() {
 }
 
 function openEditor(type, editId) {
-  document.getElementById('fab-menu').classList.remove('open');
-  mzHideOptions();
+  document.getElementById('fab-menu')?.classList.remove('open');
+  mzHideOptions?.();
+  toast('🔒 Lecture seule — création et modification désactivées dans la prévisualisation.');
+  return;
   ES.editId = editId || null;
   if (editId) {
     const e = EVENTS.find(x=>x.id===editId);
@@ -1976,6 +2012,9 @@ function openEditor(type, editId) {
 function closeEditor() { document.getElementById('editor').classList.remove('open'); }
 
 function saveEditor() {
+  toast('🔒 Lecture seule — enregistrement désactivé dans la prévisualisation.');
+  return;
+  // ---- code d'écriture désactivé Phase 1 ----
   collectEditorInputs();
   if (!ES.title) { toast('Le titre est obligatoire.'); document.getElementById('etitle')&&document.getElementById('etitle').focus(); return; }
   if (ES.type!=='task' && !ES.allday) {
@@ -2030,8 +2069,7 @@ function buildEvent() {
 }
 
 function deleteEvent(id) {
-  EVENTS = EVENTS.filter(e=>e.id!==id);
-  dbSave(); closeDetail(); renderCurrentView(); toast('Supprimé');
+  toast('🔒 Lecture seule — suppression désactivée dans la prévisualisation.');
 }
 
 function setEType(btn, type) {
@@ -2745,8 +2783,12 @@ function renderSearch(q) {
 }
 
 // ---- INIT ----
+// sbLogin défini dans le module Phase 1 (ci-dessous) ; stub pour le cas où le module n'est pas encore prêt
+function sbLogin() { toast('Supabase en cours de chargement…'); }
+
 dbLoad();
 renderList();
+// sbInit() est appelé par le module ES Phase 1 ci-dessous une fois les adaptateurs chargés
 
 
 // ---- SHELL MAISONNÉE ----
@@ -2780,16 +2822,190 @@ document.addEventListener('click', e => {
 })();
 </script>
 
-<!-- Chargement des adaptateurs isolés (ES modules) -->
+<!-- Adaptateurs + Supabase Phase 1 (lecture seule) -->
 <script type="module">
   import * as RA from './adapters/rrule-adapter.js';
   import * as RemA from './adapters/reminder-adapter.js';
+  import { prodToV2 } from './adapters/prod-to-v2.js';
   window._RA = RA;
   window._RemA = RemA;
+  window._prodToV2 = prodToV2;
+
   const editor = document.getElementById('editor-panel');
   if (editor && editor.classList.contains('open')) {
     if (typeof renderEditorBody === 'function') renderEditorBody();
   }
+
+  // ── Supabase Phase 1 — lecture seule ─────────────────────────────────────
+  const SB_URL = 'https://cluqleqbbidozpioekog.supabase.co';
+  const SB_KEY = 'sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS';
+  const MZ_AUTH_KEY = 'cm_sb_auth';
+  let _sb = null;
+
+  function sbGetClient() {
+    if (_sb) return _sb;
+    if (!window.supabase) { console.warn('[Phase1] Supabase JS non chargé'); return null; }
+    _sb = window.supabase.createClient(SB_URL, SB_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, storageKey: MZ_AUTH_KEY, detectSessionInUrl: false }
+    });
+    return _sb;
+  }
+
+  async function sbLoginImpl() {
+    const btn = document.getElementById('sb-auth-btn');
+    const errEl = document.getElementById('sb-auth-error');
+    const email = document.getElementById('sb-auth-email').value.trim();
+    const pwd = document.getElementById('sb-auth-password').value;
+    if (!email || !pwd) { sbShowError('Renseignez l\'e-mail et le mot de passe.'); return; }
+    btn.textContent = 'Connexion…'; btn.disabled = true;
+    errEl.style.display = 'none';
+    try {
+      const sb = sbGetClient();
+      if (!sb) throw new Error('Supabase non initialisé');
+      const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+      if (error) throw error;
+      await sbLoadData();
+    } catch(err) {
+      sbShowError(err.message || 'Erreur de connexion');
+      btn.textContent = 'Connexion'; btn.disabled = false;
+    }
+  }
+
+  function sbShowError(msg) {
+    const el = document.getElementById('sb-auth-error');
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+  }
+
+  async function sbLoadData() {
+    const sb = sbGetClient();
+    if (!sb) return;
+    const loadingEl = document.getElementById('sb-auth-loading');
+    if (loadingEl) loadingEl.style.display = 'block';
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) {
+        document.getElementById('sb-auth-overlay').style.display = 'flex';
+        if (loadingEl) loadingEl.style.display = 'none';
+        return;
+      }
+
+      // Foyer
+      const { data: memberships, error: memErr } = await sb
+        .from('household_members').select('household_id').eq('user_id', user.id).limit(1);
+      if (memErr) throw memErr;
+      if (!memberships || memberships.length === 0) {
+        sbShowError('Aucun foyer trouvé pour ce compte.');
+        document.getElementById('sb-auth-overlay').style.display = 'flex';
+        if (loadingEl) loadingEl.style.display = 'none';
+        return;
+      }
+      const hid = memberships[0].household_id;
+
+      // Membres
+      const { data: members } = await sb
+        .from('household_members').select('id,name,color,user_id,position')
+        .eq('household_id', hid).order('position');
+      if (members && members.length > 0) {
+        MEMBERS.length = 0;
+        members.forEach(m => {
+          const initials = (m.name || '?').split(' ').map(w => w[0]||'').join('').toUpperCase().slice(0, 2) || '?';
+          MEMBERS.push({ id: m.id, name: m.name || m.id, color: m.color || '#4C8DF6', initials });
+        });
+      }
+
+      // Événements
+      const { data: rows, error: evErr } = await sb
+        .from('events').select('*').eq('household_id', hid);
+      if (evErr) throw evErr;
+
+      if (rows && rows.length > 0) {
+        EVENTS = rows.map(row => {
+          try {
+            const ev = window._prodToV2(row);
+            if (!ev.cat) ev.cat = kindToCat(ev.type, row.colorId);
+            return ev;
+          } catch(e) {
+            console.warn('[Phase1] prodToV2 error', row.id, e);
+            return null;
+          }
+        }).filter(Boolean);
+      } else {
+        EVENTS = [];
+      }
+
+      // Anniversaires (optionnel — table bdays)
+      try {
+        const { data: bdays } = await sb.from('bdays').select('*').eq('household_id', hid);
+        if (bdays && bdays.length > 0) {
+          const yr = new Date().getFullYear();
+          bdays.forEach(b => {
+            if (!b.date) return;
+            const mmdd = String(b.date).slice(5);
+            for (let y = yr - 1; y <= yr + 2; y++) {
+              EVENTS.push({
+                id: 'bday_' + b.id + '_' + y,
+                date: y + '-' + mmdd,
+                title: (b.name || '?') + ' 🎂',
+                cat: 'famille',
+                allday: true,
+                members: [],
+                _isBday: true,
+              });
+            }
+          });
+        }
+      } catch(e) { /* table bdays absente ou inaccessible — non bloquant */ }
+
+      // Mettre à jour les avatars de l'en-tête
+      const avatarContainer = document.querySelector('.mz-avatars');
+      if (avatarContainer && MEMBERS.length > 0) {
+        avatarContainer.innerHTML = MEMBERS.slice(0, 4).map(m =>
+          `<div class="mz-av" style="background:${m.color}">${m.initials}</div>`
+        ).join('');
+      }
+
+      // Afficher les données
+      document.getElementById('sb-auth-overlay').style.display = 'none';
+      const badge = document.querySelector('.demo-badge');
+      if (badge) badge.textContent = '🔒 Données réelles · Lecture seule';
+      renderCurrentView();
+      toast('Données chargées (' + EVENTS.length + ' événements)');
+
+    } catch(err) {
+      console.error('[Phase1] sbLoadData error', err);
+      sbShowError('Erreur chargement : ' + (err.message || err));
+      document.getElementById('sb-auth-overlay').style.display = 'flex';
+      const btn = document.getElementById('sb-auth-btn');
+      if (btn) { btn.textContent = 'Connexion'; btn.disabled = false; }
+    } finally {
+      if (loadingEl) loadingEl.style.display = 'none';
+    }
+  }
+
+  async function sbInit() {
+    const sb = sbGetClient();
+    if (!sb) {
+      // Supabase CDN non chargé (offline ?) — afficher overlay sans login
+      document.getElementById('sb-auth-overlay').style.display = 'flex';
+      sbShowError('Supabase JS non disponible. Vérifiez votre connexion.');
+      return;
+    }
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      // Session existante — charger les données directement
+      document.getElementById('sb-auth-overlay').style.display = 'flex';
+      document.getElementById('sb-auth-loading').style.display = 'block';
+      await sbLoadData();
+    } else {
+      document.getElementById('sb-auth-overlay').style.display = 'flex';
+    }
+  }
+
+  // Exposer sbLogin pour l'onclick HTML (remplace le stub défini dans le script principal)
+  window.sbLogin = sbLoginImpl;
+
+  // Lancer l'init
+  sbInit();
 </script>
 </body>
 </html>
