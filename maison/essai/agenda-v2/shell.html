@@ -739,20 +739,6 @@ input, textarea, select { color-scheme: dark; }
   align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
 }
 .mz-bell svg { width: 18px; height: 18px; }
-/* ========= SHELL: sim banner ========= */
-.mz-sim-banner {
-  background: rgba(76,141,246,0.08); border-bottom: 1px solid rgba(76,141,246,0.2);
-  padding: 6px 16px; display: flex; align-items: center; gap: 10px;
-  font-size: 12px; color: var(--muted); flex-shrink: 0;
-}
-.mz-sim-label { font-weight: 600; color: var(--accent); }
-.mz-sim-sep { color: var(--line); }
-.mz-src-btn {
-  background: none; border: 1px solid var(--line); border-radius: var(--r-pill);
-  padding: 3px 10px; font-size: 11px; font-weight: 500; color: var(--muted);
-  cursor: pointer; transition: all .15s;
-}
-.mz-src-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 /* ========= SHELL: Maisonnée FAB (create) ========= */
 #mz-cal-create {
   position: fixed; right: 20px;
@@ -808,7 +794,7 @@ input, textarea, select { color-scheme: dark; }
 
   <!-- SHELL: barre Maisonnée -->
   <div class="mz-top">
-    <button class="mz-back" onclick="mzBack()" title="Retour"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="mz-back" onclick="mzBack()" title="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     <div class="mz-top-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Calendrier</div>
     <div class="mz-avatars">
       <div class="mz-av" style="background:#4C8DF6">F</div>
@@ -818,14 +804,6 @@ input, textarea, select { color-scheme: dark; }
     <button class="mz-bell" onclick="mzSimToast('Notifications — simulées')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 10a6 6 0 0 1 12 0c0 5 2 7 2 7H4s2-2 2-7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button>
   </div>
 
-  <!-- SHELL: bannière prototype -->
-  <div class="mz-sim-banner">
-    <span class="mz-sim-label">🧪 Prévisualisation</span>
-    <span class="mz-sim-sep">·</span>
-    <span>Retour vers :</span>
-    <button class="mz-src-btn active" data-target="home" onclick="mzSetReturn('home')">Accueil</button>
-    <button class="mz-src-btn" data-target="explore" onclick="mzSetReturn('explore')">Explorer</button>
-  </div>
 
   <!-- HEADER AGENDA V2 (sans modification) -->
   <div id="header">
