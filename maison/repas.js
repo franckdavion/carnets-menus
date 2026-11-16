@@ -5,6 +5,7 @@
    il l'enregistre dans le carnet commun et le pont (pont.js) la reporte dans Maisonnée (repas et courses). */
 
 const CK = { frame: null, ready: false, err: "", busy: false, waiters: [], startedAt: 0 };
+function repasDemoMode() { try { return sessionStorage.getItem("cm_demo_repas") === "1" || new URLSearchParams(location.search).get("demo") === "repas"; } catch (_) { return false; } }
 const cev = code => CK.frame.contentWindow.eval(code);          // lire / appeler dans le Carnet
 const cj = code => JSON.parse(cev(`JSON.stringify(${code})`));  // copie simple de ses données
 let rWeek = mondayOf(today()), rPick = null;                     // semaine affichée, recherche de recette
@@ -23,7 +24,7 @@ async function carnetSeedAuth() {
 }
 function carnetBoot(force) {
   carnetLive();
-  if (mode !== "cloud") return;
+  if (mode !== "cloud" && !repasDemoMode()) return;
   if (navigator.onLine === false) return;
   if (CK.frame && !force && (CK.ready || !CK.err)) return;
   if (CK.frame && (force || CK.err)) {
@@ -35,9 +36,10 @@ function carnetBoot(force) {
   CK.err = "";
   CK.ready = false;
   const startFrame = () => {
-    if (CK.frame || mode !== "cloud") return;
+    if (CK.frame || (mode !== "cloud" && !repasDemoMode())) return;
     const f = document.createElement("iframe");
-    f.src = CARNET_URL + "?arriere-plan=maisonnee" + (force ? "&t=" + Date.now() : "");
+    const demoRepas = (() => { try { return sessionStorage.getItem("cm_demo_repas") === "1" || new URLSearchParams(location.search).get("demo") === "repas"; } catch (_) { return false; } })();
+    f.src = CARNET_URL + "?arriere-plan=maisonnee" + (demoRepas ? "&demo=repas" : "") + (force ? "&t=" + Date.now() : "");
     f.title = "Carnet de menus (arrière-plan)";
     f.setAttribute("aria-hidden", "true");
     f.loading = "eager";
@@ -55,7 +57,7 @@ function carnetBoot(force) {
         CK.ready = true; CK.err = ""; CK.waiters.splice(0).forEach(w => w());
         if (view === "repas" || view === "courses") softRender();
         ticking = false;
-        try { cev("typeof cloudSync==='function'&&cloudSync()"); } catch (_) {}
+        if (!demoRepas) try { cev("typeof cloudSync==='function'&&cloudSync()"); } catch (_) {}
         rScheduleGoogleMeals();
         return;
       }
@@ -332,12 +334,12 @@ const RDAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dim
 function weekSlots(wk) {
   cev(`curWeek=${JSON.stringify(wk)}`);
   return cj(`(()=>{const w=(menu.weeks||{})[curWeek]||{},o={};for(const k of SLOT_ORDER){const s=w[k];o[k]={s:s||null,past:isPast(k),skip:skipped(k),
-    name:s&&recipes[s.id]?recipes[s.id].name:"",kind:s&&recipes[s.id]?KIND_LABEL[kindOf(recipes[s.id])]||"":"",
+    name:typeof slotDishName==="function"?slotDishName(s):"",kind:s&&recipes[s.id]?KIND_LABEL[kindOf(recipes[s.id])]||"":"",
     left:s&&!recipes[s.id]&&s.left?String(s.left):"",note:s&&!recipes[s.id]&&s.note?String(s.note):"",ent:s&&s.entree&&recipes[s.entree]?recipes[s.entree].name:"",des:s&&s.dessert&&recipes[s.dessert]?recipes[s.dessert].name:""};}return o;})()`);
 }
 
 VIEWS.repas = function () {
-  if (mode !== "cloud") return `<div class="empty"><strong>Disponible avec un vrai foyer.</strong>La semaine de repas utilise le Carnet de menus du foyer.</div>`;
+  if (mode !== "cloud" && !repasDemoMode()) return `<div class="empty"><strong>Disponible avec un vrai foyer.</strong>La semaine de repas utilise le Carnet de menus du foyer.</div>`;
   carnetBoot();
   if (CK.err) return `<div class="empty"><strong>Repas indisponibles pour l'instant.</strong>${esc(CK.err)}<div class="btns"><button class="btn primary" type="button" data-act="rCarnetRetry">Réessayer</button><a class="btn" href="${CARNET_URL}">Ouvrir le Carnet</a></div></div>`;
   if (!CK.ready) return `<div class="empty"><strong>Chargement du Carnet de menus…</strong>Recettes et réglages du foyer, quelques secondes la première fois.${Date.now() - (CK.startedAt || 0) > 8000 ? `<div class="btns" style="margin-top:12px"><button class="btn" type="button" data-act="rCarnetRetry">Réessayer le chargement</button></div>` : ""}</div>`;
@@ -539,7 +541,7 @@ function mealSlotSheet(k) {
         <div class="meal-compose-item meal-compose-side"><b>🍰 Dessert</b>${x.des ? `<span>${esc(x.des)}</span><button class="linkbtn small" data-act="rSide" data-v="${esc(k)}" data-r="dessert">Retirer</button>` : `<button class="btn" data-act="rChoose" data-v="${esc(k)}" data-r="dessert">+ Ajouter un dessert</button>`}</div>
       </div></div>
     </section>
-    <div class="btns"><button class="btn danger block" data-act="rRemoveChoose" data-v="${esc(k)}">Retirer ce repas</button></div>
+    <div class="btns"><button class="btn block" data-act="rMove" data-v="${esc(k)}">📅 Déplacer ce repas</button><button class="btn danger block" data-act="rRemoveChoose" data-v="${esc(k)}">Retirer ce repas</button></div>
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
   if (same) { dlg.scrollTop = st; $("#sheetIn").scrollTop = si; }
 }
@@ -868,12 +870,82 @@ function rNoteSheet(k) {
     <div class="sheet-sticky btns"><button class="btn block" data-act="closeSheet">Fermer</button></div>`);
 }
 
+/* ---------- déplacer un repas (même moteur que le Carnet, via l'iframe) ---------- */
+let rMove = null;
+const cjApplyMove = opts => cj(`applyMealRelocation(${JSON.stringify(opts)})`);
+function rMoveDest(sel, meal) {
+  return cj(`(()=>{const d=parseYmd(${JSON.stringify(sel)});return mealSlotFromDate(${JSON.stringify(sel)},${JSON.stringify(meal)});})()`);
+}
+function rMoveSheet(k) {
+  const x = weekSlots(rWeek)[k];
+  if (!x || !x.name) { toast(x && x.s ? "Ce repas ne peut pas être déplacé." : "Repas introuvable."); return; }
+  if (!CK.ready) { toast("Le Carnet de menus charge encore…"); carnetBoot(true); return; }
+  rMove = { fromK: k, fromW: rWeek, month: new Date(), sel: null, meal: k.split("|")[1] || "soir", conflict: null, name: x.name };
+  try { rMoveRender(); } catch (err) { console.error("rMoveRender", err); toast("Ouverture du calendrier impossible."); }
+}
+function rMoveRender() {
+  if (!rMove) return;
+  const m0 = rMove.month instanceof Date ? rMove.month : new Date(rMove.month), mon = new Date(m0.getFullYear(), m0.getMonth(), 1);
+  const cells = [], todayKey = today(), calStart = mondayOf(ymd(mon));
+  for (let i = 0; i < 42; i++) {
+    const k = addDays(calStart, i), dt = parse(k);
+    if (i >= 35 && dt.getMonth() !== mon.getMonth()) break;
+    cells.push({ k, dt });
+  }
+  const sel = rMove.sel;
+  const cal = ["L", "M", "M", "J", "V", "S", "D"].map(x => `<span class="wd" style="font-size:11px;color:var(--muted);font-weight:600">${x}</span>`).join("")
+    + cells.map(({ k, dt }) => {
+      const fut = k >= todayKey;
+      return `<button type="button" class="btn ghost" data-act="rMoveDay" data-d="${k}" style="padding:8px 0;${k === sel ? "background:var(--accent);color:var(--accent-ink)" : ""}${!fut ? ";opacity:.35" : ""}" ${!fut ? "disabled" : ""}>${dt.getDate()}</button>`;
+    }).join("");
+  let day = `<p class="muted">Choisissez une date future.</p>`;
+  if (sel) {
+    const slots = cj(`dayPlanningOn(${JSON.stringify(sel)})`);
+    day = `<p class="muted small">Déplacer <b>${esc(rMove.name)}</b></p><div class="move-slots" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">${slots.map(s => {
+      const same = rMove.fromW === s.w && rMove.fromK === s.k;
+      const on = rMove.meal === s.m;
+      return `<button type="button" class="btn${on ? " primary" : ""}" data-act="rMoveMeal" data-m="${s.m}" ${same ? "disabled" : ""}">${s.lab}<br><small>${same ? "Origine" : s.used ? esc(s.title) : "Libre"}</small></button>`;
+    }).join("")}</div><button type="button" class="btn primary block" data-act="rMoveGo" style="margin-top:12px">Déplacer ici</button>`;
+  }
+  let conflict = "";
+  if (rMove.conflict) {
+    const v = rMove.conflict.victimTitle || "autre repas";
+    conflict = `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><p>Ce créneau est pris par <b>${esc(v)}</b>.</p>
+      <button type="button" class="btn primary block" data-act="rMoveDo" data-mode="replace">Remplacer</button>
+      <button type="button" class="btn block" data-act="rMoveDo" data-mode="swap">Échanger</button>
+      <button type="button" class="btn ghost block" data-act="rMoveCancel">Annuler</button></div>`;
+  }
+  openSheet("Déplacer ce repas", `
+    <p class="muted small">${esc(rMove.name)} · ${esc(rMove.fromK.replace("|", " "))}</p>
+    <div class="row" style="justify-content:space-between"><button class="icon-btn" data-act="rMoveMonth" data-d="-1">‹</button><strong>${mon.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}</strong><button class="icon-btn" data-act="rMoveMonth" data-d="1">›</button></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;margin-top:8px">${cal}</div>
+    ${day}${conflict}`);
+}
+function rMoveRun(mode) {
+  if (!rMove || !rMove.sel) return;
+  const dest = rMoveDest(rMove.sel, rMove.meal);
+  const opts = Object.assign({ fromW: rMove.fromW, fromK: rMove.fromK, toW: dest.w, toK: dest.k, toDate: rMove.sel, mode: mode || "move" }, {});
+  const res = cjApplyMove(opts);
+  if (res.needChoice) {
+    const v = cj(`planningTitle(${JSON.stringify(dest.w)},${JSON.stringify(dest.k)},getMealSlot(${JSON.stringify(dest.w)},${JSON.stringify(dest.k)}))`);
+    rMove.conflict = { opts, victimTitle: v };
+    rMoveRender();
+    return;
+  }
+  if (!res.ok) { toast(res.code === "past" ? "Date passée." : "Déplacement impossible."); return; }
+  carnetSave("Repas déplacé.");
+  rMove = null;
+  closeSheet();
+  if (dest.w !== rWeek) rWeek = dest.w;
+  softRender();
+}
+
 /* ---------- actions ---------- */
 const slotJs = k => `W()[${JSON.stringify(k)}]`;
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b || !String(b.dataset.act).startsWith("r") || !CK.ready && b.dataset.act !== "rWeek" && b.dataset.act !== "rCarnetRetry") return;
   const v = b.dataset.v, act = b.dataset.act;
-  if (!["rCarnetRetry", "rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut", "rHomeFav", "rHomeCook"].includes(act)) return;
+  if (!["rCarnetRetry", "rPortion", "rPortionCustom", "rRecipeTab", "rRecipeServ", "rRecipeFav", "rEditSteps", "rStepAdd", "rStepUp", "rStepDown", "rStepDelete", "rCook", "rCookNext", "rCookPrev", "rCookRecipe", "rCookBack", "rCookExit", "rRecipe", "rRecipeOpen", "rVariant", "rFav", "rEditIngredients", "rQuantities", "rPhotoEdit", "rRename", "rIngAdd", "rIngDelete", "rWeek", "rPropose", "rPrefs", "rLockAll", "rIng", "rKeep", "rSlot", "rReroll", "rChoose", "rLock", "rState", "rBought", "rQuickIng", "rServ", "rSide", "rRemove", "rRemoveChoose", "rRemovePart", "rPut", "rNum", "rLeft", "rLeftPut", "rNote", "rNotePut", "rHomeFav", "rHomeCook", "rMove", "rMoveMonth", "rMoveDay", "rMoveMeal", "rMoveGo", "rMoveDo", "rMoveCancel"].includes(act)) return;
   if (act !== "rWeek" && act !== "rCarnetRetry") cev(`curWeek=${JSON.stringify(rWeek)}`);
   switch (act) {
     case "rCarnetRetry": carnetBoot(true); render(); break;
@@ -887,6 +959,13 @@ document.addEventListener("click", async e => {
     case "rPropose": rProposeSheet(); break;
     case "rPrefs": rPrefsSheet(); break;
     case "rSlot": rRecipeReturnSlot=null; mealSlotSheet(v); break;
+    case "rMove": rMoveSheet(v); break;
+    case "rMoveMonth": if (rMove) { const m = rMove.month; rMove.month = new Date(m.getFullYear(), m.getMonth() + Number(b.dataset.d), 1); rMove.conflict = null; rMoveRender(); } break;
+    case "rMoveDay": if (rMove) { rMove.sel = b.dataset.d; rMove.conflict = null; rMoveRender(); } break;
+    case "rMoveMeal": if (rMove) { rMove.meal = b.dataset.m; rMove.conflict = null; rMoveRender(); } break;
+    case "rMoveGo": rMoveRun("move"); break;
+    case "rMoveDo": rMoveRun(b.dataset.mode); break;
+    case "rMoveCancel": if (rMove) { rMove.conflict = null; rMoveRender(); } break;
     case "rRecipe": rRecipeSheet(v); break;
     case "rRecipeTab": rRecipeSheet(v,b.dataset.tab); break;
     case "rEditSteps": rEditStepsSheet(v); break;

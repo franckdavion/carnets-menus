@@ -616,6 +616,7 @@ function renderSlotSheet(){
     if(!past)h+=`<div class="pref-row"><div><strong>Personnes</strong></div><div class="ctl"><button class="step sm" data-act="serv" data-k="${k}" data-d="-1" ${s.n<=1?"disabled":""} aria-label="Une de moins">−</button><span class="n">${s.n}</span><button class="step sm" data-act="serv" data-k="${k}" data-d="1" aria-label="Une de plus">+</button></div></div>`;
     h+=`<div class="slot-acts2">`+(past?btn("openSide","+ En plus"):
       (r?(cmShopBought(s)?"":btn("slotValidate",s.lock?"✓ Dans les courses · ingrédients":"🛒 Ajouter aux courses","","btn primary"))+(s.lock?"":btn("swap","↻ Changer de plat"))+`<button type="button" class="btn" data-act="viewRec" data-id="${esc(s.id)}">📖 Voir la recette</button>`:"")
+      +(!past&&slotUsed(s)?btn("openMove","📅 Déplacer ce repas"):"")
       +btn("pick",s.entree?"↻ Entrée":"+ Entrée",'data-role="entree"')+btn("pick",s.dessert?"↻ Dessert":"+ Dessert",'data-role="dessert"')
       +btn("openSide","+ En plus")+(s.lock?"":btn("slotClear","Vider la case","","btn danger")))+`</div>`;
   }else h+=(past?`<p class="muted">Aucun repas noté ce jour-là.</p>`:"")+`<div class="slot-acts2">${past?"":btn("pick","+ Choisir un plat")}${btn("freeNote","✏️ Noter un repas")}${btn("freeLeft","🥡 Restes")}</div>`;
@@ -647,7 +648,7 @@ const ROLE_FIELD={main:"id",entree:"entree",dessert:"dessert"};
 const ROLE_AS={main:"en plat",entree:"en entrée",dessert:"en dessert"};
 // a meal can hold a starter or dessert while its main dish is still to choose
 const hasSide=s=>!!s&&(!!recipes[s.entree]||!!recipes[s.dessert]||!!(s.extra||[]).length||!!s.left||!!s.note); // s.left = « 🥡 Restes », s.note = « ✏️ repas noté » (sans recette)
-const slotUsed=s=>!!s&&(!!recipes[s.id]||hasSide(s));
+const slotUsed=s=>!!s&&(!!recipes[s.id]||!!s.label||hasSide(s));
 function openAdd(id){
   const r=recipes[id];if(!r)return;addId=id;
   addRole=r.cat==="Dessert"?"dessert":(r.cat==="Entrée"&&!canMain(r))?"entree":"main"; // used on free meals
@@ -713,6 +714,20 @@ function showUndo(label,snap){undoStack.push(snap);if(undoStack.length>20)undoSt
   const bar=$("#undoBar");$("#undoText").textContent="Retiré : "+label;bar.hidden=false;clearTimeout(undoTimer);undoTimer=setTimeout(()=>{bar.hidden=true;},7000);}
 function undoRemove(){const u=undoStack.pop();if(!u)return;
   if(u.type==="shop"){Object.assign(menu,u.before);render();saveMenu();if(!undoStack.length)$("#undoBar").hidden=true;toast("Liste remise comme avant");return;}
+  if(u.type==="move"&&u.slots){
+    if(u.afterFp){
+      const cur=u.slots.map(s=>`${s.w}|${s.k}|${JSON.stringify(((menu.weeks||{})[s.w]||{})[s.k]||null)}`).join(";");
+      if(cur!==u.afterFp){
+        undoStack.push(u);
+        toast("Annulation impossible : le planning a changé sur un autre appareil ou depuis ce déplacement.");
+        return;
+      }
+    }
+    if(u.boughtSnap)menu.bought=JSON.parse(JSON.stringify(u.boughtSnap));
+    if(u.checkedSnap)menu.checked=JSON.parse(JSON.stringify(u.checkedSnap));
+    if(u.checkedQtySnap)menu.checkedQty=JSON.parse(JSON.stringify(u.checkedQtySnap));
+    for(const x of u.slots){menu.weeks[x.w]=menu.weeks[x.w]||{};if(x.slot)menu.weeks[x.w][x.k]=x.slot;else delete menu.weeks[x.w][x.k];if(!Object.keys(menu.weeks[x.w]).length)delete menu.weeks[x.w];}
+    render();saveMenu();if(!undoStack.length)$("#undoBar").hidden=true;toast("Déplacement annulé");return;}
   menu.weeks[u.w]=menu.weeks[u.w]||{};
   if(u.before)menu.weeks[u.w][u.k]=u.before;else delete menu.weeks[u.w][u.k];
   render();saveMenu();if(u.w===curWeek)flashSlot(u.k);

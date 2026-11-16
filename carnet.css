@@ -275,6 +275,14 @@ button{cursor:pointer}
 .cal button.has .pt{background:var(--accent)}
 .cal button.today{border-color:var(--line)}
 .cal button.sel{background:var(--accent);color:var(--accent-ink)}.cal button.sel .pt{background:var(--accent-ink)}
+.cal button.past-day{opacity:.35}
+.move-slots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.move-slot{display:flex;flex-direction:column;align-items:stretch;text-align:left;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);font:inherit;color:var(--ink)}
+.move-slot.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.move-slot.free .move-slot-t{color:var(--accent);font-weight:600}
+.move-slot.busy .move-slot-t{font-size:13px;color:var(--muted)}
+.move-slot-l{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)}
+.move-conflict-btns{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .hday{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
 .hmeal .meal{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .hmeal .dish{display:block;font-weight:600;border:none;padding:0}

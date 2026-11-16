@@ -38,6 +38,13 @@
   const keyToUuid = k => (P.map && P.map.k2u[k]) || (k.startsWith("c-") ? k.slice(2) : null);
   const AISLES = window.MAISON_SHOP_AISLES ? Array.from(window.MAISON_SHOP_AISLES) : ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
   const aisleOf = r => AISLES.includes(r) ? r : "Divers";
+  const carnetMealSig = sl => {
+    if (!sl) return "";
+    if (sl.id && typeof recipes !== "undefined" && recipes[sl.id]) return "R:" + sl.id;
+    const lab = (typeof slotDishName === "function" ? slotDishName(sl) : "") || sl.label || "";
+    return lab ? "T:" + lab : "";
+  };
+  const slotHasPlan = sl => !!(sl && (sl.left || sl.note || sl.id || sl.label));
 
   /* ---------- the sync ---------- */
   async function pontSync() {
@@ -79,7 +86,7 @@
         const day = ymd(d), wk = ymd(mondayOf(d)), dn = DAYS[(d.getDay() + 6) % 7];
         for (const [slot] of MEALS) {
           const k = day + "|" + slot, sk = slotKey(dn, slot), sl = ((menu.weeks || {})[wk] || {})[sk];
-          const cSig = sl && recipes[sl.id] ? "R:" + sl.id : "";
+          const cSig = carnetMealSig(sl);
           const mm = M[k];
           let mSig = "";
           if (mm && mm.recipe_id) mSig = "R:" + uuidToKey(mm.recipe_id);
@@ -91,24 +98,34 @@
           let cNew = cSig, mNew = mSig;
           if (!b) { if (cSig && cSig !== mSig) mNew = cSig; else if (!cSig && mSig.startsWith("R:")) cNew = mSig; }
           else if (cSig !== b.c) mNew = cSig;
-          else if (mSig !== b.m) cNew = mSig.startsWith("R:") ? mSig : "";
+          else if (mSig !== b.m) cNew = mSig.startsWith("R:") || mSig.startsWith("T:") ? mSig : "";
           if (mNew !== mSig) {
-            if (!mNew) { if (mm) ops.push(sb.from("meals").delete().eq("id", mm.id)); }
+            if (!mNew) { if (mm && !slotHasPlan(sl)) ops.push(sb.from("meals").delete().eq("id", mm.id)); }
             else {
-              const key = mNew.slice(2), ru = keyToUuid(key);
-              const row = { household_id: hid, day, slot, recipe_id: ru || null, label: ru ? "" : (recipes[key] ? recipes[key].name : ""), updated_at: now };
-              ops.push(sb.from("meals").upsert(row, { onConflict: "household_id,day,slot" }));
+              let row;
+              if (mNew.startsWith("R:")) {
+                const key = mNew.slice(2), ru = keyToUuid(key);
+                const lab = ru ? "" : (recipes[key] ? recipes[key].name : (sl && sl.label) || (mm && mm.label) || "");
+                row = { household_id: hid, day, slot, recipe_id: ru || null, label: lab, updated_at: now };
+              } else if (mNew.startsWith("T:")) {
+                row = { household_id: hid, day, slot, recipe_id: null, label: mNew.slice(2), updated_at: now };
+              }
+              if (row) ops.push(sb.from("meals").upsert(row, { onConflict: "household_id,day,slot" }));
             }
           }
           if (cNew !== cSig) {
             menu.weeks = menu.weeks || {};
             if (!menu.weeks[wk]) menu.weeks[wk] = {};
-            if (!cNew) { if (!(sl && (sl.left || sl.note))) delete menu.weeks[wk][sk]; } // des « restes » ne sont pas effacés par la synchro des repas
-            else {
-              const key = cNew.slice(2);
-              if (recipes[key]) menu.weeks[wk][sk] = Object.assign({}, sl && sl.id === key ? sl : {}, { id: key, n: (sl && sl.n) || menu.people || 4, lock: true });
-              else cNew = cSig;
-            }
+            if (!cNew) { if (!slotHasPlan(sl)) delete menu.weeks[wk][sk]; } // des « restes » ne sont pas effacés par la synchro des repas
+            else if (cNew.startsWith("R:")) {
+              const key = cNew.slice(2), lab = (mm && mm.label) || (sl && sl.label) || "";
+              if (recipes[key]) menu.weeks[wk][sk] = Object.assign({}, sl && sl.id === key ? sl : {}, { id: key, label: recipes[key].name, n: (sl && sl.n) || menu.people || 4, lock: !!(sl && sl.lock) });
+              else menu.weeks[wk][sk] = Object.assign({}, sl || {}, { id: key, label: lab || key, n: (sl && sl.n) || menu.people || 4 });
+            } else if (cNew.startsWith("T:")) {
+              const lab = cNew.slice(2);
+              menu.weeks[wk][sk] = Object.assign({}, sl || {}, { label: lab, n: (sl && sl.n) || menu.people || 4 });
+              if (sl && sl.id) menu.weeks[wk][sk].id = sl.id;
+            } else cNew = cSig;
             if (cNew !== cSig) pulled++;
           }
           base.meals[k] = { c: cNew, m: mNew };

@@ -18,9 +18,11 @@
 d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_font","carnet"));d.setAttribute("data-dark",g("cm_dark","auto"));d.setAttribute("data-depth",g("cm_depth","plat"));}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Instrument+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Caveat:wght@600;700&family=Abril+Fatface&display=swap">
-<link rel="stylesheet" href="carnet.css?v=20261109-shop-layout">
+<link rel="stylesheet" href="carnet.css?v=20261116-move">
 
 </head><body>
+<div id="demoRepasBanner" hidden style="position:sticky;top:0;z-index:9999;background:#3d5a45;color:#fff;text-align:center;padding:8px 12px;font-size:14px">Mode démo · données fictives · synchronisation cloud désactivée · vos vrais menus ne sont pas touchés</div>
+<script>try{if(new URLSearchParams(location.search).get("demo")==="repas"||sessionStorage.getItem("cm_demo_repas")==="1"){document.getElementById("demoRepasBanner").hidden=false;}}catch(e){}</script>
 <div class="wrap">
   <header class="top">
     <h1>Carnet de menus</h1>
@@ -320,6 +322,17 @@ d.setAttribute("data-pal",g("cm_pal","sauge"));d.setAttribute("data-font",g("cm_
   </div>
 </div>
 
+<div class="sheet" id="moveSheet" hidden>
+  <div class="sheet-in">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Déplacer ce repas</h2><button type="button" class="btn primary" data-act="closeMove">Fermer</button></div>
+    <p class="muted small" id="moveFrom" style="margin-top:4px"></p>
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap;margin-top:8px"><button type="button" class="step" data-act="moveMonth" data-d="-1" aria-label="Mois précédent">‹</button><strong id="moveTitle" style="text-transform:capitalize"></strong><button type="button" class="step" data-act="moveMonth" data-d="1" aria-label="Mois suivant">›</button></div>
+    <div class="cal" id="moveCal"></div>
+    <div id="moveDay" style="margin-top:12px"></div>
+    <div id="moveConflict" hidden><div id="moveConflictBody" class="move-conflict" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"></div></div>
+  </div>
+</div>
+
 <div class="sheet" id="histSheet" hidden>
   <div class="sheet-in">
     <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2>Historique des repas</h2><button type="button" class="btn primary" data-act="closeHist">Fermer</button></div>
@@ -573,14 +586,15 @@ Préparation :
 <!-- Pont avec Maisonnée (repas et courses synchronisés, bouton de retour) -->
 <script src="ingredient-arts.js"></script>
 <script src="ingredient-emojis.js"></script>
-<script src="carnet-calc.js"></script>
-<script src="carnet-base.js?v=20261109-portions-shop"></script>
+<script src="carnet-calc.js?v=20261116-move"></script>
+<script src="carnet-base.js?v=20261116-move"></script>
 <script src="carnet-github.js?v=20261107-repas-google"></script>
-<script src="carnet-semaine.js?v=20261031achat"></script>
+<script src="carnet-semaine.js?v=20261116-move"></script>
 <script src="carnet-courses.js"></script>
 <script src="carnet-photos.js?v=20261112-photos"></script>
-<script src="carnet-repas.js?v=20261112-photos"></script>
-<script src="carnet-partage.js?v=20261107-import-open"></script>
+<script src="carnet-repas.js?v=20261116-move"></script>
+<script src="carnet-move.js?v=20261116-move"></script>
+<script src="carnet-partage.js?v=20261116-move"></script>
 <script src="carnet-cloud.js?v=20261106-carnet-rapide-v1"></script>
 <script src="maison/shared-constants.js"></script>
 <script src="maison/pont.js?v=20261106-carnet-rapide-v1"></script>

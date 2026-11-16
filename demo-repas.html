@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Démo déplacement repas (données fictives)</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;line-height:1.5}
+    .warn{background:#fff3cd;border:1px solid #e0c56e;padding:1rem;border-radius:8px;margin:1rem 0}
+    code{background:#f4f4f4;padding:2px 6px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <h1>Essais locaux — déplacement de repas</h1>
+  <div class="warn">
+    <strong>Mode démo isolé</strong> : aucune synchronisation Supabase ni GitHub.
+    Les données restent sur cet appareil (localStorage dédié si vous n’êtes pas connecté).
+  </div>
+  <p>Ouvrez cette page via le serveur local (pas en fichier <code>file://</code>) :</p>
+  <p><code>./scripts/serve-demo-8765.sh</code> depuis le dossier du projet.</p>
+  <p>Choisissez l’application :</p>
+  <ul>
+    <li><a id="lnk-carnet" href="index.html?demo=repas&amp;reset=1">Carnet de menus (démo)</a> — réinitialise le bac à sable</li>
+    <li><a id="lnk-maison" href="maison/?demo=repas">Maisonnée (démo)</a></li>
+  </ul>
+  <p class="muted" id="origin-hint" style="font-size:14px;color:#555"></p>
+  <script>
+    try { sessionStorage.setItem("cm_demo_repas", "1"); } catch (e) {}
+    if (location.protocol === "file:") {
+      document.querySelector(".warn").innerHTML = "<strong>Erreur :</strong> ouvrez <code>http://127.0.0.1:8765/demo-repas.html</code> (serveur local), pas le fichier directement.";
+    }
+    var o = location.origin;
+    if (o && o !== "null") {
+      document.getElementById("lnk-carnet").href = o + "/index.html?demo=repas";
+      document.getElementById("lnk-maison").href = o + "/maison/?demo=repas";
+      document.getElementById("origin-hint").textContent = "Serveur détecté : " + o;
+    }
+  </script>
+</body>
+</html>

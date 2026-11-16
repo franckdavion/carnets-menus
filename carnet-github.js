@@ -34,7 +34,7 @@ function setStatus(k,e){
      :"Hors ligne : les modifications sont gardées ici et partiront plus tard.";}
   chip.textContent=t; chip.dataset.state=k; if(line)line.textContent=t;
 }
-function scheduleSync(ms=800){if(GITHUB_SYNC_PAUSED)return;if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
+function scheduleSync(ms=800){if(typeof cmDemoRepas==="function"&&cmDemoRepas())return;if(GITHUB_SYNC_PAUSED)return;if(!sync)return;clearTimeout(syncTimer);setStatus("pending");syncTimer=setTimeout(runSync,ms);}
 function cloudCarnet(){try{return !!((typeof cloud!=="undefined"&&cloud.owner)||LS.get("cm_state_owner",""));}catch(e){return false;}}
 async function runSync(){
   if(GITHUB_SYNC_PAUSED){setStatus("off");return;}

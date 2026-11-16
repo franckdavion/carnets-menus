@@ -133,9 +133,60 @@
   function cloudRecipePhotoRel(uid, id, key) { return uid + "/" + id + "-" + key + ".jpg"; }
   function cloudRecipePhotoUrl(sb, path) { return sb.storage.from(RECIPE_PHOTO_BUCKET).getPublicUrl(path).data.publicUrl; }
 
+  /* Déplacement / échange de repas : ne touche pas aux achats, sauf retrait explicite (remplacement). */
+  function slotUsedPlanning(s, recipes) {
+    if (!s) return false;
+    if (s.id && recipes && recipes[s.id]) return true;
+    if (s.label) return true;
+    if (s.entree && recipes && recipes[s.entree]) return true;
+    if (s.dessert && recipes && recipes[s.dessert]) return true;
+    if (s.left || s.note) return true;
+    if (Array.isArray(s.extra) && s.extra.length) return true;
+    return false;
+  }
+  function relocateMealSlots(menu, recipes, opts) {
+    const used = s => slotUsedPlanning(s, recipes);
+    const get = (w, k) => ((menu.weeks || {})[w] || {})[k] || null;
+    const set = (w, k, s) => {
+      menu.weeks = menu.weeks || {};
+      if (!menu.weeks[w]) menu.weeks[w] = {};
+      if (s == null) {
+        delete menu.weeks[w][k];
+        if (!Object.keys(menu.weeks[w]).length) delete menu.weeks[w];
+      } else menu.weeks[w][k] = s;
+    };
+    const clone = s => (s ? JSON.parse(JSON.stringify(s)) : null);
+    const { fromW, fromK, toW, toK, mode } = opts || {};
+    const from = get(fromW, fromK);
+    if (!from || !used(from)) return { ok: false, code: "empty_source" };
+    if (fromW === toW && fromK === toK) return { ok: false, code: "same" };
+    const to = get(toW, toK);
+    const toOcc = used(to);
+    const m = mode || "move";
+    if (toOcc && m === "move") return { ok: false, needChoice: true };
+    if (toOcc && m !== "swap" && m !== "replace") return { ok: false, code: "need_mode" };
+  if (!toOcc && m !== "move") return { ok: false, code: "dest_free" };
+    const undo = [
+      { w: fromW, k: fromK, slot: clone(from) },
+      { w: toW, k: toK, slot: clone(to) }
+    ];
+    if (m === "swap" && toOcc) {
+      set(toW, toK, clone(from));
+      set(fromW, fromK, clone(to));
+    } else if (m === "replace" && toOcc) {
+      set(toW, toK, clone(from));
+      set(fromW, fromK, null);
+    } else {
+      set(toW, toK, clone(from));
+      set(fromW, fromK, null);
+    }
+    return { ok: true, undo, mode: m, replaced: m === "replace" && toOcc, victimHad: toOcc ? clone(to) : null };
+  }
+
   const api = {
     num, customIngredientQuantity, toBase, fmt, mealPortionFactor, portionFactor, dishOf, platsFor, ingMult,
     recipeIngredientBase, mealIngredientBase, mealCustomQuantity, merge3, settleCheckedGrowth, applyFinishTrip,
+    slotUsedPlanning, relocateMealSlots,
     RECIPE_PHOTO_BUCKET, recipeDataPhotoPath, sharePhotoRel, githubPagesFileUrl, shareBookUrl, sharePhotoPublicUrl,
     cloudRecipePhotoRel, cloudRecipePhotoUrl
   };

@@ -16,13 +16,25 @@ const MEALS=[["midi","Midi"],["soir","Soir"]];
 // Quantités personnalisées : référence fixe au moment de la saisie.
 // Ne jamais inférer la référence d'une ancienne recette depuis son nombre actuel.
 const slotKey=(d,m)=>d+"|"+m;
+function cmDemoRepas(){try{
+  const p=new URLSearchParams(location.search);
+  const q=p.get("demo")==="repas";
+  const s=sessionStorage.getItem("cm_demo_repas")==="1";
+  if(q||s){try{sessionStorage.setItem("cm_demo_repas","1");}catch(e){}}
+  if((q||s)&&p.get("reset")==="1"){for(const k of Object.keys(localStorage))if(k.startsWith("demo_repas__"))localStorage.removeItem(k);}
+  return q||s;
+}catch(e){return false;}}
+function cmLsKey(k){return cmDemoRepas()?"demo_repas__"+k:k;}
+const LS={get(k,d){try{const v=localStorage.getItem(cmLsKey(k));return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(cmLsKey(k),JSON.stringify(v))}catch(e){}}};
+function cmStoreMenuRaw(obj){try{localStorage.setItem(cmLsKey("cm_menu"),JSON.stringify(obj));}catch(e){}}
 const SLOT_ORDER=DAYS.flatMap(d=>MEALS.map(([m])=>slotKey(d,m)));
 const slotLabel=k=>k.replace("|"," ");
+function slotDishName(sl){if(!sl)return"";if(sl.id&&recipes[sl.id])return recipes[sl.id].name;if(sl.label)return String(sl.label);return"";}
 function mondayOf(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x;}
 const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 function parseYmd(t){const[a,b,c]=String(t).split("-").map(Number);return new Date(a,b-1,c);}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
-let curWeek=(()=>{const now=ymd(mondayOf(new Date()));let w=null;try{w=JSON.parse(localStorage.getItem("cm_week")||"null");}catch(e){}return w&&w>=now?w:now;})();
+let curWeek=(()=>{const now=ymd(mondayOf(new Date()));const w=LS.get("cm_week",null);return w&&w>=now?w:now;})();
 function W(){if(!menu.weeks)menu.weeks={};if(!menu.weeks[curWeek])menu.weeks[curWeek]={};return menu.weeks[curWeek];}
 function weekIds(wk){const sl=(menu.weeks||{})[wk]||{};return Object.values(sl).map(x=>x&&x.id).filter(Boolean);}
 function weekStartDate(){return parseYmd(curWeek);}
@@ -67,7 +79,6 @@ const GUESS=[[/(?:^|[^a-zà-ÿœ])(?:poulet|bœuf|boeuf|porc|veau|agneau|lardon|
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s||"").trim().toLowerCase();
-const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 
 let recipes={};
 let menu={people:4,weeks:{},checked:{},extras:[]};
@@ -194,7 +205,7 @@ function shopping(all){
   const changed=settled.changed;
   if(changed){
     // Ne pas réentrer dans render() depuis shopping().
-    try{localStorage.setItem("cm_menu",JSON.stringify(menu));}catch(e){}
+    try{cmStoreMenuRaw(menu);}catch(e){}
     if(typeof scheduleSync==="function")scheduleSync();
     if(typeof cloudSoon==="function")cloudSoon();
   }
@@ -220,10 +231,27 @@ function shoppingDuplicateWarnings(){
 }
 /* ---------- storage (on this phone) ---------- */
 function saveMenu(){
-  try{localStorage.setItem("cm_menu",JSON.stringify(menu));}
+  try{cmStoreMenuRaw(menu);}
   catch(e){ // phone storage full: drop what can be rebuilt, then try again
-    try{["cm_base","cm_rph_orig"].forEach(k=>localStorage.removeItem(k));localStorage.setItem("cm_menu",JSON.stringify(menu));}
+    try{["cm_base","cm_rph_orig"].forEach(k=>localStorage.removeItem(cmLsKey(k)));cmStoreMenuRaw(menu);}
     catch(x){toast("Mémoire du téléphone pleine : la semaine n'est pas enregistrée sur ce téléphone");}}LS.set("cm_menu_at",Date.now());scheduleSync();cloudSoon();if(typeof scheduleGoogleMeals==="function")scheduleGoogleMeals();}
+
+function ensureDemoRepasData(){
+  if(!cmDemoRepas()||LS.get("cm_demo_seeded_v2",false))return;
+  const w=ymd(mondayOf(new Date())),w2=ymd(addDays(mondayOf(new Date()),7)),until=ymd(addDays(new Date(),90));
+  const demoRecipes={
+    "demo-lasagnes":{name:"[Démo] Lasagnes",cat:"Plat",serves:4,ing:[{n:"pâtes",q:500,u:"g",r:"Épicerie"},{n:"bœuf",q:400,u:"g",r:"Boucherie & poisson"}],steps:"Étaler, cuire 35 min au four."},
+    "demo-poulet":{name:"[Démo] Poulet rôti",cat:"Plat",serves:4,ing:[{n:"poulet",q:1,u:"pièce",r:"Boucherie & poisson"},{n:"pommes de terre",q:800,u:"g",r:"Fruits & légumes"}],steps:"Enfourner 1 h."},
+    "demo-riz":{name:"[Démo] Riz sauté",cat:"Végé",serves:4,ing:[{n:"riz",q:300,u:"g",r:"Épicerie"},{n:"oignon",q:1,u:"pièce",r:"Fruits & légumes"}],steps:"Sauter au wok."}
+  };
+  LS.set("cm_recipes",demoRecipes);
+  LS.set("cm_menu",normMenu({people:4,
+    weeks:{[w]:{"Mercredi|midi":{id:"demo-lasagnes",n:4,lock:true,label:"[Démo] Lasagnes"},"Vendredi|soir":{id:"demo-poulet",n:4,label:"[Démo] Poulet rôti"},"Samedi|midi":{id:"demo-riz",n:4,lock:true,shopBought:true,mealState:"Courses faites",label:"[Démo] Riz sauté"}},
+      [w2]:{"Mardi|soir":{id:"demo-poulet",n:4,lock:true,label:"[Démo] Poulet rôti"}}},
+    bought:{"pâtes|g":{q:500,until}}}));
+  LS.set("cm_week",w);
+  LS.set("cm_demo_seeded_v2",true);
+}
 function saveRecipe(id,data){recipes[id]=data;LS.set("cm_recipes",recipes);render();scheduleSync();cloudSoon();}
 function removeRecipe(id){cloudDeleted(id);for(const wk of Object.values(menu.weeks||{}))for(const[k,sl]of Object.entries(wk||{})){if(!sl)continue;if(sl.id===id)delete wk[k];else{if(sl.entree===id)delete sl.entree;if(sl.dessert===id)delete sl.dessert;}}saveMenu();delete recipes[id];LS.set("cm_recipes",recipes);render();scheduleSync();}
 

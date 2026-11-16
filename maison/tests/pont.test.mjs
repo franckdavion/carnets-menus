@@ -7,16 +7,23 @@ let fail = 0;
 const ok = (name, cond) => { console.log((cond ? "ok  " : "FAIL ") + name); if (!cond) fail++; };
 const read = rel => fs.readFileSync(path.join(root, rel), "utf8");
 
-const order = ["carnet-calc.js", "carnet-base.js", "carnet-github.js", "carnet-semaine.js", "carnet-courses.js", "carnet-repas.js", "carnet-partage.js", "carnet-cloud.js", "maison/pont.js"];
+const order = ["carnet-calc.js", "carnet-base.js", "carnet-github.js", "carnet-semaine.js", "carnet-courses.js", "carnet-repas.js", "carnet-move.js", "carnet-partage.js", "carnet-cloud.js", "maison/pont.js"];
 const page = read("index.html");
 let at = 0;
+const srcAt = (file, from) => {
+  const q = `src="${file}?`, plain = `src="${file}"`;
+  const i = page.indexOf(q, from), j = page.indexOf(plain, from);
+  if (i < 0) return j;
+  if (j < 0) return i;
+  return Math.min(i, j);
+};
 for (const file of order) {
-  const i = page.indexOf(`src="${file}"`, at);
+  const i = srcAt(file, at);
   ok("page charge " + file, i > at);
   if (i > at) at = i;
 }
 const sw = read("sw.js");
-ok("cache du Carnet contient chaque fichier", order.filter(f => f !== "maison/pont.js").every(f => sw.includes(f)) && sw.includes("maison/pont.js") && sw.includes("carnet-v207"));
+ok("cache du Carnet contient chaque fichier", order.filter(f => f !== "maison/pont.js").every(f => sw.includes(f)) && sw.includes("maison/pont.js") && sw.includes("carnet-move.js") && sw.includes("carnet-photos.js") && sw.includes("carnet-v220"));
 ok("l'ancien fichier unique n'est plus chargé", !page.includes('src="carnet.js"') && !fs.existsSync(path.join(root, "carnet.js")));
 
 const carnet = order.filter(f => f.startsWith("carnet-")).map(read).join("\n");

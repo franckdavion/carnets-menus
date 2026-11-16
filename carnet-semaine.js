@@ -170,15 +170,15 @@ function cmStatusChips(k,s){
 // state of a meal: proposed (not validated), validated (in the list), shopping done (validated and nothing left to buy for it)
 function mealState(k,s,date){if(!s||!recipes[s.id])return null;if(s.mealState==="Courses faites"||s.shopBought)return["p3","✓ acheté"];if(s.mealState==="Terminé")return["p3","✓ terminé"];if(!s.lock)return["p1","🛒 à ajouter aux courses"];
   return ["p2","✓ dans les courses"];}
-function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
+function mealCard(d,i,m,lab){const k=slotKey(d,m),s=W()[k],r=s&&recipes[s.id],dish=slotDishName(s),date=ymd(addDays(weekStartDate(),i)),past=isPast(k);
   const side=s?[s.entree&&recipes[s.entree]?"entrée : "+recipes[s.entree].name:"",s.dessert&&recipes[s.dessert]?"dessert : "+recipes[s.dessert].name:"",(s.extra||[]).length?"en plus : "+s.extra.join(", "):""].filter(Boolean):[];
   if(!r&&s&&(s.note||s.left))return`<button type="button" class="mc${past?" past":""}" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-ph mc-noph">${s.note?"✏️":"🥡"}</span><span class="mc-t"><span class="mc-m">${lab}</span><b>${s.note?esc(s.note):"Restes : "+esc(s.left)}</b><small>Sans recette · rien à acheter</small></span></button>`;
-  if(!r&&!side.length)return past?`<button type="button" class="mc mc-empty dim" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-m">${lab}</span><span class="mc-t">✏️ Noter ce qu'on a mangé</span></button>`
+  if(!dish&&!side.length)return past?`<button type="button" class="mc mc-empty dim" data-act="wcell" data-k="${k}" data-slot="${k}"><span class="mc-m">${lab}</span><span class="mc-t">✏️ Noter ce qu'on a mangé</span></button>`
     :`<button type="button" class="mc mc-empty${m==="midi"&&menu.prefs.skip.includes(d)?" dim":""}" data-act="pick" data-k="${k}" data-slot="${k}"><span class="mc-m">${lab}</span><span class="mc-t">${m==="midi"&&menu.prefs.skip.includes(d)?"Pas à la maison · choisir":"+ Choisir un plat"}</span></button>`;
-  const ph=r?rPhotoSrc(s.id):"",st=past?null:mealState(k,s,date),nut=slotNut(s);
+  const ph=r?rPhotoSrc(s.id):"",st=past?null:mealState(k,s,date),nut=r?slotNut(s):null;
   return`<button type="button" class="mc${past?" past":""}${s&&s.lock?" locked":""}" data-act="wcell" data-k="${k}" data-slot="${k}">
     ${ph?`<img class="mc-ph" src="${esc(ph)}" alt=""${r&&!r.photo?` data-auto="${esc(s.id)}"`:""} loading="lazy">`:`<span class="mc-ph mc-noph">${lab==="Midi"?"☀️":"🌙"}</span>`}
-    <span class="mc-t"><span class="mc-m">${lab}</span><b>${r?esc(r.name):"Plat à choisir"} ${s.n?`<span class="muted" style="font-size:.82em;font-weight:500;white-space:nowrap">· 👥 ${s.n} pers.</span>`:""}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
+    <span class="mc-t"><span class="mc-m">${lab}</span><b>${esc(dish||"Plat à choisir")}${!r&&dish?` <span class="muted" style="font-size:.82em">· en cours de synchro</span>`:""} ${s.n?`<span class="muted" style="font-size:.82em;font-weight:500;white-space:nowrap">· 👥 ${s.n} pers.</span>`:""}</b>${side.length?`<small>${esc(side.join(" · "))}</small>`:""}
       ${r&&!past?`<small class="mc-info">${[showOn("nut")&&nut?esc(fmtNut(nut,true)):"",showOn("wine")?esc(drinkLine(r)):""].filter(Boolean).join(" · ")}${menu.prefs.dissoc?" "+dissocBadge(mealDissoc(s)):""}</small>`:""}</span>
     ${st?`<span class="cm-card-state cm-state-${CM_MEAL_STATES.indexOf(cmMealStatus(s))}">${esc(cmMealLabel(s))}</span>`:""}</button>`;}
 // the future meals of the shown week that are planned but not validated yet
@@ -222,17 +222,22 @@ function renderRecipes(){
   if(!$("#filtSheet").hidden)renderFilt();
   {const KL={vege:"Végé",poisson:"Poisson",volaille:"Volaille",rouge:"Viande rouge",porc:"Porc"},parts=[...filter.cats,...filter.kinds.map(k=>KL[k]||k),filter.light?"Léger":"",filter.quick?"30 min et moins":"",filter.theme?THEME_LABEL[filter.theme]:""].filter(Boolean);
    $("#filtSum").innerHTML=parts.length?`Filtres : ${esc(parts.join(" · "))} · <button type="button" class="link" data-act="filtReset">effacer</button>`:"";}
+  const menuHits=filter.q&&typeof menuSlotIdsMatching==="function"?menuSlotIdsMatching(filter.q):new Set();
   const list=Object.entries(recipes)
     .filter(([,r])=>!filter.cats.length||filter.cats.some(c=>inCat(r,c)))
     .filter(([,r])=>!filter.kinds.length||filter.kinds.includes(kindOf(r)))
-    .filter(([,r])=>recMatch(r,filter.q,"",filter.quick,filter.light,filter.fav,filter.theme==="nouveau"?"":filter.theme))
+    .filter(([id,r])=>recMatch(r,filter.q,"",filter.quick,filter.light,filter.fav,filter.theme==="nouveau"?"":filter.theme)||menuHits.has(id))
     .sort(filter.theme==="nouveau"?(a,b)=>addedAt(b[0])-addedAt(a[0])||a[1].name.localeCompare(b[1].name,"fr"):(a,b)=>a[1].name.localeCompare(b[1].name,"fr"));
   const el=$("#recList");
   if(mode==="loading"){el.innerHTML='<div class="empty">Chargement des recettes…</div>';return;}
   if(!Object.keys(recipes).length){el.innerHTML='<div class="empty"><strong>Votre carnet est vide</strong>Touchez « Nouvelle recette » pour ajouter votre premier plat.</div>';return;}
   if(!list.length){const near=filter.q?closeNames(filter.q,Object.keys(recipes)):[],q=filter.q.trim(),e=encodeURIComponent(q);
+    let menuOnly="";
+    if(q){const words=deacc(q).split(/\s+/).filter(w=>w.length>1),orph=[];
+      for(const wk of Object.values(menu.weeks||{}))for(const sl of Object.values(wk||{})){if(!sl||recipes[sl.id])continue;const nm=slotDishName(sl);if(!nm)continue;const hay=deacc(nm);if(!words.length||words.every(w=>hay.includes(w)))orph.push(nm);}
+      if(orph.length)menuOnly=`<div class="empty" style="margin-bottom:12px">Au menu : ${[...new Set(orph)].map(n=>`<b>${esc(n)}</b>`).join(" · ")} <span class="muted">(fiche en cours de chargement — ouvrez Menu ou resynchronisez)</span></div>`;}
     const web=q?`<div class="web-find"><span class="label">🌐 Rechercher « ${esc(q)} » sur Internet</span><div class="row"><a class="btn primary" target="_blank" rel="noopener" href="https://www.marmiton.org/recettes/recherche.aspx?aqt=${e}">Marmiton ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.750g.com/recherche?q=${e}">750g ↗</a><a class="btn" target="_blank" rel="noopener" href="https://www.google.com/search?q=${e}+recette">Google ↗</a></div><span class="muted" style="font-size:12px">Une recette vous plaît ? Copiez son lien et collez-le dans « Importer du web ».</span></div>`:"";
-    el.innerHTML=(near.length?`<div class="empty">Pas de « ${esc(filter.q)} »… vouliez-vous dire :<div class="row" style="justify-content:center;margin-top:10px">${near.map(id=>`<button class="btn" data-act="recSearch" data-q="${esc(recipes[id].name)}">${esc(recipes[id].name)}</button>`).join("")}</div></div>`
+    el.innerHTML=menuOnly+(near.length?`<div class="empty">Pas de « ${esc(filter.q)} »… vouliez-vous dire :<div class="row" style="justify-content:center;margin-top:10px">${near.map(id=>`<button class="btn" data-act="recSearch" data-q="${esc(recipes[id].name)}">${esc(recipes[id].name)}</button>`).join("")}</div></div>`
       :`<div class="empty">Aucune recette ne correspond${q?` à « ${esc(q)} »`:" à cette recherche"}.</div>`)+web;return;}
   const shown=list.slice(0,Math.max(recLimit,list.findIndex(([id])=>id===openId)+1));
   el.innerHTML=shown.map(([id,r])=>{

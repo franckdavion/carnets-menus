@@ -608,6 +608,10 @@ document.addEventListener("click",e=>{
   else if(a==="weekMore"){const m=$("#weekMoreMenu");m.hidden=!m.hidden;b.setAttribute("aria-expanded",!m.hidden);}
   else if(a==="weekValidate"){const t=weekToValidate();if(t.length)lockPreview(t);}
   else if(a==="proposeGo"){view="week";LS.set("cm_view",view);render();window.scrollTo(0,0);document.querySelector('#v-week [data-act=propose]').click();}
+  else if(a==="openMove"){const k=b.dataset.k||slotK||recMealCtx;if(!k)return;let w=curWeek;
+    if(typeof getMealSlot==="function"&&!getMealSlot(w,k))for(const ww of Object.keys(menu.weeks||{}).sort())if(getMealSlot(ww,k)){w=ww;break;}
+    if($("#slotSheet")&&!$("#slotSheet").hidden)$("#slotSheet").hidden=true;
+    if(typeof openMealMove==="function")openMealMove(w,k);}
   else if(a==="closeSlot"){$("#slotSheet").hidden=true;slotK=null;}
   else if(a==="slotClear"){const k=b.dataset.k;if(W()[k]&&!W()[k].lock){const snap=snapshotSlot(k);delete W()[k];$("#slotSheet").hidden=true;slotK=null;render();saveMenu();showUndo("toute la case ("+slotLabel(k)+")",snap);}}
   else if(a==="wRm"){e.stopPropagation();removePart(b.dataset.k,b.dataset.part,b.dataset.i);if(!W()[b.dataset.k]){$("#slotSheet").hidden=true;slotK=null;}}
@@ -920,6 +924,14 @@ function recMatch(r,q,kind,quick,light,fav,theme){
   const words=nq.split(/\s+/);
   const hay=deacc(r.name+" "+(r.cat||"")+" "+KIND_LABEL[kindOf(r)]+" "+(r.ing||[]).map(i=>i.n).join(" "));
   return words.every(w=>hay.includes(w));
+}
+function menuSlotIdsMatching(q){
+  const nq=deacc(q||"").trim();if(!nq)return new Set();
+  const hit=new Set();
+  for(const wk of Object.values(menu.weeks||{}))for(const sl of Object.values(wk||{})){if(!sl)continue;
+    const nm=slotDishName(sl);if(!nm)continue;
+    const hay=deacc(nm);if(nq.split(/\s+/).every(w=>hay.includes(w))){if(sl.id)hit.add(sl.id);}}
+  return hit;
 }
 function renderFilt(){const ch=(k,v,l,on)=>`<button type="button" class="chip" data-act="fT" data-k="${k}" data-v="${esc(v)}" aria-pressed="${on}">${on?"✓ ":""}${l}</button>`;
   const n=Object.entries(recipes).length;
@@ -1345,7 +1357,7 @@ function renderRecSheet(){
   if(recTab==="ing")body=`<div class="serv-row"><span class="label">Ingrédients pour</span>
       <div class="ctl"><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="-1" ${p<=1?"disabled":""} aria-label="Une personne de moins">−</button><span class="n">${p} pers.</span><button class="step sm" data-act="vserv" data-id="${esc(id)}" data-d="1" aria-label="Une personne de plus">+</button></div>
       ${platsLine(r,p,id)}<span class="muted" style="font-size:12px">recette prévue pour ${r.serves||4}${dishOf(r)?` (1 ${dishOf(r).one})`:""}</span></div>
-    ${activeSlot?`<div style="margin:9px 0 13px;padding:12px;border:1px solid #4b98ff;border-radius:12px;background:#102d4c"><b>🍽️ Adapter les portions</b><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">${[[1,"Normale ×1"],[1.5,"Généreuse ×1,5"],[2,"Double ×2"]].map(([v,t])=>`<button type="button" class="btn" data-act="mealPortion" data-k="${esc(recMealCtx)}" data-v="${v}" style="border-color:${mealPortionFactor(activeSlot)===v?'#45dd9c':'#4b98ff'}">${t}</button>`).join("")}<button type="button" class="btn" data-act="mealPortionCustom" data-k="${esc(recMealCtx)}">Personnalisée (${String(mealPortionFactor(activeSlot)).replace('.',',')}×)</button></div><small>Choix enregistré pour ce repas, identique dans Maisonnée et les courses.</small></div>`:""}
+    ${activeSlot?`<div style="margin:9px 0 13px;padding:12px;border:1px solid #4b98ff;border-radius:12px;background:#102d4c"><b>🍽️ Adapter les portions</b><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">${[[1,"Normale ×1"],[1.5,"Généreuse ×1,5"],[2,"Double ×2"]].map(([v,t])=>`<button type="button" class="btn" data-act="mealPortion" data-k="${esc(recMealCtx)}" data-v="${v}" style="border-color:${mealPortionFactor(activeSlot)===v?'#45dd9c':'#4b98ff'}">${t}</button>`).join("")}<button type="button" class="btn" data-act="mealPortionCustom" data-k="${esc(recMealCtx)}">Personnalisée (${String(mealPortionFactor(activeSlot)).replace('.',',')}×)</button></div><small>Choix enregistré pour ce repas, identique dans Maisonnée et les courses.</small>${!isPast(recMealCtx)?`<div style="margin-top:10px"><button type="button" class="btn" data-act="openMove" data-k="${esc(recMealCtx)}">📅 Déplacer ce repas</button></div>`:""}</div>`:""}
     ${ings?`<ul class="ings">${ings}</ul>`:`<p class="muted">Pas d'ingrédients notés.</p>`}
     <div class="recipe-tools"><button type="button" class="btn" data-act="editRec" data-id="${esc(id)}">✏️ Ajouter, supprimer ou remplacer des ingrédients</button></div>
     ${recMealCtx&&W()[recMealCtx]&&W()[recMealCtx].id===id?`<div class="cm-reversible"><button type="button" class="btn ${W()[recMealCtx].lock?"cm-remove":"primary"}" data-act="cmToggleCourses" data-k="${esc(recMealCtx)}">${W()[recMealCtx].lock?"↩ Retirer des courses":"🛒 Ajouter aux courses"} · ${p} pers.</button><div class="muted" style="font-size:12px;margin-top:7px">${W()[recMealCtx].lock?"✓ Ce repas est dans les courses. Les besoins sont recalculés à chaque changement de personnes.":"Ce repas n'est pas dans les courses."}</div></div>`:""}`;
@@ -1431,10 +1443,8 @@ function detachRemovedMealPurchases(w,k){
     if(contribution<=0.000001)continue;
     // Un produit partagé par plusieurs repas ne doit pas perdre leurs achats.
     if((rest[key]||0)>0.000001)continue;
-    const b=menu.bought[key];
-    if(b&&b.until>=today){const left=Math.max(0,(Number(b.q)||0)-contribution);
-      if(left<=0.000001)delete menu.bought[key];else menu.bought[key]={...b,q:left};}
-    delete menu.checked[key];delete menu.checkedQty[key];
+    // Les achats réels (menu.bought) restent au stock : seule la coche de liste part.
+    delete menu.checked[key];if(menu.checkedQty)delete menu.checkedQty[key];
   }
 }
 // changing a dish from Courses: if the meal was already validated, its old ingredients leave the list first
@@ -1455,7 +1465,7 @@ function setPicked(id){
     W()[k]=Object.assign({},old,{id});delete W()[k].lock;$("#pickSheet").hidden=true;render();saveMenu();
     toast(`« ${was} » retiré de la liste (${gone} ingrédient${gone>1?"s":""})`);
     setTimeout(()=>lockPreview([{w:sw.w,k}]),120);return;}
-  if(pickRole==="main"){W()[k]=Object.assign({},old||{},{id,n:old?old.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}}
+  if(pickRole==="main"){W()[k]=Object.assign({},old||{},{id,label:recipes[id].name,n:old?old.n:menu.people});if(W()[k].left||W()[k].note){delete W()[k].left;delete W()[k].note;delete W()[k].keep;}}
   else{if(!old)return;old[pickRole]=id;}
   $("#pickSheet").hidden=true;render();saveMenu();flashSlot(k);
   toast(slotLabel(k)+(pickRole==="entree"?" · entrée : ":pickRole==="dessert"?" · dessert : ":" : ")+recipes[id].name);
