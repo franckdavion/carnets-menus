@@ -837,7 +837,8 @@ input, textarea, select { color-scheme: dark; }
       <div class="header-actions">
         <button class="hbtn" onclick="openSearch()" title="Rechercher">🔍</button>
         <button class="hbtn" onclick="goToday()" title="Aujourd'hui" id="today-btn">📅</button>
-        <button class="hbtn" onclick="dbReset()" title="Réinitialiser les données fictives" style="font-size:14px">↺</button>
+        <button class="hbtn" id="cal-select-btn" onclick="openCalSheet()" title="Sélectionner les calendriers" style="font-size:14px;position:relative">📆<span id="cal-select-dot" style="display:none;position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--accent)"></span></button>
+        <button class="hbtn" onclick="toggleDiagPanel()" title="Diagnostic sources" style="font-size:14px">🩺</button>
       </div>
     </div>
     <div class="view-tabs">
@@ -1011,6 +1012,33 @@ const NOW = new Date();
 function isoDate(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
 function today() { const d = NOW; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function addDays(iso, n) { const d = new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function diffDays(a, b) { return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000); }
+function ymd(date) { return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'); }
+function pad2(n) { return String(n).padStart(2,'0'); }
+
+// Convertit un item G.ev.items (format modules.js) en événement V2
+function gEvToV2(g) {
+  const C2C={1:'perso',2:'perso',3:'sport',4:'famille',5:'travail',6:'travail',7:'sante',8:'perso',9:'travail',10:'sport',11:'sante'};
+  const cat=g.colorId&&C2C[Number(g.colorId)]?C2C[Number(g.colorId)]:'famille';
+  return {
+    id:'g_'+g.id+'_'+g.day, _gid:g.id, date:g.day,
+    start:g.start_time||null, end:g.end_time||null,
+    title:g.title||'(Sans titre)', lieu:g.place||'',
+    cat, color:g.color||'#4C8DF6', calId:g.cal, calName:g.calName||'',
+    allday:!g.start_time, members:[], _source:'google',
+    link:g.link||'', _multiday:(g.n||1)>1,
+    _k:g.k||0, _n:g.n||1, _endDay:g.endDay||g.day, notes:g.desc||'',
+  };
+}
+
+// État Google Calendar — même structure que modules.js G
+window.G = {
+  ev: { at: 0, items: [] },
+  list: [],
+  cals: (function(){ try { const v=localStorage.getItem('mz_gcals'); return v?JSON.parse(v):null; } catch(_){ return null; } })(),
+  palette: {},
+  busy: false, connected: false, googleOff: false, err: null,
+};
 function fmtDateShort(iso) { return new Date(iso+'T12:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }
 function fmtRemLabel(r) {
   if (!r) return '';
@@ -1117,7 +1145,14 @@ function shortDay(iso) {
   const d = new Date(iso+'T12:00:00');
   return ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][d.getDay()];
 }
-function eventsOnDay(iso) { return EVENTS.filter(e=>e.date===iso); }
+function eventsOnDay(iso) {
+  const sbEvs = EVENTS.filter(e=>e.date===iso);
+  const G = window.G;
+  if (!G||!G.ev||!G.ev.items||!G.ev.items.length) return sbEvs;
+  const gcals = G.cals;
+  const gEvs = G.ev.items.filter(e=>e.day===iso&&(!gcals||gcals.includes(e.cal))).map(gEvToV2);
+  return [...sbEvs, ...gEvs];
+}
 
 const LIST_CHUNK = 30;
 let listChunksLoaded = 1;
@@ -1144,6 +1179,17 @@ function buildEventIndex(fromIso, toIso) {
         if (iso < fromIso) continue;
         if (iso > toIso) break;
         (idx[iso] = idx[iso] || []).push({ ...e, date: iso, _recurring: true });
+      }
+    }
+  }
+  // Google events
+  const G = window.G;
+  if (G && G.ev && G.ev.items) {
+    const gcals = G.cals;
+    for (const g of G.ev.items) {
+      if (gcals && !gcals.includes(g.cal)) continue;
+      if (g.day >= fromIso && g.day <= toIso) {
+        (idx[g.day] = idx[g.day] || []).push(gEvToV2(g));
       }
     }
   }
@@ -2782,6 +2828,117 @@ function renderSearch(q) {
   r.innerHTML = matches.map(e=>renderEventCard(e)).join('');
 }
 
+// ---- CALENDRIERS & DIAGNOSTIC ----
+function openCalSheet() {
+  renderCalSheet();
+  document.getElementById('cal-sheet-backdrop').classList.add('open');
+  document.getElementById('cal-sheet').classList.add('open');
+}
+function closeCalSheet() {
+  document.getElementById('cal-sheet-backdrop').classList.remove('open');
+  document.getElementById('cal-sheet').classList.remove('open');
+}
+function renderCalSheet() {
+  const G = window.G;
+  const body = document.getElementById('cal-sheet-body');
+  if (!body) return;
+  const gcals = Array.isArray(G.cals) ? G.cals : (G.list.map(c=>c.id));
+  const allOn = G.list.length > 0 && G.list.every(c=>gcals.includes(c.id));
+  let html = '';
+  // Tous les calendriers
+  html += `<label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer">
+    <input type="checkbox" onchange="toggleAllCals(this.checked)" ${allOn?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+    <span style="font-size:15px;font-weight:600;color:var(--ink)">Tous les calendriers</span>
+  </label>`;
+  // Source Maisonnée (toujours visible)
+  const sbCount = EVENTS.filter(e=>!e._isBday&&!e._isTask).length;
+  html += `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)">
+    <span style="width:18px;height:18px;border-radius:50%;background:#4C8DF6;flex-shrink:0;display:inline-block"></span>
+    <span style="flex:1;font-size:14px;color:var(--ink)">Maisonnée</span>
+    <span style="font-size:12px;color:var(--muted)">${sbCount} événement${sbCount!==1?'s':''}</span>
+  </div>`;
+  if (G.googleOff) {
+    html += `<div style="padding:14px 0;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)">Google Agenda non connecté — connectez-le depuis Maisonnée → Ma famille.</div>`;
+  } else if (G.busy) {
+    html += `<div style="padding:14px 0;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)">Chargement des calendriers Google…</div>`;
+  } else if (!G.list.length) {
+    html += `<div style="padding:14px 0;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)">Connectez-vous pour charger vos calendriers Google.</div>`;
+  }
+  for (const c of G.list) {
+    const isOn = gcals.includes(c.id);
+    html += `<label style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer">
+      <input type="checkbox" data-calid="${esc(c.id)}" onchange="toggleCal('${esc(c.id)}',this.checked)" ${isOn?'checked':''} style="width:18px;height:18px;accent-color:${esc(c.color)}">
+      <span style="width:14px;height:14px;border-radius:50%;background:${esc(c.color)};flex-shrink:0;display:inline-block"></span>
+      <span style="flex:1;font-size:14px;color:var(--ink)">${esc(c.name)}</span>
+      ${c.primary?'<span style="font-size:11px;color:var(--muted);background:var(--soft);border-radius:6px;padding:2px 6px">Principal</span>':''}
+    </label>`;
+  }
+  if (!G.googleOff) {
+    html += `<div style="padding:14px 0">
+      <button onclick="window.gFetch&&window.gFetch();closeCalSheet()" style="width:100%;background:var(--soft);border:none;border-radius:12px;padding:11px 16px;font-size:14px;color:var(--accent);cursor:pointer;font-family:inherit">🔄 Actualiser Google Agenda</button>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+function toggleCal(calId, on) {
+  const G = window.G;
+  if (!Array.isArray(G.cals)) G.cals = G.list.map(c=>c.id);
+  if (on) { if (!G.cals.includes(calId)) G.cals.push(calId); }
+  else G.cals = G.cals.filter(id=>id!==calId);
+  try { localStorage.setItem('mz_gcals', JSON.stringify(G.cals)); } catch(_) {}
+  renderCurrentView();
+  renderCalSheet();
+  updateCalDot();
+}
+function toggleAllCals(on) {
+  const G = window.G;
+  G.cals = on ? G.list.map(c=>c.id) : [];
+  try { localStorage.setItem('mz_gcals', JSON.stringify(G.cals)); } catch(_) {}
+  renderCurrentView();
+  renderCalSheet();
+  updateCalDot();
+}
+function updateCalDot() {
+  const G = window.G;
+  const dot = document.getElementById('cal-select-dot');
+  if (!dot) return;
+  const gcals = Array.isArray(G.cals) ? G.cals : null;
+  const hasPartial = G.list.length > 0 && gcals && !G.list.every(c=>gcals.includes(c.id));
+  dot.style.display = hasPartial ? 'block' : 'none';
+}
+function renderDiagPanel() {
+  const G = window.G;
+  const panel = document.getElementById('diag-panel');
+  if (!panel || panel.style.display === 'none') return;
+  const sbCount = EVENTS.filter(e=>e._source!=='google'&&!e._isBday&&!e._isTask).length;
+  const bdayCount = EVENTS.filter(e=>e._isBday).length;
+  const taskCount = EVENTS.filter(e=>e._isTask).length;
+  const gCount = G.ev ? G.ev.items.length : 0;
+  const calCount = G.list.length;
+  const selCount = Array.isArray(G.cals) ? G.cals.length : calCount;
+  panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-weight:600;color:var(--ink);font-size:14px">Diagnostic sources</span>
+    <button onclick="document.getElementById('diag-panel').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0;line-height:1">✕</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 20px;line-height:1.6">
+    <div>Calendriers Google : <strong style="color:var(--ink)">${calCount}</strong></div>
+    <div>Sélectionnés : <strong style="color:var(--ink)">${selCount}</strong></div>
+    <div>Événements Google : <strong style="color:var(--ink)">${gCount}</strong></div>
+    <div>Événements Maisonnée : <strong style="color:var(--ink)">${sbCount}</strong></div>
+    <div>Anniversaires : <strong style="color:var(--ink)">${Math.round(bdayCount/4)}</strong></div>
+    <div>Tâches avec date : <strong style="color:var(--ink)">${taskCount}</strong></div>
+    ${G.err?`<div style="grid-column:1/-1;color:#FF8080;margin-top:4px">⚠️ ${esc(G.err)}</div>`:''}
+    ${G.googleOff?`<div style="grid-column:1/-1;color:#FFC050;margin-top:4px">ⓘ Google non connecté</div>`:''}
+    ${G.busy?`<div style="grid-column:1/-1;color:var(--accent);margin-top:4px">⟳ Chargement Google…</div>`:''}
+  </div>`;
+}
+function toggleDiagPanel() {
+  const panel = document.getElementById('diag-panel');
+  if (!panel) return;
+  if (panel.style.display === 'none') { panel.style.display = 'block'; renderDiagPanel(); }
+  else panel.style.display = 'none';
+}
+
 // ---- INIT ----
 // sbLogin défini dans le module Phase 1 (ci-dessous) ; stub pour le cas où le module n'est pas encore prêt
 function sbLogin() { toast('Supabase en cours de chargement…'); }
@@ -2822,6 +2979,20 @@ document.addEventListener('click', e => {
 })();
 </script>
 
+<!-- SHEET SÉLECTION CALENDRIERS -->
+<div class="sheet-backdrop" id="cal-sheet-backdrop" onclick="closeCalSheet()"></div>
+<div class="sheet" id="cal-sheet" style="max-height:85vh">
+  <div class="sheet-handle"></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:0 20px 12px">
+    <span style="font-size:17px;font-weight:700">Agendas affichés</span>
+    <button onclick="closeCalSheet()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;line-height:1">✕</button>
+  </div>
+  <div id="cal-sheet-body" style="padding:0 20px 8px;overflow-y:auto"></div>
+</div>
+
+<!-- PANEL DIAGNOSTIC -->
+<div id="diag-panel" style="display:none;position:fixed;bottom:calc(var(--tabbar) + var(--safe-bottom) + 12px);left:12px;right:12px;z-index:200;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;font-size:13px;color:var(--muted);box-shadow:0 4px 20px rgba(0,0,0,.4)"></div>
+
 <!-- Adaptateurs + Supabase Phase 1 (lecture seule) -->
 <script type="module">
   import * as RA from './adapters/rrule-adapter.js';
@@ -2839,6 +3010,7 @@ document.addEventListener('click', e => {
   // ── Supabase Phase 1 — lecture seule ─────────────────────────────────────
   const SB_URL = 'https://cluqleqbbidozpioekog.supabase.co';
   const SB_KEY = 'sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS';
+  const G_ENDPOINT = SB_URL + '/functions/v1/google-calendar';
   const MZ_AUTH_KEY = 'cm_sb_auth';
   let _sb = null;
 
@@ -2850,6 +3022,150 @@ document.addEventListener('click', e => {
     });
     return _sb;
   }
+
+  // ── Google Calendar (lecture seule) ──────────────────────────────────────
+  async function gServer(action) {
+    const sb = sbGetClient();
+    if (!sb) throw new Error('Supabase non initialisé');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('Non authentifié');
+    const res = await fetch(G_ENDPOINT + '/' + action, {
+      headers: {
+        'Authorization': 'Bearer ' + session.access_token,
+        'apikey': SB_KEY,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => res.statusText);
+      throw new Error('gServer ' + action + ' → ' + res.status + ': ' + txt);
+    }
+    return res.json();
+  }
+
+  async function gEnsure() {
+    try {
+      const r = await gServer('token');
+      if (!r || !r.connected) return null;
+      return r.access_token;
+    } catch(e) {
+      console.warn('[G] gEnsure:', e.message);
+      return null;
+    }
+  }
+
+  async function gApiCall(path, tok) {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/' + path, {
+      headers: { 'Authorization': 'Bearer ' + tok }
+    });
+    if (!res.ok) {
+      if (res.status === 401) throw new Error('expired');
+      throw new Error('gApi ' + path.slice(0, 60) + ' → ' + res.status);
+    }
+    return res.json();
+  }
+
+  async function gFetchImpl() {
+    const G = window.G;
+    if (G.busy) return;
+    G.busy = true;
+    G.err = null;
+    if (typeof renderDiagPanel === 'function') renderDiagPanel();
+    try {
+      const tok = await gEnsure();
+      if (!tok) { G.googleOff = true; G.connected = false; return; }
+      G.googleOff = false;
+
+      // Palette couleurs Google
+      if (!G.palette || !Object.keys(G.palette).length) {
+        try {
+          const co = await gApiCall('colors', tok);
+          G.palette = Object.fromEntries(Object.entries(co.event||{}).map(([k,v])=>[k,v.background]));
+        } catch(_) { G.palette = {}; }
+      }
+
+      // Liste des calendriers
+      const cl = await gApiCall('users/me/calendarList?minAccessRole=reader&maxResults=250', tok);
+      G.list = (cl.items||[]).map(c => ({
+        id: c.id,
+        name: c.summaryOverride || c.summary || c.id,
+        color: c.backgroundColor || '#4C8DF6',
+        primary: !!c.primary,
+        accessRole: c.accessRole || 'reader',
+        on: !!c.selected || !!c.primary,
+      }));
+      try { localStorage.setItem('mz_gcallist', JSON.stringify(G.list)); } catch(_) {}
+
+      // Initialiser la sélection si absente
+      if (!Array.isArray(G.cals) || !G.cals.length) {
+        G.cals = G.list.filter(c=>c.on).map(c=>c.id);
+        if (!G.cals.length) G.cals = G.list.map(c=>c.id);
+        try { localStorage.setItem('mz_gcals', JSON.stringify(G.cals)); } catch(_) {}
+      }
+
+      // Plage : -40 j à +150 j (identique à modules.js)
+      const tMin = new Date(addDays(today(), -40)+'T00:00:00').toISOString();
+      const tMax = new Date(addDays(today(), 150)+'T23:59:59').toISOString();
+      const items = [];
+
+      for (const c of G.list.filter(c=>G.cals.includes(c.id))) {
+        let page = '';
+        do {
+          const url = `calendars/${encodeURIComponent(c.id)}/events?singleEvents=true&orderBy=startTime&maxResults=2500&timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}${page?'&pageToken='+page:''}`;
+          const j = await gApiCall(url, tok);
+          for (const e of j.items||[]) {
+            if (e.status === 'cancelled' || e.eventType === 'birthday') continue;
+            const base = {
+              id: e.id, cal: c.id, calName: c.name,
+              colorId: e.colorId||'',
+              color: (e.colorId&&G.palette[e.colorId])||c.color,
+              title: e.summary||'(Sans titre)',
+              place: e.location||'', link: e.htmlLink||'',
+              desc: e.description||'',
+              gs: e.start||null, ge: e.end||null,
+              rec: !!e.recurringEventId, rem: e.reminders||null,
+            };
+            if (e.start && e.start.date) {
+              const startD = e.start.date;
+              const endD = e.end&&e.end.date ? e.end.date : addDays(startD, 1);
+              const nd = Math.min(31, Math.max(1, diffDays(startD, endD)));
+              for (let d=startD, k=0; d<endD&&k<31; d=addDays(d,1), k++)
+                items.push({...base, day:d, start_time:null, end_time:null, k, n:nd, endDay:addDays(endD,-1)});
+            } else if (e.start && e.start.dateTime) {
+              const st = new Date(e.start.dateTime);
+              const en = e.end&&e.end.dateTime ? new Date(e.end.dateTime) : null;
+              const day = ymd(st);
+              const hhmm = x => pad2(x.getHours())+':'+pad2(x.getMinutes());
+              const lastDay = en ? (hhmm(en)==='00:00' ? addDays(ymd(en),-1) : ymd(en)) : day;
+              const n = Math.min(31, Math.max(1, diffDays(day, lastDay)+1));
+              if (n===1) {
+                items.push({...base, day, start_time:hhmm(st), end_time:en&&ymd(en)===day?hhmm(en):null});
+              } else {
+                for (let k=0; k<n; k++)
+                  items.push({...base, day:addDays(day,k), start_time:k===0?hhmm(st):null, end_time:k===n-1&&hhmm(en)!=='00:00'?hhmm(en):null, k, n, endDay:lastDay});
+              }
+            }
+          }
+          page = j.nextPageToken||'';
+        } while (page);
+      }
+
+      G.ev = { at: Date.now(), items };
+      try { localStorage.setItem('mz_gev', JSON.stringify(G.ev)); } catch(_) {}
+      G.connected = true;
+
+    } catch(e) {
+      G.err = e.message;
+      console.warn('[G] gFetch error:', e);
+    } finally {
+      G.busy = false;
+      renderCurrentView();
+      if (typeof renderDiagPanel === 'function') renderDiagPanel();
+      if (typeof updateCalDot === 'function') updateCalDot();
+    }
+  }
+
+  window.gFetch = gFetchImpl;
 
   async function sbLoginImpl() {
     const btn = document.getElementById('sb-auth-btn');
@@ -2956,6 +3272,25 @@ document.addEventListener('click', e => {
         }
       } catch(e) { /* table bdays absente ou inaccessible — non bloquant */ }
 
+      // Tâches avec date d'échéance
+      try {
+        const { data: tasks } = await sb.from('tasks').select('id,title,next_due,members').eq('household_id', hid).is('done_at', null).not('next_due', 'is', null);
+        if (tasks && tasks.length > 0) {
+          tasks.forEach(t => {
+            if (!t.next_due) return;
+            EVENTS.push({
+              id: 'task_' + t.id,
+              date: t.next_due,
+              title: (t.title || '(Tâche)') + ' ✓',
+              cat: 'travail',
+              allday: true,
+              members: Array.isArray(t.members) ? t.members : [],
+              _isTask: true,
+            });
+          });
+        }
+      } catch(_) { /* table tasks inaccessible — non bloquant */ }
+
       // Mettre à jour les avatars de l'en-tête
       const avatarContainer = document.querySelector('.mz-avatars');
       if (avatarContainer && MEMBERS.length > 0) {
@@ -2964,12 +3299,16 @@ document.addEventListener('click', e => {
         ).join('');
       }
 
-      // Afficher les données
+      // Afficher les données Supabase
       document.getElementById('sb-auth-overlay').style.display = 'none';
       const badge = document.querySelector('.demo-badge');
       if (badge) badge.textContent = '🔒 Données réelles · Lecture seule';
       renderCurrentView();
-      toast('Données chargées (' + EVENTS.length + ' événements)');
+      const sbCount = EVENTS.filter(e=>!e._isBday&&!e._isTask).length;
+      toast('Données Maisonnée chargées (' + sbCount + ' événements) · Chargement Google…');
+
+      // Lancer Google Calendar en parallèle
+      gFetchImpl();
 
     } catch(err) {
       console.error('[Phase1] sbLoadData error', err);
