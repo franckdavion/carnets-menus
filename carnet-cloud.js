@@ -2,18 +2,7 @@
 const SB_URL="https://cluqleqbbidozpioekog.supabase.co",SB_KEY="sb_publishable_aqFMnHwdC6XpnuR3kQJqZQ_AJfMwJyS";
 const SHARED_F=["name","cat","cats","time","serves","ing","steps","image","tags","source"],PRIV_F=["fav","ratings","photo","pick","noAuto","autoIdx","noPh","viewServ","autoPick"];
 let cloud={sb:null,user:null,profile:null,admin:false,busy:false,members:null,msg:""},acctMode="login",cloudT=null;
-function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{
-  const urls=["maison/vendor/supabase.min.js","vendor/supabase.min.js","https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"];
-  const tryUrl=i=>{
-    if(i>=urls.length)return ko(new Error("Bibliothèque Supabase indisponible"));
-    const sc=document.createElement("script");
-    sc.src=urls[i];
-    sc.onload=()=>ok(window.supabase);
-    sc.onerror=()=>{sc.remove();tryUrl(i+1);};
-    document.head.appendChild(sc);
-  };
-  tryUrl(0);
-});}
+function loadSb(){return window.supabase?Promise.resolve(window.supabase):new Promise((ok,ko)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";sc.onload=()=>ok(window.supabase);sc.onerror=ko;document.head.appendChild(sc);});}
 async function sbc(){if(cloud.sb)return cloud.sb;const S=await loadSb();cloud.sb=S.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"cm_sb_auth"}});return cloud.sb;}
 const cloudOn=()=>!!(cloud.user&&cloud.profile&&cloud.profile.status==="active");
 async function cloudInit(){if(typeof cmDemoRepas==="function"&&cmDemoRepas())return;if(!LS.get("cm_sb_auth",null)&&!localStorage.getItem("cm_sb_auth"))return; // never signed in: nothing to load
@@ -55,7 +44,7 @@ async function acctSubmit(){const mail=$("#ac-mail").value.trim(),pass=$("#ac-pa
     else{const{data,error}=await sb.auth.signInWithPassword({email:mail,password:pass});if(error)throw error;await cloudSession(data.session);}
     cloud.msg="";sb.auth.onAuthStateChange((ev,ses)=>{if(ev==="SIGNED_OUT")cloudSession(null);});}
   catch(e){m.textContent=/Invalid login/i.test(e.message||"")?"E-mail ou mot de passe incorrect.":/confirm/i.test(e.message||"")?"Confirmez d'abord votre e-mail (lien reçu par mail).":/registered|exists/i.test(e.message||"")?"Ce compte existe déjà : connectez-vous.":"Échec : "+(e.message||"réseau ?");}}
-async function cloudSignOut(){cm96StopRealtime();try{await cloud.sb.auth.signOut({scope:'local'});}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
+async function cloudSignOut(){cm96StopRealtime();try{await cloud.sb.auth.signOut();}catch(e){}cloud.user=null;cloud.profile=null;cloud.admin=false;setAcctLine();renderAcct();toast("Déconnecté · vos données restent sur ce téléphone");}
 async function savePseudo(){const v=$("#ac-pseudo2").value.trim();if(v.length<2)return;const{error}=await cloud.sb.from("profiles").update({pseudo:v}).eq("id",cloud.user.id);if(error){toast("Pseudo non enregistré");return;}cloud.profile.pseudo=v;setAcctLine();toast("Pseudo enregistré");}
 // what of a recipe is shared (in the common book) and what stays private (favourite, ratings, own photo…)
 const sharedOf=r=>{const o={};SHARED_F.forEach(k=>{if(r[k]!==undefined)o[k]=r[k];});return o;};
@@ -101,7 +90,8 @@ async function cloudPush(){if(cmDemoRepas())return;if(location.hostname==="franc
       priv=privNow();
       const payload={menu:shareMenu(),priv,at:LS.get("cm_menu_at",0)||Date.now()},ph=hashOf(payload.menu)+hashOf(priv);
       const at=new Date().toISOString(),{error}=await sb.from("user_state").upsert({user_id:stateUid(),menu:payload,updated_at:at});if(!error)stateSeen=at;
-      if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(payload.menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);}}
+      if(!error){cloudPh=ph;cloudBase={menu:JSON.parse(J(payload.menu)),priv};LS.set("cm_cloud_ph",ph);LS.set("cm_cloud_base",cloudBase);
+        if(typeof mealsPushFromCarnet==="function")setTimeout(mealsPushFromCarnet,400);}}
     LS.set("cm_cloud_at",Date.now());}
   catch(e){cloud.msg="Synchro en attente (réseau ?)";}finally{cloud.busy=false;}}
 /* ---------- carnet partagé du foyer (Maisonnée) ---------- */
@@ -313,7 +303,7 @@ var fromMz=false;
 // hidden copy inside Maisonnée: no password field, so the iPhone never offers to save a password for it
 if(new URLSearchParams(location.search).get("arriere-plan")){const strip=()=>document.querySelectorAll('input[type=password]').forEach(i=>{i.type="text";i.autocomplete="off";i.value="";});
   strip();new MutationObserver(strip).observe(document.body,{childList:true,subtree:true});}
-setTimeout(cloudInit,new URLSearchParams(location.search).get("arriere-plan")?0:400);applyRoleUi();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudOn())cloudSync();});
+setTimeout(cloudInit,800);applyRoleUi();document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&cloudOn())cloudSync();});
 /* ---------- boot ---------- */
 {const v=$("#v-wine"),inn=$("#winesIn");while(inn.firstChild)v.appendChild(inn.firstChild);const h=v.querySelector(".row");if(h){h.querySelector("[data-act=closeWines]")?.remove();}
   const b=document.createElement("p");b.className="muted";b.style.cssText="margin:0;font-size:13px";b.textContent="Vos bouteilles : ajoutez-les avec leur appellation, type, millésime et quantité ; touchez − / + quand vous en ouvrez ou en achetez. Liez un vin à une recette ou à un repas prévu dans sa fiche.";h&&h.after(b);}

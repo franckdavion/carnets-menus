@@ -20,6 +20,7 @@ function maisonLaunchUrl(raw) {
 const FILES = [
   "./", "index.html", "ouvrir-frais.html", "maison.css", "trajets-v2.css", "fonds-bibliotheque.css",
   "espace.js", "push-config.js", "shared-constants.js", "vendor/supabase.min.js", "supabase/functions/_shared/cal.js",
+  "meals-project.js", "meals-sync.js",
   "app.js", "essai-cartes.js", "modules.js", "repas.js", "courses.js", "gtaches.js", "catalogue.js",
   "animaux-core.js", "animaux.js", "animal-card.css", "animal.html", "vendor/qrcode.min.js", "assets/modules3d/animaux.svg",
   "presences-core.js", "presences-trajets-core.js", "presences.js", "presences-trajets.js", "presences-export.js",

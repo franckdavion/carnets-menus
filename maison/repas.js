@@ -108,7 +108,13 @@ function carnetLive() {
     .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
   ckLive = { owner, ch };
 }
-function carnetSave(msg, kind) { cev("saveMenu()"); softRender(); if (msg) toast(msg, null, null, null, kind); rScheduleGoogleMeals(); }
+function carnetSave(msg, kind) {
+  cev("saveMenu()");
+  try { cev("typeof mealsPushFromCarnet==='function'&&mealsPushFromCarnet()"); } catch (_) {}
+  softRender();
+  if (msg) toast(msg, null, null, null, kind);
+  rScheduleGoogleMeals();
+}
 let rGMealT = null, rGMealBusy = false;
 function rScheduleGoogleMeals() {
   clearTimeout(rGMealT);

@@ -9,7 +9,7 @@
   const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, userEdit: false, me: null, meFor: "", map: null, mapAt: 0, hid: null };
   // only after this copy has received the shared carnet once: a copy still showing what it had in memory
   // (phone just reopened, new device) must not send its old week to Maisonnée
-  const ready = () => location.hostname !== "franckdavion.github.io" && typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
+  const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
 
   /* ---------- button back to Maisonnée ---------- */
   function addBackButton() {
@@ -36,7 +36,7 @@
   }
   const uuidToKey = u => (P.map && P.map.u2k[u]) || "c-" + u;
   const keyToUuid = k => (P.map && P.map.k2u[k]) || (k.startsWith("c-") ? k.slice(2) : null);
-  const AISLES = window.MAISON_SHOP_AISLES ? Array.from(window.MAISON_SHOP_AISLES) : ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
+  const AISLES = ["Fruits & légumes", "Boulangerie", "Boucherie & poisson", "Crémerie", "Épicerie", "Surgelés", "Boissons", "Hygiène & maison", "Divers"];
   const aisleOf = r => AISLES.includes(r) ? r : "Divers";
   const carnetMealSig = sl => {
     if (!sl) return "";
@@ -86,13 +86,19 @@
         const day = ymd(d), wk = ymd(mondayOf(d)), dn = DAYS[(d.getDay() + 6) % 7];
         for (const [slot] of MEALS) {
           const k = day + "|" + slot, sk = slotKey(dn, slot), sl = ((menu.weeks || {})[wk] || {})[sk];
-          const cSig = carnetMealSig(sl);
+          const cSig = typeof MzMeals !== "undefined" ? MzMeals.slotSig(sl, recipes, norm) : carnetMealSig(sl);
           const mm = M[k];
           let mSig = "";
           if (mm && mm.recipe_id) mSig = "R:" + uuidToKey(mm.recipe_id);
           else if (mm && mm.label) {
-            const n = norm(mm.label);
-            mSig = sl && recipes[sl.id] && norm(recipes[sl.id].name) === n ? "R:" + sl.id : byName[n] ? "R:" + byName[n] : "T:" + mm.label;
+            const lab = String(mm.label);
+            if (lab.startsWith("Restes · ")) mSig = "L:" + lab.slice(9).trim();
+            else if (sl && sl.note && norm(sl.note) === norm(lab)) mSig = "N:" + sl.note.trim();
+            else if (sl && sl.left && norm(sl.left) === norm(lab.replace(/^Restes ·\s*/i, ""))) mSig = "L:" + sl.left.trim();
+            else {
+              const n = norm(lab);
+              mSig = sl && recipes[sl.id] && norm(recipes[sl.id].name) === n ? "R:" + sl.id : byName[n] ? "R:" + byName[n] : "N:" + lab.trim();
+            }
           }
           const b = base.meals[k];
           let cNew = cSig, mNew = mSig;
@@ -103,7 +109,9 @@
             if (!mNew) { if (mm && !slotHasPlan(sl)) ops.push(sb.from("meals").delete().eq("id", mm.id)); }
             else {
               let row;
-              if (mNew.startsWith("R:")) {
+              if (typeof MzMeals !== "undefined" && /^(R:|N:|L:)/.test(mNew)) {
+                row = MzMeals.rowFromSig(mNew, hid, day, slot, keyToUuid, recipes, now);
+              } else if (mNew.startsWith("R:")) {
                 const key = mNew.slice(2), ru = keyToUuid(key);
                 const lab = ru ? "" : (recipes[key] ? recipes[key].name : (sl && sl.label) || (mm && mm.label) || "");
                 row = { household_id: hid, day, slot, recipe_id: ru || null, label: lab, updated_at: now };
@@ -116,7 +124,9 @@
           if (cNew !== cSig) {
             menu.weeks = menu.weeks || {};
             if (!menu.weeks[wk]) menu.weeks[wk] = {};
-            if (!cNew) { if (!slotHasPlan(sl)) delete menu.weeks[wk][sk]; } // des « restes » ne sont pas effacés par la synchro des repas
+            if (!cNew) { if (!slotHasPlan(sl)) delete menu.weeks[wk][sk]; }
+            else if (cNew.startsWith("N:")) menu.weeks[wk][sk] = Object.assign({}, sl || {}, { note: cNew.slice(2), keep: true });
+            else if (cNew.startsWith("L:")) menu.weeks[wk][sk] = Object.assign({}, sl || {}, { left: cNew.slice(2), keep: true });
             else if (cNew.startsWith("R:")) {
               const key = cNew.slice(2), lab = (mm && mm.label) || (sl && sl.label) || "";
               if (recipes[key]) menu.weeks[wk][sk] = Object.assign({}, sl && sl.id === key ? sl : {}, { id: key, label: recipes[key].name, n: (sl && sl.n) || menu.people || 4, lock: !!(sl && sl.lock) });
@@ -200,20 +210,37 @@
   }
   function soon(ms) { clearTimeout(P.timer); P.timer = setTimeout(pontSync, ms); }
 
+  let pushT = null;
+  async function mealsPushFromCarnet() {
+    if (!ready() || typeof MzMeals === "undefined") return;
+    try {
+      const sb = cloud.sb, uid = cloud.user.id;
+      const { data: hs } = await sb.from("households").select("id,carnet_user").eq("carnet_user", cloud.owner || uid).limit(1);
+      if (!hs || !hs.length) return;
+      await MzMeals.projectMeals(sb, hs[0].id, menu, recipes, { norm });
+    } catch (e) { console.warn("Projection repas (carnet)", e); }
+  }
+  function pushSoon() { clearTimeout(pushT); pushT = setTimeout(mealsPushFromCarnet, 700); }
+  window.mealsPushFromCarnet = mealsPushFromCarnet;
+
   /* ---------- when to sync: after the Carnet's own cloud sync, after each change, every minute ---------- */
   if (typeof saveMenu === "function") {
     const orig = saveMenu;
-    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(600); } return r; };
+    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(1200); pushSoon(); } return r; };
   }
   if (typeof cloudSync === "function") {
     const orig = cloudSync;
-    window.cloudSync = async function () { const r = await orig.apply(this, arguments); if (!cloud.msg) P.cloudOk = true; soon(400); return r; };
+    window.cloudSync = async function () { const r = await orig.apply(this, arguments); if (!cloud.msg) P.cloudOk = true; soon(400); pushSoon(); return r; };
   }
   // the hidden copy of the Carnet inside Maisonnée only syncs while Maisonnée's Repas page is open
   const bgIdle = () => { try { return window.frameElement && !(window.parent && window.parent.mzRepasActive); } catch (e) { return false; } };
-  setInterval(() => { if (document.visibilityState === "visible" && !bgIdle()) pontSync(); }, 60e3);
+  setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    if (!bgIdle()) pontSync();
+    else pushSoon();
+  }, 45e3);
   window.pontSync = pontSync;
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", addBackButton); else addBackButton();
-  setTimeout(pontSync, 600);
+  setTimeout(pontSync, 4000);
 })();

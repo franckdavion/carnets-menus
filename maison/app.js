@@ -2568,7 +2568,10 @@ document.addEventListener("click", async e => {
     case "weekA": weekA = addDays(weekA, +v); render(); break;
     case "weekR": weekR = addDays(weekR, +v); render(); break;
     case "repasTab": repasTab = v; render(); break;
-    case "meal": mealSheet(b.dataset.day, b.dataset.slot); break;
+    case "meal": {
+      if (isLinked() && typeof openHomeMeal === "function") { view = "repas"; LS.set("mz_view", "repas"); render(); openHomeMeal(b.dataset.day, b.dataset.slot); break; }
+      mealSheet(b.dataset.day, b.dataset.slot); break;
+    }
     case "pickRecipe": {
       sheetCtx.recipe = sheetCtx.recipe === v ? null : v;
       $("#recList").querySelectorAll(".rec").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === sheetCtx.recipe));
@@ -2785,8 +2788,13 @@ document.addEventListener("submit", async e => {
       break;
     }
     case "meal": {
+      closeSheet();
+      if (isLinked()) {
+        toast("Les repas passent par l'onglet Repas (carnet du foyer).", "Ouvrir Repas", () => { view = "repas"; LS.set("mz_view", "repas"); render(); if (typeof openHomeMeal === "function") openHomeMeal(sheetCtx.day, sheetCtx.slot); });
+        break;
+      }
       const { day, slot, recipe } = sheetCtx, label = (fd.label || "").trim(), cook = chipVal(f, "cook") || null;
-      const m = mealAt(day, slot); closeSheet();
+      const m = mealAt(day, slot);
       const row = { recipe_id: label ? null : recipe || null, label: label, cook, updated_at: new Date().toISOString() };
       if (!row.recipe_id && !row.label) { if (m) await remove("meals", m.id); break; }
       if (m) await patch("meals", m.id, row); else await add("meals", { day, slot, ...row });
