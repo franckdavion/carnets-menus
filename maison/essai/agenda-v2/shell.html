@@ -1028,6 +1028,10 @@ const DEMO_EVENTS = [
   // 22 nov (samedi)
   { id:'e19', date:'2026-11-22', start:'09:30', end:'11:00', title:'Coiffeur — Léa', cat:'perso', members:['l'], allday:false },
   { id:'e20', date:'2026-11-22', start:'18:00', end:'23:00', title:'Anniversaire Stéphane', cat:'famille', members:['f','m','l'], allday:false },
+  // Récurrents (séries hebdomadaires) — dates calées sur le bon jour de semaine
+  { id:'r1', date:'2026-11-16', start:'09:00', end:'09:30', title:'Réunion hebdo', cat:'travail', members:['f'], allday:false, rrule_freq:'WEEKLY', rrule_interval:1, rrule_byDay:['MO'], rrule_endType:'never' },
+  { id:'r2', date:'2026-11-18', start:'18:30', end:'19:30', title:'Natation — Marie', cat:'sport', members:['m'], allday:false, rrule_freq:'WEEKLY', rrule_interval:1, rrule_byDay:['WE'], rrule_endType:'never' },
+  { id:'r3', date:'2026-11-19', start:'16:30', end:'17:30', title:'Entraînement foot — Léa', cat:'sport', members:['l'], allday:false, rrule_freq:'WEEKLY', rrule_interval:1, rrule_byDay:['TH'], rrule_endType:'never' },
 ];
 
 // ---- DATA STORE ----
@@ -1082,6 +1086,44 @@ function shortDay(iso) {
   return ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'][d.getDay()];
 }
 function eventsOnDay(iso) { return EVENTS.filter(e=>e.date===iso); }
+
+const LIST_CHUNK = 30;
+let listChunksLoaded = 1;
+
+function buildRruleFrom(e) {
+  return { freq: e.rrule_freq, interval: e.rrule_interval || 1, byDay: e.rrule_byDay || [],
+           monthType: e.rrule_monthType, monthDay: e.rrule_monthDay, monthPos: e.rrule_monthPos,
+           monthWd: e.rrule_monthWd, endType: e.rrule_endType || 'never', until: e.rrule_until,
+           count: e.rrule_count, feb29: e.rrule_feb29, wkst: e.rrule_wkst || 'MO' };
+}
+
+function buildEventIndex(fromIso, toIso) {
+  const idx = {};
+  for (const e of EVENTS) {
+    if (e.date >= fromIso && e.date <= toIso) {
+      (idx[e.date] = idx[e.date] || []).push(e);
+    }
+    if (e.rrule_freq && e.rrule_freq !== 'NONE') {
+      const r = buildRruleFrom(e);
+      const occs = rruleNext(r, e.date, 200, e.exdates || []);
+      for (const iso of occs) {
+        if (iso < fromIso) continue;
+        if (iso > toIso) break;
+        (idx[iso] = idx[iso] || []).push({ ...e, date: iso, _recurring: true });
+      }
+    }
+  }
+  return idx;
+}
+
+function listLoadMore() {
+  listChunksLoaded++;
+  renderList(true);
+  setTimeout(() => {
+    const btn = document.getElementById('list-load-more');
+    if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
+}
 function renderCurrentView() {
   if (currentView==='list') renderList();
   else if (currentView==='week') renderWeek();
@@ -1089,21 +1131,27 @@ function renderCurrentView() {
 }
 
 // ---- RENDER LIST VIEW ----
-function renderList() {
+function renderList(keepScroll) {
+  if (!keepScroll) listChunksLoaded = 1;
   renderWeekStrip();
   const container = document.getElementById('list-events');
-  const days = [];
-  for (let i=-2; i<=7; i++) days.push(addDays(today(), i));
+  const fromIso = addDays(today(), -7);
+  const toIso = addDays(today(), LIST_CHUNK * listChunksLoaded);
+  const idx = buildEventIndex(fromIso, toIso);
+  const days = Object.keys(idx).sort();
   let html = '';
   for (const d of days) {
-    const evs = eventsOnDay(d);
-    const alldays = evs.filter(e=>e.allday);
-    const timed = evs.filter(e=>!e.allday);
-    if (!evs.length) continue;
-    const isToday = d===today();
-    const dateStr = isToday ? 'Aujourd\'hui' : formatDate(d).replace(/^./, c=>c.toUpperCase());
+    const evs = idx[d].sort((a, b) => {
+      if (a.allday && !b.allday) return -1;
+      if (!a.allday && b.allday) return 1;
+      return (a.start || '').localeCompare(b.start || '');
+    });
+    const alldays = evs.filter(e => e.allday);
+    const timed = evs.filter(e => !e.allday);
+    const isToday = d === today();
+    const dateStr = isToday ? "Aujourd'hui" : formatDate(d).replace(/^./, c => c.toUpperCase());
     html += `<div class="day-group" data-date="${d}">
-      <div class="day-heading ${isToday?'today-label':''}">${dateStr}</div>`;
+      <div class="day-heading ${isToday ? 'today-label' : ''}">${dateStr}</div>`;
     for (const e of alldays) {
       const cat = getcat(e.cat);
       html += `<div class="allday-chip" style="background:${cat.bg};color:${cat.ink}" onclick="openDetail('${e.id}')">
@@ -1115,12 +1163,18 @@ function renderList() {
     }
     html += '</div>';
   }
+  const endStr = formatDate(toIso).replace(/^./, c => c.toUpperCase());
+  html += `<div id="list-load-more" style="text-align:center;padding:16px 0 40px">
+    <button onclick="listLoadMore()" style="background:var(--soft);border:1.5px solid var(--line);color:var(--accent);border-radius:999px;padding:9px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Voir plus</button>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">Jusqu'au ${endStr}</div>
+  </div>`;
   container.innerHTML = html;
-  // scroll to today
-  setTimeout(()=>{
-    const el = container.querySelector(`[data-date="${today()}"]`);
-    if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
-  }, 50);
+  if (!keepScroll) {
+    setTimeout(() => {
+      const el = container.querySelector(`[data-date="${today()}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
 }
 
 function fmtCountdownShort(isoDate, startTime) {
