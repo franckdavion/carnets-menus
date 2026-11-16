@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda V2 — Tests adaptateurs Phase 0</title>
+<style>
+  :root {
+    --bg: #0f1621; --surface: #1b2433; --border: #2b374b;
+    --ok: #22c55e; --fail: #ef4444; --warn: #f59e0b;
+    --text: #e2e8f0; --muted: #64748b; --accent: #7c5cfc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 'SF Mono', monospace; padding: 24px; }
+  h1 { font-size: 18px; margin-bottom: 4px; color: #fff; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+  #summary { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+          padding: 12px 20px; min-width: 100px; text-align: center; }
+  .stat .n { font-size: 28px; font-weight: 700; }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .ok .n { color: var(--ok); } .fail .n { color: var(--fail); } .warn .n { color: var(--warn); }
+  .suite { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+           margin-bottom: 16px; overflow: hidden; }
+  .suite-header { padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;
+                  background: rgba(255,255,255,.03); border-bottom: 1px solid var(--border); font-weight: 600; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+  .badge-ok { background: rgba(34,197,94,.15); color: var(--ok); }
+  .badge-fail { background: rgba(239,68,68,.15); color: var(--fail); }
+  .test { padding: 8px 16px; display: flex; align-items: flex-start; gap: 10px;
+          border-bottom: 1px solid rgba(43,55,75,.5); }
+  .test:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .dot-ok { background: var(--ok); } .dot-fail { background: var(--fail); } .dot-warn { background: var(--warn); }
+  .test-name { flex: 1; }
+  .test-err { font-size: 12px; color: var(--fail); margin-top: 4px; white-space: pre-wrap; }
+  .test-warn { font-size: 12px; color: var(--warn); margin-top: 4px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Agenda V2 — Tests adaptateurs Phase 0</h1>
+<p class="meta" id="run-info">Exécution en cours…</p>
+
+<div id="summary">
+  <div class="stat ok"><div class="n" id="cnt-ok">—</div><div class="l">Réussis</div></div>
+  <div class="stat fail"><div class="n" id="cnt-fail">—</div><div class="l">Échecs</div></div>
+  <div class="stat warn"><div class="n" id="cnt-warn">—</div><div class="l">Avertissements</div></div>
+</div>
+
+<div id="results"></div>
+
+<script type="module">
+// ─── Import des modules ────────────────────────────────────────────────────────
+import {
+  PRESENCE_KEYWORDS, detectPresenceKeywords,
+  repeatToRrule, normalizeRemindersToV2, prodToV2
+} from './prod-to-v2.js';
+
+import {
+  rruleToRepeat, normalizeRemindersToProd, v2ToProd
+} from './v2-to-prod.js';
+
+// ─── Micro-framework de test ───────────────────────────────────────────────────
+const suites = [];
+let currentSuite = null;
+
+function suite(name, fn) {
+  currentSuite = { name, tests: [] };
+  suites.push(currentSuite);
+  fn();
+}
+
+function test(name, fn) {
+  currentSuite.tests.push({ name, fn });
+}
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'Assertion échouée');
+}
+
+function assertEqual(a, b, msg) {
+  const sa = JSON.stringify(a), sb = JSON.stringify(b);
+  if (sa !== sb) throw new Error((msg || '') + `\n  Attendu : ${sb}\n  Reçu    : ${sa}`);
+}
+
+function assertThrows(fn, msgPart) {
+  let threw = false;
+  try { fn(); } catch (e) {
+    threw = true;
+    if (msgPart && !e.message.includes(msgPart))
+      throw new Error(`Exception attendue contenant "${msgPart}", reçu : "${e.message}"`);
+  }
+  if (!threw) throw new Error(`Devait lever une exception${msgPart ? ` contenant "${msgPart}"` : ''}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUITES DE TESTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── 1. repeatToRrule ─────────────────────────────────────────────────────────
+suite('repeatToRrule', () => {
+  test('null → null', () => assertEqual(repeatToRrule(null), null));
+  test('"none" → null', () => assertEqual(repeatToRrule('none'), null));
+  test('"" → null',    () => assertEqual(repeatToRrule(''), null));
+
+  test('"weekly" → WEEKLY/1', () => {
+    const r = repeatToRrule('weekly');
+    assert(r.freq === 'WEEKLY' && r.interval === 1 && Array.isArray(r.byDay));
+  });
+  test('"monthly" → MONTHLY/1', () => {
+    const r = repeatToRrule('monthly');
+    assert(r.freq === 'MONTHLY' && r.interval === 1);
+  });
+  test('"yearly" → YEARLY/1', () => {
+    const r = repeatToRrule('yearly');
+    assert(r.freq === 'YEARLY' && r.interval === 1);
+  });
+
+  test('"custom:2:weeks" → WEEKLY/2', () => {
+    const r = repeatToRrule('custom:2:weeks');
+    assert(r.freq === 'WEEKLY' && r.interval === 2 && r.endType === 'never');
+  });
+  test('"custom:3:months" → MONTHLY/3', () => {
+    const r = repeatToRrule('custom:3:months');
+    assert(r.freq === 'MONTHLY' && r.interval === 3);
+  });
+  test('"custom:1:days" → DAILY/1', () => {
+    const r = repeatToRrule('custom:1:days');
+    assert(r.freq === 'DAILY' && r.interval === 1);
+  });
+  test('"custom:999:years" → YEARLY/999', () => {
+    const r = repeatToRrule('custom:999:years');
+    assert(r.freq === 'YEARLY' && r.interval === 999);
+  });
+  test('"custom:0:weeks" → null (interval invalide)', () => {
+    assertEqual(repeatToRrule('custom:0:weeks'), null);
+  });
+  test('"biweekly" (inconnu) → null', () => {
+    assertEqual(repeatToRrule('biweekly'), null);
+  });
+  test('endType=never présent', () => {
+    assert(repeatToRrule('weekly').endType === 'never');
+  });
+  test('wkst=MO présent', () => {
+    assert(repeatToRrule('weekly').wkst === 'MO');
+  });
+});
+
+// ── 2. rruleToRepeat ─────────────────────────────────────────────────────────
+suite('rruleToRepeat', () => {
+  test('null → "none"', () => assertEqual(rruleToRepeat(null), 'none'));
+  test('{freq:"NONE"} → "none"', () => assertEqual(rruleToRepeat({ freq: 'NONE' }), 'none'));
+
+  test('WEEKLY/1 → "weekly"', () => assertEqual(rruleToRepeat({ freq: 'WEEKLY', interval: 1 }), 'weekly'));
+  test('MONTHLY/1 → "monthly"', () => assertEqual(rruleToRepeat({ freq: 'MONTHLY', interval: 1 }), 'monthly'));
+  test('YEARLY/1 → "yearly"', () => assertEqual(rruleToRepeat({ freq: 'YEARLY', interval: 1 }), 'yearly'));
+  test('DAILY/1 → "custom:1:days"', () => assertEqual(rruleToRepeat({ freq: 'DAILY', interval: 1 }), 'custom:1:days'));
+  test('WEEKLY/2 → "custom:2:weeks"', () => assertEqual(rruleToRepeat({ freq: 'WEEKLY', interval: 2 }), 'custom:2:weeks'));
+  test('MONTHLY/3 → "custom:3:months"', () => assertEqual(rruleToRepeat({ freq: 'MONTHLY', interval: 3 }), 'custom:3:months'));
+  test('interval invalide (0) → "none"', () => assertEqual(rruleToRepeat({ freq: 'WEEKLY', interval: 0 }), 'none'));
+  test('freq inconnu → "none"', () => assertEqual(rruleToRepeat({ freq: 'HOURLY', interval: 1 }), 'none'));
+
+  test('Round-trip weekly', () => {
+    assertEqual(rruleToRepeat(repeatToRrule('weekly')), 'weekly');
+  });
+  test('Round-trip custom:2:weeks', () => {
+    assertEqual(rruleToRepeat(repeatToRrule('custom:2:weeks')), 'custom:2:weeks');
+  });
+  test('Round-trip monthly', () => {
+    assertEqual(rruleToRepeat(repeatToRrule('monthly')), 'monthly');
+  });
+});
+
+// ── 3. normalizeRemindersToV2 ─────────────────────────────────────────────────
+suite('normalizeRemindersToV2', () => {
+  test('[] → []', () => assertEqual(normalizeRemindersToV2([]), []));
+  test('null → []', () => assertEqual(normalizeRemindersToV2(null), []));
+  test('[30, 60] → [{type:preset,min:30},{type:preset,min:60}]', () => {
+    const r = normalizeRemindersToV2([30, 60]);
+    assert(r.length === 2 && r[0].type === 'preset' && r[0].min === 30 && r[1].min === 60);
+  });
+  test('[0] → [{type:preset,min:0}]', () => {
+    const r = normalizeRemindersToV2([0]);
+    assert(r.length === 1 && r[0].min === 0);
+  });
+  test('valeur négative filtrée', () => {
+    assertEqual(normalizeRemindersToV2([-5]), []);
+  });
+  test('objet V2 existant passé tel quel', () => {
+    const obj = { type: 'preset', min: 15, label: 'test' };
+    assertEqual(normalizeRemindersToV2([obj]), [obj]);
+  });
+});
+
+// ── 4. normalizeRemindersToProd ───────────────────────────────────────────────
+suite('normalizeRemindersToProd', () => {
+  test('[] → minutes:[]', () => {
+    const r = normalizeRemindersToProd([]);
+    assert(r.minutes.length === 0 && !r.hasExact);
+  });
+  test('[{type:preset,min:30}] → [30]', () => {
+    const r = normalizeRemindersToProd([{ type: 'preset', min: 30 }]);
+    assert(r.minutes[0] === 30 && !r.hasExact);
+  });
+  test('[{type:custom,min:60}] → [60]', () => {
+    const r = normalizeRemindersToProd([{ type: 'custom', min: 60 }]);
+    assert(r.minutes[0] === 60);
+  });
+  test('[{type:exact,...}] → hasExact=true', () => {
+    const r = normalizeRemindersToProd([{ type: 'exact', date: '2026-11-16', time: '09:00' }]);
+    assert(r.hasExact && r.exactReminders.length === 1 && r.minutes.length === 0);
+  });
+  test('[{type:at,...}] → hasExact=true', () => {
+    const r = normalizeRemindersToProd([{ type: 'at', at: '2026-11-16T08:30' }]);
+    assert(r.hasExact && r.exactReminders.length === 1);
+  });
+  test('entier passé directement → converti', () => {
+    const r = normalizeRemindersToProd([30]);
+    assert(r.minutes[0] === 30);
+  });
+});
+
+// ── 5. detectPresenceKeywords ──────────────────────────────────────────────────
+suite('detectPresenceKeywords', () => {
+  test('titre sans mot-clé → []', () => assertEqual(detectPresenceKeywords('Réunion équipe'), []));
+  test('"abs" détecté', () => assert(detectPresenceKeywords('abs Marie').length > 0));
+  test('"dvh" détecté', () => assert(detectPresenceKeywords('dvh semaine').length > 0));
+  test('"Vacances été" détecté', () => assert(detectPresenceKeywords('Vacances été').length > 0));
+  test('"Retour école" détecté', () => assert(detectPresenceKeywords('Retour école').length > 0));
+  test('insensible à la casse', () => assert(detectPresenceKeywords('ABSENCE').length > 0));
+  test('insensible aux accents (absénce)', () => assert(detectPresenceKeywords('Absénce').length > 0));
+  test('null → []', () => assertEqual(detectPresenceKeywords(null), []));
+});
+
+// ── 6. prodToV2 ───────────────────────────────────────────────────────────────
+suite('prodToV2 — événement simple', () => {
+  const BASE = {
+    id: 'evt-001', household_id: 'hh-abc',
+    created_by: 'user-xyz', created_at: '2026-01-01T00:00:00Z',
+    day: '2026-11-20', start_time: '10:00', end_time: '11:00',
+    title: 'Dentiste', notes: 'Salle 3', place: '12 rue de la Paix', kind: 'appointment',
+    members: ['uuid-franck', 'uuid-marie'],
+    repeat: 'none', reminders: [30], gDefault: false,
+    colorId: '7', travel: 15, url: null, countdown: false, cal: null,
+  };
+
+  test('id Supabase conservé', () => { const ev = prodToV2(BASE); assertEqual(ev.id, 'evt-001'); });
+  test('household_id conservé', () => { const ev = prodToV2(BASE); assertEqual(ev.household_id, 'hh-abc'); });
+  test('day → date', () => { const ev = prodToV2(BASE); assertEqual(ev.date, '2026-11-20'); });
+  test('start_time → start', () => { const ev = prodToV2(BASE); assertEqual(ev.start, '10:00'); });
+  test('end_time → end', () => { const ev = prodToV2(BASE); assertEqual(ev.end, '11:00'); });
+  test('place → lieu', () => { const ev = prodToV2(BASE); assertEqual(ev.lieu, '12 rue de la Paix'); });
+  test('kind → type', () => { const ev = prodToV2(BASE); assertEqual(ev.type, 'appointment'); });
+  test('allday=false (start_time présent)', () => { const ev = prodToV2(BASE); assert(ev.allday === false); });
+  test('members IDs Supabase conservés', () => {
+    const ev = prodToV2(BASE);
+    assertEqual(ev.members, ['uuid-franck', 'uuid-marie']);
+  });
+  test('rappels normalisés → objets V2', () => {
+    const ev = prodToV2(BASE);
+    assert(ev.reminders[0].type === 'preset' && ev.reminders[0].min === 30);
+  });
+  test('repeat:none → rrule:null', () => {
+    const ev = prodToV2(BASE); assertEqual(ev.rrule, null);
+  });
+  test('pas de _extra pour champs connus', () => {
+    const ev = prodToV2(BASE); assert(!ev._extra || Object.keys(ev._extra).length === 0);
+  });
+  test('champ inconnu → _extra', () => {
+    const ev = prodToV2({ ...BASE, custom_field: 'valeur' });
+    assert(ev._extra && ev._extra.custom_field === 'valeur');
+  });
+  test('row.id manquant → exception', () => {
+    assertThrows(() => prodToV2({ ...BASE, id: undefined }), 'row.id');
+  });
+  test('row.day manquant → exception', () => {
+    assertThrows(() => prodToV2({ ...BASE, day: undefined }), 'row.day');
+  });
+  test('null → exception TypeError', () => {
+    assertThrows(() => prodToV2(null), '');
+  });
+});
+
+suite('prodToV2 — événement toute la journée', () => {
+  const ROW = {
+    id: 'evt-002', household_id: 'hh-abc', day: '2026-12-25',
+    start_time: null, end_time: null, title: 'Noël',
+    members: [], repeat: 'none', reminders: [], gDefault: false,
+  };
+  test('allday=true quand start_time=null', () => { const ev = prodToV2(ROW); assert(ev.allday === true); });
+  test('start=null', () => { const ev = prodToV2(ROW); assert(ev.start === null); });
+});
+
+suite('prodToV2 — récurrences', () => {
+  test('"weekly" → WEEKLY/1', () => {
+    const ev = prodToV2({ id: 'r1', day: '2026-11-16', repeat: 'weekly', members: [], reminders: [], gDefault: false });
+    assert(ev.rrule.freq === 'WEEKLY' && ev.rrule.interval === 1);
+  });
+  test('"monthly" → MONTHLY/1', () => {
+    const ev = prodToV2({ id: 'r2', day: '2026-11-16', repeat: 'monthly', members: [], reminders: [], gDefault: false });
+    assert(ev.rrule.freq === 'MONTHLY');
+  });
+  test('"custom:2:weeks" → WEEKLY/2', () => {
+    const ev = prodToV2({ id: 'r3', day: '2026-11-16', repeat: 'custom:2:weeks', members: [], reminders: [], gDefault: false });
+    assert(ev.rrule.freq === 'WEEKLY' && ev.rrule.interval === 2);
+  });
+  test('rrule_json prioritaire sur repeat', () => {
+    const rruleObj = { freq: 'WEEKLY', interval: 1, byDay: ['MO', 'WE'], endType: 'never', wkst: 'MO' };
+    const ev = prodToV2({
+      id: 'r4', day: '2026-11-16', repeat: 'monthly',
+      rrule_json: rruleObj, members: [], reminders: [], gDefault: false
+    });
+    assertEqual(ev.rrule.byDay, ['MO', 'WE']);
+    assert(ev.rrule.freq === 'WEEKLY'); // rrule_json prend le dessus
+  });
+  test('rrule_json string JSON → parsé', () => {
+    const rruleObj = { freq: 'YEARLY', interval: 1, endType: 'never', wkst: 'MO' };
+    const ev = prodToV2({
+      id: 'r5', day: '2026-11-16', repeat: 'none',
+      rrule_json: JSON.stringify(rruleObj), members: [], reminders: [], gDefault: false
+    });
+    assert(ev.rrule.freq === 'YEARLY');
+  });
+  test('exdates conservés', () => {
+    const ev = prodToV2({
+      id: 'r6', day: '2026-11-16', repeat: 'weekly',
+      exdates: ['2026-11-23', '2026-11-30'], members: [], reminders: [], gDefault: false
+    });
+    assertEqual(ev.exdates, ['2026-11-23', '2026-11-30']);
+  });
+  test('series_id conservé', () => {
+    const ev = prodToV2({
+      id: 'r7', day: '2026-11-16', repeat: 'weekly',
+      series_id: 'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb', members: [], reminders: [], gDefault: false
+    });
+    assertEqual(ev.series_id, 'aaaabbbb-cccc-dddd-eeee-ffffaaaabbbb');
+  });
+});
+
+// ── 7. v2ToProd ───────────────────────────────────────────────────────────────
+suite('v2ToProd — événement simple', () => {
+  const EV = {
+    id: 'evt-001', household_id: 'hh-abc',
+    created_by: 'user-xyz', created_at: '2026-01-01T00:00:00Z',
+    date: '2026-11-20', start: '10:00', end: '11:00',
+    title: 'Dentiste', notes: 'Salle 3', lieu: '12 rue de la Paix', type: 'appointment',
+    members: ['uuid-franck', 'uuid-marie'], rrule: null,
+    reminders: [{ type: 'preset', min: 30 }], gDefault: false,
+    allday: false, colorId: '7', travel: 15, url: null, countdown: false, cal: null,
+  };
+
+  test('id conservé', () => { const { row } = v2ToProd(EV); assertEqual(row.id, 'evt-001'); });
+  test('date → day', () => { const { row } = v2ToProd(EV); assertEqual(row.day, '2026-11-20'); });
+  test('start → start_time', () => { const { row } = v2ToProd(EV); assertEqual(row.start_time, '10:00'); });
+  test('end → end_time', () => { const { row } = v2ToProd(EV); assertEqual(row.end_time, '11:00'); });
+  test('lieu → place', () => { const { row } = v2ToProd(EV); assertEqual(row.place, '12 rue de la Paix'); });
+  test('type → kind', () => { const { row } = v2ToProd(EV); assertEqual(row.kind, 'appointment'); });
+  test('rrule:null → repeat:"none" + rrule_json:null', () => {
+    const { row } = v2ToProd(EV);
+    assertEqual(row.repeat, 'none');
+    assertEqual(row.rrule_json, null);
+  });
+  test('rappels V2 → minutes prod', () => {
+    const { row } = v2ToProd(EV);
+    assertEqual(row.reminders, [30]);
+  });
+  test('members IDs Supabase conservés', () => {
+    const { row } = v2ToProd(EV);
+    assertEqual(row.members, ['uuid-franck', 'uuid-marie']);
+  });
+  test('allday présent', () => { const { row } = v2ToProd(EV); assert(row.allday === false); });
+  test('no warnings pour événement standard', () => {
+    const { warnings } = v2ToProd(EV);
+    assert(warnings.length === 0, 'Warnings inattendus : ' + warnings.join('; '));
+  });
+  test('ev.id manquant → exception', () => {
+    assertThrows(() => v2ToProd({ ...EV, id: undefined }), 'ev.id');
+  });
+  test('ev.date manquant → exception', () => {
+    assertThrows(() => v2ToProd({ ...EV, date: undefined }), 'ev.date');
+  });
+  test('isNewRecord=true sans id → ok', () => {
+    const { row } = v2ToProd({ ...EV, id: undefined }, { isNewRecord: true });
+    assert(!row.id);
+  });
+});
+
+suite('v2ToProd — récurrences et warnings', () => {
+  test('WEEKLY/1 → "weekly"', () => {
+    const ev = { id: 'x', date: '2026-11-16', rrule: { freq: 'WEEKLY', interval: 1 } };
+    const { row } = v2ToProd(ev);
+    assertEqual(row.repeat, 'weekly');
+  });
+  test('WEEKLY+byDay → warning RRULE avancée', () => {
+    const ev = { id: 'x', date: '2026-11-16', rrule: { freq: 'WEEKLY', interval: 1, byDay: ['MO', 'WE'], endType: 'never', wkst: 'MO' } };
+    const { warnings } = v2ToProd(ev);
+    assert(warnings.some(w => w.includes('rrule_json')), 'Warning RRULE avancée attendu');
+  });
+  test('WEEKLY+until → warning RRULE avancée', () => {
+    const ev = { id: 'x', date: '2026-11-16', rrule: { freq: 'WEEKLY', interval: 1, endType: 'until', until: '2027-01-01', wkst: 'MO' } };
+    const { warnings } = v2ToProd(ev);
+    assert(warnings.some(w => w.includes('rrule_json')));
+  });
+  test('exdates dans row', () => {
+    const ev = { id: 'x', date: '2026-11-16', rrule: { freq: 'WEEKLY', interval: 1 }, exdates: ['2026-11-23'] };
+    const { row } = v2ToProd(ev);
+    assertEqual(row.exdates, ['2026-11-23']);
+  });
+  test('rrule_json stocké complet', () => {
+    const rrule = { freq: 'WEEKLY', interval: 1, byDay: ['MO', 'WE'], endType: 'never', wkst: 'MO' };
+    const ev = { id: 'x', date: '2026-11-16', rrule };
+    const { row } = v2ToProd(ev);
+    assertEqual(row.rrule_json, rrule);
+  });
+});
+
+suite('v2ToProd — rappels à heure exacte', () => {
+  test('type:exact → warning + conservé', () => {
+    const ev = {
+      id: 'x', date: '2026-11-20',
+      reminders: [{ type: 'exact', date: '2026-11-20', time: '09:00' }]
+    };
+    const { row, warnings } = v2ToProd(ev);
+    assert(warnings.some(w => w.includes('heure exacte')));
+    assert(row.reminders.some(r => typeof r === 'object' && r.type === 'exact'));
+  });
+});
+
+suite('v2ToProd — _extra et mots-clés présence', () => {
+  test('_extra ré-injecté sans conflit', () => {
+    const ev = { id: 'x', date: '2026-11-16', _extra: { google_event_id: 'gcal-xyz' } };
+    const { row } = v2ToProd(ev);
+    assertEqual(row.google_event_id, 'gcal-xyz');
+  });
+  test('_extra conflit → warning', () => {
+    const ev = { id: 'x', date: '2026-11-16', _extra: { day: 'valeur-conflictuelle' } };
+    const { warnings } = v2ToProd(ev);
+    assert(warnings.some(w => w.includes('_extra.day')));
+  });
+  test('titre avec mot-clé présence → warning', () => {
+    const ev = { id: 'x', date: '2026-11-16', title: 'DVH Marie cette semaine' };
+    const { warnings } = v2ToProd(ev);
+    assert(warnings.some(w => w.includes('Présences')));
+  });
+});
+
+// ── 8. Round-trips ────────────────────────────────────────────────────────────
+suite('Round-trips prodToV2 → v2ToProd', () => {
+  const BASE_ROW = {
+    id: 'rt-001', household_id: 'hh-rt',
+    created_by: 'user-rt', created_at: '2026-06-01T00:00:00Z',
+    day: '2026-11-20', start_time: '14:00', end_time: '15:30',
+    title: 'Réunion direction', notes: '', place: 'Bureau', kind: 'event',
+    members: ['uuid-a', 'uuid-b'], repeat: 'weekly',
+    reminders: [15, 60], gDefault: false, colorId: '3',
+    travel: null, url: null, countdown: false, cal: null,
+  };
+
+  test('id préservé après round-trip', () => {
+    const { row } = v2ToProd(prodToV2(BASE_ROW));
+    assertEqual(row.id, 'rt-001');
+  });
+  test('day préservé', () => {
+    const { row } = v2ToProd(prodToV2(BASE_ROW));
+    assertEqual(row.day, '2026-11-20');
+  });
+  test('members IDs préservés', () => {
+    const { row } = v2ToProd(prodToV2(BASE_ROW));
+    assertEqual(row.members, ['uuid-a', 'uuid-b']);
+  });
+  test('repeat round-trip : "weekly" → WEEKLY/1 → "weekly"', () => {
+    const { row } = v2ToProd(prodToV2(BASE_ROW));
+    assertEqual(row.repeat, 'weekly');
+  });
+  test('reminders round-trip : [15,60] → objets V2 → [15,60]', () => {
+    const { row } = v2ToProd(prodToV2(BASE_ROW));
+    assertEqual(row.reminders, [15, 60]);
+  });
+
+  test('round-trip événement avec rrule_json complexe', () => {
+    const rrule = { freq: 'WEEKLY', interval: 2, byDay: ['TU', 'TH'], endType: 'count', count: 10, wkst: 'MO' };
+    const row2 = { ...BASE_ROW, id: 'rt-002', repeat: 'none', rrule_json: rrule };
+    const v2ev = prodToV2(row2);
+    assertEqual(v2ev.rrule.freq, 'WEEKLY');
+    assertEqual(v2ev.rrule.byDay, ['TU', 'TH']);
+    const { row: back } = v2ToProd(v2ev);
+    assertEqual(back.rrule_json, rrule);
+  });
+
+  test('round-trip champ inconnu via _extra', () => {
+    const rowWithExtra = { ...BASE_ROW, id: 'rt-003', custom_x: 'xyz' };
+    const v2ev = prodToV2(rowWithExtra);
+    assert(v2ev._extra && v2ev._extra.custom_x === 'xyz');
+    const { row: back } = v2ToProd(v2ev);
+    assertEqual(back.custom_x, 'xyz');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXÉCUTION ET RENDU
+// ─────────────────────────────────────────────────────────────────────────────
+
+let totalOk = 0, totalFail = 0, totalWarn = 0;
+const container = document.getElementById('results');
+
+for (const s of suites) {
+  let suiteOk = 0, suiteFail = 0;
+  const testsHtml = [];
+
+  for (const t of s.tests) {
+    let status = 'ok', errMsg = '', warnMsg = '';
+    try {
+      t.fn();
+      suiteOk++; totalOk++;
+    } catch (e) {
+      status = 'fail'; suiteFail++; totalFail++;
+      errMsg = e.message;
+    }
+    testsHtml.push(`
+      <div class="test">
+        <div class="dot dot-${status}"></div>
+        <div>
+          <div class="test-name">${t.name}</div>
+          ${errMsg ? `<div class="test-err">${errMsg}</div>` : ''}
+          ${warnMsg ? `<div class="test-warn">${warnMsg}</div>` : ''}
+        </div>
+      </div>`);
+  }
+
+  const allOk = suiteFail === 0;
+  container.insertAdjacentHTML('beforeend', `
+    <div class="suite">
+      <div class="suite-header">
+        <span>${s.name}</span>
+        <span class="badge ${allOk ? 'badge-ok' : 'badge-fail'}">
+          ${suiteOk}/${s.tests.length}
+        </span>
+      </div>
+      ${testsHtml.join('')}
+    </div>`);
+}
+
+document.getElementById('cnt-ok').textContent   = totalOk;
+document.getElementById('cnt-fail').textContent = totalFail;
+document.getElementById('cnt-warn').textContent = totalWarn;
+
+const now = new Date();
+document.getElementById('run-info').textContent =
+  `${totalOk + totalFail} tests — ${now.toLocaleDateString('fr-FR')} ${now.toLocaleTimeString('fr-FR')} — Branche preview/agenda-v2`;
+</script>
+</body>
+</html>
