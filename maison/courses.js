@@ -380,8 +380,16 @@ document.addEventListener("submit", e => {
   const f = e.target.closest("form[data-form=cxAdd]"); if (!f || !CK.ready) return;
   e.preventDefault();
   const t = (new FormData(f).get("name") || "").toString().trim(); if (!t) return;
+  let st;
+  try {
+    st = cj(`(()=>{const v=${JSON.stringify(t)},n=(typeof norm==="function"?norm(v):v.trim().toLowerCase());if((menu.extras||[]).some(x=>x&&x.t&&(typeof norm==="function"?norm(x.t):x.t.trim().toLowerCase())===n))return "extra";try{if(shopping().some(i=>i&&i.n&&(typeof norm==="function"?norm(i.n):i.n.trim().toLowerCase())===n))return "meal";}catch(e){}return ""})()`);
+  } catch (_) { st = ""; }
+  if (st === "extra") { toast("« " + t + " » est déjà dans la liste."); return; }
+  if (st === "meal") { toast("« " + t + " » est déjà calculé depuis un repas (ingrédient)."); return; }
   cev(`menu.extras=[...(menu.extras||[]),{t:${JSON.stringify(t)},done:false}];saveMenu()`);
-  render(); const i = document.getElementById("cxIn"); if (i) i.focus();
+  render();
+  if (typeof toast === "function") toast("« " + t + " » ajouté à la liste.");
+  const i = document.getElementById("cxIn"); if (i) i.focus();
 });
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && view === "courses") carnetRefresh(); });
 if (view === "courses") render();
@@ -488,7 +496,7 @@ function mzFocusCourseItems() {
     first.scrollIntoView({behavior:'smooth',block:'center'});
   } else {
     const h = document.querySelector('#cxList'); if (h) h.scrollIntoView({behavior:'smooth',block:'start'});
-    if (typeof toast === 'function') toast('Article déjà acheté, retiré ou non visible dans cette liste.');
+    if (typeof toast === 'function') toast('Article introuvable ici (souvent un décalage de synchro). Rouvrez Courses ou synchronisez le carnet.');
   }
   window.mzCourseTargets = [];
 }

@@ -192,11 +192,10 @@
           else if (cD !== mD) ops.push(sb.from("shopping_items").update({ done: cD }).eq("id", r.id));
           base.extras[k] = done;
         } else if (c) {
-          // Carnet a l'article, plus de ligne côté Maisonnée : ne pas effacer pendant une édition locale
-          // (ajout à la main, ré-insertion réseau) — sinon un échec d'insert ou un nom déjà vu dans mzBase
-          // faisait disparaître les articles ajoutés ce matin avant même un déploiement.
-          if (inB && !P.userEdit) { ex = ex.filter(x => x !== c); exChanged = true; pulled++; delete base.extras[k]; }
-          else { shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" }); base.extras[k] = !!c.done; }
+          // Carnet a l'article, pas (encore) de ligne Maisonnée : toujours ré-insérer, jamais effacer le carnet.
+          // L'ancienne branche « inB sans ligne » faisait disparaître farine, bananes… après un pont à froid.
+          if (!r) shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" });
+          base.extras[k] = !!c.done;
         } else if (r) {
           if (inB) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
           else { ex.push({ t: r.name, done: !!r.done }); exChanged = true; pulled++; base.extras[k] = !!r.done; }
