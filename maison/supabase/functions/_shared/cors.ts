@@ -9,7 +9,8 @@ const STATIC = new Set([
   "http://127.0.0.1:8000",
   "http://localhost:8000",
   "https://carnets-menus.vercel.app",
-  "https://carnets-menus-franckdavion.vercel.app"
+  "https://carnets-menus-franckdavion.vercel.app",
+  "https://agenda-v2-tau.vercel.app"
 ]);
 
 export function originOk(origin: string) {
