@@ -4,9 +4,15 @@
    à un foyer Maisonnée (households.carnet_user), il synchronise dans les deux sens :
    - les repas, de la semaine passée à 4 semaines devant ;
    - la liste de courses : articles calculés par le Carnet (repas validés), articles ajoutés à la main, coches.
-   Il ajoute aussi un bouton « Maisonnée » en haut du Carnet pour revenir dans l'autre appli. */
+   Il ajoute aussi un bouton « Maisonnée » en haut du Carnet pour revenir dans l'autre appli.
+   Invariants courses : (1) extra présent dans le carnet → jamais retiré du carnet par le pont ;
+   (2) pas de delete côté DB ingrédients si recettes non chargées ou liste carnet partielle (carnetLooksEmpty) ;
+   (3) pas de delete pendant une fenêtre d'édition locale (saveMenu) ;
+   (4) source de vérité affichage Courses = carnet (Maisonnée iframe), pas shopping_items seul. */
 (() => {
-  const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, userEdit: false, me: null, meFor: "", map: null, mapAt: 0, hid: null };
+  const P = { cloudOk: false, busy: false, again: false, timer: null, skip: false, userEdit: false, editUntil: 0, me: null, meFor: "", map: null, mapAt: 0, hid: null };
+  const localEdit = () => P.userEdit || Date.now() < P.editUntil;
+  const recipesReady = () => typeof recipes !== "undefined" && Object.keys(recipes || {}).length > 0;
   // only after this copy has received the shared carnet once: a copy still showing what it had in memory
   // (phone just reopened, new device) must not send its old week to Maisonnée
   const ready = () => typeof cloud !== "undefined" && typeof cloudOn === "function" && cloudOn() && typeof menu !== "undefined" && P.cloudOk;
@@ -73,7 +79,7 @@
       const before = JSON.stringify([menu.weeks, menu.extras, menu.checked, menu.mzBase]);
       const base = menu.mzBase && menu.mzBase.hid === hid ? JSON.parse(JSON.stringify(menu.mzBase)) : { hid, meals: {}, extras: {}, checked: {} };
       const ops = [], authored = [], now = new Date().toISOString();
-      const shopInsert = row => { if (P.userEdit) authored.push(row); ops.push(sb.from("shopping_items").insert(row)); };
+      const shopInsert = row => { if (localEdit()) authored.push(row); ops.push(sb.from("shopping_items").insert(row)); };
       let pulled = 0;
 
       /* 1. meals: each side's change goes to the other; if both changed, the Carnet (open now) wins */
@@ -176,9 +182,9 @@
       }
       // Ne pas vider la base si le Carnet n'a calculé qu'une poignée d'ingrédients (iframe/recettes pas prêts).
       const cN = Object.keys(C).length, rN = Object.keys(rowsC).length;
-      const carnetLooksEmpty = cN < 8 && rN >= 12 && cN < rN * 0.35;
+      const carnetLooksEmpty = !recipesReady() || (cN < 8 && rN >= 12 && cN < rN * 0.35);
       for (const [key, r] of Object.entries(rowsC)) if (!C[key]) {
-        if (P.userEdit || carnetLooksEmpty) continue;
+        if (localEdit() || carnetLooksEmpty) continue;
         ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.checked[key];
       }
       // 2b. items added by hand on either side (Carnet « En plus » ⇄ Maisonnée)
@@ -197,18 +203,30 @@
           if (!r) shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" });
           base.extras[k] = !!c.done;
         } else if (r) {
-          if (inB) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
-          else { ex.push({ t: r.name, done: !!r.done }); exChanged = true; pulled++; base.extras[k] = !!r.done; }
+          if (inB) {
+            if (!localEdit()) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
+          } else { ex.push({ t: r.name, done: !!r.done }); exChanged = true; pulled++; base.extras[k] = !!r.done; }
         } else delete base.extras[k];
       }
       if (exChanged) menu.extras = ex;
+      let shopDaysPruned = false;
+      if (!localEdit() && Array.isArray(menu.shopDays) && menu.shopDays.length) {
+        const cut = ymd(addDays(new Date(), -2));
+        const sd = menu.shopDays, vd = menu.shopViewDays;
+        const ns = sd.filter(k => k >= cut), nv = Array.isArray(vd) ? vd.filter(k => k >= cut) : vd;
+        if (ns.length < sd.length || (Array.isArray(vd) && nv.length < vd.length)) {
+          if (ns.length) menu.shopDays = ns;
+          if (Array.isArray(vd) && nv.length) menu.shopViewDays = nv;
+          shopDaysPruned = true;
+        }
+      }
 
       if (authored.length && authored.length <= 15 && P.me) for (const row of authored) row.added_by = P.me;
       const res = await Promise.all(ops);
       const bad = res.find(r => r && r.error);
       if (bad) throw bad.error;
       menu.mzBase = base;
-      if (JSON.stringify([menu.weeks, menu.extras, menu.checked, menu.mzBase]) !== before) {
+      if (shopDaysPruned || JSON.stringify([menu.weeks, menu.extras, menu.checked, menu.mzBase]) !== before) {
         P.skip = true; saveMenu();
         if (typeof render === "function") render();
         if (pulled && typeof toast === "function") toast("🏠 Mis à jour depuis Maisonnée");
@@ -234,7 +252,7 @@
   /* ---------- when to sync: after the Carnet's own cloud sync, after each change, every minute ---------- */
   if (typeof saveMenu === "function") {
     const orig = saveMenu;
-    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; soon(1200); pushSoon(); } return r; };
+    window.saveMenu = function () { const r = orig.apply(this, arguments); if (P.skip) P.skip = false; else { P.userEdit = true; P.editUntil = Date.now() + 90e3; soon(1200); pushSoon(); } return r; };
   }
   if (typeof cloudSync === "function") {
     const orig = cloudSync;

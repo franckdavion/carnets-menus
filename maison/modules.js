@@ -40,7 +40,7 @@ const monthName = s => parse(s).toLocaleDateString("fr-FR", { month: "long", yea
 const MODS = [
   { k: "tasks", t: "Tâches", g: "Essentiels", sub() { const n = live().filter(t => t.next_due <= today()).length; return live().length ? (n ? `${plural(n, "tâche", "tâches")} aujourd'hui` : "Tout est fait") : "Ajoutez vos tâches"; } },
   { k: "agenda", t: "Calendrier", g: "Essentiels", sub() { const n = occurrences(today(), addDays(today(), 6)).length; return n ? `${plural(n, "événement", "événements")} cette semaine` : "Semaine libre"; } },
-  { k: "courses", t: "Courses", g: "Essentiels", sub() { const n = S.shop.filter(x => !x.done).length; return n ? plural(n, "article", "articles") : "Liste vide"; } },
+  { k: "courses", t: "Courses", g: "Essentiels", sub() { const n = typeof mzShopTodoCount === "function" ? mzShopTodoCount() : S.shop.filter(x => !x.done).length; return n ? plural(n, "article", "articles") : "Liste vide"; } },
   { k: "messages", t: "Messages", g: "Essentiels", sub() { const n = unread(); if (n) return plural(n, "nouveau message", "nouveaux messages"); const l = S.msgs.at(-1); return l ? `${(member(l.member_id) || {}).name || "?"} : ${l.body}` : "Écrivez au foyer"; } },
   { k: "repas", t: "Repas", g: "Essentiels", sub() { const name = carnetMealName(today(), "soir"); return name === null ? "Menu en cours de synchronisation" : name ? `Ce soir : ${name}` : "Rien de prévu ce soir"; } },
   { k: "recettes", t: "Recettes", g: "Essentiels", sub() { return (S.recipes && S.recipes.length ? plural(S.recipes.length, "recette", "recettes") + " · " : "") + "ouvrir le Carnet"; } },

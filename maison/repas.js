@@ -9,8 +9,23 @@ function repasDemoMode() { try { return sessionStorage.getItem("cm_demo_repas") 
 const cev = code => CK.frame.contentWindow.eval(code);          // lire / appeler dans le Carnet
 const cj = code => JSON.parse(cev(`JSON.stringify(${code})`));  // copie simple de ses données
 let rWeek = mondayOf(today()), rPick = null;                     // semaine affichée, recherche de recette
-// read by the hidden Carnet: it only syncs on its own while this page is open
-Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && (view === "repas" || view === "courses") });
+// Lu par le Carnet caché (pont.js, carnet-cloud.js) : sync active sur accueil + repas + courses
+Object.defineProperty(window, "mzRepasActive", { get: () => screen === "app" && (view === "home" || view === "repas" || view === "courses") });
+function mzCarnetShopTodo() {
+  if (!CK.ready) return null;
+  try {
+    return cj(`(()=>{let n=0;try{for(const i of shopping())if(i&&i.n&&!menu.checked[i.key])n++;}catch(e){}for(const x of menu.extras||[])if(x&&x.t&&!x.done)n++;return n;})()`);
+  } catch (_) { return null; }
+}
+function mzShopTodoCount() {
+  if (typeof isLinked === "function" && isLinked()) {
+    const n = mzCarnetShopTodo();
+    if (n != null) return n;
+  }
+  return Array.isArray(S.shop) ? S.shop.filter(x => !x.done).length : 0;
+}
+window.mzCarnetShopTodo = mzCarnetShopTodo;
+window.mzShopTodoCount = mzShopTodoCount;
 
 async function carnetSeedAuth() {
   try {
@@ -55,7 +70,7 @@ function carnetBoot(force) {
       try { ok = cev("typeof planWeek==='function' && !!recipes && Object.keys(recipes).length>0"); } catch (_) {}
       if (ok) {
         CK.ready = true; CK.err = ""; CK.waiters.splice(0).forEach(w => w());
-        if (view === "repas" || view === "courses") softRender();
+        if (view === "repas" || view === "courses" || view === "home") softRender();
         ticking = false;
         if (!demoRepas) try { cev("typeof cloudSync==='function'&&cloudSync()"); } catch (_) {}
         rScheduleGoogleMeals();
@@ -68,7 +83,7 @@ function carnetBoot(force) {
           : why === "nouser" ? "Session Carnet absente sur cet iPhone. Réessayez : Maisonnée recopie la connexion."
           : why === "empty" ? "Le livre de recettes du Carnet est vide."
           : "Le Carnet de menus ne répond pas. Réessayez, le réseau iPhone peut bloquer le cadre caché.";
-        if (view === "repas" || view === "courses") softRender();
+        if (view === "repas" || view === "courses" || view === "home") softRender();
         ticking = false;
         return;
       }
@@ -109,7 +124,10 @@ function carnetLive() {
   const ch = sb.channel("carnet-" + owner)
     .on("postgres_changes", { event: "*", schema: "public", table: "user_state", filter: "user_id=eq." + owner }, () => {
       clearTimeout(ckLiveT);                          // plusieurs changements d'affilée : un seul rechargement
-      ckLiveT = setTimeout(() => { if (view === "repas" || view === "courses") carnetRefresh(); }, 800);
+      ckLiveT = setTimeout(() => {
+        if (view === "repas" || view === "courses") carnetRefresh();
+        else if (view === "home") softRender();
+      }, 800);
     })
     .subscribe(status => { if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("Carnet en direct :", status); });
   ckLive = { owner, ch };

@@ -491,7 +491,9 @@ function apercuMaison(){
    if(nom===''){const other=slot==='midi'?'soir':'midi';const suivant=carnetMealName(d,other);if(suivant){nom=suivant;slot=other;}}
    vide.repas={k:slot==='midi'?'Ce midi':'Ce soir',t:nom===null?'Menu en cours de synchronisation':nom||'Rien de prévu',m:nom===null?'Synchronisation en cours':nom?'Au menu':'Choisir un plat',day:d,slot};
   }
-  const reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
+  let reste=Array.isArray(S.shop)?S.shop.filter(x=>!x.done).length:0;
+  if(typeof isLinked==='function'&&isLinked()&&typeof mzShopTodoCount==='function'){const c=mzShopTodoCount();if(c!=null)reste=c;}
+  else if(typeof isLinked==='function'&&isLinked()&&typeof mzCarnetShopTodo==='function'){const c=mzCarnetShopTodo();if(c!=null)reste=c;}
   vide.courses={k:'Liste de courses',t:reste?reste+(reste>1?' articles':' article'):'Liste vide',m:reste?'À acheter':'Rien à ajouter'};
   const livre=(Array.isArray(S.recipes)&&S.recipes.length)?S.recipes:(typeof DEMO_RECIPES!=='undefined'?DEMO_RECIPES:[]);
   if(livre.length){const r=livre[jourAnnee(new Date())%livre.length];vide.recette={k:'Idée du jour',t:r.name||'Recette',m:r.time?r.time+' min':'Voir la fiche',id:r.legacy_id||r.id||''};}
