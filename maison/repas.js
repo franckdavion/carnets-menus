@@ -92,7 +92,13 @@ setInterval(() => {
   ckSig = sg;
 }, 3000);
 // the others' changes: refresh from the shared carnet when the page comes back
-async function carnetRefresh() { if (!CK.ready) return; try { await cev("cloudSync()"); } catch (_) {} if (view === "repas" || view === "courses") softRender(); }
+async function carnetRefresh() {
+  if (!CK.ready) return;
+  try {
+    await cev("(async()=>{if(typeof cloudSync==='function')await cloudSync();if(typeof pontSync==='function')await pontSync();})()");
+  } catch (_) {}
+  if (view === "repas" || view === "courses") softRender();
+}
 // Mise à jour en direct (Supabase Realtime) : quand le carnet commun change (table user_state, ligne du
 // propriétaire du carnet), on relance le chargement existant carnetRefresh() pour Repas et Courses.
 let ckLive = null, ckLiveT = null;

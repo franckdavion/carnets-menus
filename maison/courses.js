@@ -15,6 +15,49 @@ function cclick(d) {
   for (const [k, v] of Object.entries(d)) b.dataset[k] = v;
   doc.body.appendChild(b); b.click(); b.remove();
 }
+function cxNorm(s) {
+  return String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+/* L’accueil compte shopping_items (S.shop) ; cxData lit le carnet en iframe, parfois en retard.
+   Afficher aussi les lignes foyer encore absentes du carnet (sans effacer ni fusionner les quantités). */
+function cxMergeShop(D) {
+  if (typeof isLinked !== "function" || !isLinked() || !Array.isArray(S?.shop) || !D) return D;
+  const keys = new Set(D.items.map(i => i.key));
+  const names = new Set([...D.items.map(i => cxNorm(i.n)), ...D.extras.map(x => cxNorm(x.t))]);
+  for (const row of S.shop) {
+    if (row.done) continue;
+    const src = String(row.source || "");
+    const nk = cxNorm(row.name);
+    if (src.startsWith("carnet:")) {
+      const key = src.slice(7);
+      if (keys.has(key) || names.has(nk)) continue;
+      D.items.push({
+        key,
+        n: row.name,
+        qt: row.qty || "",
+        r: CX_RAYONS.includes(row.aisle) ? row.aisle : cxGuess(row.name, D.learn),
+        from: ["Maisonnée"],
+        on: false,
+        miss: "",
+        _shopId: row.id
+      });
+      keys.add(key);
+      names.add(nk);
+    } else if (!src.startsWith("menu:")) {
+      if (names.has(nk)) continue;
+      D.extras.push({
+        ix: D.extras.length,
+        t: row.name,
+        on: false,
+        miss: "",
+        r: cxGuess(row.name, D.learn),
+        _shopId: row.id
+      });
+      names.add(nk);
+    }
+  }
+  return D;
+}
 function cxData() {
   return cj(`(()=>{const all=shopDates(),selK=visibleShopDates().map(x=>x.key);
     const days=all.map(x=>({key:x.key,lab:dayShort(x),on:selK.includes(x.key),full:x.locked===x.n,any:x.locked>0,n:x.n}));
@@ -118,13 +161,14 @@ VIEWS.courses = function () {
   carnetBoot();
   if (CK.err) return `<div class="card warn"><strong>Liste du Carnet indisponible.</strong><span class="small">${esc(CK.err)}</span></div>` + shopViewBase();
   if (!CK.ready) return `<div class="empty"><strong>Chargement de la liste du Carnet…</strong>Quelques secondes la première fois.</div>`;
-  let D; try { D = cxData(); } catch (e) { return shopViewBase(); }
+  let D; try { D = cxMergeShop(cxData()); } catch (e) { return shopViewBase(); }
   const tick = i => `<span class="box">${I.tick}</span>`;
+  const rowRef = (i, ref) => (i._shopId ? "s:" + i._shopId : ref);
   const row = (i, ref) => `<div class="cx-item ${i.on ? "done" : ""}" data-mz-shop-name="${esc(String(i.n || i.t || "").trim().toLocaleLowerCase("fr"))}">
-      <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(ref)}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
+      <button type="button" class="cx-tick" data-act="cxTick" data-v="${esc(rowRef(i, ref))}" aria-pressed="${i.on}" aria-label="${i.on ? "Retirer du caddie" : "Dans le caddie"} : ${esc(i.n || i.t)}">${tick(i)}</button>
       <span class="nm"><button type="button" class="cx-emoji-edit" data-act="cxEmojiEdit" data-n="${esc(i.n || i.t)}" aria-label="Changer l’emoji de ${esc(i.n || i.t)}" title="Changer l’emoji"><span class="cx-ingredient-emoji" aria-hidden="true">${cxProductEmoji(i.n || i.t)}</span></button><button type="button" class="cx-name" data-act="cxMove" data-ref="${esc(ref)}" data-n="${esc(i.n || i.t)}" data-r="${esc(i.r || "")}" title="Appui long : modifier · appui court : rayon">${esc(i.n || i.t)}</button>${i.miss && !i.on ? `<span class="cx-miss">Pas trouvé le ${esc(cxShort(i.miss))}</span>` : ""}${i.from && i.from.length ? `<span class="cx-from">Pour : ${esc(i.from.join(" · "))}</span>` : ""}</span>
       ${i.qt ? `<span class="q">${esc(i.qt)}</span>` : ""}
-      ${i.on ? "" : ref.startsWith("k:") ? `<button type="button" class="cx-have" data-act="cxHave" data-v="${esc(i.key)}">J'ai déjà</button>` : `<button type="button" class="cx-x" data-act="cxRmX" data-v="${i.ix}" aria-label="Retirer ${esc(i.t)}">✕</button>`}
+      ${i.on ? "" : ref.startsWith("k:") ? (i._shopId ? "" : `<button type="button" class="cx-have" data-act="cxHave" data-v="${esc(i.key)}">J'ai déjà</button>`) : `<button type="button" class="cx-x" data-act="cxRmX" data-v="${i._shopId ? "s:" + i._shopId : i.ix}" aria-label="Retirer ${esc(i.t)}">✕</button>`}
     </div>`;
   for (const i of D.items) i.r = D.learn[String(i.n).trim().toLowerCase()] || i.r;
   for (const x of D.extras) x.r = cxGuess(x.t, D.learn);
@@ -347,12 +391,23 @@ document.addEventListener("click", async e => {
     case "cxOrdMove": { const i = +v, j = i + +b.dataset.d, l = cxOrderDraft; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; const sc = $("#sheet").scrollTop; cxOrderSheet(); $("#sheet").scrollTop = sc; return; }
     case "cxOrdSave": cev(`menu.rayonOrder=${JSON.stringify(cxOrderDraft)};saveMenu()`); closeSheet(); msg = "Ordre des rayons enregistré."; break;
     case "cxOrdReset": cev(`delete menu.rayonOrder;saveMenu()`); closeSheet(); msg = "Ordre habituel des rayons."; break;
-    case "cxTick": cclick({ act: "storeTick", s: v }); break;
+    case "cxTick":
+      if (String(v).startsWith("s:")) {
+        const id = v.slice(2);
+        const x = S.shop.find(i => i.id === id);
+        if (x) patch("shop", id, { done: !x.done });
+        break;
+      }
+      cclick({ act: "storeTick", s: v });
+      break;
     case "cxHave": cclick({ act: "haveIt", k: v }); msg = "Retiré de la liste : vous l'avez déjà."; break;
     case "cxHaveRayon": cev(`(()=>{const ry=${JSON.stringify(v)},u=haveUntil();menu.have=Object.assign({},menu.have);
       shopping().filter(i=>((menu.rayonLearn||{})[norm(i.n)]||(RAYONS.includes(i.r)?i.r:"Divers"))===ry&&!menu.checked[i.key]).forEach(i=>{menu.have[i.key]=u;});saveMenu();})()`); msg = `Rayon « ${v} » retiré : vous avez déjà tout.`; break;
     case "cxHaveUndo": cclick({ act: "haveUndo", k: v }); break;
-    case "cxRmX": cclick({ act: "rmX", i: v }); break;
+    case "cxRmX":
+      if (String(v).startsWith("s:")) { await removeMany("shop", [v.slice(2)]); break; }
+      cclick({ act: "rmX", i: v });
+      break;
     case "cxRmR": cclick({ act: "shopRm", id: v }); break;
     case "cxDay": cclick({ act: "shopDay", d: v }); break;
     case "cxDsTog": cxDaySel[b.dataset.k] = cxDaySel[b.dataset.k] === false; cxDaySheet(cxDayK, false); return;

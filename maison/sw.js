@@ -1,6 +1,6 @@
 // Maisonnée : l'appli s'ouvre même sans réseau (les données viennent ensuite de Supabase).
 // Le nom commence par « carnet-archive » pour que le Carnet de menus (même site) ne l'efface pas.
-const CACHE = "carnet-archive-maison-v194";
+const CACHE = "carnet-archive-maison-v195";
 const MAISON_HOME = "https://carnets-menus.vercel.app/maison/";
 function maisonLaunchUrl(raw) {
   const s = String(raw || "./").trim() || "./";
