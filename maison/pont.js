@@ -174,7 +174,13 @@
         } else shopInsert({ household_id: hid, name: i.n, qty: fmt(i.q, i.u) || "", aisle: aisleOf(i.r), done: cDone, source: "carnet:" + key });
         base.checked[key] = done;
       }
-      for (const [key, r] of Object.entries(rowsC)) if (!C[key]) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.checked[key]; }
+      // Ne pas vider la base si le Carnet n'a calculé qu'une poignée d'ingrédients (iframe/recettes pas prêts).
+      const cN = Object.keys(C).length, rN = Object.keys(rowsC).length;
+      const carnetLooksEmpty = cN < 8 && rN >= 12 && cN < rN * 0.35;
+      for (const [key, r] of Object.entries(rowsC)) if (!C[key]) {
+        if (P.userEdit || carnetLooksEmpty) continue;
+        ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.checked[key];
+      }
       // 2b. items added by hand on either side (Carnet « En plus » ⇄ Maisonnée)
       let ex = (menu.extras || []).slice(), exChanged = false;
       const CE = {}; for (const x of ex) if (x && x.t) CE[norm(x.t)] = x;
@@ -186,7 +192,10 @@
           else if (cD !== mD) ops.push(sb.from("shopping_items").update({ done: cD }).eq("id", r.id));
           base.extras[k] = done;
         } else if (c) {
-          if (inB) { ex = ex.filter(x => x !== c); exChanged = true; pulled++; delete base.extras[k]; }
+          // Carnet a l'article, plus de ligne côté Maisonnée : ne pas effacer pendant une édition locale
+          // (ajout à la main, ré-insertion réseau) — sinon un échec d'insert ou un nom déjà vu dans mzBase
+          // faisait disparaître les articles ajoutés ce matin avant même un déploiement.
+          if (inB && !P.userEdit) { ex = ex.filter(x => x !== c); exChanged = true; pulled++; delete base.extras[k]; }
           else { shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" }); base.extras[k] = !!c.done; }
         } else if (r) {
           if (inB) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
