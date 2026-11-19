@@ -12,7 +12,8 @@
     { id: "kais", first_name: "Kaïs", aliases: [] },
     { id: "loic", first_name: "Loïc", aliases: [] },
     { id: "lucas", first_name: "Lucas", aliases: [] },
-    { id: "emma", first_name: "Emma", aliases: [] }
+    { id: "emma", first_name: "Emma", aliases: [] },
+    { id: "johan", first_name: "Johan", aliases: [] }
   ];
   const PER = [
     { child_id: "matheo", kind: "permanent", start_day: "2024-01-01", end_day: null },
@@ -20,7 +21,8 @@
     { child_id: "loic", kind: "permanent", start_day: "2024-01-01", end_day: null },
     { child_id: "lucas", kind: "relais", start_day: "2026-01-01", end_day: "2026-02-28" },
     { child_id: "lucas", kind: "permanent", start_day: "2026-03-01", end_day: null },
-    { child_id: "emma", kind: "relais", start_day: "2025-01-01", end_day: null }
+    { child_id: "emma", kind: "relais", start_day: "2025-01-01", end_day: null },
+    { child_id: "johan", kind: "relais", start_day: "2025-01-01", end_day: null }
   ];
   const allDay = (id, title, a, bEx, extra) => ({ id, summary: title, start: { date: a }, end: { date: bEx }, ...extra });
   const build = (items, more = {}) => P.index({ children: C, periods: PER, events: P.rowsFromGoogle(items, "cal", C), overrides: [], rules: [], ...more });
@@ -37,6 +39,14 @@
   // Test 3 — relais d'une journée, avec horaires (quelques heures suffisent)
   ix = build([{ id: "e3", summary: "Emma relais", start: { dateTime: "2026-11-11T14:00:00+01:00" }, end: { dateTime: "2026-11-11T18:00:00+01:00" } }]);
   ok("Test 3 · relais le mercredi → 1 présent", P.stats(ix, "emma", "2026-11-01", "2026-11-30").present === 1 && P.dayStatus(ix, "emma", "2026-11-11").st === "present");
+
+  // Test 13 — relais WE : Arrivée vendredi + Départ dimanche → ven–sam–dim présents
+  ix = build([
+    allDay("e13a", "Arrivée Johan", "2026-11-27", "2026-11-28"),
+    allDay("e13d", "Départ Johan", "2026-11-29", "2026-11-30")
+  ]);
+  ok("Test 13 · relais arrivée + départ WE → 3 présents", eq(days(ix, "johan", "2026-11-27", "2026-11-29"), ["present", "present", "present"]),
+    days(ix, "johan", "2026-11-27", "2026-11-30"));
 
   // Test 4 — permanent sans événement : tout le mois présent
   ix = build([]);

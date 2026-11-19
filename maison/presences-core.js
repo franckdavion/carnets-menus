@@ -77,6 +77,7 @@
   const isDvh = title => /\bdvh\b/.test(norm(title));
   const isDeparture = title => /\b(dep|depart)\b/.test(norm(title));
   const isReturn = title => /\b(retour|ret)\b/.test(norm(title));
+  const isArrival = title => /\b(arrivee|arrive)\b/.test(norm(title));
 
   // Quels enfants enregistrés sont nommés, et ce que dit le reste du titre.
   // sig : abs (mot d'absence) · rel (mot de relais) · only (prénom seul, avec des dates au plus)
@@ -137,8 +138,30 @@
     for (const k of ruleKeys(ev)) { const r = rules && rules.get(k + "|" + ev.child_id); if (r) return r; }
     const s = ev.sig;
     if (kind === "permanent") return s === "abs" ? "absence" : s === "other" ? "ignore" : "ambig";
-    if (kind === "relais") return s === "only" || s === "rel" ? "presence" : "ambig";
+    if (kind === "relais") {
+      if (isDeparture(ev.title)) return "departure";
+      return s === "only" || s === "rel" ? "presence" : "ambig";
+    }
     return "ignore";
+  }
+
+  // Relais : entre un événement « arrivée [Prénom] » et « départ [Prénom] », tous les jours comptent présents.
+  function relaisStaySpan(ix, childId, day) {
+    if (kindOn(ix, childId, day) !== "relais") return false;
+    const starts = [], ends = [];
+    for (const ev of ix.events.get(childId) || []) {
+      if (kindOn(ix, childId, ev.start_day) !== "relais") continue;
+      const it = interpret(ev, "relais", ix.rules);
+      if (it === "departure") ends.push(ev.start_day);
+      else if (it === "presence" && isArrival(ev.title)) starts.push(ev.start_day);
+    }
+    if (!starts.length || !ends.length) return false;
+    ends.sort();
+    for (const a of starts) {
+      const dep = ends.find(d => d >= a);
+      if (dep && day >= a && day <= dep) return true;
+    }
+    return false;
   }
 
   function index(data) {
@@ -169,7 +192,10 @@
       const present = evs.some(x => x.it === "presence" || (x.it === "departure" && day === x.ev.start_day) || (x.it === "return" && day === x.ev.end_day));
       auto = present ? "present" : absent ? "absent" : "present";
     }
-    else auto = evs.some(x => x.it === "presence") ? "present" : "none";
+    else {
+      const present = evs.some(x => x.it === "presence" || (x.it === "departure" && day === x.ev.start_day)) || relaisStaySpan(ix, childId, day);
+      auto = present ? "present" : "none";
+    }
     const o = ix.overrides.get(childId + "|" + day);
     st = o ? o.status : auto;
     return { st, auto, kind, manual: !!o, override: o || null, unsure: !o && unsure && !!kind, evs };
