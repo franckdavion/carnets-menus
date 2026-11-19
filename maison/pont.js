@@ -159,8 +159,9 @@
           else if (cD !== mD) ops.push(sb.from("shopping_items").update({ done: cD }).eq("id", r.id));
           base.extras[k] = done;
         } else if (c) {
-          if (inB) { ex = ex.filter(x => x !== c); exChanged = true; pulled++; delete base.extras[k]; }
-          else { shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" }); base.extras[k] = !!c.done; }
+          // Extra présent dans le Carnet mais absent de shopping_items : on repousse au lieu de l'effacer.
+          shopInsert({ household_id: hid, name: c.t, qty: "", aisle: "Divers", done: !!c.done, source: "x" });
+          base.extras[k] = !!c.done;
         } else if (r) {
           if (inB) { ops.push(sb.from("shopping_items").delete().eq("id", r.id)); delete base.extras[k]; }
           else { ex.push({ t: r.name, done: !!r.done }); exChanged = true; pulled++; base.extras[k] = !!r.done; }

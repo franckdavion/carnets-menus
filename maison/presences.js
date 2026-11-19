@@ -299,7 +299,7 @@ function prKidsTab() {
     <section class="pr-panel">
       <h2 class="pr-h">Mots reconnus dans l'agenda</h2>
       <p class="small"><b>Absence</b> (enfant permanent) : « Mathéo <i>absent</i> », « Kaïs <i>WE papa</i> »…</p>${wl("abs", W.abs)}
-      <p class="small" style="margin-top:16px"><b>Relais</b> : le prénom seul suffit (« Lucas ») ; ces mots le confirment aussi.</p>${wl("rel", W.rel)}
+      <p class="small" style="margin-top:16px"><b>Relais</b> : le prénom seul suffit (« Lucas ») ; ces mots le confirment aussi. Pour un week-end : « Arrivée [Prénom] » le vendredi et « Départ [Prénom] » le dimanche couvrent les jours entre les deux.</p>${wl("rel", W.rel)}
       <p class="muted small">Un événement avec le prénom d'un enfant permanent et un autre mot (« Mathéo médecin ») ne change rien. Un cas douteux est mis « à vérifier ». Après une modification, les 12 derniers mois sont relus.</p>
       ${prSet().abs || prSet().rel ? `<button class="linkbtn" data-act="prWordsReset">Rétablir les listes par défaut</button>` : ""}
     </section>`;
@@ -378,7 +378,7 @@ function prCalsSheet() {
 function prKidSheet(id, draft) {
   const c = id ? prChild(id) : null;
   const d = draft || { first_name: c ? c.first_name : "", last_name: c ? c.last_name : "", aliases: c ? (c.aliases || []).join(", ") : "",
-    periods: c ? (PR.ix.periods.get(c.id) || []).map(p => ({ kind: p.kind, start_day: p.start_day, end_day: p.end_day || "" })) : [{ kind: "permanent", start_day: today(), end_day: "" }] };
+    periods: c ? (PR.ix.periods.get(c.id) || []).map(p => ({ kind: p.kind, start_day: p.start_day, end_day: p.end_day || "" })) : [{ kind: "relais", start_day: today(), end_day: "" }] };
   const per = d.periods.map((p, i) => `<div class="pr-per">
       <div class="seg" role="group" aria-label="Type d'accueil">${["permanent", "relais"].map(k => `<button type="button" data-chip="kind${i}" data-v="${k}" aria-pressed="${p.kind === k}">${k === "permanent" ? "Permanent" : "Relais"}</button>`).join("")}</div>
       <div class="inline"><label class="field"><span class="label">Du</span><input class="input" type="date" name="start${i}" value="${esc(p.start_day)}" required></label><label class="field"><span class="label">Au (facultatif)</span><input class="input" type="date" name="end${i}" value="${esc(p.end_day || "")}"></label></div>
@@ -399,7 +399,7 @@ function prKidSheet(id, draft) {
 function prKidDraft() {
   const f = $("#sheetIn form[data-form=prKid]"); if (!f) return null;
   const fd = new FormData(f), n = f.querySelectorAll(".pr-per").length, periods = [];
-  for (let i = 0; i < n; i++) periods.push({ kind: chipVal(f, "kind" + i) || "permanent", start_day: fd.get("start" + i) || "", end_day: fd.get("end" + i) || "" });
+  for (let i = 0; i < n; i++) periods.push({ kind: chipVal(f, "kind" + i) || "relais", start_day: fd.get("start" + i) || "", end_day: fd.get("end" + i) || "" });
   return { first_name: (fd.get("first_name") || "").trim(), last_name: (fd.get("last_name") || "").trim(), aliases: fd.get("aliases") || "", periods };
 }
 
