@@ -24,7 +24,7 @@ ok("accueil / modules : compteur via carnet si relié", modules.includes("mzShop
 ok("courses : pas de fusion cxMergeShop", !read("maison/courses.js").includes("cxMergeShop"));
 
 const swM = read("maison/sw.js");
-ok("cache Maisonnée à jour", swM.includes("carnet-archive-maison-v198"));
+ok("cache Maisonnée à jour", swM.includes("carnet-archive-maison-v199"));
 
 if (fail) { console.log(fail + " échec(s)"); process.exit(1); }
 console.log("sync-invariants ok");
